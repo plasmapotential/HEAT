@@ -12,19 +12,4 @@ network configuration and proxy mapping, etc.).
 For more info contact Tom Looby, a PhD candidate on assignment at NSTX-U for Oak Ridge National Lab.
 This project is an Oak Ridge National Lab tool, but it is openSource under the MIT license.
 
-
-The source directory contains code for the project.  The architecture is as follows:
-
-source
-   CADclass.py		main CAD module  
-   MHDClass.py		main MHD module  
-   heatfluxClass.py	main HF module  
-   openFOAMClass.py	main openFOAM FEM module  
-   toolsClass.py	module for extra tools  
-   gfiles.py		module for gfiles  
-   GUIscripts/		directory for GUI plotting scripts  
-   htmlGUI/		directory containing all HTML/JS/CSS for GUI  
-      HEATgui.py	script that launches HEAT with Flask Bindings  
-      GUIclass.py       main GUI module  
-   inputs/		location of HEAT input files  
-   openFoamTemplates	location of OF template case  
+tlooby@vols.utk.edu
