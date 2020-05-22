@@ -12,4 +12,7 @@ network configuration and proxy mapping, etc.).
 For more info contact Tom Looby, a PhD candidate on assignment at NSTX-U for Oak Ridge National Lab.
 This project is an Oak Ridge National Lab tool, but it is openSource under the MIT license.
 
-tlooby@vols.utk.edu
+email:  tlooby@vols.utk.edu
+
+Example HEAT output:
+![Alt text](exampleHF.png?raw=true "NSTXU Heat Flux onto CAD")
