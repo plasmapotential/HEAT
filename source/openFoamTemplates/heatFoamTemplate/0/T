@@ -1,0 +1,51 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v1912                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volScalarField;
+    location    "0";
+    object      T;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+dimensions      [0 0 0 1 0 0 0];
+
+//#include "/u/tlooby/OpenFOAM/tlooby-7/run/heatTestLaplace/postProcessing/surfaces/0/STLHF/scalarField/HF";
+
+internalField   uniform 300.0;
+
+
+boundaryField
+{
+
+    STLpatch
+    {
+//        type fixedGradient;
+//        gradient nonuniform $HF;
+
+//        type            fixedValue;
+//        value           uniform 573;
+
+            type            groovyBC;
+            fractionExpression "0";
+            //mm2m converts mm to m (H.E.A.T. outputs mesh in mm)
+            //If you dont want to do this then you need to change
+            //the scale parameter in blockMeshDict and snappyHexMeshDict,
+            //Note that currently we are using DT scaled by 1000000 [mm^2 => m^2]
+            variables       "HF@STLpatch=HF;k=110;mm2m=1000;";
+            gradientExpression "HF/(k*mm2m)";
+//            gradientExpression "8000000/(k*mm2m)";
+//            gradientExpression "HF/k";
+
+
+
+//            value           $internalField;
+    }
+}

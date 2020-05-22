@@ -1,0 +1,9 @@
+source /opt/OpenFOAM/OpenFOAM-v1912/etc/bashrc
+echo "Running blockMesh"
+blockMesh > |-rootDir-| # blockMesh.log
+echo "Running snappyHexMesh"
+snappyHexMesh -overwrite > |-rootDir-| # snappyHexMesh.log
+echo "Running topoSet"
+topoSet > |-rootDir-| # topoSet.log
+echo "Running createPatch"
+createPatch -overwrite > |-rootDir-| # createPatch.log

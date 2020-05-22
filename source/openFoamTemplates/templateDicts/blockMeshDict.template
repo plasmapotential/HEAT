@@ -1,0 +1,58 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  =========                 |
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+   \\    /   O peration     | Website:  https://openfoam.org
+    \\  /    A nd           | Version:  7
+     \\/     M anipulation  |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      blockMeshDict;
+}
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+scale 1;
+
+vertices
+(
+
+//Use these for STLs in millimeters
+  (|-xMin-| |-yMin-| |-zMin-|)
+  (|-xMax-| |-yMin-| |-zMin-|)
+  (|-xMax-| |-yMax-| |-zMin-|)
+  (|-xMin-| |-yMax-| |-zMin-|)
+  (|-xMin-| |-yMin-| |-zMax-|)
+  (|-xMax-| |-yMin-| |-zMax-|)
+  (|-xMax-| |-yMax-| |-zMax-|)
+  (|-xMin-| |-yMax-| |-zMax-|)
+
+);
+// An example:
+// (400.0 55.0 -1660.0)
+// (605.0 55.0 -1660.0)
+// (605.0 235.0 -1660.0)
+// (400.0 235.0 -1660.0)
+// (400.0 55.0 -1600.0)
+// (605.0 55.0 -1600.0)
+// (605.0 235.0 -1600.0)
+// (400.0 235.0 -1600.0)
+
+
+blocks
+(
+  hex (0 1 2 3 4 5 6 7) (30 30 30) simpleGrading (1 1 1)
+);
+
+edges
+(
+);
+
+boundary
+(
+);
+
+// ************************************************************************* //

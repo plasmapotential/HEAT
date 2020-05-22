@@ -1,0 +1,11 @@
+echo "Running blockMesh"
+blockMesh > |-heatLogFile-| # blockMesh.log
+echo "Running snappyHexMesh"
+snappyHexMesh -overwrite > |-heatLogFile-| # snappyHexMesh.log
+echo "Running topoSet"
+topoSet > |-heatLogFile-| # topoSet.log
+echo "Running createPatch"
+createPatch -overwrite > |-heatLogFile-| # createPatch.log
+heatFoam > |-heatLogFile-| # heatFoam.log
+paraFoam -touchAll
+# postProcess -func "probes" > postProcess.log
