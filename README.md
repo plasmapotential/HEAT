@@ -14,5 +14,7 @@ This project is an Oak Ridge National Lab tool, but it is openSource under the M
 
 email:  tlooby@vols.utk.edu
 
-Example HEAT output:
+Below is an example HEAT output.  More specifically, this is a real NSTX-U castellated graphite
+ tile CAD drawing from the lower outer divertor, coupled to an Eich profile physics module.  
+ Note the complicated 3D structure of the heat flux, due to the castellated tiles.
 ![Alt text](exampleHF.png?raw=true "NSTXU Heat Flux onto CAD")
