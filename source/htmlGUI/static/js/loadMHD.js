@@ -3,7 +3,9 @@ function loadMHDajax () {
   var tmin = document.getElementById("tmin").value;
   var tmax = document.getElementById("tmax").value;
   var nTrace = document.getElementById("nTrace").value;
+  var ionDirection = document.getElementById("ionDirection").value;
   var gfilePath = document.getElementById("gfilePath").value;
+  var plasma3Dmask = document.getElementById("plasma3Dmask").checked;
 //  var docWidth = $(document).width();
 //  var width = docWidth * 0.65 * 0.55; //gridcontainer1 * gridcontainer2
 //  var height = document.getElementById("item10").offsetHeight;
@@ -18,7 +20,8 @@ function loadMHDajax () {
     type : "POST",
     cache: false,
     url : "loadMHD",
-    data: {shot: shot, tmin: tmin, tmax: tmax, height: height, nTrace: nTrace, gfilePath: gfilePath},
+    data: {shot: shot, tmin: tmin, tmax: tmax, height: height, nTrace: nTrace,
+           ionDirection: ionDirection, gfilePath: gfilePath, plasma3Dmask: plasma3Dmask},
     success: function (data) {
     //  $("#eq").attr('src',"data:image/png;base64," + png);
     //$("#eq").attr('data', "{{ url_for('static',filename='html/EQ2D.html') }}");

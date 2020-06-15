@@ -38,7 +38,7 @@ PVPath = '/opt/paraview/ParaView-5.7.0-MPI-Linux-Python3.7-64bit/lib/python3.7/s
 sys.path.append(PVPath)
 
 #Root HEAT directory
-rootDir = '/u/tlooby/source/HEAT/rev6/source/'
+rootDir = '/u/tlooby/source/HEAT/rev7/source/'
 
 #Create log files that will be displayed in the HTML GUI
 import logging
@@ -137,37 +137,21 @@ def loadMHD():
     else: tmax = None
     if request.form.get('nTrace'): nTrace = int(request.form.get('nTrace'))
     else: nTrace = None
+    if request.form.get('ionDirection'): ionDirection = int(request.form.get('ionDirection'))
+    else: ionDirection = None
     if request.form.get('gfilePath'): gfilePath = request.form.get('gfilePath')
     else:gfilePath = None
+    if request.form.get('plasma3Dmask'):
+        plasma3Dmask = request.form.get('plasma3Dmask')
+        if plasma3Dmask == 'true':
+            plasma3Dmask = 1
+        else:
+            plasma3Dmask = 0
+    else:plasma3Dmask = None
 
-    gui.getMHDInputs(shot,tmin,tmax,nTrace,gfilePath)
+    gui.getMHDInputs(shot,tmin,tmax,nTrace,ionDirection,gfilePath,plasma3Dmask)
+    plotEquil()
 
-    #Update Equilibrium plot on client
-    #Now using plotly interactive plots
-    import GUIscripts.plotly2DEQ as plotly2DEQ
-    ep = app.config['GUI'].MHD.ep
-    shot = app.config['GUI'].MHD.shot
-    t = app.config['GUI'].t
-    if os.path.exists(html2DEQfile):
-        os.remove(html2DEQfile)
-    plotly2DEQ.writePlotlyEQ(shot, t, html2DEQfile, ep=ep, gfile=None)
-
-#    height = float(request.form.get('height')) #available height in html page
-
-#    import GUIscripts.plot2DEQ as EQplot
-#    ep = app.config['GUI'].MHD.ep
-#    shot = app.config['GUI'].MHD.shot
-##    t = app.config['GUI'].MHD.timesteps[0]
-#    t = app.config['GUI'].t
-#    plt = EQplot.EQ2Dplot(ep,shot,t,gui.MachFlag,height)
-#    #Create plt figure in memory buffer
-#    output = io.BytesIO()
-#    plt.savefig(output, format='png', transparent=True)
-#    #Now Create JSON response for ajax running on client side.
-#    #We change output.getvalue() to base64 encoded variable so that ajax
-#    #script can read it directly on client after it is returned
-#    response = make_response(base64.b64encode(output.getvalue()))
-#    response.headers.set('Content-Type', 'image/png')
     print("MHD Load Complete")
     log.info("MHD Load Complete")
 #    response = {'outFile': html2DEQfile}
@@ -191,27 +175,56 @@ def gfileClean():
     FpolMult = eval(parser.expr(request.form.get('Fpol')).compile())
 
     gui.gfileClean(psiRZMult,psiSepMult,psiAxisMult,FpolMult)
+    plotEquil()
 
-    height = float(request.form.get('height')) #available height in html page
+    print("gFile Clean")
+    log.info("gFile Clean")
+    return ('', 204)
+
+
+@app.route('/plotEquil', methods=['POST'])
+def plotEquil():
+    """
+    Updates plotly equilibrium
+    """
     #Update Equilibrium plot on client
-    import GUIscripts.plot2DEQ as EQplot
+    #Now using plotly interactive plots
+    import GUIscripts.plotly2DEQ as plotly2DEQ
     ep = app.config['GUI'].MHD.ep
-    print(ep.g['psiRZ'])
     shot = app.config['GUI'].MHD.shot
-#    t = app.config['GUI'].MHD.timesteps[0]
     t = app.config['GUI'].t
-    plt = EQplot.EQ2Dplot(ep,shot,t,gui.MachFlag,height)
-    #Create plt figure in memory buffer
-    output = io.BytesIO()
-    plt.savefig(output, format='png', transparent=True)
-    #Now Create JSON response for ajax running on client side.
-    #We change output.getvalue() to base64 encoded variable so that ajax
-    #script can read it directly on client after it is returned
-    response = make_response(base64.b64encode(output.getvalue()))
-    response.headers.set('Content-Type', 'image/png')
-    log.info("MHD Load Complete")
-    return response
+    if os.path.exists(html2DEQfile):
+        os.remove(html2DEQfile)
+    plotly2DEQ.writePlotlyEQ(shot, t, html2DEQfile, gui.MachFlag,
+                             ep=ep, gfile=None, logFile=True)
+    #if plotly failed to generate a plot, load default plot instead
+    if os.path.exists(html2DEQfile)==False:
+        shutil.copy(defaultEQfile, html2DEQfile)
+    return
 
+
+@app.route('/renormalizeLCFS', methods=['POST'])
+def renormalizeLCFS():
+    """
+    renormalizes lcfs to specific point in space defined in GUI.
+    saves new gfile in user defined location
+    """
+    print("Defining new LCFS")
+    log.info("Defining new LCFS")
+    rNew = float(request.form.get('rNew'))
+    if request.form.get('zNew'):
+        noneStrings = ['None', 'none', 'na', 'NA', 'N/A']
+        if request.form.get('zNew') in noneStrings:
+            zNew = None
+        else:
+            zNew = float(request.form.get('zNew'))
+    else:
+        zNew = None
+    print("LCFS rNew = {:f}".format(rNew))
+    gui.newLCFS(rNew, zNew)
+    print("LCFS reDefinition complete")
+    log.info("LCFS reDefinition complete")
+    return ('', 204)
 
 @app.route('/writeGfile', methods=['POST'])
 def writeGfile():
@@ -259,11 +272,40 @@ def loadHF():
 
     print("Loading HF Variables")
     log.info("Loading HF Variables")
-    lq = float(request.form.get('lq'))
-    S = float(request.form.get('s'))
-    P = float(request.form.get('p'))
-    qBG = float(request.form.get('qBG'))
-    gui.getHFInputs(lq,S,P,qBG)
+
+    if request.form.get('mode'): mode = request.form.get('mode')
+    else: mode = 'eich'
+    if request.form.get('lqEich'): lqEich = float(request.form.get('lqEich'))
+    else: lqEich = None
+    if request.form.get('lqPN'): lqPN = float(request.form.get('lqPN'))
+    else: lqPN = None
+    if request.form.get('lqPF'): lqPF = float(request.form.get('lqPF'))
+    else: lqPF = None
+    if request.form.get('lqCN'): lqCN = float(request.form.get('lqCN'))
+    else: lqCN = None
+    if request.form.get('lqCF'): lqCF = float(request.form.get('lqCF'))
+    else: lqCF = None
+    if request.form.get('fracPN'): fracPN = float(request.form.get('fracPN'))
+    else: fracPN = None
+    if request.form.get('fracPF'): fracPF = float(request.form.get('fracPF'))
+    else: fracPF = None
+    if request.form.get('fracCN'): fracCN = float(request.form.get('fracCN'))
+    else: fracCN = None
+    if request.form.get('fracCF'): fracCF = float(request.form.get('fracCF'))
+    else: fracCF = None
+    if request.form.get('s'): S = float(request.form.get('s'))
+    else: S = None
+    if request.form.get('p'): P = float(request.form.get('p'))
+    else: P = None
+    if request.form.get('qBG'): qBG = float(request.form.get('qBG'))
+    else: qBG = None
+    LRmask = request.form.get('LRmask')
+    if request.form.get('LRpower'): LRpower = float(request.form.get('LRpower'))
+    else: LRpower = None
+
+
+    gui.getHFInputs(lqEich,S,P,qBG,lqPN,lqPF,lqCN,lqCF,
+                    fracPN,fracPF,fracCN,fracCF,mode,LRmask,LRpower)
     log.info("HF Load Complete")
     return ('', 204)
 
@@ -460,6 +502,8 @@ def machineSelect():
     run()
 
     return ('', 204)
+
+
 
 
 if __name__ == '__main__':

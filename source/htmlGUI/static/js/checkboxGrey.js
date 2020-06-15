@@ -27,3 +27,17 @@ function toggleDisabled_T(_checked) {
     document.getElementById('coordsYLab_T').style.display = _checked ? 'block' : 'none';
     document.getElementById('coordsZLab_T').style.display = _checked ? 'block' : 'none';
 }
+
+function toggleDisabled_LR1(_checked) {
+    document.getElementById('LRdata1').style.display = _checked ? 'block' : 'none';
+}
+function toggleDisabled_LR2(_checked) {
+    document.getElementById('LRdata2').style.display = _checked ? 'block' : 'none';
+}
+function toggleDisabled_LR3(_checked) {
+    document.getElementById('LRdata3').style.display = _checked ? 'block' : 'none';
+}
+
+function toggleDisabled_3D(_checked) {
+    document.getElementById('plasma3Dmask').style.display = _checked ? 'block' : 'none';
+}

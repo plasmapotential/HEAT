@@ -103,7 +103,7 @@ class tools:
         y = np.asarray(y)
         z = np.asarray(z)
         r = np.sqrt(x**2 + y**2)
-        phi = np.arctan(y/x)
+        phi = np.arctan2(y,x)
         #phi = np.radians(phi)
         return r,z,phi
 
@@ -229,7 +229,7 @@ class tools:
                 #check if intersection face is over 10mm from start face
                 #which implies that it is not a self intersection
 #                if (delta2[0] > 0.02) or (delta2[1] > 0.02) or (delta2[2] > 0.2):
-                if np.sqrt(delta2[0]**2 + delta2[1]**2 + delta2[2]**2) > 0.1:
+                if np.sqrt(delta2[0]**2 + delta2[1]**2 + delta2[2]**2) > 0.2:
                     result = 1
                 else:
                     result = 0

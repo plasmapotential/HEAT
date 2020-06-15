@@ -93,7 +93,8 @@ class GUIobj():
         self.OF = openFOAMclass.OpenFOAM()
         return
 
-    def getMHDInputs(self,shot=None,tmin=None,tmax=None,nTrace=None,gfile=None):
+    def getMHDInputs(self,shot=None,tmin=None,tmax=None,nTrace=None,
+                     ionDirection=None,gfile=None,plasma3Dmask=None):
         """
         Get the mhd inputs from the gui or input file
         """
@@ -111,6 +112,8 @@ class GUIobj():
             self.MHD.tmax = tmax
         if nTrace is not None:
             self.MHD.nTrace = nTrace
+        if ionDirection is not None:
+            self.MHD.ionDirection = ionDirection
         self.MHD.gfile = gfile
         if gfile is not None:
             path, name = os.path.split(gfile)
@@ -119,7 +122,8 @@ class GUIobj():
             self.MHD.shot = int(shot)
             #self.MHD.time = time
 
-
+        if plasma3Dmask is not None:
+            self.MHD.plasma3Dmask = plasma3Dmask
 
         self.MHD.tree = 'EFIT02'
         self.MHD.dataPath = self.MHD.dataPath + self.MHD.MachFlag +"_{:06d}".format(self.MHD.shot)
@@ -135,6 +139,20 @@ class GUIobj():
         self.gridfile = self.MHD.dataPath + '/' + '{:06d}/grid.dat'.format(self.t)
         self.outputFile = self.controlfilePath + 'lam.dat'
         self.MHD.setTypes()
+
+        print('psiSep = {:f}'.format(self.MHD.ep.g['psiSep']))
+        print('psiAxis = {:f}'.format(self.MHD.ep.g['psiAxis']))
+        print('Nlcfs: {:f}'.format(self.MHD.ep.g['Nlcfs']))
+        print('length Rlcfs: {:f}'.format(len(self.MHD.ep.g['lcfs'][:,0])))
+        log.info('psiSep = {:f}'.format(self.MHD.ep.g['psiSep']))
+        log.info('psiAxis = {:f}'.format(self.MHD.ep.g['psiAxis']))
+        log.info('Nlcfs: {:f}'.format(self.MHD.ep.g['Nlcfs']))
+        if self.MHD.plasma3Dmask==1:
+            print('Solving for 3D plasmas with MAFOT')
+            log.info('Solving for 3D plasmas with MAFOT')
+        else:
+            print('Solving for 2D plasmas with EFIT (no MAFOT)')
+            log.info('Solving for 2D plasmas with EFIT (no MAFOT)')
 
     def gfileClean(self, psiRZMult,psiSepMult,psiAxisMult,FpolMult):
         """
@@ -159,6 +177,14 @@ class GUIobj():
         psiAxis = self.MHD.ep.g['psiAxis']
 
         self.MHD.ep.g['psiRZn'] = (psi - psiAxis) / (psiSep - psiAxis)
+        return
+
+    def newLCFS(self, rNew, zNew):
+        """
+        resets the lcfs so that it is defined as psi value at rminNew, zminNew
+        and writes this new equilibrium out into gfile in fileNew location
+        """
+        self.MHD.renormalizeLCFS(rNew, zNew)
         return
 
     def writeGfile(self, newShot, newTime, newGfile):
@@ -199,20 +225,71 @@ class GUIobj():
         print('Wrote intersect meshes to file')
         return
 
-    def getHFInputs(self,lq=None,S=None,Psol=None,qBG=None):
+    def getHFInputs(self,lqEich,S,P,qBG,lqPN,lqPF,lqCN,lqCF,
+                        fracPN, fracPF, fracCN, fracCF, mode, LRmask, LRpower):
         """
         get heat flux inputs from gui or input file
         """
         self.initializeHF()
+        self.HF.lqEich = lqEich
+        self.HF.lqCN = lqCN
+        self.HF.lqCF = lqCF
+        self.HF.lqPN = lqPN
+        self.HF.lqPF = lqPF
+        self.HF.S = S
+        self.HF.Psol = P
+        self.HF.qBG = qBG
+        self.HF.mode = mode
+        self.HF.fracCN = fracCN
+        self.HF.fracCF = fracCF
+        self.HF.fracPN = fracPN
+        self.HF.fracPF = fracPF
+        if LRmask=='true':
+            self.HF.LRmask = True
+            self.HF.LRpower = LRpower
+        else:
+            self.HF.LRmask = False
 
-        if lq is not None:
-            self.HF.lq = lq
-        if S is not None:
-            self.HF.S = S
-        if Psol is not None:
-            self.HF.Psol = Psol
-        if qBG is not None:
-            self.HF.qBG = qBG
+        print("Mode = "+mode)
+        log.info("Mode = "+mode)
+        print("Psol = {:f}".format(P))
+        log.info("Psol = {:f}".format(P))
+        print("Long range intersection checking: "+LRmask)
+
+        if mode=='eich':
+            print("lqEich = {:f}".format(lqEich))
+            print("S = {:f}".format(S))
+            print("qBG = {:f}".format(qBG))
+            log.info("lqEich = {:f}".format(lqEich))
+            log.info("S = {:f}".format(S))
+            log.info("qBG = {:f}".format(qBG))
+        elif mode=='limiter':
+            print("lqCN = {:f}".format(lqCN))
+            print("lqCF = {:f}".format(lqCF))
+            print("fracCN = {:f}".format(fracCN))
+            print("fracCF = {:f}".format(fracCF))
+            log.info("lqCN = {:f}".format(lqCN))
+            log.info("lqCF = {:f}".format(lqCF))
+            log.info("fracCN = {:f}".format(fracCN))
+            log.info("fracCF = {:f}".format(fracCF))
+        elif mode=='multiExp':
+            print("lqCN = {:f}".format(lqCN))
+            print("lqCF = {:f}".format(lqCF))
+            print("lqPN = {:f}".format(lqPN))
+            print("lqPF = {:f}".format(lqPF))
+            print("fracCN = {:f}".format(fracCN))
+            print("fracCF = {:f}".format(fracCF))
+            print("fracPN = {:f}".format(fracPN))
+            print("fracPF = {:f}".format(fracPF))
+            log.info("lqCN = {:f}".format(lqCN))
+            log.info("lqCF = {:f}".format(lqCF))
+            log.info("lqPN = {:f}".format(lqPN))
+            log.info("lqPF = {:f}".format(lqPF))
+            log.info("fracCN = {:f}".format(fracCN))
+            log.info("fracCF = {:f}".format(fracCF))
+            log.info("fracPN = {:f}".format(fracPN))
+            log.info("fracPF = {:f}".format(fracPF))
+
         return
 
     def bfieldAtSurface(self):
@@ -265,6 +342,18 @@ class GUIobj():
         #Write Point Cloud
         self.HF.write_shadow_pointcloud(PFC.centers,PFC.shadowed_mask,self.controlfilePath)
 
+    def bdotnPC(self, PFC):
+        """
+        makes a cos(alpha) point cloud:b_hat dot n_hat
+        where b_hat is normalized magnetic field vector and n_hat is mesh surface
+        normal vector
+        """
+        self.HF.makePFCs(self.MHD, self.CAD.ROImeshes, self.CAD.ROIctrs,
+                        self.CAD.ROInorms, self.CAD.ROIareas, self.CAD.ROIparts)
+        PFC = self.HF.PFCs[0]
+        self.HF.HFincidentAngle(PFC,MHD)
+        self.HF.write_bdotn_pointcloud(PFC.centers, PFC.bdotn, self.controlfilePath)
+
 
     def initializeHF(self):
         """
@@ -296,25 +385,41 @@ class GUIobj():
         log.info("INTERSECTION CHECK INITIALIZED")
         self.HF.findShadows_structure(self.MHD,PFC,self.targetMeshes)
 
-        #Run MAFOT laminar
-        print('\n')
-        print("-"*70)
-        print("MAFOT LAMINAR MODULE INITIALIZED")
-        log.info("MAFOT LAMINAR MODULE INITIALIZED")
-        self.MHD.writeControlFile(self.controlfile, self.t, mode='laminar')
-        use = np.where(PFC.shadowed_mask != 1)[0]
-        self.MHD.writeMAFOTpointfile(PFC.centers[use],self.gridfile)
-        self.MHD.runMAFOTlaminar(self.gridfile,self.controlfilePath,self.controlfile,self.NCPUs)
+        #Run MAFOT laminar fro 3D plasmas
+        if self.MHD.plasma3Dmask==True:
+            print('\n')
+            print("-"*70)
+            print("MAFOT LAMINAR MODULE INITIALIZED")
+            log.info("MAFOT LAMINAR MODULE INITIALIZED")
+            self.MHD.writeControlFile(self.controlfile, self.t, mode='laminar')
+            use = np.where(PFC.shadowed_mask != 1)[0]
+            self.MHD.writeMAFOTpointfile(PFC.centers[use],self.gridfile)
+            self.MHD.runMAFOTlaminar(self.gridfile,self.controlfilePath,self.controlfile,self.NCPUs)
+            self.HF.readMAFOTLaminarOutput(PFC,self.outputFile)
+            os.remove(self.outputFile)
+        #get psi from gfile for 2D plasmas
+        else:
+            self.MHD.psi2DfromEQ(PFC)
 
         #Create Heat Flux Profile
         print('\n')
         print("-"*70)
         print("HEAT FLUX CALCULATION")
         log.info("HEAT FLUX CALCULATION")
-        self.HF.readMAFOTLaminarOutput(PFC,self.outputFile)
-        q = self.HF.getHFprofile(PFC, self.HF.Psol, self.HF.lq, self.HF.S, self.HF.qBG)
+        q = self.HF.getHFprofile(PFC, self.MachFlag)
         qDiv = self.HF.q_div(PFC, self.MHD, q)
-        os.remove(self.outputFile)
+
+        #Points over threshold power are likely errors, so check them
+        if self.HF.LRmask == True:
+            distPhi = 370.0 #degrees
+            qDiv = self.HF.longRangeIntersectCheck(PFC,qDiv,self.targetMeshes,
+                                                   self.HF.LRpower,distPhi,
+                                                   self.MHD)
+
+        #Save data to class variable for future use
+        PFC.q = q
+        PFC.qDiv = qDiv
+        self.HF.PFCs[0] = PFC
 
         print('Maximum heat load on tile: {:f}'.format(max(qDiv)))
         print('Input Power = {:f}'.format(self.HF.Psol))
@@ -327,13 +432,9 @@ class GUIobj():
         R,Z,phi = tools.xyz2cyl(PFC.centers[:,0],PFC.centers[:,1],PFC.centers[:,2])
         self.HF.write_shadow_pointcloud(PFC.centers,PFC.shadowed_mask,self.controlfilePath)
         self.HF.write_heatflux_pointcloud(PFC.centers,qDiv,self.controlfilePath)
+        self.HF.write_bdotn_pointcloud(PFC.centers, PFC.bdotn, self.controlfilePath)
         #structOutfile = MHD.dataPath + '/' + '{:06d}/struct.csv'.format(PFC.t)
         #HF.PointCloudfromStructOutput(structOutfile)
-
-        #Save data to class variable for future use
-        PFC.q = q
-        PFC.qDiv = qDiv
-        self.HF.PFCs[0] = PFC
         print("\nTime Elapsed: {:f}".format(time.time() - t0))
         log.info("\nTime Elapsed: {:f}".format(time.time() - t0))
 
@@ -350,18 +451,28 @@ class GUIobj():
                         self.CAD.ROInorms, self.CAD.ROIareas, self.CAD.ROIparts)
         PFC = self.HF.PFCs[0]
         PFC.shadowed_mask = np.zeros((len(PFC.shadowed_mask)))
-        #Run MAFOT laminar
+
         print('\n')
         print("-"*70)
         print("Writing psi point cloud")
         log.info("Writing psi point cloud")
-        self.MHD.writeControlFile(self.controlfile, self.t, mode='laminar')
-        self.MHD.writeMAFOTpointfile(PFC.centers,self.gridfile)
-        self.MHD.runMAFOTlaminar(self.gridfile,self.controlfilePath,self.controlfile,self.NCPUs)
-        self.HF.readMAFOTLaminarOutput(PFC,self.outputFile)
-        use = np.where(PFC.psimin < 10)[0]
-        self.HF.write_psiN_pointcloud(PFC.centers[use],PFC.psimin[use],self.controlfilePath)
-        os.remove(self.outputFile)
+
+        #Run MAFOT laminar fro 3D plasmas
+        if self.MHD.plasma3Dmask==True:
+            self.MHD.writeControlFile(self.controlfile, self.t, mode='laminar')
+            self.MHD.writeMAFOTpointfile(PFC.centers,self.gridfile)
+            self.MHD.runMAFOTlaminar(self.gridfile,self.controlfilePath,self.controlfile,self.NCPUs)
+            self.HF.readMAFOTLaminarOutput(PFC,self.outputFile)
+            use = np.where(PFC.psimin < 10)[0]
+            self.HF.write_psiN_pointcloud(PFC.centers[use],PFC.psimin[use],self.controlfilePath)
+            os.remove(self.outputFile)
+        #get psi from gfile for 2D plasmas
+        else:
+            PFC.shadowed_mask = np.zeros((len(PFC.shadowed_mask)))
+            self.MHD.psi2DfromEQ(PFC)
+            self.HF.write_psiN_pointcloud(PFC.centers,PFC.psimin,self.controlfilePath)
+
+
         print("Completed psiPC calculation")
         log.info("Completed psiPC calculation")
 
@@ -385,11 +496,20 @@ class GUIobj():
                     'tmin': self.MHD.tmin,
                     'tmax': self.MHD.tmax,
                     'nTrace': self.MHD.nTrace,
+                    'ionDirection': self.MHD.ionDirection,
                     'ROIGridRes': self.CAD.ROIGridRes,
                     'gridRes': self.CAD.gridRes,
                     'STPfile': self.CAD.STPfile,
-                    'lq': self.HF.lq,
+                    'lqEich': self.HF.lqEich,
                     'S': self.HF.S,
+                    'lqCN': self.HF.lqCN,
+                    'lqCF': self.HF.lqCF,
+                    'lqPN': self.HF.lqPN,
+                    'lqPF': self.HF.lqPF,
+                    'fracCN': self.HF.fracCN,
+                    'fracCF': self.HF.fracCF,
+                    'fracPN': self.HF.fracPN,
+                    'fracPF': self.HF.fracPF,
                     'Psol': self.HF.Psol,
                     'qBG' : self.HF.qBG,
                     'xMin': self.OF.xMin,
@@ -503,6 +623,8 @@ class GUIobj():
         partDir is <caseDir>/<part> where <part> is the CAD part.  Each solver
             caseDir has multiple partDir inside, corresponding to running that
             solver for each part
+
+        This function uses a constant HF profile for now (not time varying)
         """
         print('Setting Up OF run')
         log.info('Setting Up OF run')
@@ -584,7 +706,6 @@ class GUIobj():
         dependent thermal diffusion constant for single region
         (no multiregion analysis)
 
-        dict is the dictionary of
         """
         #strip .stl extension for part name
         if STLpart[-4:] == '.stl':
@@ -609,3 +730,4 @@ class GUIobj():
         """
         self.OF.runTprobe(x,y,z)
         self.OF.plotTprobes(self.OF.TprobeFile)
+        return

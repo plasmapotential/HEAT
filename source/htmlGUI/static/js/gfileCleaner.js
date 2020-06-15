@@ -1,6 +1,6 @@
 function loadGfileAjax () {
   var gfilePath = document.getElementById("gfilePath1").value;
-  var height = $("#item12").height();
+  var height = $("#itemClean2").height();
   $.ajax({
     type : "POST",
     cache: false,
@@ -18,7 +18,7 @@ function loadGfileAjax () {
 }
 
 function gfileCleanAjax () {
-  var height = $("#item12").height();
+  var height = $("#itemClean2").height();
   var psiRZ = document.getElementById("psiRZ").value;
   var psiSep = document.getElementById("psiSep").value;
   var psiAxis = document.getElementById("psiAxis").value;
@@ -30,7 +30,7 @@ function gfileCleanAjax () {
     url : "gfileClean",
     data: {height: height, psiRZ: psiRZ, psiSep: psiSep, psiAxis: psiAxis, Fpol: Fpol},
     success: function (png) {
-      $("#eqClean").attr('src',"data:image/png;base64," + png);
+      document.getElementById('eq2').contentDocument.location.reload(true);
       },
     error: function(xhr, status, error) {
       var err = eval("(" + xhr.responseText + ")");
@@ -58,7 +58,22 @@ function writeGfileAjax () {
     });
 }
 
-
+function renormalizeLCFSAjax () {
+  var rNew = document.getElementById("rlcfsNew").value;
+  var zNew = document.getElementById("zlcfsNew").value;
+  $.ajax({
+    type : "POST",
+    cache: false,
+    url : "renormalizeLCFS",
+    data: {rNew: rNew, zNew: zNew},
+    success: function (data) {
+      },
+    error: function(xhr, status, error) {
+      var err = eval("(" + xhr.responseText + ")");
+      alert(err.Message);
+      }
+    });
+};
 
 
 
@@ -69,6 +84,10 @@ $('#loadGfile').click(function () {
 
 $('#gfileClean').click(function () {
   gfileCleanAjax();
+});
+
+$('#renormalizeLCFS').click(function () {
+  renormalizeLCFSAjax();
 });
 
 $('#writeGfile').click(function () {

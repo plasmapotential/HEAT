@@ -43,6 +43,7 @@ class MHD:
                             'tmin',
                             'tmax',
                             'nTrace',
+                            'plasma3Dmask',
                             'dataPath',
                             'MachFlag',
                             'Nphi',
@@ -55,6 +56,8 @@ class MHD:
                             'Nswall',
                             'phistart',
                             'MapDirection',
+                            'MapDirectionStruct',
+                            'ionDirection',
                             'PlasmaResponse',
                             'Field',
                             'target',
@@ -96,7 +99,9 @@ class MHD:
         self.ittLaminar = float(self.ittLaminar)
         self.ittStruct = float(self.ittStruct)
         self.phistart = float(self.phistart)
-        self.MapDirection = int(self.MapDirection)
+        self.MapDirection =float(self.MapDirection)
+        self.MapDirectionStruct = float(self.MapDirectionStruct)
+        self.ionDirection = float(self.ionDirection)
         self.PlasmaResponse = int(self.PlasmaResponse)
         self.Field = int(self.Field)
         self.target = int(self.target)
@@ -128,6 +133,7 @@ class MHD:
         if self.MachFlag in ['dt']:
             self.useBus = int(self.useBus)
             self.useBcoil = int(self.useBcoil)
+        self.plasma3Dmask = int(self.plasma3Dmask)
         return
 
     # Pull fresh gfile data from MDS+ tree, create directory tree in the process
@@ -166,19 +172,19 @@ class MHD:
         #Correct for weird helicity and field directions that are occasionally
         #in gfile.  Here we assume that Ip is the CCW direction as viewed from
         #above tokamak.
-        self.dsign = np.sign(self.ep.g['Ip'])
-        self.gsign = np.sign( (self.ep.g['psiAxis'] - self.ep.g['psiSep']) )
-        self.qsign = np.sign(self.ep.g['Fpol'][-1]) #F_edge sign
-        print('dsign = {:f}'.format(self.dsign))
-        print('gsign = {:f}'.format(self.gsign))
-        print('qsign = {:f}'.format(self.qsign))
-        self.ep.g['FFprime'] *= self.dsign*self.qsign*self.gsign
-        self.ep.g['Pprime'] *= self.dsign*self.qsign*self.gsign
-        self.ep.g['psiRZ'] *= self.dsign*self.qsign*self.gsign
-        self.ep.g['qpsi'] *= -self.qsign*self.dsign
-        self.ep.g['psiSep'] *= self.dsign*self.qsign*self.gsign
-        self.ep.g['psiAxis'] *= self.dsign*self.qsign*self.gsign
-        self.ep.g['Fpol'] *= self.dsign*self.qsign
+#        self.dsign = np.sign(self.ep.g['Ip'])
+#        self.gsign = np.sign( (self.ep.g['psiAxis'] - self.ep.g['psiSep']) )
+#        self.qsign = np.sign(self.ep.g['Fpol'][-1]) #F_edge sign
+#        print('dsign = {:f}'.format(self.dsign))
+#        print('gsign = {:f}'.format(self.gsign))
+#        print('qsign = {:f}'.format(self.qsign))
+#        self.ep.g['FFprime'] *= self.dsign*self.qsign*self.gsign
+#        self.ep.g['Pprime'] *= self.dsign*self.qsign*self.gsign
+#        self.ep.g['psiRZ'] *= self.dsign*self.qsign*self.gsign
+#        self.ep.g['qpsi'] *= -self.qsign*self.dsign
+#        self.ep.g['psiSep'] *= self.dsign*self.qsign*self.gsign
+#        self.ep.g['psiAxis'] *= self.dsign*self.qsign*self.gsign
+#        self.ep.g['Fpol'] *= self.dsign*self.qsign
         return
 
     def makeEFITobjects(self):
@@ -226,9 +232,9 @@ class MHD:
 #        Bt = ep.BtFunc.ev(R,Z)*self.MapDirection
 #        BR = ep.BRFunc.ev(R,Z)
 #        BZ = -ep.BZFunc.ev(R,Z)
-        Bt = ep.BtFunc.ev(R,Z)#*self.MapDirection
-        BR = ep.BRFunc.ev(R,Z)#*self.MapDirection
-        BZ = ep.BZFunc.ev(R,Z)#*self.MapDirection
+        Bt = ep.BtFunc.ev(R,Z)*self.ionDirection
+        BR = ep.BRFunc.ev(R,Z)*self.ionDirection
+        BZ = ep.BZFunc.ev(R,Z)*self.ionDirection
 
         #print(BR)
         #print(Bt)
@@ -301,8 +307,10 @@ class MHD:
             f.write('Nswall=\t{:d}\n'.format(self.Nswall))
 
             f.write('phistart(deg)=\t{:2f}\n'.format(self.phistart))
-            f.write('MapDirection=\t{:d}\n'.format(self.MapDirection))
-
+            if mode=='laminar':
+                f.write('MapDirection=\t{:f}\n'.format(self.MapDirection))
+            else:
+                f.write('MapDirection=\t{:f}\n'.format(self.MapDirectionStruct))
 
             f.write('PlasmaResponse(0=no,>1=yes)=\t{:d}\n'
                     .format(self.PlasmaResponse))
@@ -347,6 +355,17 @@ class MHD:
 
             f.write('pi=\t3.141592653589793\n')
             f.write('2*pi=\t6.283185307179586\n')
+
+    def psi2DfromEQ(self, PFC):
+        """
+        Returns psi from EFIT equilibrium rather than from 3D trace.  Does not
+        use MAFOT
+        """
+        use = np.where(PFC.shadowed_mask == 0)[0]
+        xyz = PFC.centers[use]
+        R,Z,phi = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
+        PFC.psimin = PFC.ep.psiFunc.ev(R,Z)
+        return
 
 
     def writeMAFOTpointfile(self,xyz,gridfile):
@@ -476,14 +495,74 @@ class MHD:
 
         return
 
-    def writeGfile(self, file, shot, time):
+    def renormalizeLCFS(self, rNew, zNew=None):
+        """
+        script for changing the lcfs in gfile.  because we use CAD in HEAT, and
+        this CAD is oftentimes at different r,z locations than the rlim,zlim from
+        gfile, we sometimes need to adjust the gfile to reflect the CAD.  This
+        is especially true for limited discharges, where if we use the rlim, zlim
+        wall from the gfile and try to compute qDiv on a real CAD PFC the center
+        stack CAD PFCs are sometimes in the core with psiN < 1.  This script
+        updates the LCFS in the gfile so that only one point in the CAD touches
+        the LCFS.
+
+        User must supply desired R,Z coordinate
+
+        """
+        g = self.ep.g
+        if zNew is not None:
+            print("Redefine LCFS using point")
+            log.info("Redefine LCFS using point")
+            psiNew = self.ep.psiFunc_noN.ev(rNew, zNew)
+        else:
+            print("Redefine LCFS using vector")
+            log.info("Redefine LCFS using vector")
+            zWall = np.linspace(self.ep.g['Z'].min(), self.ep.g['Z'].max(), 1000)
+            rWall = np.ones((len(zWall)))*rNew
+            psiWall = self.ep.psiFunc_noN.ev(rWall, zWall)
+            psiNew = self.ep.psiFunc_noN.ev(rWall, zWall).min()
+            psiNewNormalized = self.ep.psiFunc.ev(rWall, zWall).min()
+            idx = np.argmin(psiWall)
+            print('New LCFS R: {:f}'.format(rWall[idx]))
+            print('New LCFS Z: {:f}'.format(zWall[idx]))
+            print('psi at RLCFS, ZLCFS: {:f}'.format(psiNew))
+            print('psiN at RLCFS, ZLCFS: {:f}'.format(psiNewNormalized))
+            print('Original psiSep: {:f}'.format(self.ep.g['psiSep']))
+            print('Original psiAxis: {:f}'.format(self.ep.g['psiAxis']))
+            print('Original Nlcfs: {:f}'.format(self.ep.g['Nlcfs']))
+            log.info('New LCFS R: {:f}'.format(rWall[idx]))
+            log.info('New LCFS Z: {:f}'.format(zWall[idx]))
+            log.info('psi at RLCFS, ZLCFS: {:f}'.format(psiNew))
+            log.info('psiN at RLCFS, ZLCFS: {:f}'.format(psiNewNormalized))
+            log.info('Original psiSep: {:f}'.format(self.ep.g['psiSep']))
+            log.info('Original psiAxis: {:f}'.format(self.ep.g['psiAxis']))
+            log.info('Original Nlcfs: {:f}'.format(self.ep.g['Nlcfs']))
+
+        #find contour
+        import matplotlib.pyplot as plt
+        CS = plt.contourf(g['R'],g['Z'],g['psiRZ'])
+        lcfsCS = plt.contour(CS, levels = [psiNew])
+        rlcfs = lcfsCS.allsegs[0][0][:,0]
+        zlcfs = lcfsCS.allsegs[0][0][:,1]
+        self.ep.g['Nlcfs'] = len(rlcfs)
+        self.ep.g['lcfs'] = np.column_stack((rlcfs,zlcfs))
+        self.ep.g['psiSep'] = psiNew
+        print('Renormalized LCFS to new (Rlcfs, Zlcfs)')
+        log.info('Renormalized LCFS to new (Rlcfs, Zlcfs)')
+        return
+
+    def writeGfile(self, file, shot, time, ep=None):
         """
         writes a new gfile.  for use with the cleaner script.  user must supply
         file: name of new gfile
         shot: new shot number
         time: new shot timestep [ms]
         """
-        g = self.ep.g
+        if ep==None:
+            g = self.ep.g
+        else:
+            g = ep.g
+
         KVTOR = 0
         RVTOR = 1.7
         NMASS = 0

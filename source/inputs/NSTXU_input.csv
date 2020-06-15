@@ -4,9 +4,11 @@
 #=============================================================
 #                CAD Variables
 #=============================================================
-STPfile, /u/tlooby/NSTX/CAD/HEAT/30deg_lowerhalf.step
+#STPfile, /u/tlooby/NSTX/CAD/HEAT/30deg_lowerhalf.step
 #STPfile, /u/tlooby/NSTX/CAD/HEAT/centerStack.step
+STPfile, /u/tlooby/NSTX/CAD/HEAT/204118limiterCAD.step
 #STPfile, /u/tlooby/NSTX/CAD/HEAT/lowerDiv.step
+#STPfile, /u/tlooby/NSTX/CAD/HEAT/cylinderLwr.step
 STLpath, /u/tlooby/NSTX/CAD/HEAT/STLs/
 FreeCADPath, /opt/freecad/appImage/squashfs-root/usr/lib
 PVPath, /opt/paraview/ParaView-5.7.0-MPI-Linux-Python3.7-64bit/lib/python3.7/site-packages
@@ -23,20 +25,30 @@ shot, 204118
 tree, EFIT02
 tmin, 101
 tmax, 103
-nTrace, 5
-dataPath, /u/tlooby/source/HEAT/rev6/data/
+nTrace, 0
+dataPath, /u/tlooby/source/HEAT/rev7/data/
+ionDirection, -1
+plasma3Dmask, 0 #1=true, 0=false
 #==============================================================
 #                HF Variables
 #==============================================================
-lq, 3.0
+lqEich, 3.0
 S, 1.0
 Psol, 3.0
 qBG, 0.0
+lqCN, 3.0
+lqCF, 5.0
+lqPN, 1.0
+lqPF, 1.0
+fracCN, 0.6
+fracCF, 0.3
+fracPN, 0.1
+fracPF, 0.0
 #==============================================================
 #                MAFOT Variables
 #==============================================================
 Nphi, 1
-ittLaminar, 100.0
+ittLaminar, 10.0
 ittStruct, 1.0
 Smin, 0.0
 Smax, 5.0
@@ -49,6 +61,7 @@ Rmax, 1.6
 Nswall, 1
 phistart, 1 #(deg)
 MapDirection, 1
+MapDirectionStruct, 1
 PlasmaResponse, 0 #(0=no,>1=yes)
 Field, -1 #(-3=VMEC,-2=SIESTA,-1=gfile,M3DC1:0=Eq,1=I-coil,2=both)
 target, 0 #(0=useSwall)

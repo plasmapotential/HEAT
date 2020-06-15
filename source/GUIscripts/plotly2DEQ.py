@@ -13,8 +13,12 @@ from scipy import interpolate
 from scipy.interpolate import interp1d
 import json
 import matplotlib.pyplot as plt
+import logging
 
-def writePlotlyEQ(shot, time, outFile, ep=None, gfile=None):
+
+def writePlotlyEQ(shot, time, outFile, MachFlag, ep=None, gfile=None, logFile=False):
+    if logFile is True:
+        log = logging.getLogger(__name__)
 
     #Use Equilparamsclass to create EQ object
     if ep is None:
@@ -33,13 +37,14 @@ def writePlotlyEQ(shot, time, outFile, ep=None, gfile=None):
     rbdry = ep.g['lcfs'][:,0]
     zbdry = ep.g['lcfs'][:,1]
 
-    rlim = ep.g['wall'][:,0]
-    zlim = ep.g['wall'][:,1]
+    if MachFlag == 'nstx':
+        rlim, zlim = nstxu_wall(oldwall=False) #FOR NSTXU
+    else:
+        rlim = ep.g['wall'][:,0]
+        zlim = ep.g['wall'][:,1]
 
 
     levels = sorted(np.append([0.0,0.05,0.1,0.25,0.5,0.75,1.0], np.linspace(1.01,psi.max(),10)))
-    CS = plt.contourf(R,Z,psi,levels,cmap=plt.cm.cividis)
-    lcfsCS = plt.contour(CS, levels = [1.0])
 
     import plotly
     import plotly.graph_objects as go
@@ -70,15 +75,42 @@ def writePlotlyEQ(shot, time, outFile, ep=None, gfile=None):
             )
             )
 
-    #Seperatrix in red
-    for i in range(len(lcfsCS.allsegs[0])):
-        rlcfs = lcfsCS.allsegs[0][i][:,0]
-        zlcfs = lcfsCS.allsegs[0][i][:,1]
+    #Seperatrix in red.  Sometimes this fails if psi is negative
+    #so we try and except.
+    #if try fails, just plot using rbdry,zbdry from gfile
+    try:
+        CS = plt.contourf(R,Z,psi,levels,cmap=plt.cm.cividis)
+        lcfsCS = plt.contour(CS, levels = [1.0])
+        for i in range(len(lcfsCS.allsegs[0])):
+            rlcfs = lcfsCS.allsegs[0][i][:,0]
+            zlcfs = lcfsCS.allsegs[0][i][:,1]
+
+            fig.add_trace(
+                go.Scatter(
+                    x=rlcfs,
+                    y=zlcfs,
+                    mode="lines",
+                    name="LCFS",
+                    line=dict(
+                        color="red",
+                        width=4,
+
+                            )
+                    )
+                    )
+    except:
+        print("Could not create contour plot.  Psi levels must be increasing.")
+        print("Try flipping psi sign and replotting.")
+        print("plotting rbdry, zbdry from gfile (not contour)")
+        if logFile is True:
+            log.info("Could not create contour plot.  Psi levels must be increasing.")
+            log.info("Try flipping psi sign and replotting.")
+            log.info("plotting rbdry, zbdry from gfile (not contour)")
 
         fig.add_trace(
             go.Scatter(
-                x=rlcfs,
-                y=zlcfs,
+                x=rbdry,
+                y=zbdry,
                 mode="lines",
                 name="LCFS",
                 line=dict(
@@ -88,6 +120,7 @@ def writePlotlyEQ(shot, time, outFile, ep=None, gfile=None):
                         )
                 )
                 )
+
 
     fig.update_layout(
         title="{:06d}@{:05d}ms".format(shot,time),
@@ -105,6 +138,38 @@ def writePlotlyEQ(shot, time, outFile, ep=None, gfile=None):
 
     print("writing EQ output to: "+outFile)
     fig.write_html(outFile)
+
+
+def nstxu_wall(oldwall=False):
+    """
+    returns simplified wall.  Uses two different wall versions
+    """
+    if oldwall:
+        R = np.array([0.1851, 0.1851, 0.2794, 0.2794, 0.2979, 0.5712,
+                    1.0433, 1.3192, 1.3358,
+                    1.4851, 1.4791, 1.5174, 1.5313, 1.5464, 1.5608,
+                    1.567, 1.5657, 1.5543, 1.5341, 1.5181, 1.4818,
+                    1.4851, 1.3358, 1.3192, 1.0433,
+                    0.5712, 0.2979, 0.2794, 0.2794, 0.1851, 0.1851])
+        Z = np.array([0.0, 1.0081, 1.1714, 1.578, 1.6034, 1.6034,
+                    1.43, 1.0397, 0.9976,
+                    0.545, 0.4995, 0.306, 0.2355, 0.1586, 0.0801,
+                    0.0, -0.0177, -0.1123, -0.221, -0.3026, -0.486,
+                    -0.545, -0.9976, -1.0397, -1.43,
+                    -1.6034, -1.6034, -1.578, -1.1714, -1.0081, 0])
+    else:
+      R = np.array([ 0.3147568,  0.3147568,  0.4441952,  0.4441952,  0.443484 ,
+           0.443484 ,  0.6000496,  0.7672832,  0.8499856,  1.203452,  1.3192,  1.3358,  1.4851,  1.489 ,
+           1.5638,  1.57  ,  1.5737,  1.575 ,  1.5737,  1.57  ,  1.5638,
+           1.489 ,  1.4851,  1.3358,  1.3192,  1.203452 ,  0.8499856,  0.7672832,  0.6000496,  0.443484 ,
+           0.443484 ,  0.4441952,  0.4441952,  0.3147568,  0.3147568 ])
+      Z = np.array([ 0.       ,  1.0499344,  1.2899136,  1.5104872,  1.5104872,
+            1.6028416,  1.6028416,  1.5367   ,  1.5367   ,  1.397508,  1.0397,  0.9976,  0.545 ,  0.49  ,
+            0.1141,  0.0764,  0.0383,  0.    , -0.0383, -0.0764, -0.1141,
+            -0.49  , -0.545 , -0.9976, -1.0397, -1.397508 , -1.5367   , -1.5367   , -1.6028416, -1.6028416,
+            -1.5104872, -1.5104872, -1.2899136, -1.0499344,  0.])
+    return R,Z
+
 
 
 if __name__ == '__main__':

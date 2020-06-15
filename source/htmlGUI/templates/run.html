@@ -47,11 +47,13 @@ Date:					January 2020
 			<!--Inputs-->
 		  <div class="itemInputButtons">
 				<form>
-					<div class="fields flex">
-									<input type="button" value="Import Default Inputs" onclick="loadDefaults()" id="loadDefaults" style="flex-grow: 2;">
-									<label for="fileChoose" style="flex-grow: 1;">Upload Input File:</label>
-									<input type="file" id="fileChoose" style="flex-grow: 1;">
-									<input type="button" value="Upload" onclick="uploadFile()" id="uploadFile" style="flex-grow: 1;">
+					<div class="fields">
+							<div class="field flex">
+									<input type="button" value="Import Default Inputs" onclick="loadDefaults()" id="loadDefaults">
+									<label for="fileChoose">Upload Input File:</label>
+									<input type="file" id="fileChoose">
+									<input type="button" value="Upload" onclick="uploadFile()" id="uploadFile">
+							</div>
 					</div>
 
 <!--
@@ -109,8 +111,16 @@ Date:					January 2020
 										<input type="text" name="nTrace" id="nTrace"></input>
 									</div>
 									<div class="field">
+										<label for="ionDirection">Ion Direction</label>
+										<input type="text" name="ionDirection" id="ionDirection"></input>
+									</div>
+									<div class="field">
 										<label for="gfilePath">Path to gfile</label>
 										<input type="text" id="gfilePath" placeholder='None'></input>
+									</div>
+									<div class="field">
+										<input type="checkbox" id="plasma3Dmask" onchange="toggleDisabled_3D(this.checked)">
+										<label for="plasma3Dmask">3D Plasma</label>
 									</div>
 								</div>
 					  	<input type="button" value="Pull MHD" onclick="loadMHD()", id="loadMHD" class="button inline">
@@ -140,6 +150,8 @@ Date:					January 2020
 
 				<!--CAD Tab-->
 				<div id="cad" class="tabcontent">
+					<div class=grid-container-cad>
+
 					<div class="scroll3">
 					<form>
 						<div class="fields">
@@ -160,6 +172,7 @@ Date:					January 2020
 					</form>
 				</div>
 				</div>
+			</div>
 
 				<!--PFC Tab-->
 				<div id="pfc" class="tabcontent">
@@ -186,36 +199,190 @@ Date:					January 2020
 					</div>
 				</div>
 
-
-
 				<!--HF Tab-->
 				<div id="hf" class="tabcontent">
-					<div class="scroll3">
-					<form>
-						<div class="fields">
-							<div class="field half">
-								<label for="lq">
-									Heat Flux Width:<span class=noCAPs> &lambda; <sub>q</sub> </span>
-								</label>
-								<input type="text" name="lq" id="lq" />
-							</div>
-							<div class="field half">
-								<label for="S">Gaussian Spreading: S</label>
-								<input type="text" name="S" id="S" />
-							</div>
-							<div class="field half">
-								<label for="P">P<sub>SOL</sub></label>
-								<input type="text" name="P" id="P"></input>
-							</div>
-							<div class="field half">
-								<label for="qBG">q<sub>BG</sub></label>
-								<input type="text" name="qBG" id="qBG"></input>
-							</div>
+					<div class="grid-container-hf">
+					<select class="button drop" id ="HFdropdown">
+						<option selected disabled value='default'>Choose HF Profile:</option>
+					  <option value='eich'>  Gaussian Spreading </option>
+					  <option value='multiExp'>Multi-Exponential</option>
+					  <option value='limiter'>Limiter</option>
+					</select>
+
+						<!-- Eich Profile -->
+						<div id='eich'>
+						<div class="scroll3">
+							<h4>Eich Profile</h4>
+							<form>
+								<div class="fields">
+									<div class="field half">
+										<label for="lqEich">
+											Heat Flux Width [mm]:<span class=noCAPs> &lambda; <sub>q</sub> </span>
+										</label>
+										<input type="text" name="lqEich" id="lqEich" />
+									</div>
+									<div class="field half">
+										<label for="S">Gaussian Spreading [mm]: S</label>
+										<input type="text" name="S" id="S" />
+									</div>
+									<div class="field half">
+										<label for="P1">P<sub>SOL</sub>[MW]</label>
+										<input type="text" name="P1" id="P1"></input>
+									</div>
+									<div class="field half">
+										<label for="qBG">q<sub>BG</sub>[MW]</label>
+										<input type="text" name="qBG" id="qBG"></input>
+									</div>
+
+									<div class="field half">
+										<input type="checkbox" id="LRmask1" onchange="toggleDisabled_LR1(this.checked)">
+											<label for="LRmask1">Long Range Intersection Checking</label>
+									</div>
+									<div class="field half"  id="LRdata1" hidden>
+										<label for="LRpower1" id="LRLabel1" > Power Threshold [MW]:</label>
+										<input type="text" id="LRpower1" value="50">
+									</div>
+
+								</div>
+								<input type="button" value="Load HF Parameters" onclick="loadHF()" id="loadHF1" class="button inline">
+							</form>
 						</div>
-						<input type="button" value="Load HF Parameters" onclick="loadHF()" id="loadHF" class="button inline">
-					</form>
+					</div>
+
+					<!-- Brunner Profile -->
+					<div id='multiExp'>
+					<div class="scroll3">
+						<h4>Multiple Exponential Profile</h4>
+						<form>
+							<div class="fields">
+								<div class="field half">
+									<!-- PN -->
+									<label for="lqPN2">
+										Private Near HF Width [mm]:<span class=noCAPs> &lambda; <sub>q,pn</sub> </span>
+									</label>
+									<input type="text" name="lqPN2" id="lqPN2"></input>
+								</div>
+								<div class="field half">
+								<label for="fracPN2">
+									Private Near Power Fraction:
+								</label>
+								<input type="text" name="fracPN2" id="fracPN2" />
+							</div>
+									<!-- PF -->
+								<div class="field half">
+									<label for="lqPF2">
+										Private Far HF Width [mm]:<span class=noCAPs> &lambda; <sub>q,pf</sub> </span>
+									</label>
+									<input type="text" name="lqPF2" id="lqPF2" />
+								</div>
+								<div class="field half">
+								<label for="fracPF2">
+									Private Far Power Fraction:
+								</label>
+								<input type="text" name="fracPF2" id="fracPF2" />
+							</div>
+									<!-- CN -->
+								<div class="field half">
+									<label for="lqCN2">
+										Common Near HF Width [mm]:<span class=noCAPs> &lambda; <sub>q,cn</sub> </span>
+									</label>
+									<input type="text" name="lqCN2" id="lqCN2" />
+								</div>
+								<div class="field half">
+								<label for="fracCN2">
+									Common Near Power Fraction:
+								</label>
+								<input type="text" name="fracCN2" id="fracCN2" />
+							</div>
+								<!-- CF -->
+								<div class="field half">
+									<label for="lqCF2">
+										Common Far HF Width [mm]:<span class=noCAPs> &lambda; <sub>q,cf</sub> </span>
+									</label>
+									<input type="text" name="lqCF2" id="lqCF2" />
+								</div>
+								<div class="field half">
+								<label for="fracCF2">
+									Common Far Power Fraction:
+								</label>
+								<input type="text" name="fracCF2" id="fracCF2" />
+							</div>
+
+								<div class="field">
+									<label for="P2">P<sub>SOL</sub>[MW]</label>
+									<input type="text" name="P2" id="P2" style="width:46%;"></input>
+								</div>
+
+								<div class="field half">
+									<input type="checkbox" id="LRmask2" onchange="toggleDisabled_LR2(this.checked)">
+										<label for="LRmask2">Long Range Intersection Checking</label>
+								</div>
+								<div class="field half"  id="LRdata2" hidden>
+									<label for="LRpower2" id="LRLabel2" > Power Threshold [MW]:</label>
+									<input type="text" id="LRpower2" value="50">
+								</div>
+
+							</div>
+							<input type="button" value="Load HF Parameters" onclick="loadHF()" id="loadHF2" class="button inline">
+						</form>
+					</div>
 				</div>
+					<!-- limiter Profile -->
+					<div id='limiter'>
+					<div class="scroll3">
+						<h4>Limiter Profile</h4>
+						<form>
+							<div class="fields">
+									<!-- CN -->
+								<div class="field half">
+									<label for="lqCN3">
+										Common Near HF Width [mm]:<span class=noCAPs> &lambda; <sub>q,cn</sub> </span>
+									</label>
+									<input type="text" name="lqCN3" id="lqCN3" />
+								</div>
+								<div class="field half">
+								<label for="fracCF3">
+									Common Near Power Fraction:
+								</label>
+								<input type="text" name="fracCN3" id="fracCN3" />
+							</div>
+
+								<!-- CF -->
+								<div class="field half">
+									<label for="lqCF3">
+										Common Far HF Width [mm]:<span class=noCAPs> &lambda; <sub>q,cf</sub> </span>
+									</label>
+									<input type="text" name="lqCF3" id="lqCF3" />
+								</div>
+								<div class="field half">
+								<label for="fracCF3">
+									Common Far Power Fraction:
+								</label>
+								<input type="text" name="fracCF3" id="fracCF3" />
+							</div>
+
+								<div class="field">
+									<label for="P3">P<sub>SOL</sub>[MW]</label>
+									<input type="text" name="P3" id="P3" style="width:46%;"></input>
+								</div>
+
+								<div class="field half">
+									<input type="checkbox" id="LRmask3" onchange="toggleDisabled_LR3(this.checked)">
+										<label for="LRmask3">Long Range Intersection Checking</label>
+								</div>
+								<div class="field half"  id="LRdata3" hidden>
+									<label for="LRpower3" id="LRLabel3" > Power Threshold [MW]:</label>
+									<input type="text" id="LRpower3" value="50">
+								</div>
+
+							</div>
+							<input type="button" value="Load HF Parameters" onclick="loadHF()" id="loadHF3" class="button inline">
+						</form>
+					</div>
 				</div>
+
+				</div>
+			</div>
 
 
 				<!--FEM Tab-->
@@ -476,6 +643,18 @@ Date:					January 2020
 								<input type="button" value="Apply Changes" onclick="gfileClean()" id="gfileClean" class="button inline">
 							</div>
 
+							<div class="field half">
+								<label for="rlcfsNew">New LCFS R Value [m]</label>
+								<input type="text" id="rlcfsNew" value='0.319531'></input>
+							</div>
+							<div class="field half">
+								<label for="zlcfsNew">New LCFS Z Value [m]</label>
+								<input type="text" id="zlcfsNew" value='NA'></input>
+							</div>
+									<div class="field center">
+								<input type="button" value="Re-define LCFS" onclick="renormalizeLCFS()" id="renormalizeLCFS" class="button inline">
+							</div>
+
 						<div class="field">
 							<label for="gfilePath1New">Path to new gfile</label>
 							<input type="text" id="gfilePath1New" placeholder='None'></input>
@@ -524,6 +703,7 @@ Date:					January 2020
 -->
 		<div class="slide-container fade" id="slide4">
 			<div class=grid-container-gCAD>
+			<h2 class=itemSlideHeaderPV>Paraview Web</h2>
 			<!--		<iframe src="{{ url_for('static',filename='html/test.html') }}" style="width: 100vw; height: 100vh;"></iframe>  -->
 					<object type="text/html" data="{{ url_for('static',filename='html/test.html') }}" style="width: 100%; height: 100%;"></object>
 			</div>
@@ -558,6 +738,7 @@ Date:					January 2020
 		<script src="{{ url_for('static',filename='js/setupFEM.js') }}"></script>
 		<script src="{{ url_for('static',filename='js/slideshow.js') }}"></script>
 		<script src="{{ url_for('static',filename='js/gfileCleaner.js') }}"></script>
+		<script src="{{ url_for('static',filename='js/chooseHFprof.js') }}"></script>
 
 		<!-- These are loaded on startup -->
 		<script src="{{ url_for('static',filename='js/refreshLog.js') }}"></script>
