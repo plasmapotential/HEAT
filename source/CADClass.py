@@ -606,6 +606,7 @@ class CAD:
             if any(substring in i.Label for substring in part_list):
                 #if i.Label in part_list:
                 newobj.append(i)
+                newobj[-1].Placement = i.getGlobalPlacement()
 
         #Export to a new step file
         Import.export(newobj, outfile)
