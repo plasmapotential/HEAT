@@ -1,0 +1,1245 @@
+#GUIclass.py
+#Description:   GUI Module
+#Engineer:      T Looby
+#Date:          20200115
+"""
+This is the launch point for the HEAT code, when accessing from the HTML GUI.
+It calls HEAT functions and generates heat fluxes based upon user input.  These
+functions are usually called from the HEATgui.py script, which is the FLASK
+binding to html.
+"""
+
+import CADClass
+import MHDClass
+import toolsClass
+import heatfluxClass
+import openFOAMclass
+import pfcClass
+import time
+import numpy as np
+import logging
+import os
+import pandas as pd
+import shutil
+import errno
+import copy
+import EFIT.equilParams_class as EP
+
+log = logging.getLogger(__name__)
+tools = toolsClass.tools()
+
+def create_app(GUIobj):
+    """
+    Creates flask app with GUI object so that we can refer to it later.
+    """
+    from flask import Flask
+    app = Flask(__name__)
+    app.config['GUI'] = GUIobj
+    return app
+
+def create_DASH_app(GUIobj):
+    import dash
+    app = dash.Dash(__name__, meta_tags=[{"name": "viewport", "content": "width=device-width"}])
+    app.config['GUI'] = GUIobj
+    return app
+
+class GUIobj():
+    def __init__(self, logFile, rootDir):
+        self.logFile = logFile
+        self.rootDir = rootDir
+        self.initializeEveryone()
+        self.timestepMap = None
+        self.makeGfileDir()
+        return
+
+    def makeGfileDir(self):
+        """
+        makes a temp directory in rootDir path for user uploaded gfiles
+
+        the self.MHD.gFileDir directory is accessible to the GUI users for uploading
+        and downloading
+        """
+        tempDir = self.rootDir + 'gFiles/'
+        self.MHD.gFileDir = tempDir
+        try:
+            os.mkdir(tempDir)
+            print("Directory " , tempDir ,  " Created ")
+        except FileExistsError:
+            try: shutil.rmtree(tempDir)
+            except OSError as e:
+                print ("Error: %s - %s." % (e.filename, e.strerror))
+                sys.exit()
+
+            os.mkdir(tempDir)
+            print("Directory " , tempDir ,  " Created ")
+        return
+
+    def machineSelect(self, MachFlag):
+        """
+        Select a machine and set the necessary paths
+        """
+        self.MachFlag = MachFlag
+        self.setInitialFiles()
+        return
+
+    def setInitialFiles(self):
+        """
+        sets files back to default settings
+        infile is path to input file with all HEAT parameters
+        PartsFile is path to file with parts we will calculate HF on
+        IntersectFile is path to file with parts we will check for intersections on
+        """
+        if self.MachFlag == 'nstx':
+            print('Loading NSTX-U Input Filestream')
+            log.info('Loading NSTX-U Input Filestream')
+            self.infile = './inputs/NSTXU/NSTXU_input.csv'
+            self.pfcFile = './inputs/NSTXU/NSTXUpfcs.csv'
+#            self.intersectFile = './inputs/NSTXU/NSTXUintersects.csv'
+#            self.PartsFile = '../inputs/NSTXU/NSTXUparts.csv'
+            self.OF.meshDir = '/u/tlooby/NSTX/CAD/HEAT/3Dmeshes'
+
+        elif self.MachFlag == 'st40':
+            print('Loading ST40 Input Filestream')
+            log.info('Loading ST40 Input Filestream')
+            self.infile = './inputs/ST40_input.csv'
+            self.PartsFile = './inputs/ST40parts.csv'
+            self.intersectFile = './inputs/ST40intersects.csv'
+            self.OF.meshDir = '/u/tlooby/ST40/CAD/HEAT/3Dmeshes'
+
+        elif self.MachFlag == 'd3d':
+            print('Loading DIII-D Input Filestream')
+            log.info('Loading DIII-D Input Filestream')
+            self.infile = './inputs/D3D_input.csv'
+            self.PartsFile = './inputs/D3Dparts.csv'
+            self.intersectFile = './inputs/D3Dintersects.csv'
+            self.OF.meshDir = '/u/tlooby/D3D/CAD/HEAT/3Dmeshes'
+
+        self.OF.templateCase = './openFoamTemplates/heatFoamTemplate'
+        self.OF.templateDir = './openFoamTemplates/templateDicts'
+
+
+
+    def initializeEveryone(self):
+        """
+        Create objects that we can reference later on
+        """
+        self.MHD = MHDClass.MHD()
+        self.CAD = CADClass.CAD()
+        self.HF = heatfluxClass.heatFlux()
+        self.OF = openFOAMclass.OpenFOAM()
+        return
+
+    def getMHDInputs(self,shot=None,tmin=None,tmax=None,nTrace=None,
+                     gFileList=None,gFileData=None,plasma3Dmask=None):
+        """
+        Get the mhd inputs from the gui or input file
+        """
+        self.MHD.allowed_class_vars()
+        tools.vars2None(self.MHD)
+        self.MHD.MachFlag=self.MachFlag
+        tools.read_input_file(self.MHD, infile=self.infile)
+        self.MHD.setTypes()
+
+        if shot is not None:
+            self.MHD.shot = shot
+        if tmin is not None:
+            self.MHD.tmin = tmin
+        if tmax is not None:
+            self.MHD.tmax = tmax
+        if nTrace is not None:
+            self.MHD.nTrace = nTrace
+        self.MHD.gFileList = gFileList
+        if gFileList is not None:
+            self.MHD.writeGfileData(gFileList, gFileData)
+
+        if plasma3Dmask is not None:
+            self.MHD.plasma3Dmask = plasma3Dmask
+
+        self.MHD.tree = 'EFIT02'
+        self.MHD.dataPath = self.MHD.dataPath + self.MHD.MachFlag +"_{:06d}".format(self.MHD.shot)
+        self.MHD.get_mhd_inputs('nstx',self.MHD.gFileList)
+
+#        self.t = self.MHD.timesteps[0]
+        self.MHD.makeEFITobjects()
+        self.NCPUs = 4
+        self.MHD.psiSepLimiter = None
+
+        self.MHD.setTypes()
+
+        print('psiSep0 = {:f}'.format(self.MHD.ep[0].g['psiSep']))
+        print('psiAxis0 = {:f}'.format(self.MHD.ep[0].g['psiAxis']))
+        print('Nlcfs0: {:f}'.format(self.MHD.ep[0].g['Nlcfs']))
+        print('length Rlcfs0: {:f}'.format(len(self.MHD.ep[0].g['lcfs'][:,0])))
+        log.info('psiSep0 = {:f}'.format(self.MHD.ep[0].g['psiSep']))
+        log.info('psiAxis0 = {:f}'.format(self.MHD.ep[0].g['psiAxis']))
+        log.info('Nlcfs0: {:f}'.format(self.MHD.ep[0].g['Nlcfs']))
+        if self.MHD.plasma3Dmask==1:
+            print('Solving for 3D plasmas with MAFOT')
+            log.info('Solving for 3D plasmas with MAFOT')
+        else:
+            print('Solving for 2D plasmas with EFIT (no MAFOT)')
+            log.info('Solving for 2D plasmas with EFIT (no MAFOT)')
+        return
+
+    def gfileClean(self, psiRZMult,psiSepMult,psiAxisMult,FpolMult, t):
+        """
+        multiplies values in MHD ep object with scalars defined by user in html gui
+        """
+        print("psiRZ Multiplier = {:f}".format(psiRZMult))
+        log.info("psiRZ Multiplier = {:f}".format(psiRZMult))
+        print("psiSep Multipltier = {:f}".format(psiSepMult))
+        log.info("psiSep Multipltier = {:f}".format(psiSepMult))
+        print("psiAxis Multipltier = {:f}".format(psiAxisMult))
+        log.info("psiAxis Multipltier = {:f}".format(psiAxisMult))
+        print("Fpol Multiplie = {:f}".format(FpolMult))
+        log.info("Fpol Multiplie = {:f}".format(FpolMult))
+
+        idx = np.where(t==self.MHD.timesteps)[0][0]
+        ep = self.MHD.ep[idx]
+
+        ep.g['psiRZ'] *= psiRZMult
+        ep.g['psiSep'] *= psiSepMult
+        ep.g['psiAxis'] *= psiAxisMult
+        ep.g['Fpol'] *= FpolMult
+        psi = ep.g['psiRZ']
+        psiSep = ep.g['psiSep']
+        psiAxis = ep.g['psiAxis']
+        ep.g['psiRZn'] = (psi - psiAxis) / (psiSep - psiAxis)
+        return
+
+
+    def findPsiSepfromEQ(self,t, rNew=None):
+        """
+        finds psiSep by stepping to/from core and calculating
+        minimum psiN along Z-plane at each R location.  Increments in um
+        """
+        tIdx = np.where(t==self.MHD.timesteps)[0][0]
+        ep = self.MHD.ep[tIdx]
+        gfile = self.MHD.dataPath + '/' + '{:06d}/'.format(t) + 'g{:6d}.{:05d}'.format(self.MHD.shot, t)
+        #redefine LCFS to be tangent to CAD maximum R (because rNew=None)
+        self.newLCFS(t, rNew=rNew, zNew=None, psiSep=None)
+        print("CAD rTangent: {:f}".format(self.MHD.rTangent))
+        if rNew is None:
+            rSep = self.MHD.rTangent
+        else:
+            rSep = float(rNew)
+
+        zMin = ep.g['ZmAxis'] - 0.25
+        zMax = ep.g['ZmAxis'] + 0.25
+        zWall = np.linspace(zMin, zMax, 100000)
+        while(True):
+            print("rSep = {:f}".format(rSep))
+            rWall = np.ones((len(zWall)))*rSep
+            psiN = ep.psiFunc.ev(rWall, zWall).min()
+            print("psiN Minimum = {:f}".format(psiN))
+            if psiN < 1.0:
+                rSep -= 1e-6 #step 1um away from core
+
+            else:
+                break
+        self.MHD.rTangent = rSep
+        #now that we have found rTangent and the psiSep that makes this CAD
+        #truly limited, write this psiSep to all gfiles in HEAT tree
+        self.newLCFSallTimesteps(rNew=self.MHD.rTangent, zNew=None, psiSep=None)
+        #self.MHD.makeEFITobjects()
+        for PFC in self.PFCs:
+            PFC.resetPFCeps(self.MHD)
+
+    def findPsiSepfromPFCs(self, t, rNew=None):
+        """
+        finds psiSep for limiters by incrementally increasing R_{psiSep, IMP},
+        at a specific time.  Then rewrite all gfiles in MHD.timesteps with this
+        new LCFS.
+
+        Both MHD and PFC objects must be defined before running this function
+        """
+        tIdx = np.where(t==self.MHD.timesteps)[0][0]
+        gfile = self.MHD.dataPath + '/' + '{:06d}/'.format(t) + 'g{:6d}.{:05d}'.format(self.MHD.shot, t)
+        #redefine LCFS to be tangent to CAD maximum R (because rNew=None)
+        self.newLCFS(t, rNew=rNew, zNew=None, psiSep=None)
+        print("CAD rTangent: {:f}".format(self.MHD.rTangent))
+
+        #run 2D equilibrium for all points in PFCs and determine if this rTangent
+        #actually resulted in all psiN > 1.0.  If not, add 1um to rTangent and
+        #test it again, looping until all points in CAD are in SOL
+        while(True):
+            privateN = 0
+            for i,PFC in enumerate(self.PFCs):
+                PFC.shadowed_mask = np.zeros((len(PFC.centers)))
+                PFC.ep = EP.equilParams(gfile)
+                self.MHD.psi2DfromEQ(PFC)
+                psiMinimum = min(PFC.psimin)
+                if psiMinimum < 1.0:
+                    print(PFC.ep.g['psiSep'])
+                    print(psiMinimum)
+                    privateN += 1
+                #psiIdx = np.argmin(PFC.psimin)
+                #x[i] = PFC.centers[psiIdx][0]
+                #y[i] = PFC.centers[psiIdx][1]
+                #z[i] = PFC.centers[psiIdx][2]
+                #R,Z,phi = tools.xyz2cyl(x,y,z)
+            if privateN > 0:
+                print("Number of PFCs with points in core: {:d}".format(privateN))
+                print("psiSep: {:f}".format(self.MHD.psiSepLimiter))
+                print("Incrementing rTangent by 10 um...")
+                self.MHD.rTangent += 1e-6 #add 1 um
+                print("New rTangent: {:f}".format(self.MHD.rTangent))
+                self.newLCFS(t, rNew=self.MHD.rTangent, zNew=None, psiSep=None)
+
+            else:
+                break
+
+        #now that we have found rTangent and the psiSep that makes this CAD
+        #truly limited, write this psiSep to all gfiles in HEAT tree
+        self.newLCFSallTimesteps(rNew=self.MHD.rTangent, zNew=None, psiSep=None)
+        #self.MHD.makeEFITobjects()
+        return
+
+    def newLCFSallTimesteps(self, rNew=None, zNew=None, psiSep=None):
+        """
+        Loops through the timesteps in MHD object and overwrites new gfiles
+        with user defined psiSep
+        """
+        for t in self.MHD.timesteps:
+            self.newLCFS(t,rNew,zNew,psiSep)
+        return
+
+    def newLCFS(self, t, rNew=None, zNew=None, psiSep=None):
+        """
+        resets the lcfs so that it is defined as psi value at rminNew, zminNew,
+        or psiSep defines new LCFS. For use with limited discharges
+
+        overwrites existing gfile
+        """
+        print("redefining LCFS")
+        log.info("redefining LCFS")
+        idx = np.where(t==self.MHD.timesteps)[0][0]
+        ep = self.MHD.ep[idx]
+
+        if zNew in ['None', 'none', 'na', 'NA', 'N/A', 'n/a', '', ' ', None]:
+            zNew = None
+        else:
+            zNew = float(zNew)
+
+        #find maximum value of R in all of the PFCs
+        if rNew in ['None', 'none', 'na', 'NA', 'N/A', 'n/a', '', ' ', None]:
+            print('Using CAD rNew tangent point')
+            rNew = 0.0
+            for PFC in self.PFCs:
+                if PFC.Rmax > rNew:
+                    rNew = PFC.Rmax
+        else:
+            rNew = float(rNew)
+
+        g = self.MHD.renormalizeLCFS(self.MHD.ep[idx], rNew, zNew, psiSep)
+        ep.g['psiSep'] = g['psiSep']
+        ep.g['lcfs'] = g['lcfs']
+        ep.g['Nlcfs'] = g['Nlcfs']
+
+        #set psi and R for LCFS tangent point
+        self.MHD.psiSepLimiter = g['psiSep']
+        self.MHD.rTangent = rNew
+
+        #overwrite existing gfile
+        gfile = self.MHD.dataPath + '/' + '{:06d}/'.format(t) + 'g{:6d}.{:05d}'.format(self.MHD.shot, t)
+        self.MHD.writeGfile(gfile, shot=self.MHD.shot, time=t, ep=ep)
+        self.MHD.ep[idx] = EP.equilParams(gfile)
+        for PFC in self.PFCs:
+            PFC.resetPFCeps(self.MHD)
+        return
+
+    def writeGfile(self, newGfile=None, shot=None, t=None):
+        """
+        writes a new gfile from EP object already in MHD object
+        """
+        idx = np.where(t==self.MHD.timesteps)[0][0]
+        ep = self.MHD.ep[idx]
+
+        self.MHD.writeGfile(newGfile, shot, t, ep)
+        return
+
+    def interpolateGfile(self, t):
+        """
+        finds values of all gfile parameters for user defined time using the
+        gfiles in the self.MHD.ep object
+
+        interpolates at given t then writes to file in same gFileInterpolate
+        directory
+        """
+        print("Interpolating gFile")
+        log.info("Interpolating gFile")
+        t = int(t)
+        ep = self.MHD.gFileInterpolate(t)
+        gFileName = self.MHD.gFileDir + 'g{:06d}.{:05d}'.format(self.MHD.shot,t)
+        self.MHD.writeGfile(gFileName,self.MHD.shot,t,ep)
+        print("gFile Interpolated")
+        log.info("gFile Interpolated")
+        return
+
+    def getCADInputs(self,ROIGridRes=None,gridRes=None,STPfile=None):
+        """
+        Loads CAD file
+        """
+        import numpy as np
+        tools.initializeInput(self.CAD, infile=self.infile)
+        self.CAD.rootDir = self.rootDir #set HEAT rootDir from HEATgui.py
+        if ROIGridRes is not None:
+            self.CAD.ROIGridRes = ROIGridRes
+        if gridRes is not None:
+            self.CAD.gridRes = gridRes
+        if STPfile is not None:
+            self.CAD.STPfile = STPfile
+        self.CAD.loadSTEP()
+        return
+
+    def getPFCdataFromGUI(self, data):
+        """
+        initializes timestepMap from GUI rather than from file
+        """
+        self.timestepMap = pd.DataFrame.from_dict(data)[list (data[0].keys())]
+        self.timestepMap = self.timestepMap.rename(columns=lambda x: x.strip())
+        self.timestepMap['PFCname'] = self.timestepMap['PFCname'].str.strip()
+        self.timestepMap['intersectName'] = self.timestepMap['intersectName'].str.strip()
+        return
+
+    def readPFCfile(self, infile):
+        """
+        Reads PFC names, timesteps, intersect names, and mapdirection from file
+        """
+        if infile == None:
+            print("No timesteps input file.  Please provide input file")
+            log.info("No timesteps input file.  Please provide input file")
+            sys.exit()
+
+        self.timestepMap = pd.read_csv(infile, comment='#')
+        self.timestepMap = self.timestepMap.rename(columns=lambda x: x.strip())
+        self.timestepMap['PFCname'] = self.timestepMap['PFCname'].str.strip()
+        self.timestepMap['intersectName'] = self.timestepMap['intersectName'].str.strip()
+        return
+
+    def getPFCinputs(self, defaultMask=True):
+        """
+        Load heat flux PFCs and intersection calculation PFCs from input files
+        Generate meshes for each
+        Generate file for HEAT calculation for each heat flux PFC
+        """
+        #if defaultMask is true read default pfc file
+        if defaultMask is True:
+            self.readPFCfile(self.pfcFile)
+        self.CAD.getROI(self.timestepMap)
+        self.CAD.getROImeshes()
+        self.CAD.writeMesh2file(self.CAD.ROImeshes, self.CAD.ROI, path=self.CAD.STLpath)
+        print("Calculating HF on these tiles:")
+        log.info("Calculating HF on these tiles:")
+        print(self.CAD.ROIList)
+        log.info(self.CAD.ROIList)
+
+        self.PFCs = []
+        #initialize PFC objects for each ROI part
+        for i,row in enumerate(self.timestepMap.values):
+            PFC = pfcClass.PFC(row)
+            PFC.makePFC(self.MHD, self.CAD, i, self.timestepMap['MapDirection'][i], clobberFlag=True)
+            self.PFCs.append(PFC)
+
+        #Find potential intersections by file as they correspond to ROI PFCs,
+        # then mesh 'em
+        self.CAD.getIntersectsFromFile(self.timestepMap)
+        self.CAD.getIntersectMeshes()
+        self.CAD.writeMesh2file(self.CAD.intersectMeshes,
+                                self.CAD.intersectList,
+                                path=self.CAD.STLpath,
+                                resolution=self.CAD.gridRes
+                                )
+        print("Potential intersects on these tiles:")
+        log.info("Potential intersects on these tiles:")
+        print(self.CAD.intersectList)
+        log.info(self.CAD.intersectList)
+
+        #Build HEAT file tree
+        tools.buildDirectories(self.CAD.ROIList,
+                                         self.MHD.timesteps,
+                                         self.MHD.dataPath,
+                                         clobberFlag=True
+                                         )
+
+        #assign tag if PFC is run in multiple directions (multiple lines in XXXpfc.csv)
+        for PFC in self.PFCs:
+            bool = np.where(self.timestepMap['PFCname'] == PFC.name)[0]
+            if len(bool) > 1:
+                if PFC.mapDirection > 0:
+                    PFC.tag = 'forward'
+                else:
+                    PFC.tag = 'reverse'
+            else:
+                PFC.tag = None
+
+
+        for PFC in self.PFCs:
+            ctrs = PFC.centers
+            R,Z,phi = tools.xyz2cyl(ctrs[:,0],ctrs[:,1],ctrs[:,2])
+            PFC.Rmax = max(R)
+            print("PFC: "+PFC.name+" Maximum R: {:f}".format(max(R)))
+        return
+
+
+    def getHFInputs(self,lqEich,S,P,qBG,lqPN,lqPF,lqCN,lqCF,
+                        fracPN, fracPF, fracCN, fracCF, mode, LRmask, LRpower):
+        """
+        get heat flux inputs from gui or input file
+        """
+        self.initializeHF()
+        self.HF.hfMode = mode
+        self.HF.lqEich = float(lqEich)
+        self.HF.lqCN = float(lqCN)
+        self.HF.lqCF = float(lqCF)
+        self.HF.lqPN = float(lqPN)
+        self.HF.lqPF = float(lqPF)
+        self.HF.S = float(S)
+        self.HF.Psol = float(P)
+        self.HF.qBG = float(qBG)
+        self.HF.mode = mode
+        self.HF.fracCN = float(fracCN)
+        self.HF.fracCF = float(fracCF)
+        self.HF.fracPN = float(fracPN)
+        self.HF.fracPF = float(fracPF)
+        if 'yes' in LRmask:
+            self.HF.LRmask = True
+            self.HF.LRpower = float(LRpower)
+        else:
+            self.HF.LRmask = False
+
+        print("Mode = "+mode)
+        log.info("Mode = "+mode)
+        print("Psol = {:f}".format(P))
+        log.info("Psol = {:f}".format(P))
+        print("Long range intersection checking: "+LRmask)
+
+        if mode=='eich':
+            print("lqEich = {:f}".format(self.HF.lqEich))
+            print("S = {:f}".format(self.HF.S))
+            print("qBG = {:f}".format(self.HF.qBG))
+            log.info("lqEich = {:f}".format(self.HF.lqEich))
+            log.info("S = {:f}".format(self.HF.S))
+            log.info("qBG = {:f}".format(self.HF.qBG))
+        elif mode=='limiter':
+            print("lqCN = {:f}".format(self.HF.lqCN))
+            print("lqCF = {:f}".format(self.HF.lqCF))
+            print("fracCN = {:f}".format(self.HF.fracCN))
+            print("fracCF = {:f}".format(self.HF.fracCF))
+            log.info("lqCN = {:f}".format(self.HF.lqCN))
+            log.info("lqCF = {:f}".format(self.HF.lqCF))
+            log.info("fracCN = {:f}".format(self.HF.fracCN))
+            log.info("fracCF = {:f}".format(self.HF.fracCF))
+        elif mode=='multiExp':
+            print("lqCN = {:f}".format(self.HF.lqCN))
+            print("lqCF = {:f}".format(self.HF.lqCF))
+            print("lqPN = {:f}".format(self.HF.lqPN))
+            print("lqPF = {:f}".format(self.HF.lqPF))
+            print("fracCN = {:f}".format(self.HF.fracCN))
+            print("fracCF = {:f}".format(self.HF.fracCF))
+            print("fracPN = {:f}".format(self.HF.fracPN))
+            print("fracPF = {:f}".format(self.HF.fracPF))
+            log.info("lqCN = {:f}".format(self.HF.lqCN))
+            log.info("lqCF = {:f}".format(self.HF.lqCF))
+            log.info("lqPN = {:f}".format(self.HF.lqPN))
+            log.info("lqPF = {:f}".format(self.HF.lqPF))
+            log.info("fracCN = {:f}".format(self.HF.fracCN))
+            log.info("fracCF = {:f}".format(self.HF.fracCF))
+            log.info("fracPN = {:f}".format(self.HF.fracPN))
+            log.info("fracPF = {:f}".format(self.HF.fracPF))
+
+        return
+
+    def bfieldAtSurface(self, PFC):
+        """
+        Calculate the B field at tile surface
+
+        if PFC is None, run for every tile at first timestep, else run for 1 tile
+        """
+        ctrs = PFC.centers
+        R,Z,phi = tools.xyz2cyl(ctrs[:,0],ctrs[:,1],ctrs[:,2])
+        PFC.Bxyz = self.MHD.Bfield_pointcloud(PFC.ep, R, Z, phi, PFC.mapDirection)
+        self.MHD.write_B_pointcloud(ctrs,PFC.Bxyz,PFC.controlfilePath)
+
+    def Btrace(self,x,y,z,t,mapDirection):
+        """
+        Run a MAFOT structure trace from a point defined in the gui
+        """
+#        idx = np.where(t==self.MHD.timesteps)[0][0]
+#        ep = self.MHD.ep[idx]
+        t = int(t)
+        mapDirection=int(mapDirection)
+        x = float(x)/1000.0
+        y = float(y)/1000.0
+        z = float(z)/1000.0
+
+        xyz = np.array([x,y,z])
+        controlfile = '_structCTL.dat'
+        dphi = 1.0
+
+        self.MHD.ittStruct = self.MHD.nTrace+1
+        gridfile = self.MHD.dataPath + '/' + '{:06d}/struct_grid.dat'.format(t)
+        controlfilePath =  self.MHD.dataPath + '/' + '{:06d}/'.format(t)
+        self.MHD.writeControlFile(controlfile, t, mapDirection, mode='struct')
+        self.MHD.writeMAFOTpointfile(xyz,gridfile)
+        self.MHD.getFieldpath(dphi, gridfile, controlfilePath, controlfile, paraview_mask=True)
+        return
+
+    def NormPC(self, PFC):
+        """
+        create a normal vector point cloud for mesh centers on tile surface
+        """
+        self.CAD.write_normal_pointcloud(PFC.centers,PFC.norms,PFC.controlfilePath)
+        return
+
+    def shadowPC(self, PFC):
+        """
+        create a pointcloud for mesh center locations where 1=shadowed, 0=not shadowed
+        """
+        #Check for intersections with MAFOT struct if it hasnt been done by HFPC already
+        #print("INTERSECTION CHECK INITIALIZED")
+        #log.info("INTERSECTION CHECK INITIALIZED")
+        #self.PFC.findShadows_structure(self.MHD,PFC,self.targetMeshes)
+        PFC.write_shadow_pointcloud(PFC.centers,PFC.shadowed_mask,PFC.controlfilePath)
+
+    def bdotnPC(self, PFC):
+        """
+        makes a cos(alpha) point cloud:b_hat dot n_hat
+        where b_hat is normalized magnetic field vector and n_hat is mesh surface
+        normal vector
+        """
+        self.HF.HFincidentAngle(PFC,self.MHD)
+        PFC.write_bdotn_pointcloud(PFC.centers, PFC.bdotn, PFC.controlfilePath)
+
+
+    def initializeHF(self):
+        """
+        Initialize heat flux variables
+        """
+        print("-"*70)
+        print("HEAT FLUX MODULE INITIALIZED")
+        log.info("HEAT FLUX MODULE INITIALIZED")
+        #Initialize HF Object
+        tools.initializeInput(self.HF, infile=self.infile)
+
+    def runHEAT(self, runList):
+        """
+        Run a HEAT calculation.  This is called from gui by user.
+        Creates point clouds at each mesh center of PFC objects in CAD ROI
+
+        Steps forward in time, and then solves everything for each PFC at that
+        timestep
+
+        runList options are:
+        Bpc         Bfield point cloud
+        psiPC       Normalized psi point cloud
+        shadowPC    shadowMask point cloud
+        NormPC      Normal Field point cloud
+        bdotnPC     bdotn poitn cloud
+        HFpc        heat flux point cloud
+        """
+        print('\n')
+        print("-"*70)
+        print("HEAT RUN INITIALIZED")
+        log.info("HEAT RUN INITIALIZED")
+        t0 = time.time()
+        allowedOptions = ['HFpc', 'shadowPC', 'bdotnPC', 'Bpc', 'psiPC', 'NormPC']
+        #make sure that something in runList can be run in this function, else return
+        if len([i for i in runList if i in allowedOptions]) < 1:
+            print("Nothing in runList can be run in HEAT run function")
+            return
+        #set up variables for power balance calculation
+        powerTesselate = np.zeros((len(self.MHD.timesteps)))
+        powerTrue = np.zeros((len(self.MHD.timesteps)))
+        #run HEAT for all tiles for all timesteps
+        for tIdx,t in enumerate(self.MHD.timesteps):
+            print('\n')
+            print("-"*70)
+            print("Timestep: {:d}".format(t))
+            log.info("Timestep: {:d}".format(t))
+            for PFC in self.PFCs:
+                if t not in PFC.timesteps:
+                    pass
+                else:
+                    #set up file directory structure
+                    PFC.controlfile = '_lamCTL.dat'
+                    PFC.controlfileStruct = '_struct_CTL.dat'
+                    PFC.controlfilePath = self.MHD.dataPath + '/' + '{:06d}/'.format(t) + PFC.name + '/'
+                    PFC.gridfile = self.MHD.dataPath + '/' + '{:06d}/'.format(t) + PFC.name + '/grid.dat'
+                    PFC.gridfileStruct = self.MHD.dataPath + '/' + '{:06d}/'.format(t) + PFC.name + '/struct_grid.dat'
+                    PFC.outputFile = PFC.controlfilePath + 'lam.dat'
+                    PFC.structOutfile = PFC.controlfilePath + 'struct.dat'
+                    #set up time and equilibrium
+                    PFC.t = t
+                    PFC.ep = PFC.EPs[tIdx]
+                    PFC.shadowed_mask = PFC.shadowMasks[tIdx]
+                    print('PFC Name: '+ PFC.name)
+                    if 'HFpc' in runList:
+                        self.HF_PFC(PFC, PFC.tag)
+                        PFC.powerSum[tIdx] = self.HF.power_sum_mesh(PFC)
+                        print('Maximum heat load on tile: {:f}'.format(max(PFC.qDiv)))
+                        print('Input Power = {:f}'.format(self.HF.Psol))
+                        print('Tessellated Total Power = {:f}'.format(PFC.powerSum[tIdx]))
+                        log.info('PFC Name: '+ PFC.name)
+                        log.info('Maximum heat load on tile: {:f}'.format(max(PFC.qDiv)))
+                        log.info('Input Power = {:f}'.format(self.HF.Psol))
+                        log.info('Tessellated Total Power = {:f}'.format(PFC.powerSum[tIdx]))
+                        print("\nTime Elapsed: {:f}".format(time.time() - t0))
+                        log.info("\nTime Elapsed: {:f}".format(time.time() - t0))
+                        powerTesselate[tIdx] += PFC.powerSum[tIdx]
+                        powerTrue[tIdx] += self.HF.Psol
+                    if 'Bpc' in runList:
+                        self.bfieldAtSurface(PFC)
+                    if 'psiPC' in runList:
+                        self.psiPC(PFC)
+                    if 'NormPC' in runList:
+                        self.NormPC(PFC)
+                    if 'shadowPC' in runList:
+                        self.shadowPC(PFC)
+                    if 'bdotnPC' in runList:
+                        self.bdotnPC(PFC)
+
+
+            #merge multiple pointclouds into one single pointcloud for visualization
+            tPath = self.MHD.dataPath + '/' + '{:06d}/'.format(t)
+            self.combinePFCpointcloud(runList, tPath)
+            #copy each timestep's composite point clouds to central location for
+            #paraview postprocessing (movies)
+            self.combineTimeSteps(runList, t)
+
+        if 'HFpc' in runList:
+            print('Total Input Power = {:f}'.format(np.sum(powerTrue)))
+            print('Total Tessellated Total Power = {:f}'.format(np.sum(powerTesselate)))
+            log.info('Total Input Power = {:f}'.format(np.sum(powerTrue)))
+            log.info('Total Tessellated Total Power = {:f}'.format(np.sum(powerTesselate)))
+
+        print("Total Time Elapsed: {:f}".format(time.time() - t0))
+        log.info("Total Time Elapsed: {:f}".format(time.time() - t0))
+        print("\nCompleted HEAT run")
+        log.info("\nCompleted HEAT run")
+        os.system('spd-say -t female2 "HEAT run complete"')
+
+        return
+
+    def HF_PFC(self, PFC, tag=None):
+        """
+        meat and potatoes of the HF calculation.  Called in loop or by parallel
+        processes for each PFC object
+        """
+        #Check for intersections with MAFOT struct
+        PFC.findShadows_structure(self.MHD, self.CAD)
+
+        #Run MAFOT laminar for 3D plasmas
+        if self.MHD.plasma3Dmask==True:
+#            print('\n')
+#            print("-"*70)
+#            print("MAFOT LAMINAR MODULE INITIALIZED")
+#            log.info("MAFOT LAMINAR MODULE INITIALIZED")
+            CTLfile=PFC.controlfilePath + PFC.controlfile
+            self.MHD.writeControlFile(CTLfile, PFC.t, PFC.mapDirection, mode='laminar')
+            use = np.where(PFC.shadowed_mask != 1)[0]
+            self.MHD.writeMAFOTpointfile(PFC.centers[use],PFC.gridfile)
+            self.MHD.runMAFOTlaminar(PFC.gridfile,PFC.controlfilePath,PFC.controlfile,self.NCPUs)
+            self.HF.readMAFOTLaminarOutput(PFC,PFC.outputFile)
+            os.remove(PFC.outputFile)
+        #get psi from gfile for 2D plasmas
+        else:
+            self.MHD.psi2DfromEQ(PFC)
+
+        #Create Heat Flux Profile
+        q = self.HF.getHFprofile(PFC, self.MachFlag)
+        qDiv = self.HF.q_div(PFC, self.MHD, q)
+
+        #Points over threshold power are likely errors, so check them
+        if self.HF.LRmask == True:
+            distPhi = 370.0 #degrees
+            qDiv = PFC.longRangeIntersectCheck(qDiv,
+                                               self.HF.LRpower,
+                                               distPhi,
+                                               self.MHD,
+                                               self.CAD)
+
+        #Save data to class variable for future use
+        PFC.q = q
+        PFC.qDiv = qDiv
+
+        #Create pointclouds for paraview
+        R,Z,phi = tools.xyz2cyl(PFC.centers[:,0],PFC.centers[:,1],PFC.centers[:,2])
+        PFC.write_shadow_pointcloud(PFC.centers,PFC.shadowed_mask,PFC.controlfilePath,PFC.tag)
+        self.HF.write_heatflux_pointcloud(PFC.centers,qDiv,PFC.controlfilePath, PFC.tag)
+        PFC.write_bdotn_pointcloud(PFC.centers, PFC.bdotn, PFC.controlfilePath, PFC.tag)
+        #structOutfile = MHD.dataPath + '/' + '{:06d}/struct.csv'.format(PFC.t)
+        #HF.PointCloudfromStructOutput(structOutfile)
+        return
+
+    def combinePFCpointcloud(self, runList, tPath):
+        """
+        Combines multiple pointclouds into a single pointcloud then saves to file
+        pcName is the name of the point cloud we are dealing with.  Run this
+        function once for each timestep
+        """
+        hf = []
+        shadow =[]
+        bdotn = []
+        psi = []
+        norm = np.array([])
+        bField = np.array([])
+
+        names = []
+        centers = np.array([])
+        Npoints = 0
+        for PFC in self.PFCs:
+            #for tiles that are run in multiple mapDirections
+            #add quantities that are superposition of multiple mapDirection runs
+            if PFC.name in names:
+                idx = names.index(PFC.name)
+                if 'HFpc' in runList:
+                    hf[idx]+=PFC.qDiv
+                    #HFPC always runs shadowMask too
+                    shadow[idx]+=PFC.shadowed_mask
+                    shadow[idx].astype(bool)
+                elif 'shadowPC' in runList:
+                    shadow[idx]+=PFC.shadowed_mask
+                    shadow[idx].astype(bool)
+                #some quantities cant be added (like psi)
+                #just use one mapDirection for these cases
+                else:
+                    pass
+            else:
+                if 'HFpc' in runList:
+                    hf.append(PFC.qDiv)
+                    shadow.append(PFC.shadowed_mask)
+                if 'shadowPC' in runList:
+                    shadow.append(PFC.shadowed_mask)
+                if 'bdotnPC' in runList:
+                    bdotn.append(PFC.bdotn)
+                if 'psiPC' in runList:
+                    psi.append(PFC.psimin)
+                if 'NormPC' in runList:
+                    norm = np.append(norm, PFC.norms)
+                if 'Bpc' in runList:
+                    bField = np.append(bField, PFC.Bxyz)
+                #note that I don't do the normal vector NormPC (its same every timestep)
+                #user can just get NormPCs individually for each tile
+                Npoints += len(PFC.centers)
+                centers = np.append(centers,PFC.centers)
+                names.append(PFC.name)
+
+        #now build something we can write to csv (ie numpy)
+        hfNumpy = np.array([])
+        shadowNumpy = np.array([])
+        bdotnNumpy = np.array([])
+        psiNumpy = np.array([])
+        normNumpy = np.array([])
+        for arr in hf:
+            hfNumpy = np.append(hfNumpy, arr)
+        for arr in shadow:
+            shadowNumpy = np.append(shadowNumpy, arr)
+        for arr in bdotn:
+            bdotnNumpy = np.append(bdotnNumpy, arr)
+        for arr in psi:
+            psiNumpy = np.append(psiNumpy, arr)
+
+        tag='all'
+        centers = centers.reshape(Npoints,3)
+        if 'HFpc' in runList:
+            self.HF.write_heatflux_pointcloud(centers,hfNumpy,tPath,tag)
+            PFC.write_shadow_pointcloud(centers,shadowNumpy,tPath,tag)
+        if 'shadowPC' in runList:
+            PFC.write_shadow_pointcloud(centers,shadowNumpy,tPath,tag)
+        if 'bdotnPC' in runList:
+            PFC.write_bdotn_pointcloud(centers,bdotnNumpy, tPath,tag)
+        if 'psiPC' in runList:
+            self.HF.write_psiN_pointcloud(centers,psiNumpy,tPath,tag)
+        if 'NormPC' in runList:
+            norm = norm.reshape(Npoints,3)
+            self.CAD.write_normal_pointcloud(centers,norm,tPath,tag)
+        if 'Bpc' in runList:
+            bField = bField.reshape(Npoints,3)
+            self.MHD.write_B_pointcloud(centers, bField, tPath, tag)
+
+        print("Wrote combined pointclouds")
+        log.info("Wrote combined pointclouds")
+
+
+    def combineTimeSteps(self, runList, t):
+        """
+        save composite csv from each timestep into a single directory for
+        making paraview movies
+        """
+        movieDir = self.MHD.dataPath + '/paraview/'
+        tPath = self.MHD.dataPath + '/' + '{:06d}/'.format(t)
+        #first try to make new directory
+        try:
+            os.mkdir(movieDir)
+        except FileExistsError:
+            pass
+        if 'HFpc' in runList:
+            src = tPath + 'HeatfluxPointCloud_all.csv'
+            dest = movieDir + 'heatFlux_{:06d}.csv'.format(t)
+            shutil.copy(src,dest)
+        if 'shadowPC' in runList:
+            src = tPath + 'ShadowPointCloud_all.csv'
+            dest = movieDir + 'shadowMask_{:06d}.csv'.format(t)
+            shutil.copy(src,dest)
+        if 'bdotnPC' in runList:
+            src = tPath + 'bdotnPointCloud_all.csv'
+            dest = movieDir + 'bdotn_{:06d}.csv'.format(t)
+            shutil.copy(src,dest)
+        if 'psiPC' in runList:
+            src = tPath + 'psiPointCloud_all.csv'
+            dest = movieDir + 'psiN_{:06d}.csv'.format(t)
+            shutil.copy(src,dest)
+        if 'NormPC' in runList:
+            src = tPath + 'NormPointCloud_all.csv'
+            dest = movieDir + 'normals_{:06d}.csv'.format(t)
+            shutil.copy(src,dest)
+        if 'Bpc' in runList:
+            src = tPath + 'B_pointcloud_all.csv'
+            dest = movieDir + 'Bfield_{:06d}.csv'.format(t)
+            shutil.copy(src,dest)
+
+        return
+
+
+
+    def psiPC(self, PFC):
+        """
+        creates a poloidal flux, psi, point cloud on tile surface
+        you need to have run the cad, mhd, and hf initialization processes
+        before running this function
+        """
+        PFC.shadowed_mask = np.zeros((len(PFC.shadowed_mask)))
+        self.getPsiEverywhere(PFC, PFC.tag)
+
+        print("Completed psiPC calculation")
+        log.info("Completed psiPC calculation")
+
+        return
+
+    def getPsiEverywhere(self, PFC, tag=None):
+        """
+        get psi all over the PFC (including shadowed regions).
+        """
+        #Run MAFOT laminar for 3D plasmas
+        if self.MHD.plasma3Dmask==True:
+            CTLfile=PFC.controlfilePath + PFC.controlfile
+            self.MHD.writeControlFile(CTLfile, PFC.t, PFC.mapDirection, mode='laminar')
+            self.MHD.writeMAFOTpointfile(PFC.centers,PFC.gridfile)
+            self.MHD.runMAFOTlaminar(PFC.gridfile,PFC.controlfilePath,PFC.controlfile,self.NCPUs)
+            self.HF.readMAFOTLaminarOutput(PFC,PFC.outputFile)
+            use = np.where(PFC.psimin < 10)[0]
+            self.HF.write_psiN_pointcloud(PFC.centers,PFC.psimin,PFC.controlfilePath, PFC.tag)
+            os.remove(PFC.outputFile)
+        #get psi from gfile for 2D plasmas
+        else:
+            self.MHD.psi2DfromEQ(PFC)
+            self.HF.write_psiN_pointcloud(PFC.centers,PFC.psimin,PFC.controlfilePath, PFC.tag)
+        return
+
+
+    def getDefaultDict(self):
+        """
+        returns an empty dict with each GUI parameter
+        """
+        emptyDict = {
+                    'shot':None,
+                    'tmin':None,
+                    'tmax':None,
+                    'nTrace': None,
+                    'ionDirection': None,
+                    'ROIGridRes': None,
+                    'gridRes': None,
+                    'STPfile': None,
+                    'hfMode': None,
+                    'lqEich': None,
+                    'S': None,
+                    'lqCN': None,
+                    'lqCF': None,
+                    'lqPN': None,
+                    'lqPF': None,
+                    'fracCN': None,
+                    'fracCF': None,
+                    'fracPN': None,
+                    'fracPF': None,
+                    'Psol': None,
+                    'qBG' : None,
+                    'xMin': None,
+                    'xMax': None,
+                    'yMin': None,
+                    'yMax': None,
+                    'zMin': None,
+                    'zMax': None,
+                    'tMin': None,
+                    'tMax': None,
+                    'deltaT': None,
+                    'writeDeltaT': None,
+                    'xProbe': None,
+                    'yProbe': None,
+                    'zProbe': None,
+                    'STLscale': None,
+                    'meshMinLevel': None,
+                    'meshMaxLevel': None,
+                    'xMid': None,
+                    'yMid': None,
+                    'zMid': None,
+                    'STLfileName': None,
+                    'STLlayerName': None
+                    }
+        return emptyDict
+
+    def loadDefaults(self, inFile=None):
+        """
+        loads defaults from file rather than from GUI
+        """
+        self.setInitialFiles()
+
+        if inFile is not None:
+            self.infile = inFile
+
+        tools.initializeInput(self.MHD, self.infile)
+        tools.initializeInput(self.CAD, self.infile)
+        tools.initializeInput(self.HF, self.infile)
+        tools.initializeInput(self.OF, self.infile)
+
+        inputDict = {
+                    'shot': self.MHD.shot,
+                    'tmin': self.MHD.tmin,
+                    'tmax': self.MHD.tmax,
+                    'nTrace': self.MHD.nTrace,
+                    'ionDirection': self.MHD.ionDirection,
+                    'ROIGridRes': self.CAD.ROIGridRes,
+                    'gridRes': self.CAD.gridRes,
+                    'STPfile': self.CAD.STPfile,
+                    'hfMode': self.HF.hfMode,
+                    'lqEich': self.HF.lqEich,
+                    'S': self.HF.S,
+                    'lqCN': self.HF.lqCN,
+                    'lqCF': self.HF.lqCF,
+                    'lqPN': self.HF.lqPN,
+                    'lqPF': self.HF.lqPF,
+                    'fracCN': self.HF.fracCN,
+                    'fracCF': self.HF.fracCF,
+                    'fracPN': self.HF.fracPN,
+                    'fracPF': self.HF.fracPF,
+                    'Psol': self.HF.Psol,
+                    'qBG' : self.HF.qBG,
+                    'xMin': self.OF.xMin,
+                    'xMax': self.OF.xMax,
+                    'yMin': self.OF.yMin,
+                    'yMax': self.OF.yMax,
+                    'zMin': self.OF.zMin,
+                    'zMax': self.OF.zMax,
+                    'tMin': self.OF.tMin,
+                    'tMax': self.OF.tMax,
+                    'deltaT': self.OF.deltaT,
+                    'writeDeltaT': self.OF.writeDeltaT,
+                    'xProbe': self.OF.xProbe,
+                    'yProbe': self.OF.yProbe,
+                    'zProbe': self.OF.zProbe,
+                    'STLscale': self.OF.STLscale,
+                    'meshMinLevel': self.OF.meshMinLevel,
+                    'meshMaxLevel': self.OF.meshMaxLevel,
+                    'xMid': self.OF.xMid,
+                    'yMid': self.OF.yMid,
+                    'zMid': self.OF.zMid,
+                    'STLfileName': self.OF.STLfileName,
+                    'STLlayerName': self.OF.STLlayerName
+                    }
+        print("Loaded defaults")
+
+        return inputDict
+
+    def loadPFCParts(self):
+        """
+        loads parts list from an input file
+        """
+        with open(self.IntersectFile) as f:
+            lines = f.readlines()
+
+        for idx, line in enumerate(lines):
+            lines[idx] = line.replace('#','').rstrip()
+
+        return lines[:]
+
+    def loadPFCDefaults(self):
+        """
+        returns two lists
+        1) list of parts to calculate HF on
+        2) list of parts to check for intersections with
+        """
+        parts = pd.read_csv(self.PartsFile, sep=',', comment='#', names=['parts'], skipinitialspace=True)
+        intersects = pd.read_csv(self.IntersectFile, sep=',', comment='#', names=['intersects'], skipinitialspace=True)
+        return parts['parts'].to_list(), intersects['intersects'].to_list()
+
+    def writePFCs(self,parts,intersects):
+        """
+        writes a PartsFile and an IntersectFile.  Updates the respective class
+        variables so that subsequent function calls reflect these new files.
+        """
+        allParts = self.loadPFCParts()
+        path, default = os.path.split(self.PartsFile)
+        self.PartsFile = path + '/userParts.csv'
+        self.IntersectFile = path + '/userIntersects.csv'
+
+        with open(self.PartsFile, 'w') as f:
+            for name in allParts:
+                if name in parts:
+                    f.write(name+'\n')
+                else:
+                    f.write('#'+name+'\n')
+
+        with open(self.IntersectFile, 'w') as f:
+            for name in allParts:
+                if name in intersects:
+                    f.write(name+'\n')
+                else:
+                    f.write('#'+name+'\n')
+
+        return
+
+    def getOpenFOAMinputs(self,OFsettingsDict=None):
+        """
+        Reads openfoam input variables from HEAT input file or from HEAT gui
+        if OFsettingsDict=None, then we assume we are reading from a file (not gui)
+                OFsettingsDict is a dictionary that contains all variables for OF run
+                as described in (openFOAMclass.OpenFOAM.setTypes)
+        """
+        print('\n')
+        print("-"*55)
+        print("OPENFOAM MODULE INITIALIZED")
+        log.info('\n')
+        log.info("-"*55)
+        log.info("OPENFOAM MODULE INITIALIZED")
+
+        self.OF.allowed_class_vars()
+        tools.vars2None(self.OF)
+        if OFsettingsDict==None:
+            tools.read_input_file(self.OF, infile=self.infile)
+            self.OF.dict = tools.createDict(self.OF)
+        else:
+            tools.inputs_from_dict(self.OF, OFsettingsDict)
+            self.OF.dict = tools.createDict(self.OF)
+        self.OF.setTypes()
+
+
+    def setUpOpenFOAM(self,STLpart,clobberFlag=True):
+        """
+        sets up OpenFOAM finite element simulation to determine temperature distribution
+        in a PFC.  If you are running OF for multiple PFC tiles then you must
+        call this function once for each STLpart.
+
+        STLpart is name of STL file (ie E-ED1434-011_5.0mm)
+
+        caseDir is solver case directory
+        partDir is <caseDir>/<part> where <part> is the CAD part.  Each solver
+            caseDir has multiple partDir inside, corresponding to running that
+            solver for each part
+
+        This function uses a constant HF profile for now (not time varying)
+        """
+        print('Setting Up OF run')
+        log.info('Setting Up OF run')
+        #strip .stl extension for part name
+        if STLpart[-4:] == '.stl':
+            part = STLpart[:-4]
+        else:
+            part = STLpart
+            STLpart = STLpart+'.stl'
+
+        #Variables we will use for OF bash scripts
+        self.OF.caseDir = self.controlfilePath + 'openFoam/heatFoam'
+        self.OF.partDir = self.controlfilePath + 'openFoam/heatFoam/'+part
+        self.OF.cmd3Dmesh = 'meshAndPatch'
+        self.OF.cmdSourceOF = 'source /opt/OpenFOAM/OpenFOAM-v1912/etc/bashrc'
+        self.OF.cmdThermal = 'runThermal'
+        self.OF.cmdTprobe = 'runTprobe'
+        self.OF.paraviewDir = self.controlfilePath+'paraview'
+        self.OF.TprobeFile = self.OF.partDir+'/postProcessing/probes/0/T'
+
+        #Try to make new OFcaseDir root directory for heatFoam
+        try:
+            os.mkdir(self.OF.caseDir)
+        except:
+            print('Could not make OF case directory')
+            if clobberFlag == True:
+                print('Overwriting because clobberFlag=True.')
+                os.makedirs(self.OF.caseDir, exist_ok=True)
+
+        #Try to make a caseDir for this specific part inside the directory we just made
+#        try:
+#            os.mkdir(self.OF.partDir)
+#        except:
+#            print('COULD NOT MAKE OpenFOAM PART DIR')
+
+        #copy OF heatFoam template case to new case directory location
+        try:
+            shutil.copytree(self.OF.templateCase, self.OF.partDir)
+        except:
+            print('COULD NOT COPY TEMPLATE DIRECTORY')
+
+        #copy STLfile from gui.CAD.STLpath to OFpartDir/constant/triSurface/
+        triSurfaceLocation = self.OF.partDir+'/constant/triSurface'
+        if self.CAD.STLpath[-1] == '/':
+            STLlocation = self.CAD.STLpath + STLpart
+        else:
+            STLlocation = self.CAD.STLpath + '/' + STLpart
+        print('Copying STL file: '+STLlocation)
+        log.info('Copying STL file: '+STLlocation)
+        try:
+            shutil.copy(STLlocation, triSurfaceLocation)
+        except:
+            print('Could not copy STL file to openfoam directory')
+
+        #dynamically write template variables to templateVarFile
+        templateVarFile = self.OF.partDir + '/system/templateVariables'
+        self.OF.writeOFtemplateVarFile(templateVarFile, STLpart)
+
+        self.OF.writeShellScript(self.logFile)
+
+        #get list of STL parts
+        #parts = pd.read_csv(self.PartsFile, sep=',', comment='#', names=['parts'], skipinitialspace=True)
+        #STLfiles = parts['parts'].to_list()
+
+        #create OF dictionaries from templates
+        self.OF.createDictionaries(self.OF.templateDir,
+                                   self.OF.partDir,
+                                   templateVarFile,
+                                   STLpart)
+
+        print('OF case directory ready for execution')
+        log.info('OF case directory ready for execution')
+
+
+    def runOpenFOAM(self, STLpart):
+        """
+        Runs OpenFOAM case that was setup with self.setUpOpenFOAM
+        Currently configured to solve heat diffusion equation using temperature
+        dependent thermal diffusion constant for single region
+        (no multiregion analysis)
+
+        """
+        #strip .stl extension for part name
+        if STLpart[-4:] == '.stl':
+            part = STLpart[:-4]
+        else:
+            part = STLpart
+            STLpart = STLpart+'.stl'
+
+        #Create Boundary Condition for openFOAM from HEAT heatflux data
+        self.HF.write_openFOAM_boundary(self.HF.PFCs[0].centers,self.HF.PFCs[0].qDiv,self.OF.partDir)
+
+        #generate 3D mesh if necessary
+        self.OF.generate3Dmesh(part)
+
+        #run openfoam thermal analysis using heatFoam solver
+
+        self.OF.runThermalAnalysis()
+
+    def TprobeOF(self,x,y,z):
+        """
+        if Tprobe_mask is true run temperature probe: postProcess -func "probes"
+        """
+        self.OF.runTprobe(x,y,z)
+        self.OF.plotTprobes(self.OF.TprobeFile)
+        return

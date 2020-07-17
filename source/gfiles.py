@@ -248,11 +248,9 @@ def write_multiple_gfiles(machine, shot, tree='efit01', tmin=None, tmax=None,
     preserveFlag = False
     return ts, preserveFlag
 
-
-
 def loadgfile(machine,gfile,rootDir=None,clobberwait=True):
     """
-    Copies existing gfile to HEAT file tree
+    Copies existing local gfile to HEAT file tree
     clobber checking for existing gfile
     Also returns timesteps and preserveFlag
     """
@@ -303,11 +301,7 @@ def loadgfile(machine,gfile,rootDir=None,clobberwait=True):
             print("Directory " , newPath ,  " Created ")
         else:
             preserveFlag = True
-    return ts, preserveFlag
-
-
-
-
+    return np.array([ts]), preserveFlag
 
 if __name__ == '__main__':
     print('\nWARNING: If you call this module from CLI you need to edit')

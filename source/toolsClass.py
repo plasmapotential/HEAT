@@ -5,7 +5,8 @@
 import sys
 import pandas as pd
 import numpy as np
-
+import os
+import shutil
 
 class tools:
     """
@@ -21,7 +22,6 @@ class tools:
         """
         Pulls input data for Command Line Interface (CLI)
         """
-
         #Get class variables
         obj.allowed_class_vars()
 
@@ -110,7 +110,7 @@ class tools:
     def cyl2xyz(self,r,z,phi):
         """
         Converts r,z,phi coordinates to x,y,z
-        phi should be in radians
+        phi will be converted to radians
         """
         r = np.asarray(r)
         z = np.asarray(z)
@@ -171,7 +171,7 @@ class tools:
         oldEnv = os.environ["LD_LIBRARY_PATH"]
         os.environ["LD_LIBRARY_PATH"] = ""
         pvpythonCMD = '/opt/paraview/ParaView-5.7.0-MPI-Linux-Python3.7-64bit/bin/pvpython'
-        os.system(pvpythonCMD + ' ./static/python/csv2vtk.py ' + pcfile + ' ' + outType + ' ' + prefix)
+        os.system(pvpythonCMD + ' ./GUIscripts/csv2vtk.py ' + pcfile + ' ' + outType + ' ' + prefix)
         os.environ["LD_LIBRARY_PATH"] = oldEnv
         print("Created VTK output ")
         return
@@ -267,3 +267,42 @@ class tools:
                 test=0
 
         return test
+
+
+    def buildDirectories(self, PFCnames, timesteps, dataPath, clobberFlag=True):
+        """
+        builds a HEAT tree from timesteps and PFC part names
+        """
+        for t in timesteps:
+            #Build timestep directory
+            timeDir = dataPath + '/{:06d}/'.format(t)
+            try:
+                os.mkdir(timeDir)
+                print("Directory " , timeDir ,  " Created ")
+            except FileExistsError:
+                clobberFlagTime = False #don't overwrite time directories, just PFC directories
+                if clobberFlagTime is True:
+                    try: shutil.rmtree(timeDir)
+                    except OSError as e:
+                        print ("Error: %s - %s." % (e.filename, e.strerror))
+                        sys.exit()
+
+                    os.mkdir(timeDir)
+                    print("Directory " , timeDir ,  " Created ")
+
+            #build directory for each PFC partname
+            for name in PFCnames:
+                pfcDir = timeDir + name
+                try:
+                    os.mkdir(pfcDir)
+                    print("Directory " , pfcDir ,  " Created ")
+                except FileExistsError:
+                    if clobberFlag is True:
+                        try: shutil.rmtree(pfcDir)
+                        except OSError as e:
+                            print ("Error: %s - %s." % (e.filename, e.strerror))
+                            sys.exit()
+
+                        os.mkdir(pfcDir)
+                        print("Directory " , pfcDir ,  " Created ")
+        return

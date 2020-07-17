@@ -100,24 +100,43 @@ class CAD:
         """
         pass
 
-    def getROIfromfile(self, infile):
-        """
-        Reads region of interest (ROI) from file.  File should contain part
-        numbers, each on a separate line.  Writes ROI as list to HEAT object
-        """
-        if infile == None:
-            print("No ROI input file.  Please provide input file")
-            log.info("No ROI input file.  Please provide input file")
-            sys.exit()
 
-        data = pd.read_csv(infile, comment='#', names=['Parts'],
-                            dtype={'Parts':str}, skipinitialspace=True)
-        self.ROI = list(data['Parts'])
+    def getROI(self, timestepMap):
+        """
+        Writes ROI as list to CAD object.  Input is timestepMap dataframe
+        which is read by function in PFCClass.
+        """
+        self.ROI = timestepMap['PFCname'].values
+        self.ROIList = list(set(self.ROI))
         self.ROIparts = ['None' for i in range(len(self.ROI))]
         self.ROImeshes = ['None' for i in range(len(self.ROI))]
         self.ROIctrs = ['None' for i in range(len(self.ROI))]
         self.ROInorms = ['None' for i in range(len(self.ROI))]
         return
+
+    def getIntersectsFromFile(self, timestepMap):
+        """
+        Writes intersections to CAD object
+        """
+        self.ROImapDirections = []
+        self.ROIintersects = []
+
+        #parse intersects column and make indexed list of intersection parts
+        # for each ROI part
+        for row in timestepMap['intersectName']:
+            self.ROIintersects.append(row.split(':'))
+
+        #list of unique intersect parts
+        self.intersectList = list(set( [j for row in self.ROIintersects for j in row] ))
+
+        #initialize intersect variables
+        self.intersectParts = ['None' for i in range(len(self.intersectList))]
+        self.intersectMeshes = ['None' for i in range(len(self.intersectList))]
+        self.intersectCtrs = ['None' for i in range(len(self.intersectList))]
+        self.intersectNorms = ['None' for i in range(len(self.intersectList))]
+
+        return
+
 
     def getROImeshes(self, resolution=None):
         """
@@ -125,19 +144,38 @@ class CAD:
         If they don't, create them.
         """
         if resolution == None:  resolution=self.ROIGridRes
-        for partnum in self.ROI:
+        for idx,partnum in enumerate(self.ROI):
             name = self.STLpath + partnum + "_" + resolution +"mm.stl"
             if os.path.exists(name):
-                self.loadROIMesh(name)
+                print("Mesh exists, loading...")
+                self.loadROIMesh(name,idx)
             else:
-                self.ROIobjFromPartnum(partnum)
+                print("New mesh.  Creating...")
+                self.ROIobjFromPartnum(partnum,idx)
 
         #Now get face centers, normals, areas
         self.ROInorms,self.ROIctrs,self.ROIareas = self.normsCentersAreas(self.ROImeshes)
         return
 
+    def getIntersectMeshes(self, resolution=None):
+        """
+        Checks to see if STLs at desired resolution exist.  If they do, load em.
+        If they don't, create them.
+        """
+        if resolution == None:  resolution=self.gridRes
+        for partnum in self.intersectList:
+            name = self.STLpath + partnum + "_" + resolution +"mm.stl"
+            if os.path.exists(name):
+                self.loadIntersectMesh(name)
+            else:
+                self.intersectObjFromPartnum(partnum)
 
-    def ROIobjFromPartnum(self, partslist):
+        #Now get face centers, normals, areas
+        self.intersectNorms,self.intersectCtrs,self.intersectAreas = self.normsCentersAreas(self.intersectMeshes)
+        return
+
+
+    def ROIobjFromPartnum(self, partslist, idx):
         """
         Generates ROI objects from list of part numbers.
         """
@@ -147,13 +185,35 @@ class CAD:
         #Build a list of parts CAD objects
         parts = []
         for part in partslist:
-            idx = np.where(np.asarray(self.ROI) == part)[0][0]
+#            idx = np.where(np.asarray(self.ROI) == part)[0][0]
+            count = 0
             for i in range(len(self.CADobjs)):
                 if part == self.CADobjs[i].Label:
+                    count += 1
                     self.ROIparts[idx] = self.CADobjs[i]
                     self.ROImeshes[idx] = self.part2mesh(self.ROIparts[idx])[0]
+
+            if count == 0:
+                print("Part "+part+" not found in CAD.  Cannot Mesh!")
+                log.info("Part "+part+" not found in CAD.  Cannot Mesh!")
         return
 
+    def intersectObjFromPartnum(self, partslist):
+        """
+        Generates intersect objects from list of part numbers.
+        """
+        #Check if this is a single file or list and make it a list
+        if type(partslist) == str:
+            partslist = [partslist]
+        #Build a list of parts CAD objects
+        parts = []
+        for part in partslist:
+            idx = np.where(np.asarray(self.intersectList) == part)[0][0]
+            for i in range(len(self.CADobjs)):
+                if part == self.CADobjs[i].Label:
+                    self.intersectParts[idx] = self.CADobjs[i]
+                    self.intersectMeshes[idx] = self.part2mesh(self.intersectParts[idx], resolution=self.gridRes)[0]
+        return
 
     def loadSTEP(self):
         """
@@ -287,7 +347,7 @@ class CAD:
         log.info("\nWrote meshes to file at resolution: " + resolution)
         return
 
-    def loadROIMesh(self, filenames):
+    def loadROIMesh(self, filenames, idx):
         """
         Reads a previously generated STL file and saves object into class.  If
         filename is a list of filenames, then read each into a separate index
@@ -300,7 +360,7 @@ class CAD:
         for file in filenames:
             mesh = Mesh.Mesh(file)
             partnum = file.split('/')[-1].split('_')[0]
-            idx = np.where(np.asarray(self.ROI) == partnum)[0][0]
+#            idx = np.where(np.asarray(self.ROI) == partnum)[0][0]
             #Find CAD object that matches this part number
             for i in range(len(self.CADobjs)):
                 if partnum == self.CADobjs[i].Label:
@@ -309,6 +369,30 @@ class CAD:
         print("Loaded STL files")
         log.info("Loaded STL files")
         return
+
+    def loadIntersectMesh(self, filenames):
+        """
+        Reads a previously generated STL file and saves object into class.  If
+        filename is a list of filenames, then read each into a separate index
+        of mesh variable in class.
+        """
+        #Check if this is a single file or list and make it a list
+        if type(filenames) == str:
+            filenames = [filenames]
+        for file in filenames:
+            mesh = Mesh.Mesh(file)
+            partnum = file.split('/')[-1].split('_')[0]
+            idx = np.where(np.asarray(self.intersectList) == partnum)[0][0]
+            #Find CAD object that matches this part number
+            for i in range(len(self.CADobjs)):
+                if partnum == self.CADobjs[i].Label:
+                    self.intersectParts[idx] = self.CADobjs[i]
+            self.intersectMeshes[idx] = mesh
+        print("Loaded STL files")
+        log.info("Loaded STL files")
+        return
+
+
 
     def load1Mesh(self, filename):
         """
@@ -536,27 +620,17 @@ class CAD:
         idx = np.where(intersect_mask == 1)
         parts = []
         labels = []
-#        for i,source in enumerate(sourceParts):
-#            for j,target in enumerate(targetParts):
-#                if intersect_mask[i,j] == 1:
-#                    parts.append(target)
-#                    labels.append(target.Label)
-
         for j,target in enumerate(targetParts):
             if intersect_mask[j] == 1:
                 parts.append(target)
                 labels.append(target.Label)
 
-
-#        parts = list(set(parts))
-#        labels = list(set(labels))
         parts = list(parts)
         labels = list(labels)
         meshes = self.part2mesh(parts,resolution)
         return meshes, labels
 
-
-    def write_normal_pointcloud(self,centers,norms,dataPath):
+    def write_normal_pointcloud(self,centers,norms,dataPath, tag=None):
         """
         In paraview use TableToPoints => Calculator => Glyph
         Calculator should have this formula:
@@ -564,7 +638,11 @@ class CAD:
         """
         print("Creating Normal Point Cloud")
         log.info("Creating Normal Point Cloud")
-        pcfile = dataPath + 'NormPointCloud.csv'
+        if tag is None:
+            pcfile = dataPath + 'NormPointCloud.csv'
+        else:
+            pcfile = dataPath + 'NormPointCloud_' +tag+ '.csv'
+
         pc = np.zeros((len(centers), 6))
         pc[:,0] = centers[:,0]*1000.0
         pc[:,1] = centers[:,1]*1000.0

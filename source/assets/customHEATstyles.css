@@ -1,0 +1,289 @@
+body {
+  background-color: #1b1f22;
+  color: #d5e1ed;
+  font-family: "Open Sans", sans-serif;
+  width: 100%;
+  height: 98vh;
+  max-width: 100% !important;
+  overflow-x: hidden;
+  margin: 0;
+}
+
+#big-app-container {
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 6rem;
+  width: 100%;
+  height: 90vh;
+}
+
+#tab-container {
+  width: 15%;
+  height: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  background-color: #3b3939;
+  overflow-y: scroll;
+}
+
+#simulator-container {
+  width: 100%;
+  height: 98%;
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: row;
+  align-items: center;
+  padding: 0 6rem;
+}
+
+#graph-container{
+  width: 35%;
+  height: 100%;
+  margin: 0 10px 0 10px;
+}
+
+
+.textInput{
+  width: 90%;
+  text-align:center;
+}
+
+.box{
+    align-items: center;
+	  background-color: #3b3939;
+    width: 47%;
+    text-align:center;
+    margin: 10px 10px 10px 10px;
+/*    box-shadow: 3px 6px #242526; */
+}
+
+.MHDplotBox{
+    align-items: center;
+    width: 100%;
+    height: 95%;
+    text-align:center;
+    margin: 10px 10px 10px 10px;
+/*    box-shadow: 3px 6px #242526; */
+}
+
+.wideBoxDark{
+    width: 100%;
+    align-items: left;
+	  background-color: #252626;
+    text-align:left;
+    margin: 10px 10px 10px 10px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+/*    box-shadow: 3px 6px #242526; */
+}
+.wideBoxLight{
+    align-items: left;
+	  background-color: #3b3939;
+    width: 100%;
+    text-align:left;
+    margin: 10px 10px 10px 10px;
+/*    box-shadow: 3px 6px #242526; */
+}
+.hiddenBox{
+    display: none;
+/*    box-shadow: 3px 6px #242526; */
+}
+.gfileTable{
+    align-items: center;
+    width: 90%;
+    text-align:left;
+    margin: 10px 10px 10px 10px;
+/*    box-shadow: 3px 6px #242526; */
+}
+
+.HFbox{
+    align-items: center;
+	  background-color: #3b3939;
+    width: 100%;
+    text-align:center;
+    margin: 10px 10px 10px 10px;
+/*    box-shadow: 3px 6px #242526; */
+}
+
+.PFCbox{
+    align-items: center;
+	  background-color: #3b3939;
+    width: 100%;
+    text-align:center;
+    margin: 10px 10px 10px 10px;
+/*    box-shadow: 3px 6px #242526; */
+}
+.PCbox{
+    align-items: center;
+	  background-color: #3b3939;
+    width: 95%;
+    text-align:left;
+    margin: 10px 10px 10px 10px;
+/*    box-shadow: 3px 6px #242526; */
+}
+
+.runContentBox{
+/*  width: 90%; */
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+
+}
+.xyzBox{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+	  background-color:none;
+    width: 100%;
+    text-align:center;
+    margin: 10px 10px 10px 10px;
+/*    box-shadow: 3px 6px #242526; */
+}
+.xyzBoxInput{
+    width: 15%;
+    background-color: transparent;
+    margin: 10px 10px 10px 10px;
+/*    box-shadow: 3px 6px #242526; */
+}
+
+
+.PFCupload{
+  display: inline-block;
+  align-items: center;
+  text-align:center;
+  width: 98%;
+  margin: 0 0 10px 0;
+}
+
+.PFCtable{
+  display: inline-block;
+  align-items: center;
+  text-align:center;
+  width: 98%;
+  margin: 0 0 10px 0;
+  overflow-x: scroll;
+}
+
+
+.gfileBox{
+    display: flex;
+    flex-direction: column;
+    flex-wrap: wrap;
+    align-items: center;
+	  background-color: #3b3939;
+    width: 90%;
+    text-align:left;
+    margin: 10px 10px 10px 10px;
+/*    box-shadow: 3px 6px #242526; */
+}
+.gfileBoxInput{
+    width: 30%;
+    background-color: transparent;
+    margin: 10px 10px 10px 10px;
+/*    box-shadow: 3px 6px #242526; */
+}
+
+/* Input Tab
+–––––––––––––––––––––––––––––––––––––––––––––––––– */
+.EQplot{
+    width: 60%;
+    height: 100%;
+    padding: 0 5px 0 5px;
+}
+
+.buttonRibbon{
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+
+}
+.machineSelectBox{
+  width: 45%;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+
+}
+.defaultButtonBox{
+  width: 50%;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.machineSelect{
+  width: 90%;
+  background-color: #7c8080;
+  color: #1253e0;
+
+}
+.hfSelect{
+  display: inline-block;
+  width: 50%;
+  background-color: #7c8080;
+  color: #1253e0;
+  text-align:center;
+}
+
+.defaultButtons{
+/*  width: 50%; */
+  margin: 10px 10px 10px 10px;
+  align-items: center;
+}
+
+.hfParams{
+  align-items: center;
+  width: 100%;
+  display: flex;
+  flex-direction: columns;
+  flex-wrap: wrap;
+}
+
+.hfInput{
+  align-items: center;
+  width: 45%;
+  margin: 10px 10px 10px 10px;
+}
+
+.hfInput2{
+  align-items: center;
+  text-align:center;
+  width: 55%;
+  margin: 10px 10px 10px 10px;
+}
+
+/* Tab Settings
+–––––––––––––––––––––––––––––––––––––––––––––––––– */
+/* tabs */
+	.tabcontent {
+	  border: none;
+	  border-top: none;
+		border-bottom: none;
+		min-height: 60vh;
+    max-height: 98vh;
+	  background-color: #252626;
+		animation: fadeEffect 1s; /* Fading effect takes 1 second */
+	  padding: 25px 10px 10px 10px;
+		width: 60%;
+    height: 100%;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+	}
+
+  .innerTabContent {
+	  background-color: #252626;
+		animation: fadeEffect 1s; /* Fading effect takes 1 second */
+	  padding: 25px 10px 10px 10px;
+    max-height: 85vh; 
+		width: 95%;
+    height: 100%;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    overflow-y: scroll;
+	}

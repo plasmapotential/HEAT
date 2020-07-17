@@ -49,7 +49,8 @@ class heatFlux:
                             'fracPN',
                             'fracPF',
                             'fracCN',
-                            'fracCF']
+                            'fracCF',
+                            'hfMode']
         return
 
     def setTypes(self):
@@ -69,62 +70,6 @@ class heatFlux:
         self.fracCN = float(self.fracCN)
         self.fracCF = float(self.fracCF)
         return
-
-    def makePFCs(self,MHDobj,sourceMeshes,sourceCenters,sourceNorms,sourceAreas,names):
-        """
-        Initialize a list of heat flux objects, corresponding to each part mesh
-        passed to this function.  sourceMeshes should be a list of FreeCAD
-        meshes that we want to find the heat fluxes on.
-        """
-        #Check if this is a single mesh or list and make it a list
-        if type(sourceMeshes) != list:
-            sourceMeshes = [sourceMeshes]
-        if type(sourceCenters) != list:
-            sourceCenters = [sourceCenters]
-        if type(sourceNorms) != list:
-            sourceNorms = [sourceNorms]
-        if type(names) != list:
-            names = [names]
-
-
-        self.PFCs = []
-        for i,source in enumerate(sourceMeshes):
-            self.PFCs.append(self.PFC(MHDobj,
-                                      source,
-                                      sourceCenters[i],
-                                      sourceNorms[i],
-                                      sourceAreas[i],
-                                      name=names[i]))
-
-    def backfaceCulling(self,centers,norms,MHD):
-        """
-        Use backface culling technique from computer graphics to eliminate
-        faces that are on the 'back side' of the PFC tiles.  Mathematically,
-        if: B_hat dot n_hat >= 0, then the face is shadowed.
-        returns 1 if face is shadowed, 0 if face is not shadowed
-        """
-        xyz = centers
-        r,z,phi = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
-        BNorms = MHD.Bfield_pointcloud(MHD.ep, r, z, phi, normal=True)
-        dot = np.multiply(norms, BNorms).sum(1)
-        shadowed_mask = np.zeros((len(centers)))
-        shadowed_mask[np.where(dot >= 0.0)] = 1
-        return shadowed_mask
-
-    def readStructOutput(self,file):
-        """
-        Reads output file from MAFOT structure program
-        """
-        structdata = np.genfromtxt(file,comments='#')
-        xyz = np.zeros((len(structdata),3))
-        xyz[:,0] = structdata[:,0]
-        xyz[:,1] = structdata[:,1]
-        xyz[:,2] = structdata[:,2]
-        #remove rows with zeros (invalids)
-        #xyzFinal = xyz[~(np.abs(xyz)<1e-99).any(axis=1)]
-        print('Read structure output for {:d} points'.format(len(xyz)))
-        log.info('Read structure output for {:d} points'.format(len(xyz)))
-        return xyz
 
     def readMAFOTLaminarOutput(self,PFC,file):
         """
@@ -592,7 +537,7 @@ class heatFlux:
         """
         xyz = PFC.centers
         r,z,phi = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
-        BNorms = MHD.Bfield_pointcloud(PFC.ep, r, z, phi, normal=True)
+        BNorms = MHD.Bfield_pointcloud(PFC.ep, r, z, phi, PFC.ionDirection, normal=True)
         PFC.bdotn = np.multiply(PFC.norms, BNorms).sum(1)
         return
 
@@ -612,12 +557,12 @@ class heatFlux:
         # Dot product between surface normal and B field creates PFC.bdotn (angle of incidence)
         self.HFincidentAngle(PFC, MHD)
         # Calculate Magnitude of B at Divertor
-        Bp_div = MHD.ep.BpFunc.ev(R_div,Z_div)
-        Bt_div = MHD.ep.BtFunc.ev(R_div,Z_div)
+        Bp_div = PFC.ep.BpFunc.ev(R_div,Z_div)
+        Bt_div = PFC.ep.BtFunc.ev(R_div,Z_div)
         B_div = np.sqrt(Bp_div**2 + Bt_div**2)
         # Evaluate B at outboard midplane
-        Bp_omp = MHD.ep.BpFunc.ev(R_omp,Z_omp)
-        Bt_omp = MHD.ep.BtFunc.ev(R_omp,Z_omp)
+        Bp_omp = PFC.ep.BpFunc.ev(R_omp,Z_omp)
+        Bt_omp = PFC.ep.BtFunc.ev(R_omp,Z_omp)
         B_omp = np.sqrt(Bp_omp**2 + Bt_omp**2)
 
 #        Bt_omp = MHD.ep.BtFunc.ev(R_omp,Z_omp)
@@ -655,38 +600,13 @@ class heatFlux:
         #plt.show()
         return np.abs(q_div)
 
-    def write_shadow_pointcloud(self,centers,scalar,dataPath,tag=None):
-        print("Creating Shadow Point Cloud")
-        log.info("Creating Shadow Point Cloud")
-
-        if tag is None:
-            pcfile = dataPath + 'ShadowPointCloud.csv'
-        else:
-            pcfile = dataPath + 'ShadowPointCloud_'+tag+'.csv'
-
-        #print("Shadow point cloud filename: "+pcfile)
-        #log.info("Shadow point cloud filename: "+pcfile)
-
-        pc = np.zeros((len(centers), 4))
-        pc[:,0] = centers[:,0]*1000.0
-        pc[:,1] = centers[:,1]*1000.0
-        pc[:,2] = centers[:,2]*1000.0
-        pc[:,3] = scalar
-        head = "X,Y,Z,ShadowMask"
-        np.savetxt(pcfile, pc, delimiter=',',fmt='%.10f', header=head)
-
-        #Now save a vtk file for paraviewweb
-        if tag is None:
-            tools.createVTKOutput(pcfile, 'points', 'ShadowMask')
-        else:
-            name = 'ShadowMask_'+tag
-            tools.createVTKOutput(pcfile, 'points', name)
-        return
-
-    def write_heatflux_pointcloud(self,centers,hf,dataPath,name=None):
+    def write_heatflux_pointcloud(self,centers,hf,dataPath,tag=None):
         print("Creating Heat Flux Point Cloud")
         log.info("Creating Heat Flux Point Cloud")
-        pcfile = dataPath + 'HeatfluxPointCloud.csv'
+        if tag is None:
+            pcfile = dataPath + 'HeatfluxPointCloud.csv'
+        else:
+            pcfile = dataPath + 'HeatfluxPointCloud_'+tag+'.csv'
         pc = np.zeros((len(centers), 4))
         pc[:,0] = centers[:,0]*1000.0
         pc[:,1] = centers[:,1]*1000.0
@@ -696,31 +616,21 @@ class heatFlux:
         np.savetxt(pcfile, pc, delimiter=',',fmt='%.10f', header=head)
 
         #Now save a vtk file for paraviewweb
-        tools.createVTKOutput(pcfile, 'points', 'HeatFlux')
+        if tag is None:
+            tools.createVTKOutput(pcfile, 'points', 'HeatFlux')
+        else:
+            name = 'HeatFlux_'+tag
+            tools.createVTKOutput(pcfile, 'points', name)
         return
 
 
-    def write_bdotn_pointcloud(self,centers,bdotn,dataPath,name=None):
-        print("Creating bdotn Point Cloud")
-        log.info("Creating bdotn Point Cloud")
-        pcfile = dataPath + 'bdotnPointCloud.csv'
-        pc = np.zeros((len(centers), 4))
-        pc[:,0] = centers[:,0]*1000.0
-        pc[:,1] = centers[:,1]*1000.0
-        pc[:,2] = centers[:,2]*1000.0
-        pc[:,3] = bdotn
-        head = "X,Y,Z,bdotn"
-        np.savetxt(pcfile, pc, delimiter=',',fmt='%.10f', header=head)
-
-        #Now save a vtk file for paraviewweb
-        tools.createVTKOutput(pcfile, 'points', 'bdotn')
-        return
-
-
-    def write_psiN_pointcloud(self,centers,psiN,dataPath,name=None):
+    def write_psiN_pointcloud(self,centers,psiN,dataPath,tag=None):
         print("Creating Psi Point Cloud")
         log.info("Creating Psi Point Cloud")
-        pcfile = dataPath + 'psiPointCloud.csv'
+        if tag is None:
+            pcfile = dataPath + 'psiPointCloud.csv'
+        else:
+            pcfile = dataPath + 'psiPointCloud_'+tag+'.csv'
         pc = np.zeros((len(centers), 4))
         pc[:,0] = centers[:,0]*1000.0
         pc[:,1] = centers[:,1]*1000.0
@@ -730,7 +640,11 @@ class heatFlux:
         np.savetxt(pcfile, pc, delimiter=',',fmt='%.10f', header=head)
 
         #Now save a vtk file for paraviewweb
-        tools.createVTKOutput(pcfile, 'points', 'psiN')
+        if tag is None:
+            tools.createVTKOutput(pcfile, 'points', 'psiN')
+        else:
+            name = 'psiN_'+tag
+            tools.createVTKOutput(pcfile, 'points', name)
         return
 
 
@@ -785,351 +699,6 @@ class heatFlux:
         np.savetxt(file, pc, delimiter=',',fmt='%.10f', header=head)
 
 
-
-    def findShadows_structure(self,MHD,PFC,targetMeshes, verbose=False, shadowMaskClouds=False):
-        """
-        Find shadowed faces for a given heatFluxPart object using MAFOT structure.
-        Traces field lines from PFC surface, looking for intersections with
-        triangles from mesh
-        """
-        use = np.where(PFC.shadowed_mask == 0)[0]
-
-        print("\nFinding intersections for {:d} faces".format(len(PFC.centers[use])))
-        log.info("\nFinding intersections for {:d} faces".format(len(PFC.centers[use])))
-        controlfile = '_struct_CTL.dat'
-        controlfilePath = MHD.dataPath + '/' + '{:06d}/'.format(PFC.t)
-        structOutfile = MHD.dataPath + '/' + '{:06d}/struct.dat'.format(PFC.t)
-        gridfile = MHD.dataPath + '/' + '{:06d}/struct_grid.dat'.format(PFC.t)
-
-        numTargetFaces = 0
-        targetPoints = []
-        targetNorms = []
-        print('Number of target parts: {:f}'.format(len(targetMeshes)))
-        log.info('Number of target parts: {:f}'.format(len(targetMeshes)))
-        for target in targetMeshes:
-            numTargetFaces += target.CountFacets
-            for face in target.Facets:
-                targetPoints.append(face.Points)
-                targetNorms.append(face.Normal)
-        targetPoints = np.asarray(targetPoints)/1000.0 #scale to m
-        targetNorms = np.asarray(targetNorms)
-
-        #for debugging, save a shadowmask at each step up fieldline
-        if shadowMaskClouds == True:
-            self.write_shadow_pointcloud(PFC.centers,PFC.shadowed_mask,controlfilePath,tag='original')
-
-        #MAFOT always returns ordered points in CCW (from top) direction,
-        #so we need to check which direction we are running so we read the output
-        #correctly
-        if MHD.MapDirectionStruct == -1:
-            print('Tracing with reversed Map Direction')
-            log.info('Tracing with reversed Map Direction')
-            startIdx = 0
-        else:
-            print('Tracing with forward Map Direction')
-            log.info('Tracing with forward Map Direction')
-            startIdx = 1
-
-        #===INTERSECTION TEST 1 (tricky frontface culling / first step up field line)
-        dphi = 1.0
-        MHD.ittStruct = 1.0
-        numSteps = MHD.nTrace #actual trace is (numSteps + 1)*dphi degrees
-        #If numSteps = 0, dont do intersection checking
-        if numSteps > 0:
-            MHD.writeControlFile(controlfile, PFC.t, mode='struct')
-
-            #Perform first integration step
-            MHD.writeMAFOTpointfile(PFC.centers[use],gridfile)
-            MHD.getMultipleFieldPaths(dphi, gridfile, controlfilePath, controlfile)
-            structData = self.readStructOutput(structOutfile)
-            os.remove(structOutfile) #clean up
-
-            #this is for printing information about a specific mesh element
-#            ptIdx = np.where(use==16886)[0]
-            ptIdx = None
-
-            #First we do basic intersection checking
-            intersect_mask = self.intersectTestBasic(structData,PFC.norms[use],
-                                                    targetPoints,targetNorms,
-                                                    MHD,ptIdx)
-
-            PFC.shadowed_mask[use] = intersect_mask
-
-            #for debugging, save a shadowmask at each step up fieldline
-            if shadowMaskClouds == True:
-                self.write_shadow_pointcloud(PFC.centers,PFC.shadowed_mask,controlfilePath,tag='test0')
-
-        #===INTERSECTION TEST 2 (multiple steps up field line)
-        #Starts at second step up field line
-        if numSteps > 1:
-            MHD.writeControlFile(controlfile, PFC.t, mode='struct')
-            use = np.where(PFC.shadowed_mask == 0)[0]
-            intersect_mask2 = np.zeros((len(use)))
-
-            #Perform fist integration step but dont use for finding intersections
-            MHD.writeMAFOTpointfile(PFC.centers[use],gridfile)
-            MHD.getMultipleFieldPaths(dphi, gridfile, controlfilePath, controlfile)
-            structData = self.readStructOutput(structOutfile)
-            os.remove(structOutfile) #clean up
-
-            #Perform subsequent integration steps.  Use the point we left off at in
-            #last loop iteration as the point we launch from in next loop iteration
-            #This amounts to 'walking' up the field line looking for intersections,
-            #which is important when field line curvature makes intersections happen
-            #farther than 1-2 degrees from PFC surface.
-            use2 = np.where(intersect_mask2 == 0)[0]
-            for i in range(numSteps):
-                print("\nIntersect Trace #2 Step {:d}".format(i))
-                log.info("\nIntersect Trace #2 Step {:d}".format(i))
-                useOld = use2
-                use2 = np.where(intersect_mask2 == 0)[0]
-                indexes = np.where([x==useOld for x in use2])[1] #map current steps's index back to intersect_mask2 index
-
-                StartPoints = structData[startIdx::2,:][indexes] #odd indexes are second trace point
-                MHD.writeMAFOTpointfile(StartPoints,gridfile)
-                MHD.getMultipleFieldPaths(dphi, gridfile, controlfilePath, controlfile)
-                structData = self.readStructOutput(structOutfile)
-                os.remove(structOutfile) #clean up
-                intersect_mask2[use2] = self.intersectTest2(structData,targetPoints,MHD.MapDirection)
-
-                #for debugging, save a shadowmask at each step up fieldline
-                if shadowMaskClouds == True:
-                    PFC.shadowed_mask[use] = intersect_mask2
-                    self.write_shadow_pointcloud(PFC.centers,PFC.shadowed_mask,controlfilePath,tag='test{:d}'.format(i+1))
-
-            #Now revise shadowed_mask taking intersections into account
-            PFC.shadowed_mask[use] = intersect_mask2
-        return
-
-    def longRangeIntersectCheck(self,PFC,qDiv,targetMeshes,thresh,distPhi,MHD):
-        """
-        Runs a long range intersection check.
-
-        Because some PFC components may have STL faces that are in locations
-        with very high Bt/(Br+Bz) ratio, it might take longer than 10-20 degrees
-        for them to intersect with anything.
-
-        This function requires a threshold power.  Any PFC face with power
-        higher than the threshold is checked.
-
-        The flagged faces are then checked for intersections over distPhi degrees
-        """
-        print("\nLong Range Trace Begins")
-        log.info("\nLong Range Trace Begins")
-
-        controlfile = '_struct_CTL.dat'
-        controlfilePath = MHD.dataPath + '/' + '{:06d}/'.format(PFC.t)
-        structOutfile = MHD.dataPath + '/' + '{:06d}/struct.dat'.format(PFC.t)
-        gridfile = MHD.dataPath + '/' + '{:06d}/struct_grid.dat'.format(PFC.t)
-
-        numTargetFaces = 0
-        targetPoints = []
-        print('Number of target parts: {:f}'.format(len(targetMeshes)))
-        for target in targetMeshes:
-            numTargetFaces += target.CountFacets
-            for face in target.Facets:
-                targetPoints.append(face.Points)
-        targetPoints = np.asarray(targetPoints)/1000.0 #scale to m
-
-        use = np.where(np.abs(qDiv) > thresh)[0]
-        found = 0
-        print('Number of points above threshold: {:f}'.format(len(use)))
-        log.info('Number of points above threshold: {:f}'.format(len(use)))
-        for idx in use:
-            startPoint = PFC.centers[idx]
-#            print("Start Point")
-#            print(startPoint)
-            MHD.writeMAFOTpointfile(startPoint,gridfile)
-            MHD.getMultipleFieldPaths(distPhi, gridfile, controlfilePath, controlfile)
-            structData = self.readStructOutput(structOutfile)
-            os.remove(structOutfile) #clean up
-            #create source format that intersectTest2 reads (odd start points, even end points)
-            x = np.insert(structData[:,0], np.arange(len(structData[:,0])), structData[:,0])
-            y = np.insert(structData[:,1], np.arange(len(structData[:,1])), structData[:,1])
-            z = np.insert(structData[:,2], np.arange(len(structData[:,2])), structData[:,2])
-            sources = np.array([x,y,z]).T[1:-1]
-            intersects = self.intersectTest2(sources,targetPoints,MHD.MapDirectionStruct)
-            if np.sum(intersects) > 0:
-#                print("Found long range intersection")
-#                log.info("Found long range intersection")
-                qDiv[idx] = 0.0
-                found +=1
-        print("Long range trace found {:f} intersections".format(found))
-        log.info("Long range trace found {:f} intersections".format(found))
-        return qDiv
-
-    def intersectTestBasic(self,sources,sourceNorms,
-                        targets,targetNorms,MHD,ptIdx=None):
-        """
-        checks if any of the lines (field line traces) generated by MAFOT
-        struct program intersect any of the target mesh faces.
-
-        source represents the face where we want to find the heat flux on.
-        here it is a 'source' for the field line launching that happens in
-        MAFOT.  target represents the potential intersection faces, where a
-        field line launched from the source face may intersect.
-
-        Returns a boolean matrix (bitmask) of shape (N) that is true where
-        sourceface i intersects with any targetface
-
-        This function first checks for intersection with all of the faces that are
-        labeled as 'shadowed' by the backface culling algorithm.  This will
-        capture the majority of the intersections, but will miss intricate
-        details like when the poloidal field reverses in a gap.
-
-        The function then checks for intersections for the sources that the
-        aforementioned check deemed to be heat loaded (no intersection), against
-        all of the target faces.  It eliminates self intersections during this
-        step by making sure that if an intersection occurs, it is with a face
-        that is far away in any direction
-        """
-        q1 = sources[::2,:]  #even indexes are first trace point
-        q2 = sources[1::2,:]  #odd indexes are second trace point
-        p1 = targets[:,0,:]  #point 1 of mesh triangle
-        p2 = targets[:,1,:]  #point 2 of mesh triangle
-        p3 = targets[:,2,:]  #point 3 of mesh triangle
-
-        N = len(q2)
-        Nt = len(p1)
-        print('{:d} Source Faces and {:d} Target Faces'.format(N,Nt))
-
-
-        #Cull target front face (PFC front faces will only intersect with
-        # other PFC shadowed faces)
-        x = np.zeros((Nt,3))
-        y = np.zeros((Nt,3))
-        z = np.zeros((Nt,3))
-        x[:,0] = p1[:,0]
-        x[:,1] = p2[:,0]
-        x[:,2] = p3[:,0]
-        y[:,0] = p1[:,1]
-        y[:,1] = p2[:,1]
-        y[:,2] = p3[:,1]
-        z[:,0] = p1[:,2]
-        z[:,1] = p2[:,2]
-        z[:,2] = p3[:,2]
-        tools.targetCtrs = tools.faceCenters(x,y,z)
-        targetBackfaceMask = self.backfaceCulling(tools.targetCtrs,targetNorms,MHD)
-
-        #Potential intersection faces
-        use = np.where(targetBackfaceMask == 1)[0]
-        Nt_use = len(use)
-
-        tools.q1 = q1
-        tools.q2 = q2
-        tools.p1 = p1[use]
-        tools.p2 = p2[use]
-        tools.p3 = p3[use]
-        tools.Nt = Nt_use
-
-        print('Entering basic intersection test for {:d} potential intersection faces'.format(Nt_use))
-        log.info('Entering basic intersection test for {:d} potential intersection faces'.format(Nt_use))
-        t0 = time.time()
-
-        #Prepare intersectionTest across multiple cores
-        Ncores = multiprocessing.cpu_count() -2 #reserve 2 cores for overhead
-        print('Initializing parallel intersection check across {:d} cores'.format(Ncores))
-        log.info('Initializing parallel intersection check across {:d} cores'.format(Ncores))
-        #each worker receives a single start and end point (q1 and q2),
-        #corresponding to one trace from the MAFOT structure output.
-        #The worker accesses the many potential intersection triangle vertices
-        #through tools class variables (p1,p2,p3).  Making p1,p2,p3 tools class
-        #variables eliminates the overhead of transmitting these matrices to
-        #each worker, which yields about an order of magnitude speedup.
-        print('Spawning tasks to workers')
-        log.info('Spawning tasks to workers')
-        pool = multiprocessing.Pool(Ncores)
-        mask = np.asarray(pool.map(tools.intersectTestParallel, np.arange(N)))
-        pool.close()
-        print('Found {:f} shadowed faces'.format(np.sum(mask)))
-        log.info('Found {:f} shadowed faces'.format(np.sum(mask)))
-        print('Time elapsed: {:f}'.format(time.time() - t0))
-        log.info('Time elapsed: {:f}'.format(time.time() - t0))
-
-
-
-        #Now remove trickier to identify intersections.  Test 2
-        #Remove intersections that are outside of 5mm from us.
-        #This is run with 'use' representing all faces that were identified
-        #as not shadowed (mask = 0) above.
-#        use = np.where( mask == 0 )[0]
-#        tools.q1 = q1
-#        tools.q2 = q2
-#        tools.p1 = p1
-#        tools.p2 = p2
-#        tools.p3 = p3
-#        tools.Nt = Nt
-#        print('Entering intersection Test #2 for {:d} potential intersection faces'.format(Nt))
-#        log.info('Entering intersection Test #2 for {:d} potential intersection faces'.format(Nt))
-#        t0 = time.time()
-#        print('Spawning tasks to workers')
-#        log.info('Spawning tasks to workers')
-#        pool = multiprocessing.Pool(Ncores)
-#        mask[use] = np.asarray(pool.map(tools.intersectTestParallel_selfCheck, use))
-#        pool.close()
-#        print('Found {:f} shadowed faces'.format(np.sum(mask[use])))
-#        log.info('Found {:f} shadowed faces'.format(np.sum(mask[use])))
-#        print('Time elapsed: {:f}'.format(time.time() - t0))
-#        log.info('Time elapsed: {:f}'.format(time.time() - t0))
-
-        return mask
-
-
-
-
-    def intersectTest2(self,sources,targets,mapDirection):
-        """
-        Run an intersection test against all possible source faces
-        sources is endpoints of line
-        targets is points that make up triangle faces we check for intersections
-           against
-
-        This test is called repeatedly from findShadows_structure, as we integrate
-        up a field line.  Each time it is called, it checks if the sources line
-        intersects a targets face
-        """
-        q1 = sources[::2,:] #even indexes are first trace point
-        q2 = sources[1::2,:] #odd indexes are second trace point
-        p1 = targets[:,0,:] #point 1 of mesh triangle
-        p2 = targets[:,1,:] #point 2 of mesh triangle
-        p3 = targets[:,2,:] #point 3 of mesh triangle
-
-        tools.q1 = q1
-        tools.q2 = q2
-        tools.p1 = p1
-        tools.p2 = p2
-        tools.p3 = p3
-        N = len(q2)
-        Nt = len(p1)
-        tools.Nt = Nt
-
-        print('Entering intersection Test #1 for {:d} potential intersection faces'.format(Nt))
-        log.info('Entering intersection Test #1 for {:d} potential intersection faces'.format(Nt))
-        t0 = time.time()
-
-        #Prepare intersectionTest across multiple cores
-        Ncores = multiprocessing.cpu_count() -2 #reserve 2 cores for overhead
-        print('Initializing parallel intersection check across {:d} cores'.format(Ncores))
-        log.info('Initializing parallel intersection check across {:d} cores'.format(Ncores))
-        #each worker receives a single start and end point (q1 and q2),
-        #corresponding to one trace from the MAFOT structure output.
-        #The worker accesses the many potential intersection triangle vertices
-        #through tools class variables (p1,p2,p3).  Making p1,p2,p3 tools class
-        #variables eliminates the overhead of transmitting these matrices to
-        #each worker, which yields about an order of magnitude speedup.
-        print('Spawning tasks to workers')
-        log.info('Spawning tasks to workers')
-        pool = multiprocessing.Pool(Ncores)
-        mask = np.asarray(pool.map(tools.intersectTestParallel, np.arange(N)))
-        pool.close()
-
-        print('Found {:f} shadowed faces'.format(np.sum(mask)))
-        log.info('Found {:f} shadowed faces'.format(np.sum(mask)))
-        print('Time elapsed: {:f}'.format(time.time() - t0))
-        log.info('Time elapsed: {:f}'.format(time.time() - t0))
-
-        return mask
-
     def power_sum_mesh(self, PFC):
         """
         Calculate power by summing over each mesh element.
@@ -1143,27 +712,3 @@ class heatFlux:
         log.info('phiMin = {:f}'.format(phi.min()))
         log.info('phiMax = {:f}'.format(phi.max()))
         return np.sum(PFC.qDiv * PFC.areas ) * 2 * np.pi / deltaPhi
-
-    class PFC:
-        def __init__(self, MHD, mesh, centers, norms, areas, name=None):
-            """
-            Heat Flux object for a specific mesh object.
-            """
-            self.name = name
-            self.mesh = mesh
-            self.centers = centers / (1000.0)
-            self.areas = areas / (1000.0**2)
-            self.norms = norms
-            self.Nfaces = self.mesh.CountFacets
-            self.q = np.zeros((self.Nfaces))
-            self.shadowed_mask = heatFlux.backfaceCulling(heatFlux,self.centers,self.norms,MHD)
-#            self.shadowed_mask = np.zeros((self.Nfaces))
-            #For now just take 1 timestep.  Needs to be adapted later
-            try:
-                self.t = MHD.timesteps[0]
-            except:
-                self.t = MHD.timesteps
-            self.qBg = 0.0 #Background HF
-            self.ep = MHD.ep
-
-            return

@@ -16,7 +16,144 @@ import matplotlib.pyplot as plt
 import logging
 
 
+def makePlotlyEQDiv(shot, time, MachFlag, ep, gfile=None, logFile=False):
+    """
+    returns a DASH object for use directly in dash app
+    """
+    if logFile is True:
+        log = logging.getLogger(__name__)
+
+    #Use Equilparamsclass to create EQ object
+    if ep is None:
+        print('Note:  no EP object')
+        if gfile is None:
+            print("Error generating EQ plot: no EQ object or gfile")
+            sys.exit()
+        else:
+            ep = EP.equilParams(gfile)
+
+    r = ep.g['R']
+    z = ep.g['Z']
+    psi = ep.g['psiRZn']
+    R,Z = np.meshgrid(r, z)
+
+
+    rbdry = ep.g['lcfs'][:,0]
+    zbdry = ep.g['lcfs'][:,1]
+
+    if MachFlag == 'nstx':
+        rlim, zlim = nstxu_wall(oldwall=False) #FOR NSTXU
+    else:
+        rlim = ep.g['wall'][:,0]
+        zlim = ep.g['wall'][:,1]
+
+
+    levels = sorted(np.append([0.0,0.05,0.1,0.25,0.5,0.75,1.0], np.linspace(1.01,psi.max(),10)))
+
+#    aspect = (z.max()-z.min()) / (r.max()-r.min())
+#    width = (1.0/aspect)*height
+
+    import plotly
+    import plotly.graph_objects as go
+    import plotly.express as px
+    #psi data
+    fig = go.Figure(data =
+        go.Contour(
+            z=psi,
+            x=r, # horizontal axis
+            y=z, # vertical axis
+            colorscale='cividis',
+            contours_coloring='heatmap',
+            name='psiN',
+            showscale=False,
+        ))
+
+    #Wall in green
+    fig.add_trace(
+        go.Scatter(
+            x=rlim,
+            y=zlim,
+            mode="markers+lines",
+            name="Wall",
+            line=dict(
+                color="#19fa1d"
+                    )
+            )
+            )
+
+    #Seperatrix in red.  Sometimes this fails if psi is negative
+    #so we try and except.
+    #if try fails, just plot using rbdry,zbdry from gfile
+    try:
+        CS = plt.contourf(R,Z,psi,levels,cmap=plt.cm.cividis)
+        lcfsCS = plt.contour(CS, levels = [1.0])
+        for i in range(len(lcfsCS.allsegs[0])):
+            rlcfs = lcfsCS.allsegs[0][i][:,0]
+            zlcfs = lcfsCS.allsegs[0][i][:,1]
+
+            fig.add_trace(
+                go.Scatter(
+                    x=rlcfs,
+                    y=zlcfs,
+                    mode="lines",
+                    name="LCFS",
+                    line=dict(
+                        color="red",
+                        width=4,
+
+                            )
+                    )
+                    )
+    except:
+        print("Could not create contour plot.  Psi levels must be increasing.")
+        print("Try flipping psi sign and replotting.")
+        print("plotting rbdry, zbdry from gfile (not contour)")
+        if logFile is True:
+            log.info("Could not create contour plot.  Psi levels must be increasing.")
+            log.info("Try flipping psi sign and replotting.")
+            log.info("plotting rbdry, zbdry from gfile (not contour)")
+
+        fig.add_trace(
+            go.Scatter(
+                x=rbdry,
+                y=zbdry,
+                mode="lines",
+                name="LCFS",
+                line=dict(
+                    color="red",
+                    width=4,
+
+                        )
+                )
+                )
+
+
+    fig.update_layout(
+        title="{:06d}@{:05d}ms".format(shot,time),
+        xaxis_title="R [m]",
+        yaxis_title="Z [m]",
+        autosize=True,
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        showlegend=False,
+        font=dict(
+#            family="Courier New",
+            size=18,
+            color="#dcdce3"
+        )
+        )
+    return fig
+
+
+
+
+
+
+
 def writePlotlyEQ(shot, time, outFile, MachFlag, ep=None, gfile=None, logFile=False):
+    """
+    saves a plotly webpage to a file that can be imported to html via iframe
+    """
     if logFile is True:
         log = logging.getLogger(__name__)
 

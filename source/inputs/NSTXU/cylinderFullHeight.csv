@@ -1,0 +1,21 @@
+# This is a HEAT input file responsible for:
+# 1) assigning intersection PFCs to each heat flux calculation PFC
+# 2) assigning MapDirection to each PFC
+# 3) assigning the timesteps to use each PFC for
+#
+# you can use colons (:) to insert a range of timesteps or to insert multiple intersects
+# but each PFC needs its own line (and sometimes two if you need to trace in both directions)
+# commas are the delimiter here, so don't use them inside columns or you'll break pandas
+#
+# Example
+# 100:105, E-ED1450-013, -1, E-ED1450-013:E-ED1390-003:E-ED1450-071
+#
+# this would calculate HF on E-ED1450-013 for all (available) timesteps between
+# 100ms and 105ms, checking for intersections with E-ED1450-013, E-ED1390-003,
+# and E-ED1450-071, with traces running in the reversed MapDirection
+#
+#
+#
+timesteps, PFCname, MapDirection, intersectName
+100:105, CylinderFull, -1, CylinderFull
+100:105, CylinderFull, 1, CylinderFull

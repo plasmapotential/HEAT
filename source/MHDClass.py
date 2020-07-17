@@ -12,6 +12,9 @@ import time
 import numpy as np
 import pandas as pd
 import os
+import shutil
+from scipy.interpolate import RegularGridInterpolator
+from scipy.interpolate import interp1d
 
 import logging
 log = logging.getLogger(__name__)
@@ -137,11 +140,12 @@ class MHD:
         return
 
     # Pull fresh gfile data from MDS+ tree, create directory tree in the process
-    def get_mhd_inputs(self,machine='nstx',gfile=None):
+    def get_mhd_inputs(self,machine='nstx',gFileList=None):
         """
         get gfile from mds+ tree if gfile is None, otherwise use file
         """
-        if gfile==None:
+        #load gfile from MDS+
+        if gFileList==None:
             self.timesteps, self.preserveFlag = gfiles.write_multiple_gfiles(
                                                                 self.MachFlag,
                                                                 self.shot,
@@ -150,13 +154,14 @@ class MHD:
                                                                 self.tmax,
                                                                 self.dataPath,
                                                                 clobberwait=False)
+        #load from file uploaded by user in GUI
         else:
-            self.timesteps, self.preserveFlag = gfiles.loadgfile(machine,gfile,
-                                        rootDir=self.dataPath, clobberwait=False)
-
-
-
-
+            self.timesteps = []
+            for gfile in gFileList:
+                ts = self.copyGfile2tree(gfile)
+                self.timesteps.append(ts)
+            self.timesteps = np.array(self.timesteps)
+        return
 
     def make1EFITobject(self,shot,t,gfile=None):
         """
@@ -192,6 +197,8 @@ class MHD:
         Creates an equilParams_class object for MULTIPLE timesteps. equilParams
         is a class from the ORNL_Fusion github repo, and was developed by
         A. Wingen
+
+        gfiles should be placed in the dataPath before running this function
         """
         self.ep= ['None' for i in range(len(self.timesteps))]
         for idx,t in enumerate(self.timesteps):
@@ -213,7 +220,7 @@ class MHD:
 
 
 
-    def Bfield_pointcloud(self, ep, R, Z, phi, normal=False):
+    def Bfield_pointcloud(self, ep, R, Z, phi, ionDirection, normal=False):
         """
         Creates a Bfield Pointcloud that can be saved in a .csv file
         This pointcloud is then used by ParaView to overlay the
@@ -232,9 +239,9 @@ class MHD:
 #        Bt = ep.BtFunc.ev(R,Z)*self.MapDirection
 #        BR = ep.BRFunc.ev(R,Z)
 #        BZ = -ep.BZFunc.ev(R,Z)
-        Bt = ep.BtFunc.ev(R,Z)*self.ionDirection
-        BR = ep.BRFunc.ev(R,Z)*self.ionDirection
-        BZ = ep.BZFunc.ev(R,Z)*self.ionDirection
+        Bt = ep.BtFunc.ev(R,Z)*ionDirection
+        BR = ep.BRFunc.ev(R,Z)*ionDirection
+        BZ = ep.BZFunc.ev(R,Z)*ionDirection
 
         #print(BR)
         #print(Bt)
@@ -253,7 +260,7 @@ class MHD:
             Bxyz[:,2] /= B
         return Bxyz
 
-    def write_B_pointcloud(self,centers,Bxyz, dataPath):
+    def write_B_pointcloud(self,centers,Bxyz, dataPath, tag=None):
         """
         In paraview use TableToPoints => Calculator => Glyph
         Calculator should have this formula:
@@ -261,7 +268,10 @@ class MHD:
         """
         print("Creating B Field Point Cloud")
         log.info("Creating B Field Point Cloud")
-        pcfile = dataPath + 'B_pointcloud.csv'
+        if tag is None:
+            pcfile = dataPath + 'B_pointcloud.csv'
+        else:
+            pcfile = dataPath + 'B_pointcloud_'+tag+'.csv'
         pc = np.zeros((len(centers), 6))
         pc[:,0] = centers[:,0]*1000.0
         pc[:,1] = centers[:,1]*1000.0
@@ -273,15 +283,22 @@ class MHD:
         np.savetxt(pcfile, pc, delimiter=',',fmt='%.10f', header=head)
         #np.savetxt('points.asc', pc[:,:-1], delimiter=' ',fmt='%.10f')
         #print("Wrote point cloud file: " + pcfile)
-        tools.createVTKOutput(pcfile, 'glyph', 'B_pointcloud')
+        if tag is None:
+            tools.createVTKOutput(pcfile, 'glyph', 'B_pointcloud')
+        else:
+            name = 'B_pointcloud_'+tag
+            tools.createVTKOutput(pcfile, 'glyph', name)
         return
 
 
-    def writeControlFile(self, name, t, mode='laminar'):
+    def writeControlFile(self, name, t, mapDirection, mode='laminar'):
         """
         Create a control file for MAFOT
         """
-        save_location = self.dataPath + '/' + '{:06d}/'.format(t) + name
+        if len(name.split('/')) > 1:
+            save_location = name
+        else:
+            save_location = self.dataPath + '/' + '{:06d}/'.format(t) + name
         with open(save_location, 'w') as f:
 
             f.write('# Parameterfile for ' + self.MachFlag + ' Programs\n')
@@ -307,11 +324,7 @@ class MHD:
             f.write('Nswall=\t{:d}\n'.format(self.Nswall))
 
             f.write('phistart(deg)=\t{:2f}\n'.format(self.phistart))
-            if mode=='laminar':
-                f.write('MapDirection=\t{:f}\n'.format(self.MapDirection))
-            else:
-                f.write('MapDirection=\t{:f}\n'.format(self.MapDirectionStruct))
-
+            f.write('MapDirection=\t{:f}\n'.format(mapDirection))
             f.write('PlasmaResponse(0=no,>1=yes)=\t{:d}\n'
                     .format(self.PlasmaResponse))
             f.write('Field(-3=VMEC,-2=SIESTA,-1=gfile,M3DC1:0=Eq,1=I-coil,2=both)=\t'
@@ -373,6 +386,8 @@ class MHD:
         Creates a file that MAFOT's can use to trace a field line.  Points
         in this file are the starting points for traces, organized in columns
         of R,phi,Z
+
+        input should be in meters
         """
         #Convert to meters
         #xyz/=1000.0
@@ -495,7 +510,7 @@ class MHD:
 
         return
 
-    def renormalizeLCFS(self, rNew, zNew=None):
+    def renormalizeLCFS(self, ep, rNew=None, zNew=None, psiSep=None):
         """
         script for changing the lcfs in gfile.  because we use CAD in HEAT, and
         this CAD is oftentimes at different r,z locations than the rlim,zlim from
@@ -506,52 +521,127 @@ class MHD:
         updates the LCFS in the gfile so that only one point in the CAD touches
         the LCFS.
 
-        User must supply desired R,Z coordinate
-
+        User may supply either:
+        -R coord with no Z coord, then function finds min psi for all Z at that R
+        -R coord and Z coord, then function finds psi at that point
+        -psiSep, then function finds flux surface at that psiSep
         """
-        g = self.ep.g
+
+
+        g = ep.g
         if zNew is not None:
             print("Redefine LCFS using point")
             log.info("Redefine LCFS using point")
-            psiNew = self.ep.psiFunc_noN.ev(rNew, zNew)
-        else:
+            psiNew = ep.psiFunc_noN.ev(rNew, zNew)
+        elif rNew is not None:
             print("Redefine LCFS using vector")
             log.info("Redefine LCFS using vector")
-            zWall = np.linspace(self.ep.g['Z'].min(), self.ep.g['Z'].max(), 1000)
+            zMin = g['ZmAxis'] - 0.25
+            zMax = g['ZmAxis'] + 0.25
+            zWall = np.linspace(zMin, zMax, 100000)
             rWall = np.ones((len(zWall)))*rNew
-            psiWall = self.ep.psiFunc_noN.ev(rWall, zWall)
-            psiNew = self.ep.psiFunc_noN.ev(rWall, zWall).min()
-            psiNewNormalized = self.ep.psiFunc.ev(rWall, zWall).min()
+            psiWall = ep.psiFunc_noN.ev(rWall, zWall)
+            psiNew = ep.psiFunc_noN.ev(rWall, zWall).min()
+            psiNewNormalized = ep.psiFunc.ev(rWall, zWall).min()
             idx = np.argmin(psiWall)
-            print('New LCFS R: {:f}'.format(rWall[idx]))
-            print('New LCFS Z: {:f}'.format(zWall[idx]))
-            print('psi at RLCFS, ZLCFS: {:f}'.format(psiNew))
-            print('psiN at RLCFS, ZLCFS: {:f}'.format(psiNewNormalized))
-            print('Original psiSep: {:f}'.format(self.ep.g['psiSep']))
-            print('Original psiAxis: {:f}'.format(self.ep.g['psiAxis']))
-            print('Original Nlcfs: {:f}'.format(self.ep.g['Nlcfs']))
-            log.info('New LCFS R: {:f}'.format(rWall[idx]))
-            log.info('New LCFS Z: {:f}'.format(zWall[idx]))
-            log.info('psi at RLCFS, ZLCFS: {:f}'.format(psiNew))
-            log.info('psiN at RLCFS, ZLCFS: {:f}'.format(psiNewNormalized))
-            log.info('Original psiSep: {:f}'.format(self.ep.g['psiSep']))
-            log.info('Original psiAxis: {:f}'.format(self.ep.g['psiAxis']))
-            log.info('Original Nlcfs: {:f}'.format(self.ep.g['Nlcfs']))
+            idx2 = np.argmin(ep.psiFunc.ev(rWall, zWall))
+            #print('R = {:f}, Z = {:f}'.format(rWall[idx2], zWall[idx2]))
 
+#            print('New LCFS R: {:f}'.format(rWall[idx]))
+#            print('New LCFS Z: {:f}'.format(zWall[idx]))
+#            print('psi at RLCFS, ZLCFS: {:f}'.format(psiNew))
+#            print('psiN at RLCFS, ZLCFS: {:f}'.format(psiNewNormalized))
+#            print('Original psiSep: {:f}'.format(g['psiSep']))
+#            print('Original psiAxis: {:f}'.format(g['psiAxis']))
+#            print('Original Nlcfs: {:f}'.format(g['Nlcfs']))
+#            log.info('New LCFS R: {:f}'.format(rWall[idx]))
+#            log.info('New LCFS Z: {:f}'.format(zWall[idx]))
+#            log.info('psi at RLCFS, ZLCFS: {:f}'.format(psiNew))
+#            log.info('psiN at RLCFS, ZLCFS: {:f}'.format(psiNewNormalized))
+#            log.info('Original psiSep: {:f}'.format(g['psiSep']))
+#            log.info('Original psiAxis: {:f}'.format(g['psiAxis']))
+#            log.info('Original Nlcfs: {:f}'.format(g['Nlcfs']))
+
+        #this overrides any psiNew we got using R, Z
+        if psiSep is not None:
+            print("psi provided...overwriting R,Z")
+            psiNewNormalized = (psiNew - g['psiAxis']) / (g['psiSep'] - g['psiAxis'])
+            psiNew = psiSep
         #find contour
-        import matplotlib.pyplot as plt
-        CS = plt.contourf(g['R'],g['Z'],g['psiRZ'])
-        lcfsCS = plt.contour(CS, levels = [psiNew])
-        rlcfs = lcfsCS.allsegs[0][0][:,0]
-        zlcfs = lcfsCS.allsegs[0][0][:,1]
-        self.ep.g['Nlcfs'] = len(rlcfs)
-        self.ep.g['lcfs'] = np.column_stack((rlcfs,zlcfs))
-        self.ep.g['psiSep'] = psiNew
+#        import matplotlib.pyplot as plt
+#        CS = plt.contourf(g['R'],g['Z'],g['psiRZ'])
+#        lcfsCS = plt.contour(CS, levels = [psiNew])
+#        rlcfs = lcfsCS.allsegs[0][0][:,0]
+#        zlcfs = lcfsCS.allsegs[0][0][:,1]
+        surface = ep.getBs_FluxSur(psiNewNormalized)
+        rlcfs = surface['Rs']
+        zlcfs = surface['Zs']
+        print("minimum LCFS R: {:f}".format(min(rlcfs)))
+        print("psi at this R: {:f}".format(psiNewNormalized))
+        print("Nlcfs")
+        print(len(rlcfs))
+        g['Nlcfs'] = len(rlcfs)
+        g['lcfs'] = np.column_stack((rlcfs,zlcfs))
+        g['psiSep'] = psiNew
         print('Renormalized LCFS to new (Rlcfs, Zlcfs)')
         log.info('Renormalized LCFS to new (Rlcfs, Zlcfs)')
+        return g
+
+
+
+    def copyGfile2tree(self,gFileName,clobberflag='y'):
+        """
+        Copies gfile to HEAT tree
+        gFileName is name of gFile that is already located in self.gFileDir
+        """
+        oldgfile = self.gFileDir + gFileName
+        ep = EP.equilParams(oldgfile)
+        name = 'g{:06d}.{:05d}'.format(ep.g['shot'],ep.g['time'])
+        #make tree for this shot
+        try:
+            os.mkdir(self.dataPath)
+        except:
+            pass
+        #make tree for this timestep
+        timeDir = self.dataPath + '/{:06d}/'.format(ep.g['time'])
+        newgfile = timeDir + name
+        try:
+            os.mkdir(timeDir)
+        except:
+            clobberlist = ['y','Y','yes','YES','Yes']
+            #Directory Clobber checking
+            if clobberflag in clobberlist:
+                try: shutil.rmtree(timeDir)
+                except OSError as e:
+                    print ("Error: %s - %s." % (e.filename, e.strerror))
+                    return
+
+                os.mkdir(timeDir)
+                shutil.copyfile(oldgfile, newgfile)
+                print("Directory " , timeDir ,  " Created ")
+        return ep.g['time']
+
+
+    def writeGfileData(self,gFileList, gFileData):
+        """
+        writes data passed in string object (from GUI) to files in
+        self.gFileDir directory for use later on in HEAT
+
+        the self.gFileDir directory is accessible to the GUI users for uploading
+        and downloading
+        """
+        import base64
+        for i,gfile in enumerate(gFileList):
+            data = gFileData[i].encode("utf8").split(b";base64,")[1]
+            print("Writing gfile: "+gfile)
+            log.info("Writing gfile: "+gfile)
+            path = self.gFileDir + gfile
+            with open(path, 'wb') as f:
+                f.write(base64.decodebytes(data))
+
         return
 
-    def writeGfile(self, file, shot, time, ep=None):
+    def writeGfile(self, file, shot=None, time=None, ep=None):
         """
         writes a new gfile.  for use with the cleaner script.  user must supply
         file: name of new gfile
@@ -562,6 +652,11 @@ class MHD:
             g = self.ep.g
         else:
             g = ep.g
+
+        if shot==None:
+            shot=1
+        if time==None:
+            time=1
 
         KVTOR = 0
         RVTOR = 1.7
@@ -591,6 +686,128 @@ class MHD:
         print('Wrote new gfile')
 
 
+    def gFileInterpolate(self, newTime):
+        """
+        interpolates gfiles in time at newTime
+        """
+        #Set up all arrays
+        ts = []
+        RmAxisAll = []
+        ZmAxisAll = []
+        psiRZAll = []
+        psiAxisAll = []
+        psiSepAll = []
+        Bt0All = []
+        IpAll = []
+        FpolAll = []
+        PresAll = []
+        FFprimeAll = []
+        PprimeAll = []
+        qpsiAll = []
+
+        EPs = self.ep
+        for ep in EPs:
+            ts.append(ep.g['time'])
+            RmAxisAll.append(ep.g['RmAxis'])
+            ZmAxisAll.append(ep.g['ZmAxis'])
+            psiRZAll.append(ep.g['psiRZ'])
+            psiAxisAll.append(ep.g['psiAxis'])
+            psiSepAll.append(ep.g['psiSep'])
+            Bt0All.append(ep.g['Bt0'])
+            IpAll.append(ep.g['Ip'])
+            FpolAll.append(ep.g['Fpol'])
+            PresAll.append(ep.g['Pres'])
+            FFprimeAll.append(ep.g['FFprime'])
+            PprimeAll.append(ep.g['Pprime'])
+            qpsiAll.append(ep.g['qpsi'])
+
+
+        R = EPs[0].g['R']
+        Z = EPs[0].g['Z']
+        ts = np.array(ts)
+        RmAxisAll = np.array(RmAxisAll)
+        ZmAxisAll = np.array(ZmAxisAll)
+        psiRZAll = np.dstack(psiRZAll) #2D
+        psiAxisAll = np.array(psiAxisAll)
+        psiSepAll = np.array(psiSepAll)
+        Bt0All = np.array(Bt0All)
+        IpAll = np.array(IpAll)
+        FpolAll = np.array(FpolAll).T
+        PresAll = np.array(PresAll).T
+        FFprimeAll = np.array(FFprimeAll).T
+        PprimeAll = np.array(PprimeAll).T
+        qpsiAll = np.array(qpsiAll).T
+#       FpolAll = np.dstack(FpolAll)
+#       FFprimeAll = np.dstack(FFprimeAll)
+#       PprimeAll = np.dstack(PprimeAll)
+#       qpsiAll = np.dstack(qpsiAll)
+
+        #Set up interpolators
+        RmAxisInterp = interp1d(ts,RmAxisAll)
+        ZmAxisInterp = interp1d(ts,ZmAxisAll)
+        psiRZInterp = RegularGridInterpolator((R, Z, ts), psiRZAll)
+        psiAxisInterp = interp1d(ts, psiAxisAll)
+        psiSepInterp = interp1d(ts, psiSepAll)
+        Bt0Interp = interp1d(ts, Bt0All)
+        IpInterp = interp1d(ts, IpAll)
+        psiN = np.linspace(0,1,len(FpolAll[:,0]))
+        FpolInterp = RegularGridInterpolator((psiN,ts), FpolAll)
+        PresInterp = RegularGridInterpolator((psiN,ts), PresAll)
+        FFprimeInterp = RegularGridInterpolator((psiN,ts), FFprimeAll)
+        PprimeInterp = RegularGridInterpolator((psiN,ts), PprimeAll)
+        qpsiInterp = RegularGridInterpolator((psiN,ts), qpsiAll)
+
+        #Interpolate each parameter for the new timestep
+        r,z = np.meshgrid(R,Z)
+        RmAxis = RmAxisInterp(newTime)
+        ZmAxis = ZmAxisInterp(newTime)
+        psiRZ = psiRZInterp((r,z,newTime)).T
+        psiAxis = psiAxisInterp(newTime)
+        psiSep = psiAxisInterp(newTime)
+        Bt0 = Bt0Interp(newTime)
+        Ip = IpInterp(newTime)
+        Fpol = FpolInterp((psiN,newTime))
+        Pres = PresInterp((psiN,newTime))
+        FFprime = FFprimeInterp((psiN,newTime))
+        Pprime = PprimeInterp((psiN,newTime))
+        qpsi = qpsiInterp((psiN,newTime))
+
+        #get new LCFS
+        surface = ep.getBs_FluxSur(1.0)
+        rlcfs = surface['Rs']
+        zlcfs = surface['Zs']
+
+        #make new dictionary with all this stuff
+        newEP = lambda: None #empty object
+        newEP.g = {
+                    'RmAxis':RmAxis,
+                    'ZmAxis':ZmAxis,
+                    'psiRZ':psiRZ,
+                    'psiAxis':psiAxis,
+                    'psiSep':psiSep,
+                    'Bt0':Bt0,
+                    'Ip':Ip,
+                    'Fpol':Fpol,
+                    'Pres':Pres,
+                    'FFprime':FFprime,
+                    'Pprime':Pprime,
+                    'qpsi':qpsi,
+                    'NR':EPs[0].g['NR'],
+                    'NZ':EPs[0].g['NZ'],
+                    'Xdim':EPs[0].g['Xdim'],
+                    'Zdim':EPs[0].g['Zdim'],
+                    'R0':EPs[0].g['R0'],
+                    'R1':EPs[0].g['R1'],
+                    'Zmid':EPs[0].g['Zmid'],
+                    'wall':EPs[0].g['wall'],
+                    'Nwall':EPs[0].g['Nwall'],
+                    'Nlcfs':len(rlcfs),
+                    'lcfs':np.column_stack((rlcfs,zlcfs)),
+
+                    }
+
+        #return ep that can be written to file (note its not a real EP as defined by equilParams class)
+        return newEP
 
     #=====================================================================
     #                       private functions
