@@ -12,6 +12,7 @@ import subprocess
 import numpy as np
 import matplotlib.pyplot as plt
 import logging
+import pandas as pd
 log = logging.getLogger(__name__)
 
 class OpenFOAM():
@@ -177,7 +178,7 @@ class OpenFOAM():
             f.write('decomposePar > ' + logFile + '\n')
             #f.write('snappyHexMesh -overwrite > '+logFile+ '\n')
             f.write('mpirun -np 8 snappyHexMesh -parallel -overwrite > '+logFile+ '\n')
-            f.write('reconstructParMesh -mergeTol 1e-6 -latestTime > '+logFile+ '\n')
+            f.write('reconstructParMesh -mergeTol 1e-6 -latestTime -constant > '+logFile+ '\n')
 
         os.chmod(file, 0o744)
 
@@ -214,12 +215,12 @@ class OpenFOAM():
         print('Generating 3D Mesh in OpenFOAM')
         log.info('Generating 3D Mesh in OpenFOAM')
         #Check to see if 3D mesh exists for these settings
-        minLev = self.dict['meshMinLevel']
-        maxLev = self.dict['meshMaxLevel']
+        minLev = self.meshMinLevel
+        maxLev = self.meshMaxLevel
         if self.meshDir[-1] == '/':
-            file = self.meshDir + part + '_' + minLev + '_' + maxLev
+            file = self.meshDir + part + '_{:d}_{:d}'.format(minLev,maxLev)
         else:
-            file = self.meshDir + '/' + part + '_' + minLev + '_' + maxLev
+            file = self.meshDir + '/' + part + '_{:d}_{:d}'.format(minLev,maxLev)
 
         if self.partDir[-1] != '/':
             self.partDir += '/'
@@ -251,8 +252,8 @@ class OpenFOAM():
         """
         print('Running Thermal Analysis')
         log.info('Running Thermal Analysis')
-
         subprocess.call(self.partDir+self.cmdThermal, shell=True, cwd=self.partDir)
+        return
 
 
 
@@ -299,3 +300,26 @@ class OpenFOAM():
         path = os.path.dirname(file)
         plotFile = path+'/Tprobe.png'
         plt.savefig(plotFile,type="png",dpi=300)
+
+    def getMinMaxData(self, file):
+        """
+        gets min / max data that was assembled in openfoam postprocessing function
+
+        file is location of openfoam output in postProcessing/fieldMinMax1/<timestep>
+        returns dataframe
+        """
+        path, name = os.path.split(file)
+        outfile = path + '/minMaxTnoTab.dat'
+        #first clean the tabs out of csv
+        #Equivalent of: sed 's/\t/,/g' file > outfile
+        with open(file, 'r') as fin:
+            with open(outfile, 'w') as fout:
+                for line in fin:
+                    fout.write(line.replace('\t',','))
+        #read data file
+        data = pd.read_csv(outfile, header=1)
+        data.columns = data.columns.str.strip()
+        data = data.sort_values('field')
+        data['field'] = data['field'].str.strip()
+
+        return data

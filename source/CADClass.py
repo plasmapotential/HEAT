@@ -166,8 +166,10 @@ class CAD:
         for partnum in self.intersectList:
             name = self.STLpath + partnum + "_" + resolution +"mm.stl"
             if os.path.exists(name):
+                print("Mesh exists, loading...")
                 self.loadIntersectMesh(name)
             else:
+                print("New mesh.  Creating...")
                 self.intersectObjFromPartnum(partnum)
 
         #Now get face centers, normals, areas
@@ -208,11 +210,18 @@ class CAD:
         #Build a list of parts CAD objects
         parts = []
         for part in partslist:
+            count = 0
             idx = np.where(np.asarray(self.intersectList) == part)[0][0]
             for i in range(len(self.CADobjs)):
                 if part == self.CADobjs[i].Label:
+                    count += 1
                     self.intersectParts[idx] = self.CADobjs[i]
                     self.intersectMeshes[idx] = self.part2mesh(self.intersectParts[idx], resolution=self.gridRes)[0]
+
+            if count == 0:
+                print("Part "+part+" not found in CAD.  Cannot Mesh!")
+                log.info("Part "+part+" not found in CAD.  Cannot Mesh!")
+
         return
 
     def loadSTEP(self):
@@ -659,11 +668,14 @@ class CAD:
         tools.createVTKOutput(pcfile, 'glyph', 'Norm_pointcloud')
         return
 
-    def stripSTPfile(self,partfile,rawSTP,outfile=None):
+    def stripSTPfile(self,partfile,rawSTP,outfile=None,partsOnly=True):
         """
         Strips an stpfile down to the parts defined in the parts csv input file
         STPfile is the output file defined in input file to HEAT, and is included
-        in self variable.  rawSTP is the input CAD file that we want to strip
+        in self variable.  rawSTP is the input CAD file that we want to strip.
+
+        If partsOnly is True then we only copy parts (not assemblies), which
+        technically means only objects with type=Part.Feature
         """
         print('Stripping STP file')
         t0 = time.time()
@@ -680,15 +692,28 @@ class CAD:
         #If a shape has a label in part_list, keep it
         CAD = Import.open(infile)
         newobj = []
-        for i in FreeCAD.ActiveDocument.Objects:
-            if any(substring in i.Label for substring in part_list):
-                #if i.Label in part_list:
-                newobj.append(i)
-                newobj[-1].Placement = i.getGlobalPlacement()
+        count = 0
+        for i,obj in enumerate(FreeCAD.ActiveDocument.Objects):
+            if any(substring in obj.Label for substring in part_list):
+                #conditional to check if item is part (Part.Feature) or
+                # assembly (App.Part).
+                # This could be adapted in future to exclude objects containing
+                # specific string (like "_ASM") in Label that CAD engineer uses
+                # for assemblies
+                if partsOnly==True:
+                    if type(obj)==Part.Feature:
+                        count+=1
+                        newobj.append(obj)
+                        newobj[-1].Placement = obj.getGlobalPlacement()
+                else:
+                    count+=1
+                    newobj.append(obj)
+                    newobj[-1].Placement = obj.getGlobalPlacement()
 
         #Export to a new step file
         Import.export(newobj, outfile)
         print("Step file export complete.")
+        print("Exported {:d} part objects".format(count))
         print("Execution took {:f} seconds".format(time.time() - t0))
         return
 

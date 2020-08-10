@@ -5,17 +5,13 @@
 #                CAD Variables
 #=============================================================
 #STPfile, /u/tlooby/NSTX/CAD/HEAT/30deg_lowerhalf.step
-#STPfile, /u/tlooby/NSTX/CAD/HEAT/centerStack.step
-#STPfile, /u/tlooby/NSTX/CAD/HEAT/204118limiterCAD.step
-#STPfile, /u/tlooby/NSTX/CAD/HEAT/lowerDiv.step
-STPfile, /u/tlooby/NSTX/CAD/HEAT/30degLowerDivFullIntersects.step
-#STPfile, /u/tlooby/NSTX/CAD/HEAT/cylinderLwr.step
-#STPfile, /u/tlooby/NSTX/CAD/HEAT/cylinderFullHeight.step
+STPfile, /u/tlooby/NSTX/CAD/HEAT/30degLwr_202004.step
+#STPfile, /u/tlooby/NSTX/CAD/HEAT/FullDiv_202004_PFCsonly.step
 STLpath, /u/tlooby/NSTX/CAD/HEAT/STLs/
 FreeCADPath, /opt/freecad/appImage/squashfs-root/usr/lib
 PVPath, /opt/paraview/ParaView-5.7.0-MPI-Linux-Python3.7-64bit/lib/python3.7/site-packages
 ROIGridRes, 5.0
-gridRes, 500.0
+gridRes, 25.0
 permute_mask, True
 unitConvert, 1.0
 assembly_mask, True
@@ -23,11 +19,11 @@ assembly_mask, True
 #                MHD Variables
 #==============================================================
 MachFlag, nstx
-shot, 204118
+shot, 116313
 tree, EFIT02
-tmin, 101
-tmax, 103
-nTrace, 30
+tmin, 0
+tmax, 5000
+nTrace, 20
 dataPath, /u/tlooby/source/HEAT/rev9/data/
 ionDirection, -1
 plasma3Dmask, 0 #1=true, 0=false
@@ -37,7 +33,7 @@ plasma3Dmask, 0 #1=true, 0=false
 hfMode, eich
 lqEich, 3.0
 S, 1.0
-Psol, 3.0
+Psol, 2.8
 qBG, 0.0
 lqCN, 3.0
 lqCF, 5.0
@@ -89,16 +85,16 @@ yMin, 55.0
 yMax, 235.0
 zMin, -1660.0
 zMax, -1600.0
-tMin, 0.0
-tMax, 5.0
+tMin, 0
+tMax, 6000
 deltaT, 0.01
-writeDeltaT, 0.1
+writeDeltaT, 0.01
 xProbe, 504.0
 yProbe, 128.0
 zProbe, -1605.21
 STLscale, 1.0
 meshMinLevel, 1
-meshMaxLevel, 3
+meshMaxLevel, 2
 xMid, 500.0
 yMid, 150.0
 zMid, -1625.0

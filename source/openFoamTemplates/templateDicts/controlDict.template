@@ -19,7 +19,7 @@ application     laplacianFoam;
 
 startFrom       startTime;
 
-startTime       0;
+startTime       |-tMin-|;
 
 stopAt          endTime;
 
@@ -48,6 +48,18 @@ runTimeModifiable true;
 functions
 {
     #includeFunc probes;
+
+    fieldMinMax1
+    {
+        type        fieldMinMax;
+        libs        ("libfieldFunctionObjects.so");
+        writeToFile yes;
+        log         yes;
+        location    yes;
+        mode        magnitude;
+        fields      (T flux HFinterpolated);
+    }
+
 //    #includeFunc boundaryCloud;
 }
 

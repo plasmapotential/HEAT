@@ -41,18 +41,50 @@
             gradT.component(vector::Z)
         );
 
-        volVectorField DTgradT
+//        volVectorField thermCondgradT
+//        (
+//            IOobject
+//            (
+//                "flux",
+//                runTime.timeName(),
+//                mesh,
+//                IOobject::NO_READ,
+//                IOobject::AUTO_WRITE
+//            ),
+//            //multiply by 1000 to handle the fact that HEAT does everything in mm
+//            thermCond*gradT*1000
+//        );
+
+        volScalarField thermCondgradT
         (
             IOobject
             (
-                "flux",
+                "fluxMag",
                 runTime.timeName(),
                 mesh,
                 IOobject::NO_READ,
                 IOobject::AUTO_WRITE
             ),
-            DT*gradT
+            //multiply by 1000 to handle the fact that HEAT does everything in mm
+            thermCond*mag(gradT)*1000
         );
+
+
+
+
+//        dimensionedScalar maxT
+//        (
+//            IOobject
+//            (
+//                "maxT",
+//                runTime.timeName(),
+//                mesh,
+//                IOobject::NO_READ,
+//                IOobject::AUTO_WRITE
+//            ),
+//            max(T).value()
+//        );
+
 
         runTime.write();
     }

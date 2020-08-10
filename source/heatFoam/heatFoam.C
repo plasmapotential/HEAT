@@ -40,13 +40,13 @@ Description
     equation is given by:
 
     \f[
-        \ddt{T}  = \div \left( D_T \grad T \right)
+        \ddt{T}  = \div \left( DT \grad T \right)
     \f]
 
     Where:
     \vartable
         T     | Scalar field which is solved for, e.g. temperature
-        D_T   | Diffusion coefficient
+        DT   | Diffusion coefficient
     \endvartable
 
     \heading Required fields
@@ -60,11 +60,10 @@ Description
 #include "fvOptions.H"
 #include "simpleControl.H"
 
-//Need these for DT(T)
+//Need these for DT(T), thermCond(T)
 #include "IFstream.H"
 #include "graph.H"
 #include "interpolateXY.H"
-
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 int main(int argc, char *argv[])
@@ -84,12 +83,12 @@ int main(int argc, char *argv[])
     simpleControl simple(mesh);
 
     #include "createFields.H"
-    //Need these for DT(T)
+    //Need these for DT(T), thermCond(T), Cp(T)
     #include "initContinuityErrs.H"
     #include "interpolateProperties.H"
 
-
     // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+    label patchID = mesh.boundaryMesh().findPatchID("STLpatch");
 
     Info<< "\nCalculating temperature distribution\n" << endl;
 
@@ -97,9 +96,33 @@ int main(int argc, char *argv[])
     {
         Info<< "Time = " << runTime.timeName() << nl << endl;
 
+        Info<< "Reading Heat Flux HF\n" << endl;
+        volScalarField HF
+        (
+            IOobject
+            (
+                "HF",
+                runTime.timeName(),
+                mesh,
+                IOobject::MUST_READ,
+                IOobject::AUTO_WRITE
+            ),
+            mesh
+        );
+        qFVM = HF;
+        Info << max(HF) << nl << endl;
+        //interpolate DT and thermCond
+        #include "interpolateProperties.H"
+
         while (simple.correctNonOrthogonal())
         {
-            #include "interpolateProperties.H"
+
+            //minmax handled in controlDict functionObject (fieldMinMax.H)
+            //Info << max(HF) << nl << endl;
+            //Info << max(T) << nl << endl;
+            //Info << min(DT) << nl << endl;
+            //Info << min(thermCond) << nl << endl;
+
             fvScalarMatrix TEqn
             (
                 fvm::ddt(T) - fvm::laplacian(DT, T)
@@ -113,6 +136,8 @@ int main(int argc, char *argv[])
         }
 
         #include "write.H"
+
+        qINV=thermCond*mag(fvc::grad(T))*1000;
 
         runTime.printExecutionTime(Info);
     }

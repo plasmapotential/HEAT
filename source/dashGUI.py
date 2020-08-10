@@ -1,3 +1,28 @@
+#dashGUI.py
+#Description:   DASH python html gui
+#Engineer:      T Looby
+#Date:          20200615 (ish)
+"""
+This is the python - html interface, and the launch point for the HEAT code.
+Running this script launches a web interface that can be used to run HEAT
+The web interface is html and can be accessed via any web browser.
+
+DASH is the python library that creates the html - python binding
+Under the hood, DASH is running a flask server with associated proxy mapping,
+  html, javascipt, etc.  We use decorators (@) to serve as javascript callbacks
+
+There are css files that go with this program.  They are located in the
+   ./assets directory
+
+If you want to use this in a production environment serving multiple sessions
+simultaneously, you will need to run a gunicorn server or something to isolate
+different users' class variables from each other.  For now this is just set up to
+serve a single session @ 127.0.0.1:8050
+
+You will need to set a few variables below, based upon your system paths
+rootDir, PVPath
+"""
+
 import base64
 import io
 import sys
@@ -15,13 +40,16 @@ from dash.exceptions import PreventUpdate
 import dash_table
 import EFIT.equilParams_class as EP
 
+#========= VARIABLES THAT ARE SYSTEM DEPENDENT =================================
 #Include the location of the paraview binaries.  Specifically we need 'pvpython'
 PVPath = '/opt/paraview/ParaView-5.7.0-MPI-Linux-Python3.7-64bit/lib/python3.7/site-packages'
 sys.path.append(PVPath)
-
-
 #Root HEAT directory
 rootDir = '/u/tlooby/source/HEAT/rev9/source/'
+#openFOAM bashrc location
+OFbashrc = '/opt/OpenFOAM/OpenFOAM-v1912/etc/bashrc'
+#===============================================================================
+
 
 #Create log files that will be displayed in the HTML GUI
 import logging
@@ -34,6 +62,7 @@ log = logging.getLogger(__name__)
 #Make sure all our python scripts are in the path
 from GUIclass import GUIobj
 app = dash.Dash(__name__, meta_tags=[{"name": "viewport", "content": "width=device-width"}])
+
 #Eventually need to fix this so that we are not using a global variable
 #dash can acces Flask Cache so we should cache data by userID or something
 #for R&D this works
@@ -106,6 +135,7 @@ def build_tabs():
                                 buildCADbox(),
                                 buildPFCbox(),
                                 buildHFbox(),
+                                buildOFbox(),
                                 ]
                                 )
                         ]
@@ -142,6 +172,7 @@ def build_tabs():
                             )
                         ]
                     ),
+
                     dcc.Tab(
                         id="log-tab",
                         label="LogFile Output",
@@ -281,7 +312,8 @@ def buildMHDbox():
 @app.callback([Output('timeSlider', 'min'),
                Output('timeSlider', 'max'),
                Output('timeSlider', 'marks'),
-               Output('timeSlider', 'value')],
+               Output('timeSlider', 'value'),
+               Output('gFileTable2', 'data')],
               [Input('loadMHD', 'n_clicks')],
               [State('shot', 'value'),
               State('tmin', 'value'),
@@ -293,7 +325,7 @@ def buildMHDbox():
               State('gfiletable-upload', 'contents'),
               State('plasma3Dmask', 'value')]
               )
-def loadMHD(val,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask):
+def loadMHD(n_clicks,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask):
     """
     Load MHD
     """
@@ -332,15 +364,23 @@ def loadMHD(val,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask):
     ts = gui.MHD.timesteps
     tminMHD = ts.min()
     tmaxMHD = ts.max()
-    tAll = np.linspace(int(tmin), int(tmax), (int(tmax)-int(tmin)+1))
+    if gFileList is None:
+        tAll = np.linspace(int(tmin), int(tmax), (int(tmax)-int(tmin)+1))
+        data = [dict([{'filename':'', 'timestep':''}][0])]
+    else:
+        tAll = ts
+        keys=["filename"]
+        interpData = pd.DataFrame(gFileList, columns=keys)
+        interpData["timestep[ms]"] = ""
+        data = interpData.to_dict('records')
+        #interpData = [dict([{'filename':g, 'timestep':''} for g in gFileList])]
     marks = {}
     for t in ts:
         if t in tAll:
             marks.update({int(t):'{}'.format(t)})
 
     value = ts[0]
-    return tminMHD, tmaxMHD, marks, value
-
+    return tminMHD, tmaxMHD, marks, value, data
 
 
 
@@ -400,7 +440,7 @@ def buildHFbox():
                 #style=dropdown_style,
                 options=[
                     {'label': 'Gaussian Spreading', 'value': 'eich'},
-                    {'label': 'Multi-Expontial', 'value': 'multiExp'},
+                    {'label': 'Multi-Exponential', 'value': 'multiExp'},
                     {'label': 'Limiter', 'value': 'limiter'}
                     ],
                 ),
@@ -431,7 +471,7 @@ def buildHFbox():
         )
 
 
-#==========Heat Flux Callbacks and Conditionals
+#Heat Flux Callbacks and Conditionals
 @app.callback(Output('LRthreshDiv', 'children'),
               [Input('LRmask', 'value')])
 def LRselector(mask):
@@ -466,7 +506,7 @@ def PsolInput(hidden=False):
     return html.Div(
              className=className,
              children=[
-                    html.Label("Power Crossing Separatrix [MW/m^2]"),
+                    html.Label("Power Crossing Separatrix [MW]"),
                     dcc.Input(id="Psol", className="textInput"),
                     ],
                     )
@@ -479,100 +519,365 @@ def loadHFSettings(mode=None, hidden=False):
     if mode=='eich':
         hideMask = ['hfInput','hiddenBox','hiddenBox']
     elif mode=='limiter':
-        hideMask = ['hiddenBox','hfInput','hiddenBox'] #common flux region
+        hideMask = ['hiddenBox','hiddenBox','hfInput'] #common flux region
     elif mode=='multiExp':
-        hideMask = ['hiddenBox','hfInput','hfInput'] #common + private flux region
+        hideMask = ['hiddenBox','hfInput','hiddenBox'] #common + private flux region
     if hidden==True or mode==None:
         hideMask=['hiddenBox','hiddenBox','hiddenBox']
 
     return html.Div(
-            className="wideBoxDark",
             children=[
-                #eich
+                #gaussian spreading / eich
                 html.Div(
-                    className=hideMask[0],
+                    #className=hideMask[0],
                     children=[
-                        html.Label("Heat Flux Width [mm]"),
-                        dcc.Input(id="lqEich", className="textInput"),
-                    ],
-                    ),
+                        eichParameters(hideMask[0]),
+                        ]
+                ),
+                #multiple exponentials
                 html.Div(
-                    className=hideMask[0],
+                    #className=hideMask[1],
                     children=[
-                        html.Label("Gaussian Spreading [mm]"),
-                        dcc.Input(id="S", className="textInput"),
-                    ],
-                    ),
+                        multiExpParameters(hideMask[1]),
+                        ]
+                ),
+                #limiters
                 html.Div(
-                    className=hideMask[0],
+                    #className=hideMask[2],
                     children=[
-                        html.Label("Background Heat Flux [MW/m^2]"),
-                        dcc.Input(id="qBG", className="textInput"),
-                    ],
-                    ),
-                #multiExp
-                html.Div(
-                    className=hideMask[1],
-                    children=[
-                        html.Label("Common Near Heat Flux Width [mm]"),
-                        dcc.Input(id="lqCN", className="textInput"),
-                        ],
-                        ),
-                html.Div(
-                    className=hideMask[1],
-                    children=[
-                        html.Label("Common Near Power Fraction"),
-                        dcc.Input(id="fracCN", className="textInput"),
-                        ],
-                        ),
-
-                html.Div(
-                    className=hideMask[1],
-                    children=[
-                        html.Label("Common Far Heat Flux Width [mm]"),
-                        dcc.Input(id="lqCF", className="textInput"),
-                        ],
-                        ),
-                html.Div(
-                    className=hideMask[1],
-                    children=[
-                        html.Label("Common Far Power Fraction:"),
-                        dcc.Input(id="fracCF", className="textInput"),
-                        ],
-                        ),
-
-
-                html.Div(
-                    className=hideMask[2],
-                    children=[
-                        html.Label("Private Near Heat Flux Width [mm]"),
-                        dcc.Input(id="lqPN", className="textInput"),
-                        ],
-                        ),
-                html.Div(
-                    className=hideMask[2],
-                    children=[
-                        html.Label("Private Near Power Fraction"),
-                        dcc.Input(id="fracPN", className="textInput"),
-                        ],
-                        ),
-                html.Div(
-                    className=hideMask[2],
-                    children=[
-                        html.Label("Private Far Heat Flux Width [mm]"),
-                        dcc.Input(id="lqPF", className="textInput"),
-                        ],
-                        ),
-                html.Div(
-                    className=hideMask[2],
-                    children=[
-                        html.Label("Private Far Power Fraction"),
-                        dcc.Input(id="fracPF", className="textInput"),
-                        ],
-                        ),
+                        limiterParameters(hideMask[2]),
+                        ]
+                ),
                 PsolInput(hidden),
                     ],
                     )
+
+
+def eichParameters(className):
+    row1 = html.Div(
+        className='rowBox',
+        children=[
+            html.Div(
+            className="colBox",
+            children=[
+                html.Label("Select Heat Flux Width source:", className="hfLabel"),
+                dcc.Dropdown(
+                id='eichlqCNMode',
+                className="SelectorBoxInput",
+                style={'backgroundColor': 'transparent', 'color':'transparent'},
+                options=[
+                    {'label': 'From Eich Scaling', 'value': 'eich'},
+                    {'label': 'User Defined', 'value': 'user'}
+                    ],
+                value=None,
+                ),
+                ],
+            ),
+            html.Div(
+            className="colBox",
+            children=[
+                html.Label("Select Gaussian Spreading source:", className="hfLabel"),
+                dcc.Dropdown(
+                id='eichSMode',
+                className="SelectorBoxInput",
+                style={'backgroundColor': 'transparent', 'color':'transparent'},
+                #style=dropdown_style,
+                options=[
+                    {'label': 'From Makowski Scaling', 'value': 'makowski'},
+                    {'label': 'User Defined', 'value': 'user'}
+                    ],
+                value=None,
+                ),
+                ],
+            ),
+            ])
+
+    row2 = html.Div(
+        className='rowBox',
+        children=[
+            html.Div(
+            className="colBox",
+            children=[
+                html.Label("User Defined Heat Flux Width [mm]:", className="hfLabel"),
+                dcc.Input(id="lqEich", className="hfInput2"),
+
+                ],
+            ),
+            html.Div(
+            className="colBox",
+            children=[
+                html.Label("User Defined Gaussian Spreading [mm]:", className="hfLabel"),
+                dcc.Input(id="S", className="hfInput2"),
+                ],
+            ),
+            ])
+
+    row3 = html.Div(
+        className="rowBox",
+        children=[
+            html.Div(
+                className="colBox",
+                children=[
+                    html.Label("Background Heat Flux [MW/m^2]", className="hfLabel"),
+                    dcc.Input(id="qBG", className="hfInput2"),
+                ]),
+            html.Div(
+                className="colBox",
+                children=[
+                    html.Label("Greenwald Density Fraction", className="hfLabel"),
+                    dcc.Input(id="fG", className="hfInput2", value=0.6),
+                ]),
+        ])
+
+
+    div = html.Div(
+        className=className,
+        children=[
+            row1,
+            row2,
+            row3
+        ]
+    )
+
+    return div
+
+
+def multiExpParameters(className):
+    row1 = html.Div(
+        className="rowBox",
+        children = [
+            html.Div(
+                className="colBox",
+                children=[
+                    html.Label("Select Common Near Heat Flux Width source:"),
+                    dcc.Dropdown(
+                    id='multiExplqCNMode',
+                    className="SelectorBoxInput",
+                    style={'backgroundColor': 'transparent', 'color':'transparent'},
+                    options=[
+                        #{'label': 'From Brunner Scaling', 'value': 'brunner'},
+                        {'label': 'User Defined', 'value': 'user'}
+                        ],
+                    value=None,
+                    )
+                ]),
+            ]
+    )
+    row2 = html.Div(
+            className="rowBox",
+            children=[
+                html.Div(
+                    className="colBox",
+                    children=[
+                        html.Label("Common Near Heat Flux Width [mm]"),
+                        dcc.Input(id="lqCN", className="hfInput2"),
+                    ]),
+                html.Div(
+                    className="colBox",
+                    children=[
+                        html.Label("Common Near Power Fraction"),
+                        dcc.Input(id="fracCN", className="hfInput2"),
+                    ]),
+            ])
+
+    row3 = html.Div(
+            className="rowBox",
+            children=[
+                html.Div(
+                    className="colBox",
+                    children=[
+                        html.Label("Common Far Heat Flux Width [mm]"),
+                        dcc.Input(id="lqCF", className="hfInput2"),
+                    ]),
+                html.Div(
+                    className="colBox",
+                    children=[
+                        html.Label("Common Far Power Fraction"),
+                        dcc.Input(id="fracCF", className="hfInput2"),
+                    ]),
+            ])
+
+    row4 = html.Div(
+            className="rowBox",
+            children=[
+                html.Div(
+                    className="colBox",
+                    children=[
+                        html.Label("Private Near Heat Flux Width [mm]"),
+                        dcc.Input(id="lqPN", className="hfInput2"),
+                    ]),
+                html.Div(
+                    className="colBox",
+                    children=[
+                        html.Label("Private Near Power Fraction"),
+                        dcc.Input(id="fracPN", className="hfInput2"),
+                    ]),
+            ])
+
+    row5 = html.Div(
+            className="rowBox",
+            children=[
+                html.Div(
+                    className="colBox",
+                    children=[
+                        html.Label("Private Far Heat Flux Width [mm]"),
+                        dcc.Input(id="lqPF", className="hfInput2"),
+                    ]),
+                html.Div(
+                    className="colBox",
+                    children=[
+                        html.Label("Private Far Power Fraction"),
+                        dcc.Input(id="fracPF", className="hfInput2"),
+                    ]),
+            ])
+
+
+
+    div = html.Div(
+        className=className,
+        children=[
+            #row1, #commented for now because only user defined is allowed (no regression)
+            row2,
+            row3,
+            row4,
+            row5
+        ]
+    )
+
+    return div
+
+
+def limiterParameters(className):
+    #return if this div is supposed to be hidden to prevent duplicate IDs
+    #if className== 'hiddenBox':
+    #    return
+
+    row1 = html.Div(
+        className="rowBox",
+        children = [
+            html.Div(
+                className="colBox",
+                children=[
+                    html.Label("Select Common Near Heat Flux Width source:"),
+                    dcc.Dropdown(
+                    id='limiterlqCNMode',
+                    className="SelectorBoxInput",
+                    style={'backgroundColor': 'transparent', 'color':'transparent'},
+                    options=[
+                        {'label': 'From Eich Scaling', 'value': 'eich'},
+                        {'label': 'User Defined', 'value': 'user'}
+                        ],
+                    value=None,
+                    )
+                ]),
+            html.Div(
+                className="colBox",
+                children=[
+                    html.Label("Select Common Far Heat Flux Width source:"),
+                    dcc.Dropdown(
+                    id='limiterlqCFMode',
+                    className="SelectorBoxInput",
+                    style={'backgroundColor': 'transparent', 'color':'transparent'},
+                    options=[
+                        {'label': 'From Horaceck Scaling', 'value': 'horaceck'},
+                        {'label': 'User Defined', 'value': 'user'}
+                        ],
+                    value=None,
+                    )
+                ]),
+
+            ]
+            )
+
+    row2 = html.Div(
+            className="rowBox",
+            children=[
+                html.Div(
+                    className="colBox",
+                    children=[
+                        html.Label("Common Near Heat Flux Width [mm]"),
+                        dcc.Input(id="limlqCN", className="hfInput2"),
+                    ]),
+                html.Div(
+                    className="colBox",
+                    children=[
+                        html.Label("Common Far Heat Flux Width [mm]"),
+                        dcc.Input(id="limlqCF", className="hfInput2"),
+                    ]),
+            ])
+
+    row3 = html.Div(
+            className="rowBox",
+            children=[
+                html.Div(
+                    className="colBox",
+                    children=[
+                        html.Label("Common Near Power Fraction"),
+                        dcc.Input(id="limfracCN", className="hfInput2"),
+                    ]),
+
+                html.Div(
+                    className="colBox",
+                    children=[
+                        html.Label("Common Far Power Fraction"),
+                        dcc.Input(id="limfracCF", className="hfInput2"),
+                    ]),
+            ])
+
+    div = html.Div(
+        className=className,
+        children=[
+            row1,
+            row2,
+            row3
+            ]
+        )
+    return div
+
+
+
+
+
+
+def commonRegionParameters():
+    """
+    near and far heat flux widths and power sharing fractions
+    """
+    row1 = html.Div(
+            className="rowBox",
+            children=[
+                html.Div(
+                    className="colBox",
+                    children=[
+                        html.Label("Common Near Heat Flux Width [mm]"),
+                        dcc.Input(id="lqCN", className="hfInput2"),
+                    ]),
+                html.Div(
+                    className="colBox",
+                    children=[
+                        html.Label("Common Near Power Fraction"),
+                        dcc.Input(id="fracCN", className="hfInput2"),
+                    ]),
+            ])
+
+    row2 = html.Div(
+            className="rowBox",
+            children=[
+                html.Div(
+                    className="colBox",
+                    children=[
+                        html.Label("Common Far Heat Flux Width [mm]"),
+                        dcc.Input(id="lqCF", className="hfInput2"),
+                    ]),
+                html.Div(
+                    className="colBox",
+                    children=[
+                        html.Label("Common Far Power Fraction"),
+                        dcc.Input(id="fracCF", className="hfInput2"),
+                    ]),
+            ])
+
+    return row1,row2
 
 
 #Load HF button connect
@@ -593,15 +898,45 @@ def loadHFSettings(mode=None, hidden=False):
                State('Psol', 'value'),
                State('LRmask', 'value'),
                State('LRthresh', 'value'),
-               State('MachFlag', 'value')
+               State('MachFlag', 'value'),
+               State('eichlqCNMode', 'value'),
+               #State('multiExplqCNMode', 'value'),
+               State('limiterlqCNMode', 'value'),
+               State('limiterlqCFMode', 'value'),
+               State('eichSMode', 'value'),
+               State('fG', 'value'),
+               State('limlqCN', 'value'),
+               State('limlqCF', 'value'),
+               State('limfracCN', 'value'),
+               State('limfracCF', 'value'),
                ])
 def loadHF(n_clicks,hfMode,lqEich,S,qBG,lqCN,lqCF,lqPN,lqPF,
-            fracCN,fracCF,fracPN,fracPF,Psol,LRmask,LRthresh,MachFlag):
+            fracCN,fracCF,fracPN,fracPF,Psol,LRmask,LRthresh,MachFlag,
+            eichlqCNMode,limiterlqCNMode,limiterlqCFMode,SMode,fG,
+            limlqCN,limlqCF,limfracCN,limfracCF):
     if MachFlag is None:
         raise PreventUpdate
     else:
+        #set up the heat flux configuration (which scalings to use)
+        if hfMode == 'limiter':
+            lqCNmode = limiterlqCNMode
+            lqCFmode = limiterlqCFMode
+            lqCN = limlqCN
+            lqCF = limlqCF
+            fracCN = limfracCN
+            fracCF = limfracCF
+        elif hfMode == 'multiExp':
+            lqCNmode = multiExplqCNMode
+        else: #eich mode is default
+            lqCNmode = eichlqCNMode
+            lqCFmode = None
+            SMode = SMode
+        #could add private flux scalings here if they ever exist
+
+        #set up HF object in HEAT
         gui.getHFInputs(lqEich,S,Psol,qBG,lqPN,lqPF,lqCN,lqCF,
-                            fracPN,fracPF,fracCN,fracCF,hfMode,LRmask,LRthresh)
+                        fracPN,fracPF,fracCN,fracCF,hfMode,LRmask,LRthresh,
+                        lqCNmode,lqCFmode,SMode,fG)
 
     return [html.Label("Loaded HF Settings", style={'color':'#f5d142'})]
 
@@ -724,8 +1059,88 @@ def PFCtable(n_clicks, filename, dataStore, ts, uploadContents,
     return dataStore, tableData, tableColumns, hiddenDiv
 
 
+#==========openFOAM==========
+def buildOFbox():
+    return html.Div(
+        id="OFbox",
+        children=[
+            html.H6("openFOAM Settings"),
+            OFinputBoxes(),
+            html.Br(),
+            html.Button("Load OF Settings", id="loadOF", n_clicks=0, style={'margin':'0 10px 10px 0'}),
+            html.Div(id="hiddenDivOF")
+        ],
+        className="HFbox",
+    )
 
+def OFinputBoxes():
+    return html.Div(
+            children=[
+            html.Div(
+                children=[
+                    html.Label("Start Time [ms]"),
+                    dcc.Input(id="OFstartTime", className="textInput"),
+                ],
+                className="OFInput",
+            ),
+            html.Div(
+                children=[
+                    html.Label("Stop Time [ms]"),
+                    dcc.Input(id="OFstopTime", className="textInput"),
+                ],
+                className="OFInput"
+            ),
+            html.Div(
+                children=[
+                    html.Label("Minimum Resh Refinement Level"),
+                    dcc.Input(id="OFminMeshLev", className="textInput"),
+                ],
+                className="OFInput",
+            ),
+            html.Div(
+                children=[
+                    html.Label("Maximum Resh Refinement Level"),
+                    dcc.Input(id="OFmaxMeshLev", className="textInput"),
+                ],
+                className="OFInput",
+            ),
+            html.Div(
+                children=[
+                    html.Label("STL scaling"),
+                    dcc.Input(id="OFSTLscale", className="textInput"),
+                ],
+                className="OFInput",
+            ),
+            html.Div(
+                children=[
+                    html.Label("deltaT [ms]"),
+                    dcc.Input(id="OFdeltaT", className="textInput"),
+                ],
+                className="OFInput",
+            ),
+            ],
+            className="wideBoxNoColor",
+            )
 
+#Load OF button connect
+@app.callback([Output('hiddenDivOF', 'children')],
+              [Input('loadOF', 'n_clicks')],
+              [State('OFstartTime', 'value'),
+               State('OFstopTime', 'value'),
+               State('OFminMeshLev', 'value'),
+               State('OFmaxMeshLev', 'value'),
+               State('OFSTLscale', 'value'),
+               State('OFdeltaT', 'value')
+              ])
+def loadOF(n_clicks,OFstartTime,OFstopTime,
+            OFminMeshLev,OFmaxMeshLev,OFSTLscale,OFdeltaT):
+    """
+    sets up openFOAM for an analysis
+    """
+    if n_clicks == 0:
+        raise PreventUpdate
+    gui.loadOF(OFstartTime,OFstopTime,OFminMeshLev,OFmaxMeshLev,OFSTLscale,OFbashrc,OFdeltaT)
+    return [html.Label("Loaded OF Data into HEAT", style={'color':'#f5d142'})]
 
 
 """
@@ -766,7 +1181,8 @@ def runTabChecklist():
                         {'label': 'ShadowMask point cloud', 'value': 'shadowPC'},
                         {'label': 'psiN point cloud', 'value': 'psiPC'},
                         {'label': 'bdotn point cloud', 'value': 'bdotnPC'},
-                        {'label': 'Heat  flux point cloud', 'value': 'HFpc'}
+                        {'label': 'Heat flux point cloud', 'value': 'HFpc'},
+                        {'label': 'openFOAM thermal analysis', 'value': 'OFpc'}
                         ],
                         value=['HFpc'],
                         id='checklistPC',
@@ -872,6 +1288,9 @@ def runHEAT(n_clicks,runList,Btrace,OFtrace,
         gui.Btrace(xBtrace,yBtrace,zBtrace,t,ionDir)
 
     gui.runHEAT(runList)
+
+    if 'OFpc' in runList:
+        gui.runOpenFOAM()
 
 #NEED TO ADD THIS BACK IN WHEN OF MODULE BUILT INTO DASH
 #    if thermal_flag in checklist:
@@ -1022,19 +1441,43 @@ def saveNewGfile():
     )
 
 def interpolateGfile():
+    params = ['filename', 'timestep[ms]']
+    data = [dict([{'filename':'', 'timestep':''}][0])]
     return html.Div(
             id="interpGfile",
             children=[
-                html.Label("Interpolation Timestep", style={'margin':'0 10px 0 10px'}),
+                html.Label("Interpolation by Timestep", style={'margin':'0 10px 0 10px'}),
                 dcc.Input(id="interpTime", className="gfileBoxInput"),
                 html.Button("Interpolate this Timestep", id="interpButton", n_clicks=0, style={'margin':'0 10px 10px 0'}),
-                html.Div(id="hiddenDivInterp")
+                html.Div(id="hiddenDivInterp1"),
+                html.Br(),
+                dash_table.DataTable(
+                    id='gFileTable2',
+                    columns = ([{'id': p, 'name': p} for p in params]),
+                    data = data,
+                    style_header={'backgroundColor': 'rgb(30, 30, 30)'},
+                    style_cell={
+                        'textAlign': 'left',
+                        'backgroundColor': 'rgb(50, 50, 50)',
+                        'color': 'white'
+                                },
+                    editable=True,
+                    row_deletable=False,
+
+                ),
+                html.Br(),
+
+                html.Label("Interpolate N steps between gFiles", style={'margin':'0 10px 0 10px'}),
+                html.Div(id='interpTable', className="gfileTable"), #updated from MHD button callback
+                dcc.Input(id="interpN", className="gfileBoxInput", placeholder='Enter N steps'),
+                html.Button("Interpolate these Timesteps", id="interpButton2", n_clicks=0, style={'margin':'0 10px 10px 0'}),
+                html.Div(id="hiddenDivInterp2")
             ],
             className="gfileBox",
             )
 
 
-@app.callback(Output('hiddenDivInterp', 'children'),
+@app.callback(Output('hiddenDivInterp1', 'children'),
               [Input('interpButton', 'n_clicks')],
               [State('interpTime','value'),
               ])
@@ -1046,6 +1489,27 @@ def interpolate(n_clicks, t):
         raise PreventUpdate
     gui.interpolateGfile(t)
     return [html.Label("Gfile Interpolated", style={'color':'#f5d142'})]
+
+
+@app.callback(Output('hiddenDivInterp2', 'children'),
+              [Input('interpButton2', 'n_clicks')],
+              [State('interpN','value'),
+               State('gFileTable2','data'),
+              ])
+def interpolateNsteps(n_clicks, N, data):
+    """
+    interpolate gfile at user defined steps between two gfiles
+    """
+    if n_clicks < 1:
+        raise PreventUpdate
+    #load interpolation table data
+    df = pd.DataFrame(data)
+    df = df.sort_values('timestep[ms]')
+    #interpolate N steps between each point
+    gui.interpolateNsteps(df['filename'].values, pd.to_numeric(df['timestep[ms]']).values,int(N))
+    return [html.Label("Gfile Interpolated", style={'color':'#f5d142'})]
+
+
 
 
 
@@ -1205,6 +1669,7 @@ app.layout = html.Div(
             #store the session data until browser tab is closed
             dcc.Store(id='session', storage_type='session'),
             dcc.Store(id='PFCdataStorage', storage_type='session'),
+            dcc.Store(id='gFileListStorage', storage_type='session'),
             build_banner(),
             build_simulator(),
             html.Div(id="hiddenDiv", style={'display': 'none'}),
@@ -1240,6 +1705,12 @@ Session storage callbacks and functions
                Output('fracPF', 'value'),
                Output('Psol', 'value'),
                Output('qBG', 'value'),
+               Output('OFstartTime', 'value'),
+               Output('OFstopTime', 'value'),
+               Output('OFminMeshLev', 'value'),
+               Output('OFmaxMeshLev', 'value'),
+               Output('OFSTLscale', 'value'),
+               Output('OFdeltaT', 'value'),
                Output('session', 'data'),
                ],
                [Input('loadDefaults', 'n_clicks')],
@@ -1279,11 +1750,15 @@ def session_data(n_clicks, ts, MachFlag, data):
             data.get('fracPF', ''),
             data.get('Psol', ''),
             data.get('qBG', ''),
+            data.get('tMin', ''),
+            data.get('tMax', ''),
+            data.get('meshMinLevel', ''),
+            data.get('meshMaxLevel', ''),
+            data.get('STLscale', ''),
+            data.get('deltaT', ''),
             data
             ]
 
 
-
-
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=True, dev_tools_ui=True)

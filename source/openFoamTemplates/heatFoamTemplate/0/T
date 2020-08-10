@@ -38,13 +38,9 @@ boundaryField
             //mm2m converts mm to m (H.E.A.T. outputs mesh in mm)
             //If you dont want to do this then you need to change
             //the scale parameter in blockMeshDict and snappyHexMeshDict,
-            //Note that currently we are using DT scaled by 1000000 [mm^2 => m^2]
-            variables       "HF@STLpatch=HF;k=110;mm2m=1000;";
-            gradientExpression "HF/(k*mm2m)";
-//            gradientExpression "8000000/(k*mm2m)";
-//            gradientExpression "HF/k";
-
-
+            //Note that we also need DT scaled by 1000000 [mm^2 => m^2]
+            variables       "HF@STLpatch=HF;thermCond@STLpatch=thermCond;mm2m=1000;";
+            gradientExpression "HF/(thermCond*mm2m)";
 
 //            value           $internalField;
     }

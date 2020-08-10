@@ -145,7 +145,7 @@ class MHD:
         get gfile from mds+ tree if gfile is None, otherwise use file
         """
         #load gfile from MDS+
-        if gFileList==None:
+        if gFileList is None:
             self.timesteps, self.preserveFlag = gfiles.write_multiple_gfiles(
                                                                 self.MachFlag,
                                                                 self.shot,
@@ -157,10 +157,11 @@ class MHD:
         #load from file uploaded by user in GUI
         else:
             self.timesteps = []
-            for gfile in gFileList:
-                ts = self.copyGfile2tree(gfile)
+            for idx,gfile in enumerate(gFileList):
+                ts = self.copyGfile2tree(gfile,idx+1)
                 self.timesteps.append(ts)
             self.timesteps = np.array(self.timesteps)
+
         return
 
     def make1EFITobject(self,shot,t,gfile=None):
@@ -205,6 +206,8 @@ class MHD:
             if self.dataPath[-1]!='/':
                 dataPath = self.dataPath+'/'
             gfile = dataPath+'{:06d}/g{:06d}.{:05d}'.format(t,self.shot,t)
+            print("TEST")
+            print(gfile)
             self.ep[idx] = EP.equilParams(gfile)
         return
 
@@ -589,37 +592,51 @@ class MHD:
 
 
 
-    def copyGfile2tree(self,gFileName,clobberflag='y'):
+    def copyGfile2tree(self,gFileName,idx,clobberflag='y'):
         """
         Copies gfile to HEAT tree
         gFileName is name of gFile that is already located in self.gFileDir
         """
         oldgfile = self.gFileDir + gFileName
-        ep = EP.equilParams(oldgfile)
-        name = 'g{:06d}.{:05d}'.format(ep.g['shot'],ep.g['time'])
+        #try to make EP object if naming follows d3d gFile naming convention
+        try:
+            ep = EP.equilParams(oldgfile)
+            shot = ep.g['shot']
+            time = ep.g['time']
+        #if gfile doesn't follow naming convention define manually
+        except:
+            if self.shot is None:
+                shot = 1
+            else:
+                shot = self.shot
+            time = idx
+
+        name = 'g{:06d}.{:05d}'.format(shot,time)
         #make tree for this shot
         try:
             os.mkdir(self.dataPath)
         except:
             pass
         #make tree for this timestep
-        timeDir = self.dataPath + '/{:06d}/'.format(ep.g['time'])
+        timeDir = self.dataPath + '/{:06d}/'.format(time)
         newgfile = timeDir + name
         try:
             os.mkdir(timeDir)
         except:
-            clobberlist = ['y','Y','yes','YES','Yes']
-            #Directory Clobber checking
-            if clobberflag in clobberlist:
-                try: shutil.rmtree(timeDir)
-                except OSError as e:
-                    print ("Error: %s - %s." % (e.filename, e.strerror))
-                    return
-
+            pass
+        clobberlist = ['y','Y','yes','YES','Yes']
+        #Directory Clobber checking
+        if clobberflag in clobberlist:
+            try:
+                shutil.rmtree(timeDir)
                 os.mkdir(timeDir)
-                shutil.copyfile(oldgfile, newgfile)
-                print("Directory " , timeDir ,  " Created ")
-        return ep.g['time']
+            except OSError as e:
+                print ("Error: %s - %s." % (e.filename, e.strerror))
+                return
+
+        shutil.copyfile(oldgfile, newgfile)
+        print("Directory " , timeDir ,  " Created ")
+        return time
 
 
     def writeGfileData(self,gFileList, gFileData):
@@ -763,7 +780,7 @@ class MHD:
         ZmAxis = ZmAxisInterp(newTime)
         psiRZ = psiRZInterp((r,z,newTime)).T
         psiAxis = psiAxisInterp(newTime)
-        psiSep = psiAxisInterp(newTime)
+        psiSep = psiSepInterp(newTime)
         Bt0 = Bt0Interp(newTime)
         Ip = IpInterp(newTime)
         Fpol = FpolInterp((psiN,newTime))

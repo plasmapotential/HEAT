@@ -376,6 +376,43 @@ class GUIobj():
         log.info("gFile Interpolated")
         return
 
+    def interpolateNsteps(self, gfiles, timesteps, N):
+        """
+        interpolates N steps between gfiles arranged at user defined timesteps
+        Saves resulting gfiles into gFileDir
+
+        timesteps and gfiles should be sorted so that they are increasing in
+        chronological order
+
+        gfiles should be named following d3d convention by Lau:
+        g<XXXXXX>.<YYYYY>
+        where <XXXXXX> is shot number and <YYYYY> is timestep[ms]
+        """
+        #change filename to d3d convention
+        self.MHD.tmax = int(max(timesteps))
+        self.MHD.tmin = int(min(timesteps))
+        shot = self.MHD.shot
+        newGfiles = []
+        for i,f in enumerate(gfiles):
+            newGfiles.append('g{:06d}.{:05d}'.format(shot,timesteps[i]))
+            old = self.MHD.gFileDir + gfiles[i]
+            new = self.MHD.gFileDir + newGfiles[i]
+            shutil.copyfile(old, new)
+
+
+        #rebuild eq objects
+        self.MHD.get_mhd_inputs(self.MachFlag,newGfiles)
+        self.MHD.makeEFITobjects()
+
+
+        #interpolate between existing gfiles
+        nTime = len(timesteps)
+        for i in range(nTime-1):
+            times = np.linspace(timesteps[i],timesteps[i+1],N)
+            for t in times:
+                self.interpolateGfile(t)
+
+
     def getCADInputs(self,ROIGridRes=None,gridRes=None,STPfile=None):
         """
         Loads CAD file
@@ -483,7 +520,8 @@ class GUIobj():
 
 
     def getHFInputs(self,lqEich,S,P,qBG,lqPN,lqPF,lqCN,lqCF,
-                        fracPN, fracPF, fracCN, fracCF, mode, LRmask, LRpower):
+                        fracPN, fracPF, fracCN, fracCF, mode, LRmask, LRpower,
+                        lqCNmode,lqCFmode,SMode,fG):
         """
         get heat flux inputs from gui or input file
         """
@@ -508,19 +546,26 @@ class GUIobj():
         else:
             self.HF.LRmask = False
 
+        self.HF.lqCNmode = lqCNmode
+        self.HF.lqCFmode = lqCFmode
+        self.HF.SMode = SMode
+        self.HF.fG = float(fG)
+
         print("Mode = "+mode)
         log.info("Mode = "+mode)
-        print("Psol = {:f}".format(P))
-        log.info("Psol = {:f}".format(P))
+        print("Psol = {:f}".format(self.HF.Psol))
+        log.info("Psol = {:f}".format(self.HF.Psol))
         print("Long range intersection checking: "+LRmask)
 
         if mode=='eich':
             print("lqEich = {:f}".format(self.HF.lqEich))
             print("S = {:f}".format(self.HF.S))
             print("qBG = {:f}".format(self.HF.qBG))
+            print("fG = {:f}".format(self.HF.fG))
             log.info("lqEich = {:f}".format(self.HF.lqEich))
             log.info("S = {:f}".format(self.HF.S))
             log.info("qBG = {:f}".format(self.HF.qBG))
+            log.info("fG = {:f}".format(self.HF.fG))
         elif mode=='limiter':
             print("lqCN = {:f}".format(self.HF.lqCN))
             print("lqCF = {:f}".format(self.HF.lqCF))
@@ -698,7 +743,6 @@ class GUIobj():
                         self.shadowPC(PFC)
                     if 'bdotnPC' in runList:
                         self.bdotnPC(PFC)
-
 
             #merge multiple pointclouds into one single pointcloud for visualization
             tPath = self.MHD.dataPath + '/' + '{:06d}/'.format(t)
@@ -1123,118 +1167,233 @@ class GUIobj():
         self.OF.setTypes()
 
 
-    def setUpOpenFOAM(self,STLpart,clobberFlag=True):
+    def loadOF(self, OFstartTime,OFstopTime,OFminMeshLev,OFmaxMeshLev,
+                      OFSTLscale, OFbashrc, OFdeltaT):
         """
-        sets up OpenFOAM finite element simulation to determine temperature distribution
-        in a PFC.  If you are running OF for multiple PFC tiles then you must
-        call this function once for each STLpart.
+        loads user OF GUI settings
 
-        STLpart is name of STL file (ie E-ED1434-011_5.0mm)
+        OFstartTime is when we start OF simulation (can be before HF)
+        OFstopTime is when we start OF simulation (can be after HF)
+        OFminMeshLev is minimum refinement level for snappyhexmesh (default is 1)
+        OFminMeshLev is maximum refinement level for snappyhexmesh (default is 3)
+        OFSTLscale is scalar for unit conversion (default is 1)
+        OFbashrc is file location on system to source OF binaries / libs
+        OFdeltaT is timestep size for FVM simulation.  Defaults to 1ms (0.001s)
+        """
+        self.OF.tMin = float(OFstartTime)/1000.0 #to [s] for openfoam
+        self.OF.tMax = float(OFstopTime)/1000.0 #to [s] for openfoam
+        self.OF.meshMinLevel = OFminMeshLev
+        self.OF.meshMaxLevel = OFmaxMeshLev
+        self.OF.STLscale = OFSTLscale
+        self.OF.cmd3Dmesh = 'meshAndPatch'
+        self.OF.cmdSourceOF = 'source ' + OFbashrc
+        self.OF.cmdThermal = 'runThermal'
+        self.OF.cmdTprobe = 'runTprobe'
+        self.OF.deltaT = OFdeltaT
+        self.OF.writeDeltaT = self.OF.deltaT
+        print("Loaded OF data")
+        log.info("Loaded OF data")
+        return
 
-        caseDir is solver case directory
-        partDir is <caseDir>/<part> where <part> is the CAD part.  Each solver
-            caseDir has multiple partDir inside, corresponding to running that
-            solver for each part
 
-        This function uses a constant HF profile for now (not time varying)
+    def runOpenFOAM(self):
+        """
+        sets up and runs OpenFOAM finite volume simulation to determine
+        temperature distribution in a PFC.  For use with time varying multiple
+        tile cases
+
+        Note that HEAT must have been run BEFORE running this function
+        The user cannot change PFC, MHD, CAD, or HF, settings in GUI in between
+        running HEAT to generate HF and this function, because it depends on all
+        of them. Reads heat flux csv from HEAT tree for each timestep and
+        applies as boundary condition for openFOAM FVM simulation, so you need
+        the heat flux csvs to be in the tree already
+
+        HEAT calculates heat fluxes at discrete timesteps.  Because these may
+        not always be uniform in time (ie every millisecond) we need a method
+        for resolving the discrepancies between the various timesteps we have in
+        HEAT.  We have three different timestep variables that we need to juggle:
+            - MHD.timesteps: timesteps where we have equilibrium data
+            - PFC.timesteps: subset of MHD timesteps for each PFC tile
+            - OF.timesteps: evenly spaced timesteps for FVM analyses
+
+        In order to couple these timestep variables, we need to have conditionals
+        that tests whether each OF.timestep is:
+            - in MHD.timesteps?
+            - in PFC.timesteps?
+
+        Additionally, for each OF.timestep, there are three potential cases:
+        1)  If the OF.timestep aligns perfectly with a PFC timestep the boundary
+            condition is easy, we just assign the heat flux HEAT calculated for that
+            timestep as the boundary condition.
+        2)  If, however, the OF.timestep is in between PFC.timesteps, then we
+            do not write anything and openFOAM linearly interpolates (in time)
+            the heat flux between PFC.timesteps
+        3) There is one more case, when we are outside of the MHD.timesteps.  This
+            can happen when you want to run your FVM simulation for a duration longer
+            than the plasma discharge (ie to capture the exponential decay of
+            temperature within a PFC for a few minutes after a shot ends).  Here
+            I just assign a heat flux of 0 MW/m^2 to the boundary
         """
         print('Setting Up OF run')
         log.info('Setting Up OF run')
-        #strip .stl extension for part name
-        if STLpart[-4:] == '.stl':
-            part = STLpart[:-4]
-        else:
-            part = STLpart
-            STLpart = STLpart+'.stl'
+        #set up base OF directory for this discharge
+        self.OF.caseDir = self.MHD.dataPath + '/openFoam/heatFoam'
+        tools.makeDir(self.OF.caseDir)
+        #set up OF parts for each PFC part
+        for PFC in self.PFCs:
+            print("Running openFOAM for PFC: "+PFC.name)
+            log.info("Running openFOAM for PFC: "+PFC.name)
+            partDir = self.OF.caseDir + '/' + PFC.name
+            self.OF.partDir = partDir
 
-        #Variables we will use for OF bash scripts
-        self.OF.caseDir = self.controlfilePath + 'openFoam/heatFoam'
-        self.OF.partDir = self.controlfilePath + 'openFoam/heatFoam/'+part
-        self.OF.cmd3Dmesh = 'meshAndPatch'
-        self.OF.cmdSourceOF = 'source /opt/OpenFOAM/OpenFOAM-v1912/etc/bashrc'
-        self.OF.cmdThermal = 'runThermal'
-        self.OF.cmdTprobe = 'runTprobe'
-        self.OF.paraviewDir = self.controlfilePath+'paraview'
-        self.OF.TprobeFile = self.OF.partDir+'/postProcessing/probes/0/T'
+            # tools.makeDir(partDir)
+            #copy heatFoam template directory to this location
+            try:
+                shutil.copytree(self.OF.templateCase, partDir)
+                if self.OF.tMin != 0:
+                    t0 = partDir+'/0'
+                    t0new = partDir+'/{:f}'.format(self.OF.tMin).rstrip('0').rstrip('.')
+                    os.rename(t0, t0new)
+            except OSError as e:
+                print('COULD NOT COPY TEMPLATE DIRECTORY!  Aborting!')
+                print(e)
+                return
+            #set up timesteps
+            tMin = self.OF.tMin*1000.0 #in [ms] for HEAT
+            tMax = self.OF.tMax*1000.0 #in [ms] for HEAT
+            arr = np.linspace(tMin, tMax, (tMax-tMin)+1, dtype=int)
+            OFtimesteps = arr[0::int(self.OF.deltaT*1000)]
 
-        #Try to make new OFcaseDir root directory for heatFoam
-        try:
-            os.mkdir(self.OF.caseDir)
-        except:
-            print('Could not make OF case directory')
-            if clobberFlag == True:
-                print('Overwriting because clobberFlag=True.')
-                os.makedirs(self.OF.caseDir, exist_ok=True)
-
-        #Try to make a caseDir for this specific part inside the directory we just made
-#        try:
-#            os.mkdir(self.OF.partDir)
-#        except:
-#            print('COULD NOT MAKE OpenFOAM PART DIR')
-
-        #copy OF heatFoam template case to new case directory location
-        try:
-            shutil.copytree(self.OF.templateCase, self.OF.partDir)
-        except:
-            print('COULD NOT COPY TEMPLATE DIRECTORY')
-
-        #copy STLfile from gui.CAD.STLpath to OFpartDir/constant/triSurface/
-        triSurfaceLocation = self.OF.partDir+'/constant/triSurface'
-        if self.CAD.STLpath[-1] == '/':
-            STLlocation = self.CAD.STLpath + STLpart
-        else:
-            STLlocation = self.CAD.STLpath + '/' + STLpart
-        print('Copying STL file: '+STLlocation)
-        log.info('Copying STL file: '+STLlocation)
-        try:
-            shutil.copy(STLlocation, triSurfaceLocation)
-        except:
-            print('Could not copy STL file to openfoam directory')
-
-        #dynamically write template variables to templateVarFile
-        templateVarFile = self.OF.partDir + '/system/templateVariables'
-        self.OF.writeOFtemplateVarFile(templateVarFile, STLpart)
-
-        self.OF.writeShellScript(self.logFile)
-
-        #get list of STL parts
-        #parts = pd.read_csv(self.PartsFile, sep=',', comment='#', names=['parts'], skipinitialspace=True)
-        #STLfiles = parts['parts'].to_list()
-
-        #create OF dictionaries from templates
-        self.OF.createDictionaries(self.OF.templateDir,
-                                   self.OF.partDir,
-                                   templateVarFile,
-                                   STLpart)
-
-        print('OF case directory ready for execution')
-        log.info('OF case directory ready for execution')
+            #create symbolic link to STL file
+            print("Creating openFOAM symlink to STL")
+            log.info("Creating openFOAM symlink to STL")
+            PFC.OFpart = PFC.name + "_" + self.CAD.ROIGridRes
+            triSurfaceLocation = partDir+'/constant/triSurface/' + PFC.OFpart +"mm.stl"
+            if self.CAD.STLpath[-1] == '/':
+                stlfile = self.CAD.STLpath + PFC.OFpart +"mm.stl"
+            else:
+                stlfile = self.CAD.STLpath +'/'+ PFC.OFpart +"mm.stl"
+            os.symlink(stlfile,triSurfaceLocation)
 
 
-    def runOpenFOAM(self, STLpart):
+            #update middle points and blockmesh bounds for each PFC and
+            # give 1mm of clearance on each side
+            self.OF.xMin = (PFC.centers[:,0].min() - 0.001)*1000.0
+            self.OF.xMax = (PFC.centers[:,0].max() + 0.001)*1000.0
+            self.OF.yMin = (PFC.centers[:,1].min() - 0.001)*1000.0
+            self.OF.yMax = (PFC.centers[:,1].max() + 0.001)*1000.0
+            self.OF.zMin = (PFC.centers[:,2].min() - 0.001)*1000.0
+            self.OF.zMax = (PFC.centers[:,2].max() + 0.001)*1000.0
+            self.OF.xMid = (self.OF.xMax-self.OF.xMin)/2.0 + self.OF.xMin
+            self.OF.yMid = (self.OF.yMax-self.OF.yMin)/2.0 + self.OF.yMin
+            self.OF.zMid = (self.OF.zMax-self.OF.zMin)/2.0 + self.OF.zMin
+
+            #dynamically write template variables to templateVarFile
+            print("Building openFOAM templates and shell scripts")
+            log.info("Building openFOAM templates and shell scripts")
+            templateVarFile = partDir + '/system/templateVariables'
+            STLpart = PFC.OFpart +"mm.stl"
+            self.OF.writeOFtemplateVarFile(templateVarFile, STLpart)
+            self.OF.writeShellScript(self.logFile)
+
+            #create OF dictionaries from templates
+            self.OF.createDictionaries(self.OF.templateDir,
+                                       partDir,
+                                       templateVarFile,
+                                       stlfile)
+
+            #generate 3D volume mesh or coy from file
+            self.OF.generate3Dmesh(PFC.OFpart)
+
+            qDiv = np.zeros((len(PFC.centers)))
+            ctrs = copy.copy(PFC.centers)*1000.0
+
+            #cycle through timesteps and get HF data from HEAT tree
+            for t in OFtimesteps:
+                print("openFOAM timestep: {:d}".format(t))
+                log.info("openFOAM timestep: {:d}".format(t))
+                OFt = t/1000.0 #in [s] for openFOAM
+
+                #copy variable files into each timestep for solver
+                timeDir = partDir + '/{:f}'.format(OFt).rstrip('0').rstrip('.')
+                #timestep field prescriptions
+                HFt0 = partDir+'/{:f}'.format(self.OF.tMin).rstrip('0').rstrip('.')+'/HF'
+                HFtStep = partDir+'/{:f}'.format(OFt).rstrip('0').rstrip('.')+'/HF'
+                try:
+                    #shutil.copytree(t0new,timeDir
+                    os.mkdir(timeDir)
+                    #shutil.copy(HFt0, HFtStep)
+                    shutil.copy(HFt0, timeDir)
+
+                except:
+                    print("***")
+                    print("Could not create OF directory for timestep {:d}".format(t))
+                    print("***")
+                    pass
+
+                # determine heat flux boundary condition
+                if (t in PFC.timesteps) and (t in self.MHD.timesteps):
+                    #we explicitly calculated HF for this timestep
+                    print("OF.timestep: {:d} in PFC.timesteps".format(t))
+                    log.info("OF.timestep: {:d} in PFC.timesteps".format(t))
+                    HFcsv = self.MHD.dataPath + '/' + '{:06d}/'.format(t) + PFC.name + '/HeatfluxPointCloud.csv'
+                    qDiv = pd.read_csv(HFcsv)['HeatFlux'].values
+                    #write boundary condition
+                    print("Maximum qDiv for this PFC and time: {:f}".format(qDiv.max()))
+                    self.HF.write_openFOAM_boundary(ctrs,qDiv,partDir,OFt)
+                elif (t < self.MHD.timesteps.min()) or (t > self.MHD.timesteps.max()):
+                    #apply zero HF outside of discharge domain (ie tiles cooling)
+                    print("OF.timestep: {:d} outside MHD domain".format(t))
+                    log.info("OF.timestep: {:d} outside MHD domain".format(t))
+                    qDiv = np.zeros((len(ctrs)))
+                    #write boundary condition
+                    print("Maximum qDiv for this PFC and time: {:f}".format(qDiv.max()))
+                    self.HF.write_openFOAM_boundary(ctrs,qDiv,partDir,OFt)
+                else:
+                    #boundary using last timestep that we calculated a HF for
+                    #(basically a heaviside function in time)
+                    #print("OF.timestep: {:d} using heaviside from last PFC.timestep".format(t))
+                    #log.info("OF.timestep: {:d} using heaviside from last PFC.timestep".format(t))
+                    #write boundary condition
+                    #print("Maximum qDiv for this PFC and time: {:f}".format(qDiv.max()))
+                    #self.HF.write_openFOAM_boundary(ctrs,qDiv,partDir,OFt)
+
+                    #openFOAM linear interpolation in time using timeVaryingMappedFixedValue
+                    print("HF being linearly interpolated by OF at this t")
+                    pass
+
+
+            #run openfoam thermal analysis using heatFoam solver
+            self.OF.runThermalAnalysis()
+            print("thermal analysis complete...")
+            log.info("thermal analysis complete...")
+
+        print("openFOAM run completed.")
+        log.info("openFOAM run completed.")
+        return
+
+    def getOFMinMaxPlots(self):
         """
-        Runs OpenFOAM case that was setup with self.setUpOpenFOAM
-        Currently configured to solve heat diffusion equation using temperature
-        dependent thermal diffusion constant for single region
-        (no multiregion analysis)
-
+        returns plotly figure that has data from openFOAM postProcessing
+        fieldMinMax.dat files for each PFC
         """
-        #strip .stl extension for part name
-        if STLpart[-4:] == '.stl':
-            part = STLpart[:-4]
-        else:
-            part = STLpart
-            STLpart = STLpart+'.stl'
+        data = []
+        pfcNames = []
+        for PFC in self.PFCs:
+            partDir = self.MHD.dataPath + '/openFoam/heatFoam/'+PFC.name
+            file = (partDir +
+                    '/postProcessing/fieldMinMax1/{:f}'.format(self.OF.tMin).rstrip('0').rstrip('.')
+                    +'fieldMinMax.dat')
+            data.append(self.OF.getMinMaxData(file))
+            pfcNames.append(PFC.name)
 
-        #Create Boundary Condition for openFOAM from HEAT heatflux data
-        self.HF.write_openFOAM_boundary(self.HF.PFCs[0].centers,self.HF.PFCs[0].qDiv,self.OF.partDir)
 
-        #generate 3D mesh if necessary
-        self.OF.generate3Dmesh(part)
+        import GUIscripts.plotlyGUIplots as pgp
+        return pgp.plotlyOpenFOAMplot(data,pfcNames)
 
-        #run openfoam thermal analysis using heatFoam solver
 
-        self.OF.runThermalAnalysis()
+
 
     def TprobeOF(self,x,y,z):
         """

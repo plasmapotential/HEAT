@@ -301,8 +301,25 @@ class tools:
                         try: shutil.rmtree(pfcDir)
                         except OSError as e:
                             print ("Error: %s - %s." % (e.filename, e.strerror))
-                            sys.exit()
+                            return
 
                         os.mkdir(pfcDir)
                         print("Directory " , pfcDir ,  " Created ")
+        return
+
+    def makeDir(self, dir, clobberFlag=True):
+        """
+        builds a directory with clobber checking.  for general use.
+        """
+        try:
+            os.makedirs(dir)
+            print("Directory " , dir ,  " Created ")
+        except:
+            if clobberFlag is True:
+                try:
+                    shutil.rmtree(dir)
+                    os.makedirs(dir)
+                    print("Directory " , dir ,  " Created ")
+                except OSError as e:
+                    print ("Error: %s - %s." % (e.filename, e.strerror))
         return

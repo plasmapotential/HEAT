@@ -7,6 +7,7 @@ import toolsClass
 import os
 import sys
 import time
+import copy
 tools = toolsClass.tools()
 
 import EFIT.equilParams_class as EP
@@ -142,45 +143,101 @@ class heatFlux:
         f = scinter.UnivariateSpline(p, R, s = 0, ext = 'const')	# psi outside of spline domain return the boundary value
         return f(psi)
 
-    def getEichFromEQ(self, ep, MachFlag):
+    def getEichFromEQ(self, ep):
         """
-        finds lqEich and S from equilibrium object using regression from
+        finds lqEich from equilibrium object using regression from
         Eich's paper:
 
         T. Eich et al., Nucl. Fusion, vol. 53, no. 9, p. 093031, Sep. 2013,
         doi: 10.1088/0029-5515/53/9/093031.
 
-        if machine is NSTX, then use regression #15
-        if machine is D3D, then use regression #10
-        if machine is ST40, then use regression #15
-
+        Uses regression #15
         """
+        #assuming plasma is centered in machine here
+        zMin = ep.g['ZmAxis'] - 0.25
+        zMax = ep.g['ZmAxis'] + 0.25
+        zWall = np.linspace(zMin, zMax, 1000)
+        zLCFS = ep.g['lcfs'][:,1]
+        #this prevents us from getting locations not at midplane
+        idx = np.where(np.logical_and(zLCFS>zMin,zLCFS<zMax))
+        Rmax = ep.g['lcfs'][:,0][idx].max()
+        Rmin = ep.g['lcfs'][:,0][idx].min()
         # geometric quantities
-        Rmax = ep.g['lcfs'][:,0].max()
-        Rmin = ep.g['lcfs'][:,0].min()
         Rgeo = (Rmax + Rmin) / 2.0
         a = (Rmax - Rmin) / 2.0
         aspect = a/Rgeo
 
-        if MachFlag == 'nstx':
-            #Regression 15
-            C = 1.35
-            Cp = -0.02
-            Cr = 0.04
-            Cb = -0.92
-            Ca = 0.42
-
-            # Evaluate B at outboard midplane
-            Z_omp_sol = 0.0
-            Bp = PFC.ep.BpFunc.ev(Rmax,Z_omp_sol)
-
-            #Evaluate lq, S
-            self.lqEich = C * self.Psol**Cp * Rgeo**Cr * Bp**Cb * aspect**Ca # in mm
-            self.S = 1.0 #in mm
-
+        #Regression 15
+        C = 1.35
+        Cp = -0.02
+        Cr = 0.04
+        Cb = -0.92
+        Ca = 0.42
+        # Evaluate Bp at outboard midplane
+        Z_omp_sol = 0.0
+        Bp = abs(ep.BpFunc.ev(Rmax,Z_omp_sol))
+        #Evaluate lq
+        self.lqEich = C * self.Psol**Cp * Rgeo**Cr * Bp**Cb * aspect**Ca # in mm
+        print("Found heat flux width value of: {:f} mm".format(self.lqEich))
+        log.info("Found heat flux width value of: {:f} mm".format(self.lqEich))
         return
 
+    def getSpreadingFromEQ(self, ep, fG):
+        """
+        finds gaussian spreading associated with thermal diffusion, also known
+        as S.  In Eich profile, exponential is convoluted with gaussian to
+        represent thermal diffusion into private flux region.  User must supply
+        Greenwald Density Fraction, fG
 
+        We follow the S regression from Makowski (figure 6):
+        M. Makowski, et al.  Physics of Plasmas 19, 056122 (2012)
+
+        User supplies Greenwald density fraction, as defined in:
+        M. Greenwald, Plasma Phys. Control. Fusion, vol. 44, no. 8, pp. R27–R53, Aug. 2002,
+        doi: 10.1088/0741-3335/44/8/201
+        where fG = n/nG. n is density and nG is Greenwald density
+
+        If user doesn't supply fG, a ratio of 0.6 is taken, corresponding to the
+        middle of the Makowski fG regression scan for NSTX
+
+        """
+        #default value for Greenwald fraction (mid of NSTX scan in Makowski)
+        if fG == None:
+            fG = 0.6
+        #Plasma current [MA]
+        Ip = ep.g['Ip'] / 1e6
+        # Evaluate Bt at axis [T]
+        Zaxis = ep.g['ZmAxis']
+        Raxis = ep.g['RmAxis']
+        Bt = abs(ep.BtFunc.ev(Raxis,Zaxis))
+        #assuming plasma is centered in machine here
+        zMin = ep.g['ZmAxis'] - 0.25
+        zMax = ep.g['ZmAxis'] + 0.25
+        zWall = np.linspace(zMin, zMax, 1000)
+        zLCFS = ep.g['lcfs'][:,1]
+        #this prevents us from getting locations not around plasma center
+        idx = np.where(np.logical_and(zLCFS>zMin,zLCFS<zMax))
+        Rmax = ep.g['lcfs'][:,0][idx].max()
+        Rmin = ep.g['lcfs'][:,0][idx].min()
+        # minor radius
+        a = (Rmax - Rmin) / 2.0
+
+        #per regression in Makowski figure 6:
+        C = 3.01 # +/- 0.62
+        Ci = -1.31 # +/- 0.15
+        Cb = -0.29 # +/- 0.06
+        Ca = -0.33 # +/- 0.1
+        Cf = 1.03 # +/-0.29
+
+        self.S = C * Ip**Ci * Bt**Cb * a**Ca * fG**Cf
+        print('Found Gaussian spreading value of: {:f} mm'.format(self.S))
+        log.info('Found Gaussian spreading value of: {:f} mm'.format(self.S))
+        return
+
+    def getHoraceckFromEQ(self, ep, fG=None):
+        """
+        finds Horaceck scaling for far SOL heat flux width
+        """
 
 
     def getHFprofile(self, PFC, MachFlag):
@@ -212,15 +269,26 @@ class heatFlux:
         q = np.zeros(PFC.centers[:,0].shape)
         use = np.where(PFC.shadowed_mask == 0)[0]
 
+        #handle various heat flux regressions if user selected that in GUI
+        if self.lqCNmode == 'eich' or self.lqCNmode == None:
+            self.getEichFromEQ(PFC.ep)
+            self.lqCN = self.lqEich
+
+        if self.SMode == 'makowski' or self.SMode == None:
+            self.getSpreadingFromEQ(PFC.ep, self.fG)
+
+        if self.lqCFmode == 'horaceck' or self.lqCFmode == None:
+            self.getHoraceckFromEQ(PFC.ep)
+
+
+
+
         #Multiple exponential profile (Brunner Profile)
         if self.mode=='multiExp' or self.mode=='limiter':
             q[use] = self.multiExp_profile_fluxspace(PFC, R_omp, Bp_omp, psi, self.mode)
 
         #Eich Profile
         else:
-            #if Eich profile lq and S were not defined find them from equilibrium object
-            if self.lqEich == None:
-                self.getEichFromEQ(PFC.ep, MachFlag)
             q0 = self.scaleHF_fluxspace(PFC,self.lqEich,self.S,self.Psol)
             q[use] = self.eich_profile_fluxspace(PFC, self.lqEich, self.S, R_omp, Bp_omp, psi)
             q *= q0
@@ -648,23 +716,29 @@ class heatFlux:
         return
 
 
-    def write_openFOAM_boundary(self, centers, hf, openFoamDir):
+    def write_openFOAM_boundary(self, centers, hf, openFoamDir, timestep):
         """
         Writes 2 files into <openFoamDir>/constant/boundaryData/
         1) points
-        2) 0/T
+        2) <timestep>/HF
         These files are then interpolated to the tile surface using the
         openFOAM timeVaryingMappedFixedValue boundary method
         hf should come in in [MW] (I convert to watts here)
+        timestep should come in seconds for openFOAM
         """
         print("Creating Heat Flux Boundary for OpenFoam")
         log.info("Creating Heat Flux Boundary for OpenFoam")
 
-        centers *= 1000.0
-        hf *= 1000000.0
+        #centers =  centers * 1000.0 #if we need to convert to mm
+        hf = hf*1000000.0 #scale to MW
         #openFoamDir = '/u/tlooby/OpenFOAM/tlooby-7/run/heatTestLaplace'
         pointFile = openFoamDir + '/constant/boundaryData/STLpatch/points'
-        hfFile = openFoamDir + '/constant/boundaryData/STLpatch/0/HF'
+        hfFile = openFoamDir + '/constant/boundaryData/STLpatch/{:f}'.format(timestep).rstrip('0').rstrip('.') + '/HF'
+        timeDir = openFoamDir + '/constant/boundaryData/STLpatch/{:f}'.format(timestep).rstrip('0').rstrip('.')
+        try:
+            os.mkdir(timeDir)
+        except:
+            print("COULD NOT CREATE HF BOUNDARY CONDITION DIRECTORY")
 
         with open(pointFile, 'w') as f:
             f.write('{:d}\n'.format(len(centers[:,0])))

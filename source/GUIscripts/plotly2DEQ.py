@@ -1,5 +1,5 @@
-#visualizationClass.py
-#Description:   Base HEAT Viz module
+#plotly2DEQ.py
+#Description:   Base HEAT equilibrium plot
 #Engineer:      T Looby
 #Date:          20200513
 
@@ -306,6 +306,10 @@ def nstxu_wall(oldwall=False):
             -0.49  , -0.545 , -0.9976, -1.0397, -1.397508 , -1.5367   , -1.5367   , -1.6028416, -1.6028416,
             -1.5104872, -1.5104872, -1.2899136, -1.0499344,  0.])
     return R,Z
+
+
+
+
 
 
 
