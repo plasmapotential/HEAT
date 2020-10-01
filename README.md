@@ -1,5 +1,5 @@
 # HEAT
-![Alt text](exampleHF.png?raw=true "Example NSTXU 3D Heat Flux onto CAD")
+![Alt text](HEATfullDivTransparent.png?raw=true "Example NSTXU 3D Heat Flux onto CAD")
 
 The Heat flux Engineering Analysis Toolkit (HEAT) is a suite of tools for predicting the heat flux
 incident upon PFCs in tokamaks.  The toolkit connects CAD, FEM, MHD, Plasma Physics, Visualization,
@@ -16,13 +16,20 @@ The author engineer is Tom Looby, a PhD candidate on assignment at NSTX-U for Oa
 This project is an Oak Ridge National Lab tool built by the Fusion Energy Division, but it is also
 openSource under the MIT license.
 
+We are currently looking for collaborators, so if you feel like you could use HEAT, reach out!
+
 Tom's email:  tlooby@vols.utk.edu
 
-Below is a very simple example HEAT output.  More specifically, this is a real NSTX-U castellated graphite
- tile CAD drawing from the lower outer divertor, coupled to an Eich profile physics module.  Note the complicated 3D structure of the heat flux, due to the castellated tiles.
+Below are a few examples of HEAT output.  HEAT produces time varying 3D heat fluxes, and can easily create visualizations leveraging the power of ParaVIEW.
 
+Example output for 30 degree section of the NSTX-U divertor with Equilibrium, Heat Flux, Temperature:
 ![Alt text](HF_T_EQ.gif "Example output of EQ, HF, T, video")
-![Alt text](limiter.gif "Example output of EQ, HF, T, video")
+
+Example output of PFC tile temperature for various strike points sweep frequencies:
 ![Alt text](sideBySide.gif "Example output of EQ, HF, T, video")
+
+Example output for limited discharges:
+![Alt text](limiter.gif "Example output of EQ, HF, T, video")
+
 
 
