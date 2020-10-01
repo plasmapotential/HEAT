@@ -1,6 +1,4 @@
 # HEAT
-![Alt text](HEATfullDivTransparent.png?raw=true "Example NSTXU 3D Heat Flux onto CAD")
-
 The Heat flux Engineering Analysis Toolkit (HEAT) is a suite of tools for predicting the heat flux
 incident upon PFCs in tokamaks.  The toolkit connects CAD, FEM, MHD, Plasma Physics, Visualization,
 HPC, and more, in one streamlined package.  The objective is to enable engineers and physicists to
