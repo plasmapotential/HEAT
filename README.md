@@ -31,7 +31,7 @@ Example output of PFC tile temperature for various strike points sweep frequenci
 Example output for limited discharges:
 ![Alt text](limiter.gif "Example output of EQ, HF, T, video")
 
-HEAT DASH / plotly GUI:
+HEAT Dash / plotly GUI:
 ![Alt text](gui1.png "HEAT DASH GUI")
 ![Alt text](gui2.png "HEAT DASH GUI")
 
