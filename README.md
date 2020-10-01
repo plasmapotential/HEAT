@@ -1,4 +1,5 @@
 # HEAT
+## Description:
 The Heat flux Engineering Analysis Toolkit (HEAT) is a suite of tools for predicting the heat flux
 incident upon PFCs in tokamaks.  The toolkit connects CAD, FEM, MHD, Plasma Physics, Visualization,
 HPC, and more, in one streamlined package.  The objective is to enable engineers and physicists to
@@ -18,6 +19,7 @@ We are currently looking for collaborators, so if you feel like you could use HE
 
 Tom's email:  tlooby@vols.utk.edu
 
+## Examples:
 Below are a few examples of HEAT output.  HEAT produces time varying 3D heat fluxes, and can easily create visualizations leveraging the power of ParaVIEW.
 
 Example output for 30 degree section of the NSTX-U divertor with Equilibrium, Heat Flux, Temperature:
