@@ -8,7 +8,7 @@ If a user wants to use HEAT without building it on his/her local machine, then t
 access HEAT from a web browser inside the Princeton Plasma Physics Lab (PPPL) VPN.  For instructions
 on where to point your web browser email Tom Looby (email below).
 
-If a user wants to set up HEAT on a local machine there are a variety of configuration steps that need to be completed (ie compiling MAFOT, building OF modules from source, installing FLASK, network configuration and proxy mapping, ParaViewWeb install, etc.).  For more info, again, contact Tom.
+If a user wants to set up HEAT on a local machine there are a variety of configuration steps that need to be completed (ie compiling MAFOT, building OF modules from source, installing FLASK, network configuration and proxy mapping, ParaViewWeb install, etc.).  We are currently working on an appImage (or VM) that will enable users to install locally without any setup (fall 2020).  For more info, again, contact Tom.
 
 The author engineer is Tom Looby, a PhD candidate on assignment at NSTX-U for Oak Ridge National Lab.
 This project is an Oak Ridge National Lab tool built by the Fusion Energy Division, but it is also
