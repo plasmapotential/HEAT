@@ -20,7 +20,8 @@ We are currently looking for collaborators, so if you feel like you could use HE
 Tom's email:  tlooby@vols.utk.edu
 
 ## Examples:
-Below are a few examples of HEAT output.  HEAT produces time varying 3D heat fluxes, and can easily create visualizations leveraging the power of ParaVIEW.
+Below are a few examples of HEAT output.  HEAT produces time varying 3D heat fluxes, and can easily create visualizations leveraging the power of ParaVIEW.  There is also a HEAT presentation from Aug 2020 available [here](https://docs.google.com/presentation/d/1aqJRaxt97P6R4Kqz7xyaoegtxssHQQPuwvJgVM4cCII/edit?usp=sharing).
+
 
 Example output for 30 degree section of the NSTX-U divertor with Equilibrium, Heat Flux, Temperature:
 ![Alt text](HF_T_EQ.gif "Example output of EQ, HF, T, video")
