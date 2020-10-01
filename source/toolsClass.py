@@ -7,6 +7,8 @@ import pandas as pd
 import numpy as np
 import os
 import shutil
+import logging
+log = logging.getLogger(__name__)
 
 class tools:
     """
@@ -73,6 +75,105 @@ class tools:
                 pass
                 #print("Caution! Unrecognized variable in input file: "+data['Var'][i])
 
+        return
+
+    def saveInputFile(self, data, path):
+        """
+        saves a HEAT formatted data file from data, which is a dict
+        file is saved to path location with the name HEATinput.csv
+        """
+        import CADClass
+        import MHDClass
+        import heatfluxClass
+        import openFOAMclass
+        MHD = MHDClass.MHD()
+        CAD = CADClass.CAD()
+        HF = heatfluxClass.heatFlux()
+        OF = openFOAMclass.OpenFOAM()
+        MHD.allowed_class_vars()
+        CAD.allowed_class_vars()
+        HF.allowed_class_vars()
+        OF.allowed_class_vars()
+
+        if path[-1] == '/':
+            file = path + 'HEATinput.csv'
+        else:
+            file = path + '/HEATinput.csv'
+        with open(file, 'w') as f:
+            f.write("# Input file for HEAT\n")
+            f.write("# Format is: Variable, Value\n")
+            f.write("#=============================================================\n")
+            f.write("#                CAD Variables\n")
+            f.write("#=============================================================\n")
+            for var in CAD.allowed_vars:
+                if var in data:
+                    f.write(var + ', ' + str(data[var]) + '\n')
+                else:
+                    f.write(var + ', \n')
+            f.write("#=============================================================\n")
+            f.write("#                MHD Variables\n")
+            f.write("#=============================================================\n")
+            for var in MHD.allowed_vars:
+                if var in data:
+                    f.write(var + ', ' + str(data[var]) + '\n')
+                else:
+                    f.write(var + ', \n')
+            f.write("#=============================================================\n")
+            f.write("#                HF Variables\n")
+            f.write("#=============================================================\n")
+            for var in HF.allowed_vars:
+                if var in data:
+                    f.write(var + ', ' + str(data[var]) + '\n')
+                else:
+                    f.write(var + ', \n')
+            f.write("#=============================================================\n")
+            f.write("#                OpenFOAM Variables\n")
+            f.write("#=============================================================\n")
+            for var in OF.allowed_vars:
+                if var in data:
+                    f.write(var + ', ' + str(data[var]) + '\n')
+                else:
+                    f.write(var + ', \n')
+
+        print("Wrote HEAT input file")
+        log.info("Wrote HEAT input file")
+        return
+
+    def saveDefaultPFCfile(self, path):
+        """
+        saves a default PFC input file to path
+        file is named PFCinput.csv
+        """
+        if path[-1] == '/':
+            file = path + 'PFCinput.csv'
+        else:
+            file = path + '/PFCinput.csv'
+        with open(file, 'w') as f:
+            f.write("# This is a HEAT input file responsible for: \n")
+            f.write("# 1) assigning intersection PFCs to each heat flux calculation PFC \n")
+            f.write("# 2) assigning MapDirection to each PFC \n")
+            f.write("# 3) assigning the timesteps to use each PFC for \n")
+            f.write("# \n")
+            f.write("# you can use colons (:) to insert a range of timesteps or to insert multiple intersects \n")
+            f.write("# but each PFC needs its own line (and sometimes two if you need to trace in both directions) \n")
+            f.write("# commas are the delimiter here, so don't use them inside columns or you'll break pandas \n")
+            f.write("# \n")
+            f.write("# Example \n")
+            f.write("# timesteps, PFCname, MapDirection, DivCode, intersectName\n")
+            f.write("# 100:105, E-ED1450-013, -1, E-ED1450-013:E-ED1390-003:E-ED1450-071 \n")
+            f.write("# \n")
+            f.write("# this would calculate HF on E-ED1450-013 for all (available) timesteps between \n")
+            f.write("# 100ms and 105ms, checking for intersections with E-ED1450-013, E-ED1390-003, \n")
+            f.write("# and E-ED1450-071, with traces running in the reversed MapDirection \n")
+            f.write("# \n")
+            f.write("# \n")
+            f.write("# \n")
+            f.write("# 40-1783_2 TILE UPPER \n")
+            f.write("# 40-1782_3 TILE LOWER TYPE A0 \n")
+            f.write("timesteps, PFCname, MapDirection, DivCode, intersectName\n")
+
+        print("Default PFC file saved")
+        log.info("Default PFC file saved")
         return
 
     def createDict(self, obj):
@@ -323,3 +424,16 @@ class tools:
                 except OSError as e:
                     print ("Error: %s - %s." % (e.filename, e.strerror))
         return
+
+
+    def is_number(self, s):
+        """
+        checks if s is a number
+        s is a string
+        returns boolean (true if number)
+        """
+        try:
+            float(s)
+            return True
+        except ValueError:
+            return False

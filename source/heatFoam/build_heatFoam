@@ -1,3 +1,6 @@
 #!/bin/bash
+# Need to source OF before running this
+# Example: source /opt/OpenFOAM/OpenFOAM-v1912/etc/bashrc
+# you shouldn't need to run this as root
 wclean
 wmake

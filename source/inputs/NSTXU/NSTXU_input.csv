@@ -6,6 +6,8 @@
 #=============================================================
 #STPfile, /u/tlooby/NSTX/CAD/HEAT/30deg_lowerhalf.step
 STPfile, /u/tlooby/NSTX/CAD/HEAT/30degLwr_202004.step
+#STPfile, /u/tlooby/NSTX/CAD/HEAT/30degLwr_AddedFishscale_202004.step
+#STPfile, /u/tlooby/NSTX/CAD/HEAT/360degLwrDiv_202004.step
 #STPfile, /u/tlooby/NSTX/CAD/HEAT/FullDiv_202004_PFCsonly.step
 STLpath, /u/tlooby/NSTX/CAD/HEAT/STLs/
 FreeCADPath, /opt/freecad/appImage/squashfs-root/usr/lib
@@ -19,12 +21,12 @@ assembly_mask, True
 #                MHD Variables
 #==============================================================
 MachFlag, nstx
-shot, 116313
+shot, 135111
 tree, EFIT02
 tmin, 0
 tmax, 5000
-nTrace, 20
-dataPath, /u/tlooby/source/HEAT/rev9/data/
+nTrace, 10
+dataPath, /u/tlooby/source/HEAT/v1.0/data/
 ionDirection, -1
 plasma3Dmask, 0 #1=true, 0=false
 #==============================================================
@@ -33,7 +35,7 @@ plasma3Dmask, 0 #1=true, 0=false
 hfMode, eich
 lqEich, 3.0
 S, 1.0
-Psol, 2.8
+Psol, 10
 qBG, 0.0
 lqCN, 3.0
 lqCF, 5.0
@@ -43,6 +45,10 @@ fracCN, 0.6
 fracCF, 0.4
 fracPN, 0.1
 fracPF, 0.0
+fracUI,0.0
+fracUO,0.0
+fracLI,0.3
+fracLO,0.7
 #==============================================================
 #                MAFOT Variables
 #==============================================================
@@ -86,9 +92,9 @@ yMax, 235.0
 zMin, -1660.0
 zMax, -1600.0
 tMin, 0
-tMax, 6000
-deltaT, 0.01
-writeDeltaT, 0.01
+tMax, 5050
+deltaT, 0.02
+writeDeltaT, 0.02
 xProbe, 504.0
 yProbe, 128.0
 zProbe, -1605.21
@@ -98,3 +104,4 @@ meshMaxLevel, 2
 xMid, 500.0
 yMid, 150.0
 zMid, -1625.0
+OFbashrc, /opt/OpenFOAM/OpenFOAM-v1912/etc/bashrc

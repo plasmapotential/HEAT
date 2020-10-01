@@ -5,7 +5,7 @@
 """
 This is the launch point for the HEAT code, when accessing from the HTML GUI.
 It calls HEAT functions and generates heat fluxes based upon user input.  These
-functions are usually called from the HEATgui.py script, which is the FLASK
+functions are usually called from the dashGUI.py script, which is the FLASK
 binding to html.
 """
 
@@ -24,6 +24,7 @@ import shutil
 import errno
 import copy
 import EFIT.equilParams_class as EP
+import GUIscripts.plotlyGUIplots as pgp
 
 log = logging.getLogger(__name__)
 tools = toolsClass.tools()
@@ -49,18 +50,19 @@ class GUIobj():
         self.rootDir = rootDir
         self.initializeEveryone()
         self.timestepMap = None
-        self.makeGfileDir()
+        self.makeTmpDir()
         return
 
-    def makeGfileDir(self):
+    def makeTmpDir(self):
         """
         makes a temp directory in rootDir path for user uploaded gfiles
 
-        the self.MHD.gFileDir directory is accessible to the GUI users for uploading
+        the self.tmpDir directory is accessible to the GUI users for uploading
         and downloading
         """
-        tempDir = self.rootDir + 'gFiles/'
-        self.MHD.gFileDir = tempDir
+        tempDir = self.rootDir + 'tmpDir/'
+        self.tmpDir = tempDir
+        self.MHD.tmpDir = tempDir
         try:
             os.mkdir(tempDir)
             print("Directory " , tempDir ,  " Created ")
@@ -94,28 +96,26 @@ class GUIobj():
             log.info('Loading NSTX-U Input Filestream')
             self.infile = './inputs/NSTXU/NSTXU_input.csv'
             self.pfcFile = './inputs/NSTXU/NSTXUpfcs.csv'
-#            self.intersectFile = './inputs/NSTXU/NSTXUintersects.csv'
-#            self.PartsFile = '../inputs/NSTXU/NSTXUparts.csv'
             self.OF.meshDir = '/u/tlooby/NSTX/CAD/HEAT/3Dmeshes'
 
         elif self.MachFlag == 'st40':
             print('Loading ST40 Input Filestream')
             log.info('Loading ST40 Input Filestream')
-            self.infile = './inputs/ST40_input.csv'
-            self.PartsFile = './inputs/ST40parts.csv'
-            self.intersectFile = './inputs/ST40intersects.csv'
+            self.infile = './inputs/ST40/ST40_input.csv'
+            self.pfcFile = './inputs/ST40/ST40pfcs.csv'
             self.OF.meshDir = '/u/tlooby/ST40/CAD/HEAT/3Dmeshes'
 
         elif self.MachFlag == 'd3d':
             print('Loading DIII-D Input Filestream')
             log.info('Loading DIII-D Input Filestream')
-            self.infile = './inputs/D3D_input.csv'
-            self.PartsFile = './inputs/D3Dparts.csv'
-            self.intersectFile = './inputs/D3Dintersects.csv'
+            self.infile = './inputs/D3D/D3D_input.csv'
+            self.pfcFile = './inputs/D3D/D3Dpfcs.csv'
             self.OF.meshDir = '/u/tlooby/D3D/CAD/HEAT/3Dmeshes'
 
         self.OF.templateCase = './openFoamTemplates/heatFoamTemplate'
         self.OF.templateDir = './openFoamTemplates/templateDicts'
+
+        return
 
 
 
@@ -157,6 +157,7 @@ class GUIobj():
 
         self.MHD.tree = 'EFIT02'
         self.MHD.dataPath = self.MHD.dataPath + self.MHD.MachFlag +"_{:06d}".format(self.MHD.shot)
+
         self.MHD.get_mhd_inputs('nstx',self.MHD.gFileList)
 
 #        self.t = self.MHD.timesteps[0]
@@ -354,7 +355,15 @@ class GUIobj():
         """
         idx = np.where(t==self.MHD.timesteps)[0][0]
         ep = self.MHD.ep[idx]
-
+        if os.path.isabs(newGfile) is False:
+            #save to tmpDir if path is not absolute
+            newGfile = self.tmpDir + newGfile
+        else:
+            print("Please enter a filename that is not absolute (no directories)")
+            log.info("Please enter a filename that is not absolute (no directories)")
+            return
+        print("Writing new gFile: " + newGfile)
+        log.info("Writing new gFile: " + newGfile)
         self.MHD.writeGfile(newGfile, shot, t, ep)
         return
 
@@ -365,21 +374,24 @@ class GUIobj():
 
         interpolates at given t then writes to file in same gFileInterpolate
         directory
+
+        returns the name of the new gFile
         """
         print("Interpolating gFile")
         log.info("Interpolating gFile")
         t = int(t)
         ep = self.MHD.gFileInterpolate(t)
-        gFileName = self.MHD.gFileDir + 'g{:06d}.{:05d}'.format(self.MHD.shot,t)
+        gFileName = self.tmpDir + 'g{:06d}.{:05d}'.format(self.MHD.shot,t)
         self.MHD.writeGfile(gFileName,self.MHD.shot,t,ep)
         print("gFile Interpolated")
         log.info("gFile Interpolated")
-        return
+        return gFileName
 
     def interpolateNsteps(self, gfiles, timesteps, N):
         """
         interpolates N steps between gfiles arranged at user defined timesteps
-        Saves resulting gfiles into gFileDir
+        Saves resulting gfiles into tmpDir, then creates zip file containing
+        them all
 
         timesteps and gfiles should be sorted so that they are increasing in
         chronological order
@@ -395,9 +407,13 @@ class GUIobj():
         newGfiles = []
         for i,f in enumerate(gfiles):
             newGfiles.append('g{:06d}.{:05d}'.format(shot,timesteps[i]))
-            old = self.MHD.gFileDir + gfiles[i]
-            new = self.MHD.gFileDir + newGfiles[i]
-            shutil.copyfile(old, new)
+            old = self.tmpDir + gfiles[i]
+            new = self.tmpDir + newGfiles[i]
+            try:
+                shutil.copyfile(old, new)
+            except:
+                print("Could not copy timestep {:d}.  Skipping.".format(timesteps[i]))
+                log.info("Could not copy timestep {:d}.  Skipping.".format(timesteps[i]))
 
 
         #rebuild eq objects
@@ -406,12 +422,25 @@ class GUIobj():
 
 
         #interpolate between existing gfiles
+        newNames = []
         nTime = len(timesteps)
         for i in range(nTime-1):
             times = np.linspace(timesteps[i],timesteps[i+1],N)
             for t in times:
-                self.interpolateGfile(t)
+                newName = self.interpolateGfile(t)
+                newNames.append(newName)
 
+        #now zip all these new gFiles into a single file that the user may
+        #download from GUI
+        from zipfile import ZipFile
+        from os.path import basename
+        zipFile = self.tmpDir + 'InterpolatedGfiles.zip'
+        zipObj = ZipFile(zipFile, 'w')
+        for f in newNames:
+            zipObj.write(f, basename(f))
+        zipObj.close()
+
+        return
 
     def getCADInputs(self,ROIGridRes=None,gridRes=None,STPfile=None):
         """
@@ -423,7 +452,12 @@ class GUIobj():
         if ROIGridRes is not None:
             self.CAD.ROIGridRes = ROIGridRes
         if gridRes is not None:
-            self.CAD.gridRes = gridRes
+            #check if intersection grid resolution string is a number,
+            #if not use standard mesh algorithms
+            if tools.is_number(gridRes):
+                self.CAD.gridRes = gridRes
+            else:
+                self.CAD.gridRes = "standard"
         if STPfile is not None:
             self.CAD.STPfile = STPfile
         self.CAD.loadSTEP()
@@ -437,6 +471,7 @@ class GUIobj():
         self.timestepMap = self.timestepMap.rename(columns=lambda x: x.strip())
         self.timestepMap['PFCname'] = self.timestepMap['PFCname'].str.strip()
         self.timestepMap['intersectName'] = self.timestepMap['intersectName'].str.strip()
+        self.timestepMap['DivCode'] = self.timestepMap['DivCode'].str.strip()
         return
 
     def readPFCfile(self, infile):
@@ -452,6 +487,7 @@ class GUIobj():
         self.timestepMap = self.timestepMap.rename(columns=lambda x: x.strip())
         self.timestepMap['PFCname'] = self.timestepMap['PFCname'].str.strip()
         self.timestepMap['intersectName'] = self.timestepMap['intersectName'].str.strip()
+        self.timestepMap['DivCode'] = self.timestepMap['DivCode'].str.strip()
         return
 
     def getPFCinputs(self, defaultMask=True):
@@ -479,9 +515,9 @@ class GUIobj():
             self.PFCs.append(PFC)
 
         #Find potential intersections by file as they correspond to ROI PFCs,
-        # then mesh 'em
+        # then mesh 'em using FreeCAD Standard mesh algorithm
         self.CAD.getIntersectsFromFile(self.timestepMap)
-        self.CAD.getIntersectMeshes()
+        self.CAD.getIntersectMeshes(resolution=self.CAD.gridRes)
         self.CAD.writeMesh2file(self.CAD.intersectMeshes,
                                 self.CAD.intersectList,
                                 path=self.CAD.STLpath,
@@ -518,9 +554,18 @@ class GUIobj():
             print("PFC: "+PFC.name+" Maximum R: {:f}".format(max(R)))
         return
 
+    def savePFCfile(self):
+        """
+        saves a default PFC file (no PFC data, just the template)
+        to the tmpDir directory so the user can download
+        """
+        tools.saveDefaultPFCfile(self.tmpDir)
+        return
 
     def getHFInputs(self,lqEich,S,P,qBG,lqPN,lqPF,lqCN,lqCF,
-                        fracPN, fracPF, fracCN, fracCF, mode, LRmask, LRpower,
+                        fracPN, fracPF, fracCN, fracCF,
+                        fracUI,fracUO,fracLI,fracLO,
+                        mode, LRmask, LRpower,
                         lqCNmode,lqCFmode,SMode,fG):
         """
         get heat flux inputs from gui or input file
@@ -540,6 +585,10 @@ class GUIobj():
         self.HF.fracCF = float(fracCF)
         self.HF.fracPN = float(fracPN)
         self.HF.fracPF = float(fracPF)
+        self.HF.fracUI = float(fracUI)
+        self.HF.fracUO = float(fracUO)
+        self.HF.fracLI = float(fracLI)
+        self.HF.fracLO = float(fracLO)
         if 'yes' in LRmask:
             self.HF.LRmask = True
             self.HF.LRpower = float(LRpower)
@@ -555,6 +604,14 @@ class GUIobj():
         log.info("Mode = "+mode)
         print("Psol = {:f}".format(self.HF.Psol))
         log.info("Psol = {:f}".format(self.HF.Psol))
+        print("Upper Inner Div Power Fraction: {:f}".format(self.HF.fracUI))
+        log.info("Upper Inner Div Power Fraction: {:f}".format(self.HF.fracUI))
+        print("Upper Outer Div Power Fraction: {:f}".format(self.HF.fracUO))
+        log.info("Upper Outer Div Power Fraction: {:f}".format(self.HF.fracUO))
+        print("Lower Inner Div Power Fraction: {:f}".format(self.HF.fracLI))
+        log.info("Lower Inner Div Power Fraction: {:f}".format(self.HF.fracLI))
+        print("Lower Outer Div Power Fraction: {:f}".format(self.HF.fracLO))
+        log.info("Lower Outer Div Power Fraction: {:f}".format(self.HF.fracLO))
         print("Long range intersection checking: "+LRmask)
 
         if mode=='eich':
@@ -592,7 +649,8 @@ class GUIobj():
             log.info("fracCF = {:f}".format(self.HF.fracCF))
             log.info("fracPN = {:f}".format(self.HF.fracPN))
             log.info("fracPF = {:f}".format(self.HF.fracPF))
-
+        if hasattr(self.MHD, 'ep'):
+            self.HF.getHFtableData(self.MHD.ep[0])
         return
 
     def bfieldAtSurface(self, PFC):
@@ -696,12 +754,18 @@ class GUIobj():
         #set up variables for power balance calculation
         powerTesselate = np.zeros((len(self.MHD.timesteps)))
         powerTrue = np.zeros((len(self.MHD.timesteps)))
+        powerByTile = np.zeros((len(self.PFCs)))
+        divCodes = []
         #run HEAT for all tiles for all timesteps
         for tIdx,t in enumerate(self.MHD.timesteps):
             print('\n')
-            print("-"*70)
+            print("-"*80)
+            log.info("-"*80)
             print("Timestep: {:d}".format(t))
-            log.info("Timestep: {:d}".format(t))
+            log.info("Timestep: {:d}\n".format(t))
+            print("-"*80)
+            log.info("-"*80)
+
             for PFC in self.PFCs:
                 if t not in PFC.timesteps:
                     pass
@@ -718,21 +782,27 @@ class GUIobj():
                     PFC.t = t
                     PFC.ep = PFC.EPs[tIdx]
                     PFC.shadowed_mask = PFC.shadowMasks[tIdx]
+                    print('\n')
+                    print("*"*20)
                     print('PFC Name: '+ PFC.name)
                     if 'HFpc' in runList:
                         self.HF_PFC(PFC, PFC.tag)
                         PFC.powerSum[tIdx] = self.HF.power_sum_mesh(PFC)
                         print('Maximum heat load on tile: {:f}'.format(max(PFC.qDiv)))
-                        print('Input Power = {:f}'.format(self.HF.Psol))
+                        print('Power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
                         print('Tessellated Total Power = {:f}'.format(PFC.powerSum[tIdx]))
                         log.info('PFC Name: '+ PFC.name)
                         log.info('Maximum heat load on tile: {:f}'.format(max(PFC.qDiv)))
-                        log.info('Input Power = {:f}'.format(self.HF.Psol))
+                        log.info('Power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
                         log.info('Tessellated Total Power = {:f}'.format(PFC.powerSum[tIdx]))
                         print("\nTime Elapsed: {:f}".format(time.time() - t0))
                         log.info("\nTime Elapsed: {:f}".format(time.time() - t0))
                         powerTesselate[tIdx] += PFC.powerSum[tIdx]
-                        powerTrue[tIdx] += self.HF.Psol
+                        #Add ground truth power for all the PFCs, but not if we
+                        #already counted this divertor
+                        if PFC.DivCode not in divCodes:
+                            powerTrue[tIdx] += self.HF.Psol*PFC.powerFrac
+                        divCodes.append(PFC.DivCode)
                     if 'Bpc' in runList:
                         self.bfieldAtSurface(PFC)
                     if 'psiPC' in runList:
@@ -753,9 +823,21 @@ class GUIobj():
 
         if 'HFpc' in runList:
             print('Total Input Power = {:f}'.format(np.sum(powerTrue)))
+            print('Power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
             print('Total Tessellated Total Power = {:f}'.format(np.sum(powerTesselate)))
             log.info('Total Input Power = {:f}'.format(np.sum(powerTrue)))
+            log.info('Power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
             log.info('Total Tessellated Total Power = {:f}'.format(np.sum(powerTesselate)))
+
+            print("=== Last timestep's PFC array ===")
+            totalPowPow = 0
+            for PFC in self.PFCs:
+                tmpPow = self.HF.power_sum_mesh(PFC, scale2circ=False, verbose=False)
+                totalPowPow += tmpPow
+                print(PFC.name + ":\t{:.6f}".format(tmpPow))
+                log.info(PFC.name + ":\t{:.6f}".format(tmpPow))
+                print("PFC array sum: {:.6f}".format(totalPowPow))
+                log.info("PFC array sum: {:.6f}".format(totalPowPow))
 
         print("Total Time Elapsed: {:f}".format(time.time() - t0))
         log.info("Total Time Elapsed: {:f}".format(time.time() - t0))
@@ -1007,6 +1089,10 @@ class GUIobj():
                     'fracPN': None,
                     'fracPF': None,
                     'Psol': None,
+                    'fracUI': None,
+                    'fracUO': None,
+                    'fracLI': None,
+                    'fracLO': None,
                     'qBG' : None,
                     'xMin': None,
                     'xMax': None,
@@ -1067,6 +1153,10 @@ class GUIobj():
                     'fracPN': self.HF.fracPN,
                     'fracPF': self.HF.fracPF,
                     'Psol': self.HF.Psol,
+                    'fracUI':self.HF.fracUI,
+                    'fracUO':self.HF.fracUO,
+                    'fracLI':self.HF.fracLI,
+                    'fracLO':self.HF.fracLO,
                     'qBG' : self.HF.qBG,
                     'xMin': self.OF.xMin,
                     'xMax': self.OF.xMax,
@@ -1088,7 +1178,8 @@ class GUIobj():
                     'yMid': self.OF.yMid,
                     'zMid': self.OF.zMid,
                     'STLfileName': self.OF.STLfileName,
-                    'STLlayerName': self.OF.STLlayerName
+                    'STLlayerName': self.OF.STLlayerName,
+                    #'OFbashrc': self.OF.OFbashrc
                     }
         print("Loaded defaults")
 
@@ -1142,31 +1233,6 @@ class GUIobj():
 
         return
 
-    def getOpenFOAMinputs(self,OFsettingsDict=None):
-        """
-        Reads openfoam input variables from HEAT input file or from HEAT gui
-        if OFsettingsDict=None, then we assume we are reading from a file (not gui)
-                OFsettingsDict is a dictionary that contains all variables for OF run
-                as described in (openFOAMclass.OpenFOAM.setTypes)
-        """
-        print('\n')
-        print("-"*55)
-        print("OPENFOAM MODULE INITIALIZED")
-        log.info('\n')
-        log.info("-"*55)
-        log.info("OPENFOAM MODULE INITIALIZED")
-
-        self.OF.allowed_class_vars()
-        tools.vars2None(self.OF)
-        if OFsettingsDict==None:
-            tools.read_input_file(self.OF, infile=self.infile)
-            self.OF.dict = tools.createDict(self.OF)
-        else:
-            tools.inputs_from_dict(self.OF, OFsettingsDict)
-            self.OF.dict = tools.createDict(self.OF)
-        self.OF.setTypes()
-
-
     def loadOF(self, OFstartTime,OFstopTime,OFminMeshLev,OFmaxMeshLev,
                       OFSTLscale, OFbashrc, OFdeltaT):
         """
@@ -1189,7 +1255,7 @@ class GUIobj():
         self.OF.cmdSourceOF = 'source ' + OFbashrc
         self.OF.cmdThermal = 'runThermal'
         self.OF.cmdTprobe = 'runTprobe'
-        self.OF.deltaT = OFdeltaT
+        self.OF.deltaT = float(OFdeltaT) #this comes in [sec]
         self.OF.writeDeltaT = self.OF.deltaT
         print("Loaded OF data")
         log.info("Loaded OF data")
@@ -1263,28 +1329,29 @@ class GUIobj():
             tMin = self.OF.tMin*1000.0 #in [ms] for HEAT
             tMax = self.OF.tMax*1000.0 #in [ms] for HEAT
             arr = np.linspace(tMin, tMax, (tMax-tMin)+1, dtype=int)
-            OFtimesteps = arr[0::int(self.OF.deltaT*1000)]
+            OFtimesteps = arr[0::int(self.OF.deltaT*1000.0)]
 
             #create symbolic link to STL file
             print("Creating openFOAM symlink to STL")
             log.info("Creating openFOAM symlink to STL")
-            PFC.OFpart = PFC.name + "_" + self.CAD.ROIGridRes
+            PFC.OFpart = PFC.name + "___" + self.CAD.ROIGridRes
             triSurfaceLocation = partDir+'/constant/triSurface/' + PFC.OFpart +"mm.stl"
             if self.CAD.STLpath[-1] == '/':
                 stlfile = self.CAD.STLpath + PFC.OFpart +"mm.stl"
             else:
                 stlfile = self.CAD.STLpath +'/'+ PFC.OFpart +"mm.stl"
-            os.symlink(stlfile,triSurfaceLocation)
+            #create hard link to STL
+            os.link(stlfile,triSurfaceLocation)
 
 
             #update middle points and blockmesh bounds for each PFC and
-            # give 1mm of clearance on each side
-            self.OF.xMin = (PFC.centers[:,0].min() - 0.001)*1000.0
-            self.OF.xMax = (PFC.centers[:,0].max() + 0.001)*1000.0
-            self.OF.yMin = (PFC.centers[:,1].min() - 0.001)*1000.0
-            self.OF.yMax = (PFC.centers[:,1].max() + 0.001)*1000.0
-            self.OF.zMin = (PFC.centers[:,2].min() - 0.001)*1000.0
-            self.OF.zMax = (PFC.centers[:,2].max() + 0.001)*1000.0
+            # give 10mm of clearance on each side
+            self.OF.xMin = (PFC.centers[:,0].min() - 0.01)*1000.0
+            self.OF.xMax = (PFC.centers[:,0].max() + 0.01)*1000.0
+            self.OF.yMin = (PFC.centers[:,1].min() - 0.01)*1000.0
+            self.OF.yMax = (PFC.centers[:,1].max() + 0.01)*1000.0
+            self.OF.zMin = (PFC.centers[:,2].min() - 0.01)*1000.0
+            self.OF.zMax = (PFC.centers[:,2].max() + 0.01)*1000.0
             self.OF.xMid = (self.OF.xMax-self.OF.xMin)/2.0 + self.OF.xMin
             self.OF.yMid = (self.OF.yMax-self.OF.yMin)/2.0 + self.OF.yMin
             self.OF.zMid = (self.OF.zMax-self.OF.zMin)/2.0 + self.OF.zMin
@@ -1377,6 +1444,10 @@ class GUIobj():
         """
         returns plotly figure that has data from openFOAM postProcessing
         fieldMinMax.dat files for each PFC
+
+        The function that gets the data during the run is located in the
+        controlDict for that run, as the fieldMinMax1 function.  It can
+        be found in the openFOAMTemplates/templateDicts/ dir for HEAT
         """
         data = []
         pfcNames = []
@@ -1384,21 +1455,66 @@ class GUIobj():
             partDir = self.MHD.dataPath + '/openFoam/heatFoam/'+PFC.name
             file = (partDir +
                     '/postProcessing/fieldMinMax1/{:f}'.format(self.OF.tMin).rstrip('0').rstrip('.')
-                    +'fieldMinMax.dat')
+                    +'/fieldMinMax.dat')
             data.append(self.OF.getMinMaxData(file))
             pfcNames.append(PFC.name)
 
-
-        import GUIscripts.plotlyGUIplots as pgp
         return pgp.plotlyOpenFOAMplot(data,pfcNames)
 
+    def getHFdistPlots(self):
+        """
+        returns plotly figure with qDiv PFC surface distributions
+        """
+        heatFluxes = []
+        labels = []
+        for PFC in self.PFCs:
+            heatFluxes.append(PFC.qDiv)
+            labels.append(PFC.name)
 
-
+        return pgp.plotlyqDivPlot(heatFluxes, labels, logPlot=True)
 
     def TprobeOF(self,x,y,z):
         """
-        if Tprobe_mask is true run temperature probe: postProcess -func "probes"
+        run temperature probe OF function: postProcess -func "probes"
+        returns a dash figure for use in GUI
         """
-        self.OF.runTprobe(x,y,z)
-        self.OF.plotTprobes(self.OF.TprobeFile)
-        return
+        print("Solving for Temperature Probe")
+        log.info("Solving for Temperature Probe")
+        tData = []
+        Tdata = []
+        names = []
+        for PFC in self.PFCs:
+            #PFC boundary with 1mm buffer
+            xMin = (PFC.centers[:,0].min() - 0.001)*1000.0
+            xMax = (PFC.centers[:,0].max() + 0.001)*1000.0
+            yMin = (PFC.centers[:,1].min() - 0.001)*1000.0
+            yMax = (PFC.centers[:,1].max() + 0.001)*1000.0
+            zMin = (PFC.centers[:,2].min() - 0.001)*1000.0
+            zMax = (PFC.centers[:,2].max() + 0.001)*1000.0
+
+            case1 = (x<xMax) and (x>xMin)
+            case2 = (y<yMax) and (y>yMin)
+            case3 = (z<zMax) and (z>zMin)
+
+            #make sure the Tprobe is inside this tile
+            if case1 and case2 and case3:
+                print("Found Tprobe in PFC: "+PFC.name)
+                log.info("Found Tprobe in PFC: "+PFC.name)
+                partDir = self.OF.caseDir+'/'+PFC.name+'/'
+                self.OF.runTprobe(x,y,z,partDir)
+                file = (partDir +
+                    'postProcessing/probes/{:f}'.format(self.OF.tMin).rstrip('0').rstrip('.')
+                    +'/T')
+                data = np.genfromtxt(file,comments="#", autostrip=True)
+                tData.append(data[:,0])
+                Tdata.append(data[:,1])
+                names.append(PFC.name)
+
+            #if Tprobe not in this tile, dont make a figure
+            else:
+                print("Tprobe outside of PFC: "+PFC.name)
+                log.info("Tprobe outside of PFC: "+PFC.name)
+                pass
+
+        import GUIscripts.plotlyGUIplots as pgp
+        return pgp.plotlyTprobes(tData,Tdata,names)

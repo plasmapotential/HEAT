@@ -44,7 +44,7 @@ class OpenFOAM():
                              'yMid',
                              'zMid',
                              'STLfileName',
-                             'STLlayerName'
+                             'STLlayerName',
                              ]
         return
 
@@ -74,7 +74,7 @@ class OpenFOAM():
         xMid            x coordinate in center of tile of interest for snappyHexMesh
         yMid            x coordinate in center of tile of interest for snappyHexMesh
         zMid            x coordinate in center of tile of interest for snappyHexMesh
-
+        OFbashrc        location of OpenFOAM installation bashrc file
         """
         self.xMin = float(self.xMin)
         self.xMax = float(self.xMax)
@@ -174,9 +174,11 @@ class OpenFOAM():
         with open(file, 'w') as f:
             f.write(self.cmdSourceOF + '\n')
             f.write('blockMesh > ' + logFile + '\n')
+            #single core meshing
+            #f.write('snappyHexMesh -overwrite > '+logFile+ '\n')
+            #parallel meshing
             #Run snappyHexMesh across multiple processors
             f.write('decomposePar > ' + logFile + '\n')
-            #f.write('snappyHexMesh -overwrite > '+logFile+ '\n')
             f.write('mpirun -np 8 snappyHexMesh -parallel -overwrite > '+logFile+ '\n')
             f.write('reconstructParMesh -mergeTol 1e-6 -latestTime -constant > '+logFile+ '\n')
 
@@ -255,10 +257,7 @@ class OpenFOAM():
         subprocess.call(self.partDir+self.cmdThermal, shell=True, cwd=self.partDir)
         return
 
-
-
-
-    def runTprobe(self,x,y,z):
+    def runTprobe(self,x,y,z, partDir):
         """
         runs openfoam postprocessing function to find temperature at specified
         x,y,z probe location
@@ -267,39 +266,17 @@ class OpenFOAM():
         log.info('Simulating Temperature Probe')
 
         #write probe file to partDir
-        file = self.partDir+'system/probes'
+        file = partDir+'system/probes'
         with open(file,'w') as f:
             f.write('type probes;\n')
             f.write('libs ("libsampling.so");\n')
             f.write('fields (T);\n')
             f.write('probeLocations ( ({:.6f} {:.6f} {:.6f}) );\n'.format(x,y,z))
 
-
-        subprocess.call(self.partDir+self.cmdTprobe, shell=True, cwd=self.partDir)
-
-    def plotTprobes(self, file):
-        """
-        generates plot with all temperature probes on single plot
-
-        file is filename to import
-
-        uses genfromtxt to get data.
-        first column is timesteps.  each additional column is an additional
-            temperature probe
-        """
-        data = np.genfromtxt(file)
-        #for idx in range(data.shape[1]-1):
-        #    plt.plot(data[:,0], data[:,idx+1])
-
-        plt.style.use('dark_background')
-        plt.plot(data[:,0], data[:,1], 'o-')
-        plt.title('Temperature Probe')
-        plt.xlabel('Time [s]')
-        plt.ylabel('Temperature [K]')
-
-        path = os.path.dirname(file)
-        plotFile = path+'/Tprobe.png'
-        plt.savefig(plotFile,type="png",dpi=300)
+        subprocess.call(partDir+self.cmdTprobe, shell=True, cwd=partDir)
+        print("Completed Tprobe run")
+        log.info("Completed Tprobe run")
+        return
 
     def getMinMaxData(self, file):
         """

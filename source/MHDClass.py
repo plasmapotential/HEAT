@@ -40,8 +40,7 @@ class MHD:
         """
 
 
-        self.allowed_vars = ['testvar',
-                            'shot',
+        self.allowed_vars = ['shot',
                             'tree',
                             'tmin',
                             'tmax',
@@ -60,6 +59,7 @@ class MHD:
                             'phistart',
                             'MapDirection',
                             'MapDirectionStruct',
+                            'structMapDirMultiply',
                             'ionDirection',
                             'PlasmaResponse',
                             'Field',
@@ -206,8 +206,6 @@ class MHD:
             if self.dataPath[-1]!='/':
                 dataPath = self.dataPath+'/'
             gfile = dataPath+'{:06d}/g{:06d}.{:05d}'.format(t,self.shot,t)
-            print("TEST")
-            print(gfile)
             self.ep[idx] = EP.equilParams(gfile)
         return
 
@@ -328,6 +326,16 @@ class MHD:
 
             f.write('phistart(deg)=\t{:2f}\n'.format(self.phistart))
             f.write('MapDirection=\t{:f}\n'.format(mapDirection))
+            #We check here to see if we defined a multiplier for MAFOT trace direction
+            #because MAFOT assumes increasing monotonic psiN (cant be decreasing)
+#            if (self.structMapDirMultiply >= 0.0) or (self.structMapDirMultiply is None):
+#                f.write('MapDirection=\t{:f}\n'.format(mapDirection))
+#                print("Writing CTL file with mapDir = {:f}".format(mapDirection))
+#                log.info("Writing CTL file with mapDir = {:f}".format(mapDirection))
+#            else:
+#                f.write('MapDirection=\t{:f}\n'.format(mapDirection*-1.0))
+#                print("Writing CTL file with mapDir = {:f}".format(mapDirection*-1.0))
+#                log.info("Writing CTL file with mapDir = {:f}".format(mapDirection*-1.0))
             f.write('PlasmaResponse(0=no,>1=yes)=\t{:d}\n'
                     .format(self.PlasmaResponse))
             f.write('Field(-3=VMEC,-2=SIESTA,-1=gfile,M3DC1:0=Eq,1=I-coil,2=both)=\t'
@@ -595,9 +603,9 @@ class MHD:
     def copyGfile2tree(self,gFileName,idx,clobberflag='y'):
         """
         Copies gfile to HEAT tree
-        gFileName is name of gFile that is already located in self.gFileDir
+        gFileName is name of gFile that is already located in self.tmpDir
         """
-        oldgfile = self.gFileDir + gFileName
+        oldgfile = self.tmpDir + gFileName
         #try to make EP object if naming follows d3d gFile naming convention
         try:
             ep = EP.equilParams(oldgfile)
@@ -605,6 +613,8 @@ class MHD:
             time = ep.g['time']
         #if gfile doesn't follow naming convention define manually
         except:
+            print("Couldn't open gFile with equilParams_class")
+            log.info("Couldn't open gFile with equilParams_class")
             if self.shot is None:
                 shot = 1
             else:
@@ -642,9 +652,9 @@ class MHD:
     def writeGfileData(self,gFileList, gFileData):
         """
         writes data passed in string object (from GUI) to files in
-        self.gFileDir directory for use later on in HEAT
+        self.tmpDir directory for use later on in HEAT
 
-        the self.gFileDir directory is accessible to the GUI users for uploading
+        the self.tmpDir directory is accessible to the GUI users for uploading
         and downloading
         """
         import base64
@@ -652,7 +662,7 @@ class MHD:
             data = gFileData[i].encode("utf8").split(b";base64,")[1]
             print("Writing gfile: "+gfile)
             log.info("Writing gfile: "+gfile)
-            path = self.gFileDir + gfile
+            path = self.tmpDir + gfile
             with open(path, 'wb') as f:
                 f.write(base64.decodebytes(data))
 
@@ -794,6 +804,21 @@ class MHD:
         rlcfs = surface['Rs']
         zlcfs = surface['Zs']
 
+        #with linear interpolation, infrequently RegularGridInterpolator cannot
+        #resolve the points correctly and returns NANs.  This messes up future gFile
+        #reading algorithms (although it shouldnt! come on!).  See RegularGridInterpolator
+        #python webpage for more info
+        #first do R
+        mask = np.ones(len(rlcfs), dtype=bool)
+        mask[np.argwhere(np.isnan(rlcfs))] = False
+        rlcfs = rlcfs[mask]
+        zlcfs = zlcfs[mask]
+        #then do Z
+        mask = np.ones(len(zlcfs), dtype=bool)
+        mask[np.argwhere(np.isnan(zlcfs))] = False
+        rlcfs = rlcfs[mask]
+        zlcfs = zlcfs[mask]
+
         #make new dictionary with all this stuff
         newEP = lambda: None #empty object
         newEP.g = {
@@ -822,6 +847,7 @@ class MHD:
                     'lcfs':np.column_stack((rlcfs,zlcfs)),
 
                     }
+
 
         #return ep that can be written to file (note its not a real EP as defined by equilParams class)
         return newEP

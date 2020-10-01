@@ -31,9 +31,26 @@ Group
     grpBasicSolvers
 
 Description
+    Engineer:  Tom Looby
+    Date: Summer / Fall 2020 (covid days...)
+
     Laplace equation solver for a scalar quantity with temperature dependent
-    DT.  Built for Oak Ridge National Laboratory's Heat flux Engineering
-    Analysis Toolkit (HEAT).
+    diffusion constant.
+
+    Usually this is being used for heat flux calculations in tokamaks.
+    Built for Heat flux Engineering Analysis Toolkit (HEAT), a code that
+    calculates heat flux and temperature in tokamak plasma facing components (PFCs).
+
+    HEAT outputs a heat flux calculated on PFC surface, then calls this package
+    to solve for temperature.
+
+    heat flux (HF) is assigned to FVM boundary (STLpatch) using
+    timeVaryingMappedFixedValue and a groovy boundary coundition (groovyBC)
+    that finds boundary gradT by solving Fourier's law using temperature
+    dependent thermal conductivity.  All of that is handled in the OpenFOAM
+    case directory.
+
+    for more info on HEAT see github: https://github.com/plasmapotential/HEAT
 
     \heading Solver details
     The solver is applicable to, e.g. for thermal diffusion in a solid.  The

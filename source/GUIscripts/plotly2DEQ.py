@@ -48,7 +48,7 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, gfile=None, logFile=False):
         zlim = ep.g['wall'][:,1]
 
 
-    levels = sorted(np.append([0.0,0.05,0.1,0.25,0.5,0.75,1.0], np.linspace(1.01,psi.max(),10)))
+    levels = sorted(np.append([0.0,0.05,0.1,0.25,0.5,0.75,1.0], np.linspace(1.01,psi.max(),20)))
 
 #    aspect = (z.max()-z.min()) / (r.max()-r.min())
 #    width = (1.0/aspect)*height
@@ -181,7 +181,7 @@ def writePlotlyEQ(shot, time, outFile, MachFlag, ep=None, gfile=None, logFile=Fa
         zlim = ep.g['wall'][:,1]
 
 
-    levels = sorted(np.append([0.0,0.05,0.1,0.25,0.5,0.75,1.0], np.linspace(1.01,psi.max(),10)))
+    levels = sorted(np.append([0.0,0.05,0.1,0.25,0.5,0.75,1.0], np.linspace(1.01,psi.max(),20)))
 
     import plotly
     import plotly.graph_objects as go

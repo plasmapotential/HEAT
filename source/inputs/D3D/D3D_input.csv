@@ -13,6 +13,7 @@ gridRes, 10.0
 permute_mask, False
 unitConvert, 1.0
 assembly_mask, False
+
 #==============================================================
 #                MHD Variables
 #==============================================================
@@ -22,31 +23,48 @@ tree, EFIT02
 tmin, 0
 tmax, 3
 nTrace, 0
-dataPath, /u/tlooby/source/HEAT/rev6/data/
+dataPath, /u/tlooby/source/HEAT/v1.0/data/
+ionDirection, -1
+plasma3Dmask, 0 #1=true, 0=false
+
 #==============================================================
 #                HF Variables
 #==============================================================
-lq, 3.0
+hfMode, eich
+lqEich, 3.0
 S, 1.0
-Psol, 3.0
+Psol, 10
 qBG, 0.0
+lqCN, 3.0
+lqCF, 5.0
+lqPN, 1.0
+lqPF, 1.0
+fracCN, 0.6
+fracCF, 0.4
+fracPN, 0.1
+fracPF, 0.0
+fracUI,0.0
+fracUO,0.0
+fracLI,0.3
+fracLO,0.7
 #==============================================================
 #                MAFOT Variables
 #==============================================================
 Nphi, 1
-ittLaminar, 100.0
+ittLaminar, 10.0
 ittStruct, 1.0
 Smin, 0.0
 Smax, 5.0
 phimin, 0.0
 phimax, 6.28
-Rmin, 0.9
-Rmax, 2.5
 Zmin, -1.5
 Zmax, 1.5
+Rmin, 0.9
+Rmax, 2.5
 Nswall, 1
 phistart, 0 #(deg)
 MapDirection, 1
+MapDirectionStruct, 1
 PlasmaResponse, 0 #(0=no,>1=yes)
 Field, -1 #(-3=VMEC,-2=SIESTA,-1=gfile,M3DC1:0=Eq,1=I-coil,2=both)
 target, 0 #(0=useSwall)
@@ -64,6 +82,7 @@ Mass, 2
 useM3DC1, 0.0
 # pi, 3.141592653589793
 # 2*pi, 6.283185307179586
+
 #==============================================================
 #                OpenFOAM Variables
 #==============================================================
@@ -86,3 +105,4 @@ meshMaxLevel, 3
 xMid, 295.0
 yMid, 430.0
 zMid, -847.0
+OFbashrc, /opt/OpenFOAM/OpenFOAM-v1912/etc/bashrc

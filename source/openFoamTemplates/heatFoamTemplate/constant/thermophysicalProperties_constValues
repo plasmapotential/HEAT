@@ -25,7 +25,9 @@ thermoType
     energy          sensibleEnthalpy;
 }
 
-
+//This file is obsolete but kept for reference
+//Latest versions of HEAT use temperature dependent DT and kappa
+//as defined in those respective files
  //sigrafine 6510 Graphite
 mixture
 {

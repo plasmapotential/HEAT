@@ -60,32 +60,35 @@ forAll(thermCond.boundaryFieldRef(), patchi)
 }
 
 
-Info << "Reading Cp (specific heat) property file and interpolate" << endl;
-IFstream file_Cp(runTime.path()/runTime.constant()/"Cp");
-//Read file
-graph CpGraph
-(
-    "Cp_data_file",
-    "T_data",
-    "Cp_data",
-    file_Cp
-);
-
-//Interpolation internal field
-Cp.field() = interpolateXY
-(
-    T.field(),
-    CpGraph.x(),
-    CpGraph.y()
-);
-
-//Interpolation boundary field
-forAll(Cp.boundaryFieldRef(), patchi)
-{
-    Cp.boundaryFieldRef()[patchi] = interpolateXY
-    (
-      T.boundaryFieldRef()[patchi],
-      CpGraph.x(),
-      CpGraph.y()
-    );
-}
+//We don't need Cp here, but I included it for future reference
+//You would need to add a Cp file to the /constants directory in the OF case
+//
+//Info << "Reading Cp (specific heat) property file and interpolate" << endl;
+//IFstream file_Cp(runTime.path()/runTime.constant()/"Cp");
+////Read file
+//graph CpGraph
+//(
+//    "Cp_data_file",
+//    "T_data",
+//    "Cp_data",
+//    file_Cp
+//);
+//
+////Interpolation internal field
+//Cp.field() = interpolateXY
+//(
+//    T.field(),
+//    CpGraph.x(),
+//    CpGraph.y()
+//);
+//
+////Interpolation boundary field
+//forAll(Cp.boundaryFieldRef(), patchi)
+//{
+//    Cp.boundaryFieldRef()[patchi] = interpolateXY
+//    (
+//      T.boundaryFieldRef()[patchi],
+//      CpGraph.x(),
+//      CpGraph.y()
+//    );
+//}

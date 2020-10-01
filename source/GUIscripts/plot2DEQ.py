@@ -35,6 +35,10 @@ def EQ2Dplot(ep,shot,t,MachFlag,height=None):
         #h = 8.0/5.0 * w
         h = height / dpi
         w = 5.0/8.0 * h
+        if w % 2 == 0:
+            pass
+        else:
+            w=w+1
         plt.figure(figsize=(w,h), dpi=dpi)
     #Color Contour Plot
     #CS = plt.contourf(R,Z,psi,levels,cmap=plt.cm.bone)
@@ -45,13 +49,13 @@ def EQ2Dplot(ep,shot,t,MachFlag,height=None):
     plt.contour(CS, levels = lcfs, colors=('r',),linestyles=('-',),linewidths=(2,))
     plt.axes().set_aspect('equal')
     #ax.set_aspect('equal')
-    plt.xlabel('R [m]', fontsize=14,color='w')
-    plt.ylabel('Z [m]', fontsize=14,color='w')
+    plt.xlabel('R [m]', fontsize=22,color='w')
+    plt.ylabel('Z [m]', fontsize=22,color='w')
     plt.tick_params(axis='both',colors='w')
     #plt.xlim(min(rlim)-0.02,1.6)
 #    plt.xlim(0.0,1.6)
 #    plt.ylim(-1.7,1.7)
-    plt.title("{:06d} @ {:05d}ms".format(shot,t), fontsize=14, color='white')
+    plt.title("{:06d} @ {:05d}ms".format(shot,t), fontsize=22, color='white')
     #plt.colorbar(CS, label=r'$\psi$')
     #Fill in missing limiter section
     rlim_patched = np.append(rlim[2:], rlim[2])

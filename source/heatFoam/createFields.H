@@ -13,22 +13,6 @@ volScalarField T
     mesh
 );
 
-Info<< "Reading field Cp\n" << endl;
-
-volScalarField Cp
-(
-    IOobject
-    (
-        "Cp",
-        runTime.timeName(),
-        mesh,
-        IOobject::NO_READ,
-        IOobject::AUTO_WRITE
-    ),
-    mesh,
-    dimensionedScalar ("Cp",dimensionSet (0,2,-2,-1,0,0,0), 1)
-);
-
 Info<< "Reading diffusivity DT\n" << endl;
 
 volScalarField DT
@@ -70,20 +54,8 @@ volScalarField thermCond
 );
 
 
-volScalarField qINV
-(
-    IOobject
-    (
-        "qINV",
-        runTime.timeName(),
-        mesh,
-        IOobject::NO_READ,
-        IOobject::AUTO_WRITE
-    ),
-    mesh,
-    dimensionedScalar ("qINV",dimensionSet (1,0,-3,0,0,0,0), 1)
-);
-
+//heat flux that was applied to the FVM mesh boundary
+// (here for checking)
 volScalarField qFVM
 (
     IOobject
@@ -98,6 +70,37 @@ volScalarField qFVM
     dimensionedScalar ("qFVM",dimensionSet (1,0,-3,0,0,0,0), 1)
 );
 
+//heat flux reconstructed by solving fourier's law using temperature we calculate
+// (for checking...should match qFVM...or be close)
+volScalarField qINV
+(
+    IOobject
+    (
+        "qINV",
+        runTime.timeName(),
+        mesh,
+        IOobject::NO_READ,
+        IOobject::AUTO_WRITE
+    ),
+    mesh,
+    dimensionedScalar ("qINV",dimensionSet (1,0,-3,0,0,0,0), 1)
+);
+
+//We don't need Cp here, but I included it for future reference
+//You would need to add a Cp file to the /constants directory
+//volScalarField Cp
+//(
+//    IOobject
+//    (
+//        "Cp",
+//        runTime.timeName(),
+//        mesh,
+//        IOobject::NO_READ,
+//        IOobject::AUTO_WRITE
+//    ),
+//    mesh,
+//    dimensionedScalar ("Cp",dimensionSet (0,2,-2,-1,0,0,0), 1)
+//);
 
 //Info<< "Reading Heat Flux HF\n" << endl;
 //volScalarField HF
@@ -112,6 +115,8 @@ volScalarField qFVM
 //    ),
 //    mesh
 //);
+//Info<< "Reading field Cp\n" << endl;
+//
 
 
 #include "createFvOptions.H"

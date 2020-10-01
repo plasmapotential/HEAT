@@ -37,7 +37,7 @@ class heatFlux:
         """
 
 
-        self.allowed_vars = ['testvar',
+        self.allowed_vars = [
                             'profileType',
                             'lqEich',
                             'S',
@@ -51,6 +51,10 @@ class heatFlux:
                             'fracPF',
                             'fracCN',
                             'fracCF',
+                            'fracUI',
+                            'fracUO',
+                            'fracLI',
+                            'fracLO',
                             'hfMode']
         return
 
@@ -70,7 +74,55 @@ class heatFlux:
         self.fracPF = float(self.fracPF)
         self.fracCN = float(self.fracCN)
         self.fracCF = float(self.fracCF)
+        self.fracUI = float(self.fracUI)
+        self.fracUO = float(self.fracUO)
+        self.fracLI = float(self.fracLI)
+        self.fracLO = float(self.fracLO)
         return
+
+    def getHFtableData(self, ep):
+        """
+        create a dictionary of HF parameters that are displayed in the DASH gui
+        and saves them into class variable self.HFdataDict
+
+        ep is equilibrium object
+        """
+        #handle various heat flux regressions if user selected that in GUI
+        if self.lqCNmode == 'eich' or self.lqCNmode == None:
+            self.getEichFromEQ(ep)
+            self.lqCN = self.lqEich
+
+        if self.SMode == 'makowski' or self.SMode == None:
+            self.getSpreadingFromEQ(ep, self.fG)
+
+        if self.lqCFmode == 'horaceck': #or self.lqCFmode == None:
+            self.getHoraceckFromEQ(ep)
+        self.HFdataDict = {
+                            'hfMode':self.hfMode,
+                            'lqCNmode':self.lqCNmode,
+                            'lqCFmode':self.lqCFmode,
+                            'Smode':self.SMode,
+                            'lqEich':self.lqEich,
+                            'S':self.S,
+                            'qBG':self.qBG,
+                            'fG':self.fG,
+                            'lqCN':self.lqCN,
+                            'lqCF':self.lqCF,
+                            'lqPN':self.lqPN,
+                            'lqPF':self.lqPF,
+                            'fracCN':self.fracCN,
+                            'fracCF':self.fracCF,
+                            'fracPN':self.fracPN,
+                            'fracPF':self.fracPF,
+                            'fracUI':self.fracUI,
+                            'fracUO':self.fracUO,
+                            'fracLI':self.fracLI,
+                            'fracLO':self.fracLO,
+                            'Psol':self.Psol,
+                            }
+        return
+
+
 
     def readMAFOTLaminarOutput(self,PFC,file):
         """
@@ -238,6 +290,10 @@ class heatFlux:
         """
         finds Horaceck scaling for far SOL heat flux width
         """
+        print('Horaceck Scaling Not Implemented yet!!!!')
+        log.info('Horaceck Scaling Not Implemented yet!!!!')
+        return
+
 
 
     def getHFprofile(self, PFC, MachFlag):
@@ -294,7 +350,44 @@ class heatFlux:
             q *= q0
             q += self.qBG
 
+
+        #Scale by fraction of power going to this PFC's divertor
+        PFC.powerFrac = self.getDivertorPowerFraction(PFC.DivCode)
+        q *= PFC.powerFrac
+        print("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
+        log.info("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
+
         return q
+
+    def getDivertorPowerFraction(self, DivCode):
+        """
+        assigns a fraction to each PFC object, for power sharing between divertors
+
+        DivCode is a code name taken from PFC input file.  based upon
+        the code name, the total scrape off layer power is multiplied by a
+        fraction to account for sharing between multiple divertors.
+
+        Note that the Eich function uses the total scrape off layer power (Psol),
+        not the fractional components assigned to divertors.
+
+        Right now this function (and the GUI) allow for 4 divertors.  This could
+        be adapted in the future for snowflakes divertors / other advanced divs
+
+        This function would also be where you put a function to calculate power
+        sharing based upon dRsep and lambdaq
+
+        """
+        if DivCode == 'UI':
+            frac = self.fracUI
+        elif DivCode == 'UO':
+            frac = self.fracUO
+        elif DivCode == 'LI':
+            frac = self.fracLI
+        elif DivCode == 'LO':
+            frac = self.fracLO
+        else:
+            frac = 1.0
+        return frac
 
     def scaleHF_fluxspace(self, PFC, lqEich, S, P):
         """
@@ -773,16 +866,23 @@ class heatFlux:
         np.savetxt(file, pc, delimiter=',',fmt='%.10f', header=head)
 
 
-    def power_sum_mesh(self, PFC):
+    def power_sum_mesh(self, PFC, scale2circ = True, verbose=True):
         """
         Calculate power by summing over each mesh element.
         Scale to fraction of machine we are analyzing: deltaPhi/2pi
+
+        scale2circ is a boolean.  If true, scales power by the toroidal
+        slice width.  If false, returns without scaling
         """
         xyz = PFC.centers
         R,Z,phi = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
         deltaPhi = phi.max() - phi.min()
-        print('phiMin = {:f}'.format(phi.min()))
-        print('phiMax = {:f}'.format(phi.max()))
-        log.info('phiMin = {:f}'.format(phi.min()))
-        log.info('phiMax = {:f}'.format(phi.max()))
-        return np.sum(PFC.qDiv * PFC.areas ) * 2 * np.pi / deltaPhi
+        if verbose==True:
+            print('phiMin = {:f}'.format(phi.min()))
+            print('phiMax = {:f}'.format(phi.max()))
+            log.info('phiMin = {:f}'.format(phi.min()))
+            log.info('phiMax = {:f}'.format(phi.max()))
+        if scale2circ == True:
+            return np.sum(PFC.qDiv * PFC.areas ) * 2 * np.pi / deltaPhi
+        else:
+            return np.sum(PFC.qDiv * PFC.areas )

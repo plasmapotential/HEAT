@@ -22,7 +22,8 @@ serve a single session @ 127.0.0.1:8050
 You will need to set a few variables below, based upon your system paths
 rootDir, PVPath
 """
-
+import os
+import shutil
 import base64
 import io
 import sys
@@ -37,17 +38,33 @@ import dash_html_components as html
 import dash_core_components as dcc
 from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
+import visdcc
+from flask import Flask, send_from_directory
+import plotly.io as pio
 import dash_table
 import EFIT.equilParams_class as EP
+import toolsClass
+tools = toolsClass.tools()
+from urllib.parse import quote as urlquote
+from dash_extensions import Download
+from dash_extensions.snippets import send_file
 
 #========= VARIABLES THAT ARE SYSTEM DEPENDENT =================================
 #Include the location of the paraview binaries.  Specifically we need 'pvpython'
 PVPath = '/opt/paraview/ParaView-5.7.0-MPI-Linux-Python3.7-64bit/lib/python3.7/site-packages'
 sys.path.append(PVPath)
-#Root HEAT directory
-rootDir = '/u/tlooby/source/HEAT/rev9/source/'
+#Root HEAT source code directory
+rootDir = '/u/tlooby/source/HEAT/v1.0/source/'
+#default HEAT output directory
+dataPath = '/u/tlooby/source/HEAT/v1.0/data/'
 #openFOAM bashrc location
 OFbashrc = '/opt/OpenFOAM/OpenFOAM-v1912/etc/bashrc'
+#orca installation location (for saving EQ plots)
+pio.orca.config.executable='/usr/bin/orca'
+#default freecad path
+FreeCADPath = '/opt/freecad/appImage/squashfs-root/usr/lib'
+
+
 #===============================================================================
 
 
@@ -61,7 +78,11 @@ log = logging.getLogger(__name__)
 
 #Make sure all our python scripts are in the path
 from GUIclass import GUIobj
-app = dash.Dash(__name__, meta_tags=[{"name": "viewport", "content": "width=device-width"}])
+#app = dash.Dash(__name__, meta_tags=[{"name": "viewport", "content": "width=device-width"}])
+#Create our own server for downloading files
+server = Flask(__name__)
+app = dash.Dash(server=server, meta_tags=[{"name": "viewport", "content": "width=device-width"}],
+                prevent_initial_callbacks=False)
 
 #Eventually need to fix this so that we are not using a global variable
 #dash can acces Flask Cache so we should cache data by userID or something
@@ -130,6 +151,7 @@ def build_tabs():
 #                            className='tabcontent',
                             className="innerTabContent",
                             children=[
+                                buildDefaultPaths(),
                                 buildButtonRibbon(),
                                 buildMHDbox(),
                                 buildCADbox(),
@@ -174,21 +196,39 @@ def build_tabs():
                     ),
 
                     dcc.Tab(
-                        id="log-tab",
-                        label="LogFile Output",
+                        id="output-tab",
+                        label="Output",
                         value="tab4",
                         style=tab_style,
                         selected_style=tab_selected_style,
                         children=[
                             html.Div(
 #                            className='tabcontent',
-                            className="innerTabContent",
+                            className="innerTabContentColumn",
                             children=[
-                                html.Div([html.H3('logfile')], className="box")
+                                buildOutputTab()
                                 ]
                                 )
                         ],
                     ),
+                    dcc.Tab(
+                        id="log-tab",
+                        label="LogFile",
+                        value="tab5",
+                        style=tab_style,
+                        selected_style=tab_selected_style,
+                        children=[
+                            html.Div(
+#                            className='tabcontent',
+                            className="logTabContent",
+                            children=[
+                                buildLogTab()
+                                ]
+                                )
+                        ],
+                    ),
+
+
                 ],
             )
         ],
@@ -206,9 +246,41 @@ def buildButtonRibbon():
         id="buttonRib",
         className="buttonRibbon",
         children=[
-            buildMachineSelector(),
-            buildInputButtons(),
+            html.H5("Machine Selection and Input Files"),
+            html.Div(
+                children=[
+                    buildMachineSelector(),
+                    buildInputButtons(),
+                    ],
+                className="rowBox"
+            )
         ],
+    )
+
+def buildDefaultPaths():
+    """
+    contains text boxes for HEAT relevent paths
+    PVPath is path for paraview binaries and pvpython
+    FreeCAD is location of freecad installation
+    dataDir is location where HEAT output will be saved
+
+    rootDir is location of HEAT source code and is not included in GUI
+    because it would be impossible to run GUI if this was not already set.
+    rootDir (and some other defaults) are hardcoded at the top of this file
+    """
+    return html.Div(
+        id="defaultPaths",
+        children=[
+            html.Label("ParaVIEW Path"),
+            dcc.Input(id="PVPath", className="textInput", value=PVPath),
+            html.Label("FreeCAD Path"),
+            dcc.Input(id="FreeCADPath", className="textInput", value=FreeCADPath),
+            html.Label("Data Directory"),
+            dcc.Input(id="dataPath", className="textInput", value=dataPath),
+            html.Label("OpenFOAM bashrc file"),
+            dcc.Input(id="OFbashrc", className="textInput", value=OFbashrc),
+        ],
+        className="colBox"
     )
 
 def buildMachineSelector():
@@ -220,40 +292,207 @@ def buildMachineSelector():
             children=[
                 html.Label(id="machLabel", children="Select a Tokamak"),
                 dcc.Dropdown(
-                id='MachFlag',
-                className="machineSelect",
-                style={'backgroundColor': 'transparent', 'color':'transparent'},
-                #style=dropdown_style,
-                options=[
-                    {'label': 'NSTX-U', 'value': 'nstx'},
-                    {'label': 'DIII-D', 'value': 'd3d'},
-                    {'label': 'ST40', 'value': 'st40'}
-        ],
-        value=None
-    ),
+                    id='MachFlag',
+                    className="machineSelect",
+                    style={'backgroundColor': 'transparent', 'color':'transparent',
+                            'align-items':'center'},
+                    #style=dropdown_style,
+                    options=[
+                        {'label': 'NSTX-U', 'value': 'nstx'},
+                        {'label': 'DIII-D', 'value': 'd3d'},
+                        {'label': 'ST40', 'value': 'st40'}
+                        ],
+                    value=None
+                    ),
+                html.Button("Load This Machine's Defaults", id="loadDefaults", n_clicks=0, className="defaultButtons"),
+                html.Div(id="hiddenDivDefaults"),
             ],
         )
 
 def buildInputButtons():
     """
-    returns Load Defaults and Upload Inputs buttons
+    returns Load Defaults drag and drop and Upload Input buttons
     """
     return html.Div(
             id="buttonInputs",
             className="defaultButtonBox",
             children=[
-                html.Button("Load Defaults", id="loadDefaults", n_clicks=0, className="defaultButtons"),
-                html.Button("Upload Input File", id="uploadInputs", n_clicks=0, className="defaultButtons"),
+                dcc.Upload(
+                    className="inputUpload",
+                    id='input-upload',
+                    children=html.Div([
+                        'Drag and Drop or ',
+                        html.A('Select input file')
+                    ]),
+                    style={
+                        'width': '100%', 'height': '60px', 'lineHeight': '60px',
+                        'borderWidth': '1px', 'borderStyle': 'dashed',
+                        'borderRadius': '5px', 'textAlign': 'center', 'margin': '10px',
+                        'align-items':'center'
+                        },
+                    multiple=True,
+                    ),
+                html.Div(id="hiddenDivInput"),
+                html.Button("Save Settings\nInto Input File", id="saveInputs",
+                            n_clicks=0, className="defaultButtons"),
+                Download(id="downloadInputs"),
+                html.Div(id="hiddenDivSaveInput"),
             ],
         )
 
 @app.callback(Output('hiddenDiv', 'children'),
               [Input('MachFlag', 'value')])
 def machineSelector(MachFlag):
+    """
+    callback to handle machine selector drop down
+    """
     gui.machineSelect(MachFlag)
     return
 
 
+@app.callback([Output('hiddenDivInput', 'children'),
+               Output('userInputFileData', 'data')],
+             [Input('input-upload','filename')],
+             [State('input-upload','contents'),
+              State('MachFlag','value'),])
+def inputDragDrop(file, contents, MachFlag):
+    """
+    callback to handle user input file drag and drop
+    """
+    if file is None:
+        raise PreventUpdate
+    else:
+        outputDiv = html.Label("Loaded Input File", style={'color':'#f5d142'})
+        newFile = gui.tmpDir + file[0]
+        decoded = base64.b64decode(contents[0].split(',')[1])
+        #Save user loaded file into tmp directory
+        with open(newFile, "w") as f:
+            f.write(decoded.decode('utf-8'))
+        data = gui.loadDefaults(inFile=newFile)
+
+    return [outputDiv, data]
+
+@app.callback([Output('hiddenDivSaveInput','children'),
+               Output('downloadInputs', 'data')],
+              [Input('saveInputs','n_clicks')],
+              [State('shot', 'value'),
+               State('tmin', 'value'),
+               State('tmax', 'value'),
+               State('nTrace', 'value'),
+               State('ionDir', 'value'),
+               State('ROIGridRes', 'value'),
+               State('gridRes', 'value'),
+               State('STPfile', 'value'),
+               State('lqEich', 'value'),
+               State('S', 'value'),
+               State('lqCN', 'value'),
+               State('lqCF', 'value'),
+               State('lqPN', 'value'),
+               State('lqPF', 'value'),
+               State('fracCN', 'value'),
+               State('fracCF', 'value'),
+               State('fracPN', 'value'),
+               State('fracPF', 'value'),
+               State('Psol', 'value'),
+               State('fracUI', 'value'),
+               State('fracUO', 'value'),
+               State('fracLI', 'value'),
+               State('fracLO', 'value'),
+               State('qBG', 'value'),
+               State('OFstartTime', 'value'),
+               State('OFstopTime', 'value'),
+               State('OFminMeshLev', 'value'),
+               State('OFmaxMeshLev', 'value'),
+               State('OFSTLscale', 'value'),
+               State('OFdeltaT', 'value'),
+               State('PVPath', 'value'),
+               State('FreeCADPath', 'value'),
+               State('dataPath', 'value'),
+               State('OFbashrc', 'value')]
+               )
+def saveGUIinputs(  n_clicks,
+                    shot,
+                    tmin,
+                    tmax,
+                    nTrace,
+                    ionDir,
+                    ROIGridRes,
+                    gridRes,
+                    STPfile,
+                    lqEich,
+                    S,
+                    lqCN,
+                    lqCF,
+                    lqPN,
+                    lqPF,
+                    fracCN,
+                    fracCF,
+                    fracPN,
+                    fracPF,
+                    Psol,
+                    fracUI,
+                    fracUO,
+                    fracLI,
+                    fracLO,
+                    qBG,
+                    OFstartTime,
+                    OFstopTime,
+                    OFminMeshLev,
+                    OFmaxMeshLev,
+                    OFSTLscale,
+                    OFdeltaT,
+                    PVLoc,
+                    FreeCADLoc,
+                    dataLoc,
+                    OFbashrcLoc
+                ):
+    """
+    Saves GUI text boxes into an input file in the HEAT format
+    first file is saved to the gui.tmpDir, then to client machine
+    """
+    if n_clicks < 1:
+        raise PreventUpdate
+
+    data = {}
+    data['shot'] = shot
+    data['tmin'] = tmin
+    data['tmax'] = tmax
+    data['nTrace'] = nTrace
+    data['ionDir'] = ionDir
+    data['ROIGridRes'] = ROIGridRes
+    data['gridRes'] = gridRes
+    data['STPfile'] = STPfile
+    data['lqEich'] = lqEich
+    data['S'] = S
+    data['lqCN'] = lqCN
+    data['lqCF'] = lqCF
+    data['lqPN'] = lqPN
+    data['lqPF'] = lqPF
+    data['fracCN'] = fracCN
+    data['fracCF'] = fracCF
+    data['fracPN'] = fracPN
+    data['fracPF'] = fracPF
+    data['Psol'] = Psol
+    data['fracUI'] = fracUI
+    data['fracUO'] = fracUO
+    data['fracLI'] = fracLI
+    data['fracLO'] = fracLO
+    data['qBG'] = qBG
+    data['OFstartTime'] = OFstartTime
+    data['OFstopTime'] = OFstopTime
+    data['OFminMeshLev'] = OFminMeshLev
+    data['OFmaxMeshLev'] = OFmaxMeshLev
+    data['OFSTLscale'] = OFSTLscale
+    data['OFdeltaT'] = OFdeltaT
+    data['FreeCADPath'] = FreeCADLoc
+    data['PVPath'] = PVLoc
+    data['dataPath'] = dataLoc
+    data['OFbashrc'] = OFbashrcLoc
+
+    tools.saveInputFile(data, gui.tmpDir)
+
+    outputDiv = html.Label("Saved File", style={'color':'#f5d142'})
+    return [outputDiv, send_file(gui.tmpDir + "HEATinput.csv")]
 
 
 #==========MHD==========
@@ -302,6 +541,30 @@ def buildMHDbox():
                                 ),
                 html.Br(),
                 html.Button("Load MHD", id="loadMHD", n_clicks=0, style={'margin':'10px 10px 10px 10px'}),
+                html.Br(),
+                #save EQ plots as png buttons / forms
+                html.Div(
+                    children=[
+                        html.Div(
+                            children=[
+                                html.Label("Width (px)"),
+                                dcc.Input(id="EQpixelX", className="textInput"),
+                            ],
+                            className="colBox"
+                        ),
+                        html.Div(
+                            children=[
+                                html.Label("Height (px)"),
+                                dcc.Input(id="EQpixelY", className="textInput"),
+                            ],
+                            className="colBox"
+                        ),
+                        html.Button("Save EQs to .png", id="saveEQbutton", n_clicks=0, style={'margin':'30px 10px 10px 10px'}),
+                    ],
+                    className="rowBox"
+                ),
+                Download(id="downloadEQplots"),
+                html.Div(id="hiddenDivSaveEQ")
 
             ],
             className="box",
@@ -323,16 +586,27 @@ def buildMHDbox():
               #State('gfilePath', 'value'),
               State('gfiletable-upload', 'filename'),
               State('gfiletable-upload', 'contents'),
-              State('plasma3Dmask', 'value')]
+              State('plasma3Dmask', 'value'),
+              State('dataPath', 'value')]
               )
-def loadMHD(n_clicks,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask):
+def loadMHD(n_clicks,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask,dataPath):
     """
     Load MHD
     """
     try: MachFlag = gui.MachFlag
     except:
         print("You didn't select a machine")
+        log.info("You didn't select a machine")
         raise PreventUpdate
+
+
+    #if data directory doesn't exist, create it
+    try:
+        os.mkdir(dataPath)
+    except:
+        print("Did not make new data directory: "+dataPath)
+        log.info("Did not make new data directory: "+dataPath)
+        pass
 
     if plasma3Dmask == 'plasma3D': plasma3Dmask=1
     else:  plasma3Dmask=0
@@ -382,6 +656,81 @@ def loadMHD(n_clicks,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask):
     value = ts[0]
     return tminMHD, tmaxMHD, marks, value, data
 
+
+@app.callback([Output('hiddenDivSaveEQ', 'children'),
+               Output('downloadEQplots', 'data')],
+              [Input('saveEQbutton', 'n_clicks')],
+              [State('EQpixelX', 'value'),
+               State('EQpixelY', 'value')])
+def saveEQplots(n_clicks, x, y):
+    if n_clicks < 1:
+        raise PreventUpdate
+    try: MachFlag = gui.MachFlag
+    except:
+        print("You didn't select a machine")
+        raise PreventUpdate
+    try: ts = gui.MHD.timesteps
+    except:
+        print('Please load MHD before saving EQ plots')
+        return [html.Label("Load MHD First", style={'color':'#f51b60'})]
+
+    #get png resolution
+    if x == None or y == None:
+        #default PV window size on toms computer,
+        #more or less preserving NSTX aspect ratio
+        x = 526
+        y = 760
+    else:
+        x = float(x)
+        y = float(y)
+
+    shot = gui.MHD.shot
+    #this import needs to be here (not at top of file) to prevent FreeCAD qt5
+    #shared object conflict
+    import GUIscripts.plot2DEQ as eqPlot
+    allFiles = []
+    for t in ts:
+        print("Saving timestep {:5d}ms to PNG".format(t))
+        log.info("Saving timestep {:5d}ms to PNG".format(t))
+        fileName = gui.MHD.tmpDir + 'EQplot_{:05d}.png'.format(t)
+        allFiles.append(fileName)
+        idx = np.where(t==ts)[0][0]
+        ep = gui.MHD.ep[idx]
+        #write EQ plot using matplotlib
+        plt = eqPlot.EQ2Dplot(ep,shot,t,MachFlag,height=y)
+        plt.savefig(fileName, facecolor="#1b1f22")
+
+        #Write Equilibrium plot using plotly
+        #plot = plotly2DEQ.makePlotlyEQDiv(shot, t, MachFlag, ep)
+        #plot.update_layout(
+        #    title="{:05d}ms".format(t),
+        #    xaxis_title="R [m]",
+        #    yaxis_title="Z [m]",
+        #    autosize=True,
+        #    paper_bgcolor='#1b1f22',
+        #    plot_bgcolor='#1b1f22',
+        #    showlegend=False,
+        #    font=dict(
+    #   #         family="Courier New",
+        #        size=22,
+        #        color="#dcdce3"
+        #    )
+        #    )
+        #plot.write_image(fileName, width=x, height=y)
+
+    #now zip all these plots into a single file that the user may
+    #download from GUI
+    from zipfile import ZipFile
+    from os.path import basename
+    zipFile = gui.tmpDir + 'EQplots.zip'
+    zipObj = ZipFile(zipFile, 'w')
+    for f in allFiles:
+        zipObj.write(f, basename(f))
+    zipObj.close()
+
+
+    return [html.Label("Saved EQs to file", style={'color':'#f5d142'}),
+            send_file(zipFile)]
 
 
 #==========CAD==========
@@ -503,11 +852,56 @@ def PsolInput(hidden=False):
         className="hiddenBox"
     else:
         className="hfInput"
+
+
+    row2 = html.Div(
+                children=[
+                    html.Div(
+                        children=[
+                            html.Label("Upper Inner Power Fraction", className="hfLabel"),
+                            dcc.Input(id="fracUI", className="hfInput2"),
+                            ],
+                        className="colBox"
+                    ),
+                    html.Div(
+                        children=[
+                            html.Label("Upper Outer Power Fraction", className="hfLabel"),
+                            dcc.Input(id="fracUO", className="hfInput2"),
+                            ],
+                        className="colBox"
+                    ),
+                    ],
+                className="rowBox",
+            )
+
+    row3 = html.Div(
+                children=[
+                    html.Div(
+                        children=[
+                            html.Label("Lower Inner Power Fraction", className="hfLabel"),
+                            dcc.Input(id="fracLI", className="hfInput2"),
+                            ],
+                        className="colBox"
+                    ),
+                    html.Div(
+                        children=[
+                            html.Label("Lower Outer Power Fraction", className="hfLabel"),
+                            dcc.Input(id="fracLO", className="hfInput2"),
+                            ],
+                        className="colBox"
+                    ),
+                    ],
+                className="rowBox",
+            )
+
+
     return html.Div(
              className=className,
              children=[
                     html.Label("Power Crossing Separatrix [MW]"),
                     dcc.Input(id="Psol", className="textInput"),
+                    row2,
+                    row3
                     ],
                     )
 
@@ -881,7 +1275,8 @@ def commonRegionParameters():
 
 
 #Load HF button connect
-@app.callback([Output('hiddenDivHF', 'children')],
+@app.callback([Output('hiddenDivHF', 'children'),
+               Output('hfTable', 'data')],
               [Input('loadHF', 'n_clicks')],
               [State('hfMode', 'value'),
                State('lqEich', 'value'),
@@ -896,6 +1291,10 @@ def commonRegionParameters():
                State('fracPN', 'value'),
                State('fracPF', 'value'),
                State('Psol', 'value'),
+               State('fracUI', 'value'),
+               State('fracUO', 'value'),
+               State('fracLI', 'value'),
+               State('fracLO', 'value'),
                State('LRmask', 'value'),
                State('LRthresh', 'value'),
                State('MachFlag', 'value'),
@@ -911,7 +1310,9 @@ def commonRegionParameters():
                State('limfracCF', 'value'),
                ])
 def loadHF(n_clicks,hfMode,lqEich,S,qBG,lqCN,lqCF,lqPN,lqPF,
-            fracCN,fracCF,fracPN,fracPF,Psol,LRmask,LRthresh,MachFlag,
+            fracCN,fracCF,fracPN,fracPF,
+            Psol,fracUI,fracUO,fracLI,fracLO,
+            LRmask,LRthresh,MachFlag,
             eichlqCNMode,limiterlqCNMode,limiterlqCFMode,SMode,fG,
             limlqCN,limlqCF,limfracCN,limfracCF):
     if MachFlag is None:
@@ -935,10 +1336,16 @@ def loadHF(n_clicks,hfMode,lqEich,S,qBG,lqCN,lqCF,lqPN,lqPF,
 
         #set up HF object in HEAT
         gui.getHFInputs(lqEich,S,Psol,qBG,lqPN,lqPF,lqCN,lqCF,
-                        fracPN,fracPF,fracCN,fracCF,hfMode,LRmask,LRthresh,
+                        fracPN,fracPF,fracCN,fracCF,
+                        fracUI,fracUO,fracLI,fracLO,
+                        hfMode,LRmask,LRthresh,
                         lqCNmode,lqCFmode,SMode,fG)
 
-    return [html.Label("Loaded HF Settings", style={'color':'#f5d142'})]
+        #Update output tab table
+        dataDict = gui.HF.HFdataDict
+        hfDict = [{'Parameter':i, 'Value':dataDict[i]} for i in dataDict]
+
+    return [html.Label("Loaded HF Settings", style={'color':'#f5d142'}), hfDict]
 
 
 
@@ -968,6 +1375,9 @@ def buildPFCbox():
                 html.Br(),
                 html.Button("Load PFC Settings", id="loadPFC", n_clicks=0, style={'margin':'0 10px 10px 0'}),
 #                html.Button('Add Row', id='add-rows-button', n_clicks=0, style={'margin':'0 10px 10px 0'}),
+                html.Button("Download Default PFC file", id="downloadPFCbtn", n_clicks=0, style={'margin':'0 10px 10px 0'}),
+                Download(id="downloadPFC"),
+                html.Div(id="hiddenDivDownloadPFC", style={"display": "none"}),
                 html.Div(id="hiddenDivPFC", style={"display": "none"}),
                 dcc.Input(id="hiddenDivPFC2", style={"display": "none"}),
                 html.Div(id="hiddenDivPFC3")
@@ -977,7 +1387,7 @@ def buildPFCbox():
             )
 
 def loadPFCtable():
-    params = ['timesteps','PFCname','MapDirection','intersectName']
+    params = ['timesteps','PFCname','MapDirection','DivCode','intersectName']
     cols = [{'id': p, 'name': p} for p in params]
     data = [{}]
     return dash_table.DataTable(
@@ -1058,6 +1468,20 @@ def PFCtable(n_clicks, filename, dataStore, ts, uploadContents,
 
     return dataStore, tableData, tableColumns, hiddenDiv
 
+#Download PFC Default file button connect
+@app.callback([Output('downloadPFC', 'data'),
+               Output('hiddenDivDownloadPFC', 'children')],
+              [Input('downloadPFCbtn', 'n_clicks')])
+def downloadPFCfile(n_clicks):
+    if n_clicks < 1:
+        raise PreventUpdate
+    gui.savePFCfile()
+    return [send_file(gui.tmpDir + "PFCinput.csv"),
+            html.Label("Saved PFC Default File", style={'color':'#f5d142'})]
+
+
+
+
 
 #==========openFOAM==========
 def buildOFbox():
@@ -1113,7 +1537,7 @@ def OFinputBoxes():
             ),
             html.Div(
                 children=[
-                    html.Label("deltaT [ms]"),
+                    html.Label("deltaT [s]"),
                     dcc.Input(id="OFdeltaT", className="textInput"),
                 ],
                 className="OFInput",
@@ -1130,16 +1554,19 @@ def OFinputBoxes():
                State('OFminMeshLev', 'value'),
                State('OFmaxMeshLev', 'value'),
                State('OFSTLscale', 'value'),
-               State('OFdeltaT', 'value')
+               State('OFdeltaT', 'value'),
+               State('OFbashrc', 'value')
               ])
 def loadOF(n_clicks,OFstartTime,OFstopTime,
-            OFminMeshLev,OFmaxMeshLev,OFSTLscale,OFdeltaT):
+            OFminMeshLev,OFmaxMeshLev,OFSTLscale,OFdeltaT,OFbashrcLoc):
     """
     sets up openFOAM for an analysis
     """
     if n_clicks == 0:
         raise PreventUpdate
-    gui.loadOF(OFstartTime,OFstopTime,OFminMeshLev,OFmaxMeshLev,OFSTLscale,OFbashrc,OFdeltaT)
+    gui.loadOF(OFstartTime,OFstopTime,
+                OFminMeshLev,OFmaxMeshLev,
+                OFSTLscale,OFbashrcLoc,OFdeltaT)
     return [html.Label("Loaded OF Data into HEAT", style={'color':'#f5d142'})]
 
 
@@ -1264,7 +1691,10 @@ def loadOFTrace(OFtrace=None, hidden=False):
                     )
 
 
-@app.callback(Output('hiddenDivRun', 'children'),
+@app.callback([Output('hiddenDivRun', 'children'),
+               Output('qDivDist', 'children'),
+               Output('OFmaxTplot', 'children'),
+               Output('OFTprobePlot', 'children')],
               [Input('runHEAT', 'n_clicks')],
               [State('checklistPC','value'),
                State('Btrace','value'),
@@ -1289,17 +1719,31 @@ def runHEAT(n_clicks,runList,Btrace,OFtrace,
 
     gui.runHEAT(runList)
 
+    if 'HFpc' in runList:
+        #load HF distribution plots on output page
+        qDistFig = hfDistPlots(update=True)
+    else:
+        qDistFig = hfDistPlots(update=False)
+
     if 'OFpc' in runList:
         gui.runOpenFOAM()
+        OFminmaxFig = OFmaxTPlots(update=True)
+    else:
+        OFminmaxFig = OFmaxTPlots(update=False)
 
-#NEED TO ADD THIS BACK IN WHEN OF MODULE BUILT INTO DASH
-#    if thermal_flag in checklist:
-#        parts, intersects = gui.loadPFCDefaults()
-#        part = parts[0]+'_'+gui.CAD.ROIGridRes+'mm'
-#        gui.runOpenFOAM(part)
-#    if Tprobe_flag == 'true':
-#        gui.TprobeOF(xProbe,yProbe,zProbe)
-    return [html.Label("HEAT Run Complete", style={'color':'#f5d142'})]
+    if 'OFtrace' in OFtrace:
+        OFTprobeFig = OFTprobePlots(update=True,x=xOFtrace,y=yOFtrace,z=zOFtrace)
+        #do these again here so that the plots on output tab dont go blank
+        #if the HFpc and OFpc boxes arent checked
+        OFminmaxFig = OFmaxTPlots(update=True)
+        qDistFig = hfDistPlots(update=True)
+    else:
+        OFTprobeFig = OFTprobePlots(update=False)
+
+    return ([html.Label("HEAT Run Complete", style={'color':'#f5d142'})],
+            qDistFig,
+            OFminmaxFig,
+            OFTprobeFig)
 
 
 
@@ -1435,6 +1879,7 @@ def saveNewGfile():
             html.Label("New gFile Name", style={'margin':'0 10px 0 10px'}),
             dcc.Input(id="newGfileName", className="gfileBoxInput"),
             html.Button("Save New gFile", id="saveGfileButton", n_clicks=0, style={'margin':'10px 10px 10px 10px'}),
+            Download(id="downloadNewGfile"),
             html.Div(id="hiddenDivSaveGfile")
         ],
         className="gfileBox",
@@ -1471,13 +1916,16 @@ def interpolateGfile():
                 html.Div(id='interpTable', className="gfileTable"), #updated from MHD button callback
                 dcc.Input(id="interpN", className="gfileBoxInput", placeholder='Enter N steps'),
                 html.Button("Interpolate these Timesteps", id="interpButton2", n_clicks=0, style={'margin':'0 10px 10px 0'}),
+                Download(id="download1InterpGfile"),
+                Download(id="downloadInterpGfiles"),
                 html.Div(id="hiddenDivInterp2")
             ],
             className="gfileBox",
             )
 
 
-@app.callback(Output('hiddenDivInterp1', 'children'),
+@app.callback([Output('hiddenDivInterp1', 'children'),
+               Output('download1InterpGfile', 'data')],
               [Input('interpButton', 'n_clicks')],
               [State('interpTime','value'),
               ])
@@ -1487,11 +1935,13 @@ def interpolate(n_clicks, t):
     """
     if n_clicks < 1:
         raise PreventUpdate
-    gui.interpolateGfile(t)
-    return [html.Label("Gfile Interpolated", style={'color':'#f5d142'})]
+    name = gui.interpolateGfile(t)
+    return [html.Label("Gfile Interpolated", style={'color':'#f5d142'}),
+            send_file(name)]
 
 
-@app.callback(Output('hiddenDivInterp2', 'children'),
+@app.callback([Output('hiddenDivInterp2', 'children'),
+               Output('downloadInterpGfiles', 'data')],
               [Input('interpButton2', 'n_clicks')],
               [State('interpN','value'),
                State('gFileTable2','data'),
@@ -1505,9 +1955,13 @@ def interpolateNsteps(n_clicks, N, data):
     #load interpolation table data
     df = pd.DataFrame(data)
     df = df.sort_values('timestep[ms]')
+    print(df)
+    print(df['timestep[ms]'].values)
     #interpolate N steps between each point
     gui.interpolateNsteps(df['filename'].values, pd.to_numeric(df['timestep[ms]']).values,int(N))
-    return [html.Label("Gfile Interpolated", style={'color':'#f5d142'})]
+    zipFile = gui.tmpDir + 'InterpolatedGfiles.zip'
+    return [html.Label("gFiles Interpolated", style={'color':'#f5d142'}),
+            send_file(zipFile)]
 
 
 
@@ -1569,7 +2023,8 @@ def findLCFSbutton(n_clicks, t, PFC_n_clicks, r):
 
 
 
-@app.callback(Output('hiddenDivSaveGfile', 'children'),
+@app.callback([Output('hiddenDivSaveGfile', 'children'),
+                Output('downloadNewGfile', 'data')],
               [Input('saveGfileButton', 'n_clicks')],
               [State('newGfileName','value'),
                State('timeSlider', 'value'),
@@ -1578,17 +2033,201 @@ def saveG(n_clicks, filename, t, shot):
     if n_clicks < 1:
         raise PreventUpdate
     gui.writeGfile(filename, shot, t)
-    return [html.Label("Saved gFile", style={'color':'#f5d142'})]
+    return [html.Label("Saved gFile", style={'color':'#f5d142'}),
+            send_file(gui.tmpDir + filename)]
+
+"""
+==============================================================================
+Tab Contents: Output Tab
+"""
+def buildOutputTab():
+        return html.Div(
+            id="outputTab",
+            children=[outputChildren()],
+            )
+
+def outputChildren():
+    return html.Div(
+        children = [
+            html.H4("HEAT outputs", style={"text-align":"center", "width":"100%"}),
+            html.H6("Heat Flux Parameters:"),
+            html.Div( children=buildHFtable(), className="gfileTable" ),
+            #qDiv plot
+            html.Div(
+                children=[
+                    html.H6("HEAT qDiv Distributions (run HEAT for plot):"),
+                    html.Div(children=hfDistPlots(update=False), id="qDivDist"),
+                    ],
+                className="wideBoxDarkColumn",
+            ),
+            #Temp(t) plot for max(T) in OF run
+            html.Div(
+                children=[
+                    html.H6("openFOAM max(T) Evolutions (run openFOAM for plot):"),
+                    html.Div(children=OFmaxTPlots(update=False), id="OFmaxTplot"),
+                    ],
+                className="wideBoxDarkColumn",
+            ),
+            #Temp(t) for probes from GUI
+            html.Div(
+                children=[
+                    html.H6("openFOAM Tprobe Evolution (run openFOAM Tprobe for plot):"),
+                    html.Div(children=OFTprobePlots(update=False), id="OFTprobePlot"),
+                    ],
+                className="wideBoxDarkColumn",
+            )
+            ],
+        className="wideBoxDark",
+        )
+
+def buildHFtable(data=None):
+    cols = getOutputColumns()
+    if data==None:
+        data = [{}]
+    return dash_table.DataTable(
+        id='hfTable',
+        columns = cols,
+        data = data,
+        style_header={'backgroundColor': 'rgb(30, 30, 30)'},
+        style_cell={
+            'textAlign': 'left',
+            'backgroundColor': 'rgb(50, 50, 50)',
+            'color': 'white'
+        },
+        editable=False,
+        row_deletable=False,
+        )
+
+
+#generic row data (table data is created in loadHF button connect)
+def getOutputColumns():
+    params = ['Parameter','Value']
+    return [{'id': p, 'name': p} for p in params]
+
+
+
+
+def hfDistPlots(update=False):
+    """
+    div for heat flux distribution plots
+
+    if update is False, just return an empty div, so that nothing happens on
+    page load.  If update=True, get qDivs and update the plot.
+
+    This is called at the end of a HEAT run (runHEAT callback) button click
+    """
+    if update==True:
+        fig = gui.getHFdistPlots()
+
+        return html.Div(
+            className="plotBox",
+            children=[
+                dcc.Graph(id="", figure=fig),
+                ],
+                )
+    else:
+
+        return html.Div(
+            children=[
+                html.Label("Run HEAT to get qDiv plot", style={'color':'#52caeb'})
+                ],
+            className="gfileBox"
+            )
+
+
+def OFmaxTPlots(update=False):
+    """
+    div for maximum openFOAM temperature plots
+
+    if update is False, just return an empty div, so that nothing happens on
+    page load.  If update=True, get qDivs and update the plot.
+
+    This is called at the end of a HEAT run (runHEAT callback) button click
+    """
+    if update==True:
+        fig = gui.getOFMinMaxPlots()
+
+        return html.Div(
+            className="plotBox",
+            children=[
+                dcc.Graph(id="", figure=fig),
+                ],
+                )
+    else:
+
+        return html.Div(
+            children=[
+                html.Label("Run OpenFOAM to get max(T) plot", style={'color':'#52caeb'})
+                ],
+            className="gfileBox"
+            )
+
+
+def OFTprobePlots(update=False,x=None,y=None,z=None):
+    """
+    div for openFOAM probe plots
+
+    if update is False, just return an empty div, so that nothing happens on
+    page load.  If update=True, get qDivs and update the plot.
+
+    x,y,z are coordinate locations [mm] of T probe
+
+    This is called at the end of a HEAT run (runHEAT callback) button click
+    """
+    if update==True:
+        fig = gui.TprobeOF(float(x),float(y),float(z))
+
+        return html.Div(
+            className="plotBox",
+            children=[
+                dcc.Graph(id="", figure=fig),
+                ],
+                )
+    else:
+
+        return html.Div(
+            children=[
+                html.Label("Run OpenFOAM Temp Probe to get plot", style={'color':'#52caeb'})
+                ],
+            className="gfileBox"
+            )
+
+
+
+
+
+
 
 """
 ==============================================================================
 Tab Contents: logfile tab
 """
+def buildLogTab():
+        return html.Div(
+            id="logTab",
+            children=[
+                        html.H4("HEAT Log File Updated Every 5 Seconds"),
+                        dcc.Textarea(id="logData", value='TEST', className="logBox",
+                            readOnly=True),
+                    ],
 
+            className="wideBoxDark"
+            )
 
+@app.callback([Output('logData', 'value'),
+               Output('javascriptLog', 'run')],
+              [Input('intervalLog', 'n_intervals')])
+def updateLogFile(n):
+    if n < 1:
+        raise PreventUpdate
+    with open(logFile, "r") as f:
+        content = f.read()
+    logCMD = '''
+             var textarea = document.getElementById('logData');
+             textarea.scrollTop = textarea.scrollHeight;
 
-
-
+             '''
+    return content, logCMD
 
 
 """
@@ -1640,10 +2279,15 @@ def slideEQplot(value, dummy1, tom):
     shot = gui.MHD.shot
     t = gui.MHD.timesteps[idx]
     #Update Equilibrium plot
+    #this import needs to be here (not at top of file) to prevent FreeCAD qt5
+    #shared object conflict
     import GUIscripts.plotly2DEQ as plotly2DEQ
     plot = plotly2DEQ.makePlotlyEQDiv(shot, t, MachFlag, ep)
     data = getGfileData(t)
     return plot, data
+
+
+
 
 
 
@@ -1662,14 +2306,23 @@ def build_simulator():
         ],
     )
 
-
+logJScmd = ""
 app.layout = html.Div(
         id="big-app-container",
         children=[
             #store the session data until browser tab is closed
-            dcc.Store(id='session', storage_type='session'),
-            dcc.Store(id='PFCdataStorage', storage_type='session'),
-            dcc.Store(id='gFileListStorage', storage_type='session'),
+            dcc.Store(id='session', storage_type='memory'),
+            dcc.Store(id='userInputFileData', storage_type='memory'),
+            dcc.Store(id='PFCdataStorage', storage_type='memory'),
+            dcc.Store(id='gFileListStorage', storage_type='memory'),
+            #interval for updating logFile every 5 seconds
+            dcc.Interval(
+                id='intervalLog',
+                interval=5*1000, # in milliseconds
+                n_intervals=0
+                ),
+            #visdcc to run js to scroll log box to bottom
+            visdcc.Run_js(id = 'javascriptLog', run = ""),
             build_banner(),
             build_simulator(),
             html.Div(id="hiddenDiv", style={'display': 'none'}),
@@ -1684,7 +2337,7 @@ app.title = 'HEAT'
 ==============================================================================
 Session storage callbacks and functions
 """
-# output the stored data in the GUI
+# Load Default callback and input file drag and drop
 @app.callback([Output('shot', 'value'),
                Output('tmin', 'value'),
                Output('tmax', 'value'),
@@ -1704,6 +2357,10 @@ Session storage callbacks and functions
                Output('fracPN', 'value'),
                Output('fracPF', 'value'),
                Output('Psol', 'value'),
+               Output('fracUI', 'value'),
+               Output('fracUO', 'value'),
+               Output('fracLI', 'value'),
+               Output('fracLO', 'value'),
                Output('qBG', 'value'),
                Output('OFstartTime', 'value'),
                Output('OFstopTime', 'value'),
@@ -1712,23 +2369,43 @@ Session storage callbacks and functions
                Output('OFSTLscale', 'value'),
                Output('OFdeltaT', 'value'),
                Output('session', 'data'),
+               Output('hiddenDivDefaults', 'children')
                ],
-               [Input('loadDefaults', 'n_clicks')],
+               [Input('loadDefaults', 'n_clicks'),
+                Input('userInputFileData', 'modified_timestamp')],
                [State('session', 'modified_timestamp'),
                 State('MachFlag', 'value'),
-                State('session', 'data')])
-def session_data(n_clicks, ts, MachFlag, data):
+                State('session', 'data'),
+                State('userInputFileData', 'data')])
+def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
+    #default case
     if ts is None or MachFlag not in ['nstx', 'd3d', 'st40']:
         print('Initializing Data Store')
         data = gui.getDefaultDict()
         data.update({'default_n_clicks':n_clicks})
 
+    #Let the user know if this worked or if we still need a MachFlag
+    if MachFlag not in ['nstx', 'd3d', 'st40']:
+        outputDiv = html.Label("Select Machine First", style={'color':'#f51b60'})
+    else:
+        outputDiv = html.Label("Loaded Input File", style={'color':'#f5d142'})
+
     #load defaults
     if n_clicks > 0 and n_clicks>data.get('default_n_clicks') and MachFlag is not None:
+        print("Loading Default Input File")
+        log.info("Loading Default Input File")
         data = gui.loadDefaults()
         data['default_n_clicks'] = n_clicks
-    else:
+    elif inputTs is None or inputTs is -1:
         pass
+    #use data we saved into storage object that we got from user input file
+    else:
+        print(inputTs)
+        print("Loading User Input File")
+        log.info("Loading User Input File")
+        inputFileData['default_n_clicks'] = n_clicks
+        data = inputFileData
+
     print("Updating Session Store")
     return [data.get('shot', ''),
             data.get('tmin', ''),
@@ -1749,6 +2426,10 @@ def session_data(n_clicks, ts, MachFlag, data):
             data.get('fracPN', ''),
             data.get('fracPF', ''),
             data.get('Psol', ''),
+            data.get('fracUI', ''),
+            data.get('fracUO', ''),
+            data.get('fracLI', ''),
+            data.get('fracLO', ''),
             data.get('qBG', ''),
             data.get('tMin', ''),
             data.get('tMax', ''),
@@ -1756,8 +2437,10 @@ def session_data(n_clicks, ts, MachFlag, data):
             data.get('meshMaxLevel', ''),
             data.get('STLscale', ''),
             data.get('deltaT', ''),
-            data
+            data,
+            outputDiv
             ]
+
 
 
 if __name__ == '__main__':

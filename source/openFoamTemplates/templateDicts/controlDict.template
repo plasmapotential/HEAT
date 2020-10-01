@@ -57,7 +57,7 @@ functions
         log         yes;
         location    yes;
         mode        magnitude;
-        fields      (T flux HFinterpolated);
+        fields      (T qFVM qINV);
     }
 
 //    #includeFunc boundaryCloud;

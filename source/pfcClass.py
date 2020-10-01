@@ -26,6 +26,7 @@ class PFC:
     This class also builds out the directory tree for each simulation
     """
     def __init__(self, timestepMapRow):
+        #Parse PFC input file row data into PFC object
         self.timeStr = timestepMapRow[0]
         self.name = timestepMapRow[1]
         self.mapDirection = timestepMapRow[2]
@@ -34,8 +35,10 @@ class PFC:
         self.timeLimits = np.asarray( self.timeStr.split(':') ).astype(int)
         deltat = self.timeLimits[1]-self.timeLimits[0]
         self.timesteps = np.linspace(self.timeLimits[0],self.timeLimits[1],deltat+1,dtype=int)
-        self.intersects = timestepMapRow[3].split(':')
-
+        #name of divertor this PFC is in (ie upper outer)
+        self.DivCode = timestepMapRow[3]
+        #names of tiles that will be checked for magnetic field line shadowing
+        self.intersects = timestepMapRow[4].split(':')
         return
 
     def allowed_class_vars(self):
@@ -67,7 +70,6 @@ class PFC:
         Set variable types for the stuff that isnt a string from the input file
         """
         return
-
 
     def makePFC(self,MHD,CAD,ROIidx,mapDirection,clobberFlag=True):
         """
@@ -247,6 +249,7 @@ class PFC:
         numSteps = MHD.nTrace #actual trace is (numSteps + 1)*dphi degrees
         #If numSteps = 0, dont do intersection checking
         if numSteps > 0:
+            print("Intersection Test #1")
             CTLfile = self.controlfilePath + self.controlfileStruct
             MHD.writeControlFile(CTLfile, self.t, self.mapDirectionStruct, mode='struct')
 
@@ -275,6 +278,7 @@ class PFC:
         #===INTERSECTION TEST 2 (multiple steps up field line)
         #Starts at second step up field line
         if numSteps > 1:
+            print("Intersection Test #2")
             MHD.writeControlFile(self.controlfileStruct, self.t, self.mapDirectionStruct, mode='struct')
             use = np.where(self.shadowed_mask == 0)[0]
             intersect_mask2 = np.zeros((len(use)))
@@ -296,6 +300,11 @@ class PFC:
                 log.info("\nIntersect Trace #2 Step {:d}".format(i))
                 useOld = use2
                 use2 = np.where(intersect_mask2 == 0)[0]
+                #if all faces are shadowed, break
+                if len(use2) == 0:
+                    print("All faces shadowed on this PFC. Moving onto next PFC...")
+                    log.info("All faces shadowed on this PFC. Moving onto next PFC...")
+                    break
                 indexes = np.where([x==useOld for x in use2])[1] #map current steps's index back to intersect_mask2 index
 
                 StartPoints = structData[startIdx::2,:][indexes] #odd indexes are second trace point
@@ -304,14 +313,17 @@ class PFC:
                 structData = self.readStructOutput(self.structOutfile)
                 os.remove(self.structOutfile) #clean up
                 intersect_mask2[use2] = self.intersectTest2(structData,targetPoints,self.mapDirectionStruct)
-
+                print("Assigned Mask")
                 #for debugging, save a shadowmask at each step up fieldline
                 if shadowMaskClouds == True:
                     self.shadowed_mask[use] = intersect_mask2
                     self.write_shadow_pointcloud(self.centers,self.shadowed_mask,self.controlfilePath,tag='test{:d}'.format(i+1))
+                print("Step {:d} complete".format(i))
+                log.info("Step {:d} complete".format(i))
 
             #Now revise shadowed_mask taking intersections into account
             self.shadowed_mask[use] = intersect_mask2
+        print("Completed Intersection Check")
         return
 
     def longRangeIntersectCheck(self,qDiv,thresh,distPhi,MHD,CAD):
@@ -453,12 +465,13 @@ class PFC:
         pool = multiprocessing.Pool(Ncores)
         mask = np.asarray(pool.map(tools.intersectTestParallel, np.arange(N)))
         pool.close()
+        pool.join()
+        pool.terminate()
+        del pool
         print('Found {:f} shadowed faces'.format(np.sum(mask)))
         log.info('Found {:f} shadowed faces'.format(np.sum(mask)))
         print('Time elapsed: {:f}'.format(time.time() - t0))
         log.info('Time elapsed: {:f}'.format(time.time() - t0))
-
-
 
         #Now remove trickier to identify intersections.  Test 2
         #Remove intersections that are outside of 5mm from us.
@@ -483,6 +496,7 @@ class PFC:
 #        log.info('Found {:f} shadowed faces'.format(np.sum(mask[use])))
 #        print('Time elapsed: {:f}'.format(time.time() - t0))
 #        log.info('Time elapsed: {:f}'.format(time.time() - t0))
+
 
         return mask
 
@@ -531,15 +545,19 @@ class PFC:
         #each worker, which yields about an order of magnitude speedup.
         print('Spawning tasks to workers')
         log.info('Spawning tasks to workers')
-        pool = multiprocessing.Pool(Ncores)
-        mask = np.asarray(pool.map(tools.intersectTestParallel, np.arange(N)))
-        pool.close()
-
+        #Do this try clause to kill any zombie threads that don't terminate
+        try:
+            pool = multiprocessing.Pool(Ncores)
+            mask = np.asarray(pool.map(tools.intersectTestParallel, np.arange(N)))
+        finally:
+            pool.close()
+            pool.join()
+            del pool
         print('Found {:f} shadowed faces'.format(np.sum(mask)))
         log.info('Found {:f} shadowed faces'.format(np.sum(mask)))
         print('Time elapsed: {:f}'.format(time.time() - t0))
         log.info('Time elapsed: {:f}'.format(time.time() - t0))
-
+        print("Returning")
         return mask
 
     def readStructOutput(self,file):

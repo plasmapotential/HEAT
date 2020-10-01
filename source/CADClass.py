@@ -81,7 +81,7 @@ class CAD:
         """
 
 
-        self.allowed_vars = ['testvar',
+        self.allowed_vars = [
                             'rootDir',
                             'STPfile',
                             'STLpath',
@@ -145,7 +145,7 @@ class CAD:
         """
         if resolution == None:  resolution=self.ROIGridRes
         for idx,partnum in enumerate(self.ROI):
-            name = self.STLpath + partnum + "_" + resolution +"mm.stl"
+            name = self.STLpath + partnum + "___" + resolution +"mm.stl"
             if os.path.exists(name):
                 print("Mesh exists, loading...")
                 self.loadROIMesh(name,idx)
@@ -164,13 +164,13 @@ class CAD:
         """
         if resolution == None:  resolution=self.gridRes
         for partnum in self.intersectList:
-            name = self.STLpath + partnum + "_" + resolution +"mm.stl"
+            name = self.STLpath + partnum + "___" + resolution +"mm.stl"
             if os.path.exists(name):
                 print("Mesh exists, loading...")
                 self.loadIntersectMesh(name)
             else:
                 print("New mesh.  Creating...")
-                self.intersectObjFromPartnum(partnum)
+                self.intersectObjFromPartnum(partnum, resolution)
 
         #Now get face centers, normals, areas
         self.intersectNorms,self.intersectCtrs,self.intersectAreas = self.normsCentersAreas(self.intersectMeshes)
@@ -200,9 +200,12 @@ class CAD:
                 log.info("Part "+part+" not found in CAD.  Cannot Mesh!")
         return
 
-    def intersectObjFromPartnum(self, partslist):
+    def intersectObjFromPartnum(self, partslist, resolution):
         """
         Generates intersect objects from list of part numbers.
+
+        if resolution is 'standard' then generates mesh using FreeCAD
+        Standard algorithm
         """
         #Check if this is a single file or list and make it a list
         if type(partslist) == str:
@@ -216,7 +219,10 @@ class CAD:
                 if part == self.CADobjs[i].Label:
                     count += 1
                     self.intersectParts[idx] = self.CADobjs[i]
-                    self.intersectMeshes[idx] = self.part2mesh(self.intersectParts[idx], resolution=self.gridRes)[0]
+                    if resolution=="standard":
+                        self.intersectMeshes[idx] = self.part2meshStandard(self.intersectParts[idx])[0]
+                    else:
+                        self.intersectMeshes[idx] = self.part2mesh(self.intersectParts[idx], resolution=resolution)[0]
 
             if count == 0:
                 print("Part "+part+" not found in CAD.  Cannot Mesh!")
@@ -312,6 +318,9 @@ class CAD:
         If part isn't a list, freecad throws an error.  Use this to determine
         if part is a list of parts or a single object, and handle each case
         correctly.  Returns a list of mesh objects
+
+        This function uses the FreeCAD Mefisto algorithm, and defines mesh
+        by maximum edge length (resolution)
         """
         if resolution == None: resolution = float(self.ROIGridRes)
         else: resolution = float(resolution)
@@ -330,13 +339,46 @@ class CAD:
         log.info("Converted parts to mesh objects at resolution: {:f}".format(resolution))
         return meshes
 
+    def part2meshStandard(self, part, surfDev=1.0, angDev=0.523599):
+        """
+        Converts CAD object to mesh object, and adds mesh object to CAD document
+        if part is a list of objects, returns a list of meshes.
+        If part isn't a list, freecad throws an error.  Use this to determine
+        if part is a list of parts or a single object, and handle each case
+        correctly.  Returns a list of mesh objects
+
+        This function uses the FreeCAD Standard algorithm, and defines mesh
+        by surface and angular deviation.  Default surface deviation is 1mm,
+        and default angular deviation is 0.523599rad (30deg)
+        """
+        #Check if this is a single file or list and make it a list
+        if type(part) != list:
+            part = [part]
+        meshes = []
+        for i in range(len(part)):
+            shape = part[i].Shape.copy(False)
+            shape.Placement = part[i].getGlobalPlacement()
+            print('Meshing part ' + part[i].Label)
+            log.info('Meshing part ' + part[i].Label)
+            mesh = MeshPart.meshFromShape(Shape=shape,
+                                          LinearDeflection=surfDev,
+                                          AngularDeflection=angDev,
+                                          Relative=False)
+            meshes.append(mesh)
+        print("Converted parts to mesh objects using Standard algorithm.")
+        log.info("Converted parts to mesh objects using Standard algorithm.")
+        return meshes
+
+
     def writeMesh2file(self, mesh, label, path='./', resolution=None):
         """
         Writes a mesh object to STL file named by part number.
         If mesh is a list of mesh objects, then write a separate file for
         each mesh object in the list.  Does not overwrite / clobber
         """
-        if resolution == None: resolution = self.ROIGridRes
+        if resolution == None:
+            resolution = self.ROIGridRes
+
         if type(resolution) != str:
             resolution=str(resolution)
         #Check if this is a single file or list and make it a list
@@ -345,7 +387,9 @@ class CAD:
             label = [label]
 
         for i in range(len(mesh)):
-            filename = path + label[i] + "_" + resolution +"mm.stl"
+            # ___ (3 underdashes) is the str we use to separate mesh name from resolution
+            # this MATTERS when we read back in a mesh (see self.loadROIMesh and self.loadIntersectMesh)
+            filename = path + label[i] + "___" + resolution +"mm.stl"
             print("Writing mesh file: " + filename)
             log.info("Writing mesh file: " + filename)
             if os.path.exists(filename):
@@ -368,7 +412,7 @@ class CAD:
             filenames = [filenames]
         for file in filenames:
             mesh = Mesh.Mesh(file)
-            partnum = file.split('/')[-1].split('_')[0]
+            partnum = file.split('/')[-1].split('___')[0]
 #            idx = np.where(np.asarray(self.ROI) == partnum)[0][0]
             #Find CAD object that matches this part number
             for i in range(len(self.CADobjs)):
@@ -389,8 +433,10 @@ class CAD:
         if type(filenames) == str:
             filenames = [filenames]
         for file in filenames:
+            print('Loading ' + file)
+            log.info('Loading ' + file)
             mesh = Mesh.Mesh(file)
-            partnum = file.split('/')[-1].split('_')[0]
+            partnum = file.split('/')[-1].split('___')[0]
             idx = np.where(np.asarray(self.intersectList) == partnum)[0][0]
             #Find CAD object that matches this part number
             for i in range(len(self.CADobjs)):
@@ -425,6 +471,11 @@ class CAD:
         areas = []
         for mesh in meshes:
             #mesh = obj.Mesh
+            if (mesh == None) or (mesh=='None'):
+                print("No Mesh for one of these objects.  Did you have a typo in input file?")
+                print("Check HEAT output for Mesh Not Found errors")
+                log.info("No Mesh for one of these objects.  Did you have a typo in input file?")
+                log.info("Check HEAT output for Mesh Not Found errors")
             N_facets = mesh.CountFacets
             x = np.zeros((N_facets,3))
             y = np.zeros((N_facets,3))

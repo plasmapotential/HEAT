@@ -46,6 +46,72 @@ body {
 }
 
 
+
+/* Tab Settings
+–––––––––––––––––––––––––––––––––––––––––––––––––– */
+/* tabs */
+	.tabcontent {
+	  border: none;
+	  border-top: none;
+		border-bottom: none;
+		min-height: 60vh;
+    max-height: 98vh;
+	  background-color: #252626;
+		animation: fadeEffect 1s; /* Fading effect takes 1 second */
+	  padding: 25px 10px 10px 10px;
+		width: 60%;
+    height: 100%;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+	}
+
+  .innerTabContent {
+	  background-color: #252626;
+		animation: fadeEffect 1s; /* Fading effect takes 1 second */
+	  padding: 25px 10px 10px 10px;
+    max-height: 85vh;
+		width: 95%;
+    height: 100%;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    overflow-y: scroll;
+    overflow-x: scroll;
+    max-width: 100%; /* Change this if PFC table overflows */
+	}
+
+  .logTabContent {
+	  background-color: #252626;
+		animation: fadeEffect 1s; /* Fading effect takes 1 second */
+	  padding: 25px 10px 10px 10px;
+    max-height: 85vh;
+		width: 95%;
+    height: 100%;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    max-width: 98%; /* Change this if PFC table overflows */
+	}
+
+
+  .innerTabContentColumn {
+    background-color: #252626;
+    animation: fadeEffect 1s; /* Fading effect takes 1 second */
+    padding: 25px 10px 10px 10px;
+    max-height: 85vh;
+    width: 95%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    flex-wrap: wrap;
+    overflow-y: scroll;
+  }
+
+
+  /* Boxes
+  –––––––––––––––––––––––––––––––––––––––––––––––––– */
+
 .textInput{
   width: 90%;
   text-align:center;
@@ -93,15 +159,14 @@ body {
 }
 
 .wideBoxDarkColumn{
-    width: 98%;
     align-items: left;
 	  background-color: #252626;
     text-align:left;
     margin: 10px 10px 10px 10px;
+    width: 100%;
     display: flex;
     flex-direction: column;
     flex-wrap: wrap;
-
 /*    box-shadow: 3px 6px #242526; */
 }
 .wideBoxLight{
@@ -133,6 +198,14 @@ body {
 /*    box-shadow: 3px 6px #242526; */
 }
 
+.plotBox{
+    align-items: center;
+    width: 90%;
+    text-align:left;
+    margin: 10px 10px 10px 10px;
+/*    box-shadow: 3px 6px #242526; */
+}
+
 .PFCbox{
     align-items: center;
 	  background-color: #3b3939;
@@ -153,10 +226,21 @@ body {
 .runContentBox{
 /*  width: 90%; */
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   flex-wrap: wrap;
+  width:100%;
+}
+
+.outputHeader{
+    text-align: center;
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+
+
 
 }
+
 .xyzBox{
     display: flex;
     flex-direction: row;
@@ -211,36 +295,61 @@ body {
 /*    box-shadow: 3px 6px #242526; */
 }
 
+.logBox{
+  background-color: #000000;
+  opacity: 0.4;
+  font-size: 16px;
+  font-family: monospace;
+  padding: 5px;
+  color: #03fc6b;
+
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  width: 100%;
+  height: 90%;
+  justify-items: center;
+}
+
+
+
 /* Input Tab
 –––––––––––––––––––––––––––––––––––––––––––––––––– */
 .EQplot{
-    width: 60%;
+    width: 75%;
     height: 100%;
     padding: 0 5px 0 5px;
 }
 
 .buttonRibbon{
-  width: 100%;
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
+  text-align:center;
+  align-items: center;
+  background-color: #3b3939;
+  width: 100%;
+  margin: 10px 10px 10px 10px;
 
 }
 .machineSelectBox{
-  width: 45%;
+  width: 47%;
   display: flex;
   flex-direction: column;
   flex-wrap: wrap;
+  margin: 10px 10px 10px 10px;
 
 }
+
 .defaultButtonBox{
-  width: 50%;
+  width: 47%;
   display: flex;
   flex-direction: column;
   flex-wrap: wrap;
   align-items: center;
+  margin: 10px 10px 10px 10px;
 }
 .machineSelect{
-  width: 90%;
+  width: 100%;
   background-color: #7c8080;
   color: #1253e0;
 
@@ -257,6 +366,8 @@ body {
 /*  width: 50%; */
   margin: 10px 10px 10px 10px;
   align-items: center;
+  white-space: normal;
+
 }
 
 .hfParams{
@@ -318,6 +429,8 @@ body {
 
   text-align:center;
   align-items: center;
+
+  margin: 10px 10px 10px 10px
 }
 
 
@@ -327,35 +440,3 @@ body {
   width: 45%;
   margin: 10px 10px 10px 10px;
 }
-
-/* Tab Settings
-–––––––––––––––––––––––––––––––––––––––––––––––––– */
-/* tabs */
-	.tabcontent {
-	  border: none;
-	  border-top: none;
-		border-bottom: none;
-		min-height: 60vh;
-    max-height: 98vh;
-	  background-color: #252626;
-		animation: fadeEffect 1s; /* Fading effect takes 1 second */
-	  padding: 25px 10px 10px 10px;
-		width: 60%;
-    height: 100%;
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-	}
-
-  .innerTabContent {
-	  background-color: #252626;
-		animation: fadeEffect 1s; /* Fading effect takes 1 second */
-	  padding: 25px 10px 10px 10px;
-    max-height: 85vh;
-		width: 95%;
-    height: 100%;
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    overflow-y: scroll;
-	}
