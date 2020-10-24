@@ -197,7 +197,6 @@ class GUIobj():
 
         idx = np.where(t==self.MHD.timesteps)[0][0]
         ep = self.MHD.ep[idx]
-
         ep.g['psiRZ'] *= psiRZMult
         ep.g['psiSep'] *= psiSepMult
         ep.g['psiAxis'] *= psiAxisMult

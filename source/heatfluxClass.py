@@ -230,6 +230,9 @@ class heatFlux:
         Bp = abs(ep.BpFunc.ev(Rmax,Z_omp_sol))
         #Evaluate lq
         self.lqEich = C * self.Psol**Cp * Rgeo**Cr * Bp**Cb * aspect**Ca # in mm
+        print("Poloidal Field at midplane: {:f}".format(Bp))
+        Bt = abs(ep.BtFunc.ev(ep.g['RmAxis'],ep.g['ZmAxis']))
+        print("Toroidal Field at axis: {:f}".format(Bt))    
         print("Found heat flux width value of: {:f} mm".format(self.lqEich))
         log.info("Found heat flux width value of: {:f} mm".format(self.lqEich))
         return

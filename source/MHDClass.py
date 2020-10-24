@@ -235,18 +235,15 @@ class MHD:
         Note: this function returns the normal Bfield components if normal=True
 
         """
-        #BR = ep.BRFunc.ev(R,Z)
-        #BZ = ep.BZFunc.ev(R,Z)
-#        Bt = ep.BtFunc.ev(R,Z)*self.MapDirection
-#        BR = ep.BRFunc.ev(R,Z)
-#        BZ = -ep.BZFunc.ev(R,Z)
         Bt = ep.BtFunc.ev(R,Z)*ionDirection
         BR = ep.BRFunc.ev(R,Z)*ionDirection
         BZ = ep.BZFunc.ev(R,Z)*ionDirection
-
         #print(BR)
         #print(Bt)
         #print(BZ)
+        #print(max(abs(BR)))
+        #print(max(abs(Bt)))
+        #print(max(abs(BZ)))
         try:
             Bxyz = np.zeros((len(BR),3))
         except:
@@ -442,7 +439,10 @@ class MHD:
         """
         t0 = time.time()
         #Create MAFOT shell command
-        cmd = self.MachFlag + 'structure '
+        if self.MachFlag == 'd3d':
+            cmd = 'dtstructure '
+        else:
+            cmd = self.MachFlag + 'structure '
         flags = '-d {:f}'.format(int(dphi)) + ' '
         flags += '-P ' + gridfile + ' '
         #flags += '-Z '
@@ -676,6 +676,8 @@ class MHD:
         time: new shot timestep [ms]
         """
         if ep==None:
+            print("Warning no gFile provided.  Writing from gFile in memory.")
+            log.info("Warning no gFile provided.  Writing from gFile in memory.")
             g = self.ep.g
         else:
             g = ep.g

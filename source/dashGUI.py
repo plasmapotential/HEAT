@@ -1764,6 +1764,7 @@ def gfileChildren():
             html.H4("gFile Tools", style={"text-align":"center", "width":"100%"}),
             html.H6("Loaded gFile Parameters:"),
             html.Div( children=buildGfileTable(), className="gfileTable" ),
+            html.Div( children=buildGfilePlots(), className="gfileTable" ),
             html.H6("gFile Multipliers:"),
             gFileMultipiers(),
             html.H6("Re-define LCFS:"),
@@ -1776,6 +1777,15 @@ def gfileChildren():
         className="wideBoxDark",
         )
 
+def buildGfilePlots():
+    """
+    gFile plot for Fpol, psi, etc
+    """
+    return html.Div(
+            id="gFilePlots",
+            children=[dcc.Graph(id="gFilePlot1", className=""),],
+            className="gfileBox"
+            )
 
 def buildGfileTable():
     cols = getGfileColumns()
@@ -2260,8 +2270,11 @@ def MHDplot():
         ],
     )
 
+#this callback is fired any time user moves time slider under EQ plot,
+#or when user loads mhd (which changes time slider value)
 @app.callback([Output('2DEQ', 'figure'),
-               Output('gFileTable', 'data')],
+               Output('gFileTable', 'data'),
+               Output('gFilePlot1', 'figure')],
               [Input('timeSlider', 'value'),
                Input('hiddenDivMult', 'children'),
                Input('hiddenDivSep', 'children'),])
@@ -2284,7 +2297,11 @@ def slideEQplot(value, dummy1, tom):
     import GUIscripts.plotly2DEQ as plotly2DEQ
     plot = plotly2DEQ.makePlotlyEQDiv(shot, t, MachFlag, ep)
     data = getGfileData(t)
-    return plot, data
+
+    #update plot on gfile cleaner tab with Fpol, psi. etc
+    plot2 = plotly2DEQ.makePlotlyGfilePlot(ep)
+
+    return plot, data, plot2
 
 
 
