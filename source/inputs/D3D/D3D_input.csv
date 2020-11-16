@@ -4,10 +4,10 @@
 #=============================================================
 #                CAD Variables
 #=============================================================
-STPfile, /u/tlooby/D3D/CAD/D3Dgfile5degLwrDiv.step
-STLpath, /u/tlooby/D3D/CAD/STLs/
-FreeCADPath, /opt/freecad/appImage/squashfs-root/usr/lib
-PVPath, /opt/paraview/ParaView-5.7.0-MPI-Linux-Python3.7-64bit/lib/python3.7/site-packages
+STPfile, /home/tom/D3D/CAD/D3Dgfile5degLwrDiv.step
+STLpath, /home/tom/D3D/CAD/STLs/
+FreeCADPath, /opt/freecad/squashfs-root/usr/lib
+PVPath, /opt/paraview/ParaView-5.8.1-MPI-Linux-Python3.7-64bit/lib/python3.7/site-packages
 ROIGridRes, 5.0
 gridRes, 10.0
 permute_mask, False
@@ -23,7 +23,7 @@ tree, EFIT02
 tmin, 0
 tmax, 3
 nTrace, 0
-dataPath, /u/tlooby/source/HEAT/v1.0/data/
+dataPath, /home/tom/data/HEAT/
 ionDirection, -1
 plasma3Dmask, 0 #1=true, 0=false
 

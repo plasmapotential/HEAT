@@ -8,6 +8,7 @@ import numpy as np
 import os
 import shutil
 import logging
+import subprocess
 log = logging.getLogger(__name__)
 
 class tools:
@@ -257,24 +258,46 @@ class tools:
         The vtk file will have some paraview operation performed, such as
         converting vector components to a glyph, or calculating a trace from points
         and so it requires declaration of the intended output type (outType).
-
+        spawn process in separte session
         outType is a string that can be one of the following:
         'glyph'     Create glyph from vector components
         'trace'     create a line trace between points
 
         prefix is what you want to output vtk file to be named
 
-        An environment variable is changed before we run this
-        command because paraview's pvpython script complains about mpi
-        installations.  Afterwards we reset this env variable (LD_LIBRARY_PATH)
+        ParaVIEW requires a binary file called pvpython
+        Here I load the path to this file into the PATH environment variable,
+        and also load the paraVIEW python libs into the PYTHONPATH env var.
+        I do this here (instead of in main HEAT code), because this allows
+        ParaVIEW's python version to be different from HEAT's python version.
+        If you have two different python versions (ie 3.7 for PV and 3.8 for HEAT)
+        then there will be conflicts unless you isolate the environments (like
+        I do here).
         """
         import os
-        oldEnv = os.environ["LD_LIBRARY_PATH"]
-        os.environ["LD_LIBRARY_PATH"] = ""
-        pvpythonCMD = '/opt/paraview/ParaView-5.7.0-MPI-Linux-Python3.7-64bit/bin/pvpython'
-        os.system(pvpythonCMD + ' ./GUIscripts/csv2vtk.py ' + pcfile + ' ' + outType + ' ' + prefix)
-        os.environ["LD_LIBRARY_PATH"] = oldEnv
+        current_env = os.environ.copy()
+        #running in appImage (isolate PV environment from HEAT's)
+        try:
+            appDir = current_env['APPDIR']
+            pvVersion = current_env['paraviewVersion']
+            pvPyVersion = current_env['paraviewPythonVersion']
+            pvPythonRoot = appDir + '/opt/paraview/' + pvVersion + '/lib/' + pvPyVersion
+            current_env['PYTHONPATH'] = pvPythonRoot + ':' + pvPythonRoot + '/lib-dynload'
+
+        #running on dev machine
+        #(it is expected that you have set up env externally)
+        except:
+            pass
+
+        print("Spawning PVpython subprocess")
+        log.info("Spawning PVpython subprocess")
+        pvpythonCMD = 'pvpython'
+        args = [pvpythonCMD, self.rootDir + '/GUIscripts/csv2vtk.py', pcfile, outType, prefix]
+        subprocess.run(args, env=current_env)
+        print("PVpython subprocess complete")
         print("Created VTK output ")
+        log.info("PVpython subprocess complete")
+        log.info("Created VTK output ")
         return
 
     def intersectTestParallel(self, i):
@@ -376,10 +399,13 @@ class tools:
         """
         for t in timesteps:
             #Build timestep directory
-            timeDir = dataPath + '/{:06d}/'.format(t)
+            if dataPath[-1]!='/':
+                timeDir = dataPath + '/{:06d}/'.format(t)
+            else:
+                timeDir = dataPath + '{:06d}/'.format(t)
             try:
                 os.mkdir(timeDir)
-                print("Directory " , timeDir ,  " Created ")
+                print("Tree Directory " , timeDir ,  " Created ")
             except FileExistsError:
                 clobberFlagTime = False #don't overwrite time directories, just PFC directories
                 if clobberFlagTime is True:
@@ -389,14 +415,14 @@ class tools:
                         sys.exit()
 
                     os.mkdir(timeDir)
-                    print("Directory " , timeDir ,  " Created ")
+                    print("Tree Directory " , timeDir ,  " Created ")
 
             #build directory for each PFC partname
             for name in PFCnames:
                 pfcDir = timeDir + name
                 try:
                     os.mkdir(pfcDir)
-                    print("Directory " , pfcDir ,  " Created ")
+                    print("Tree Directory " , pfcDir ,  " Created ")
                 except FileExistsError:
                     if clobberFlag is True:
                         try: shutil.rmtree(pfcDir)
@@ -405,7 +431,7 @@ class tools:
                             return
 
                         os.mkdir(pfcDir)
-                        print("Directory " , pfcDir ,  " Created ")
+                        print("Tree Directory " , pfcDir ,  " Created ")
         return
 
     def makeDir(self, dir, clobberFlag=True):

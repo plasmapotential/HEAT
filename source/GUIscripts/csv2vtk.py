@@ -6,8 +6,9 @@
 import sys
 import textwrap
 import csv
-path = '/opt/paraview/ParaView-5.7.0-MPI-Linux-Python3.7-64bit/lib/python3.7/site-packages'
-sys.path.append(path)
+#this step is completed in dashGUI.py
+#path = '/opt/paraview/ParaView-5.7.0-MPI-Linux-Python3.7-64bit/lib/python3.7/site-packages'
+#sys.path.append(path)
 
 
 def convert2Glyph(pcfile, prefix):
@@ -59,6 +60,9 @@ def convert2Glyph(pcfile, prefix):
     #Write to file
     writer = CreateWriter(PVdir+"/"+prefix+".vtk", glyph)
     writer.UpdatePipeline()
+    del writer
+
+    return
 
 
 def convert2Trace(pcfile, prefix):
@@ -93,6 +97,8 @@ def convert2Trace(pcfile, prefix):
     #Write to file
     writer = CreateWriter(PVdir+"/"+prefix+".vtk", progFil)
     writer.UpdatePipeline()
+    del writer
+    return
 
 def convert2PointCloud(pcfile, prefix):
     """
@@ -115,27 +121,34 @@ def convert2PointCloud(pcfile, prefix):
     writer = simple.CreateWriter(PVdir+"/"+prefix+".vtk", pc)
     writer.UpdatePipeline()
 
-#    from paraview import simple
-#    # create a new 'Table To Points'
-#    hfPC = simple.CSVReader(FileName=[pcfile])
-#    t2p = simple.TableToPoints(Input=hfPC)
-#    t2p.XColumn = '# X'
-#    t2p.YColumn = 'Y'
-#    t2p.ZColumn = 'Z'
-#    renderView1 = simple.GetActiveViewOrCreate('RenderView')
-#    simple.SetActiveView(renderView1)
-#    display = simple.Show(t2p, renderView1)
-#    display.ColorArrayName = [None, '']
-#    simple.ColorBy(display, ['POINTS', 'ShadowMask'])
-#    display.RescaleTransferFunctionToDataRange(True)
-#    display.SetScalarBarVisibility(renderView1, True)
-#    heatFluxLUT = simple.GetColorTransferFunction('ShadowMask')
-#    heatFluxLUT.ApplyPreset('Black-Body Radiation', True)
-#    simple.SaveState(PVdir+"/"+prefix+".py")
+
+    #from paraview import simple
+    ## create a new 'Table To Points'
+    #hfPC = simple.CSVReader(FileName=[pcfile])
+    #t2p = simple.TableToPoints(Input=hfPC)
+    #t2p.XColumn = '# X'
+    #t2p.YColumn = 'Y'
+    #t2p.ZColumn = 'Z'
+    #renderView1 = simple.GetActiveViewOrCreate('RenderView')
+    #simple.SetActiveView(renderView1)
+    #display = simple.Show(t2p, renderView1)
+    #display.ColorArrayName = [None, '']
+    #simple.ColorBy(display, ['POINTS', 'ShadowMask'])
+    #display.RescaleTransferFunctionToDataRange(True)
+    #display.SetScalarBarVisibility(renderView1, True)
+    #heatFluxLUT = simple.GetColorTransferFunction('ShadowMask')
+    #heatFluxLUT.ApplyPreset('Black-Body Radiation', True)
+    #simple.SaveState(PVdir+"/"+prefix+".py")
+
+    return
+
 
 
 if __name__=='__main__':
     import sys
+    import os
+    from subprocess import check_output
+    import signal
     print('Converting CSV to VTK format')
     if sys.argv[2] == 'glyph':
         convert2Glyph(sys.argv[1], sys.argv[3])
@@ -143,3 +156,8 @@ if __name__=='__main__':
         convert2Trace(sys.argv[1], sys.argv[3])
     else:
         convert2PointCloud(sys.argv[1], sys.argv[3])
+    print("Finished")
+
+    #sometimes pvpython hangs, so we kill by pid after our work is done
+    pid = int(check_output(["pidof","pvpython"]))
+    os.kill(pid, signal.SIGKILL)

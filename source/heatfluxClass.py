@@ -23,8 +23,16 @@ log = logging.getLogger(__name__)
 
 class heatFlux:
 
-    def __init__(self):
-        pass
+    def __init__(self, rootDir, dataPath):
+        """
+        rootDir is root location of python modules (where dashGUI.py lives)
+        dataPath is the location where we write all output to
+        """
+        self.rootDir = rootDir
+        tools.rootDir = self.rootDir
+        self.dataPath = dataPath
+        tools.dataPath = self.dataPath
+        return
 
     def allowed_class_vars(self):
         """
@@ -232,7 +240,7 @@ class heatFlux:
         self.lqEich = C * self.Psol**Cp * Rgeo**Cr * Bp**Cb * aspect**Ca # in mm
         print("Poloidal Field at midplane: {:f}".format(Bp))
         Bt = abs(ep.BtFunc.ev(ep.g['RmAxis'],ep.g['ZmAxis']))
-        print("Toroidal Field at axis: {:f}".format(Bt))    
+        print("Toroidal Field at axis: {:f}".format(Bt))
         print("Found heat flux width value of: {:f} mm".format(self.lqEich))
         log.info("Found heat flux width value of: {:f} mm".format(self.lqEich))
         return
@@ -413,7 +421,7 @@ class heatFlux:
         Z_omp = np.zeros(R_omp.shape)
         #Calculate flux at midplane using gfile
         psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
-        psi = PFC.ep.psiFunc_noN.ev(R_omp,Z_omp)
+        psi = psiN * (PFC.ep.g['psiSep']-PFC.ep.g['psiAxis']) + PFC.ep.g['psiAxis']
         PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
         s_hat = psiN - PFC.psiMinLCFS
         # Evaluate B at outboard midplane
@@ -809,6 +817,8 @@ class heatFlux:
         else:
             name = 'psiN_'+tag
             tools.createVTKOutput(pcfile, 'points', name)
+        print("Created Psi Point Cloud")
+        log.info("Created Psi Point Cloud")
         return
 
 

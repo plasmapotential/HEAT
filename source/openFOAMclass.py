@@ -14,10 +14,19 @@ import matplotlib.pyplot as plt
 import logging
 import pandas as pd
 log = logging.getLogger(__name__)
+tools = toolsClass.tools()
 
 class OpenFOAM():
-    def __init__(self):
-        tools = toolsClass.tools()
+    def __init__(self, rootDir, dataPath):
+        """
+        rootDir is root location of python modules (where dashGUI.py lives)
+        dataPath is the location where we write all output to
+        """
+        self.rootDir = rootDir
+        tools.rootDir = self.rootDir
+        self.dataPath = dataPath
+        tools.dataPath = self.dataPath
+        return
 
     def allowed_class_vars(self):
         """

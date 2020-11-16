@@ -4,7 +4,6 @@
 #Date:          20190806
 
 import numpy as np
-import MDSplus
 import os
 import shutil
 import time
@@ -188,6 +187,7 @@ def write_multiple_gfiles(machine, shot, tree='efit01', tmin=None, tmax=None,
         tree='st40'
 
     #Connect to server and get all timesteps.
+    import MDSplus
     MDS = MDSplus.Connection(Server)
     MDS.openTree(tree, shot)
     base = 'RESULTS:GEQDSK:'
@@ -271,7 +271,6 @@ def loadgfile(machine,gfile,rootDir=None,clobberwait=True):
     newPath = dirName+'/{:06d}/'.format(ts)
     newgfile = newPath + name
     newgfile_noSuffix = newPath + name[:13]
-
     try:
         # Create target Directory
         os.mkdir(newPath)

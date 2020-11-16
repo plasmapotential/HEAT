@@ -24,8 +24,10 @@ class PFC:
     the MHD information (timesteps, equilibrium objects, mapDirection, etc.)
     and the HF information (profile, lq, Psol, etc.)
     This class also builds out the directory tree for each simulation
+    rootDir is root location of python modules (where dashGUI.py lives)
+    dataPath is the location where we write all output to
     """
-    def __init__(self, timestepMapRow):
+    def __init__(self, timestepMapRow, rootDir, dataPath):
         #Parse PFC input file row data into PFC object
         self.timeStr = timestepMapRow[0]
         self.name = timestepMapRow[1]
@@ -39,6 +41,11 @@ class PFC:
         self.DivCode = timestepMapRow[3]
         #names of tiles that will be checked for magnetic field line shadowing
         self.intersects = timestepMapRow[4].split(':')
+        #set up HEAT paths
+        self.rootDir = rootDir
+        tools.rootDir = self.rootDir
+        self.dataPath = dataPath
+        tools.dataPath = self.dataPath
         return
 
     def allowed_class_vars(self):
@@ -112,9 +119,14 @@ class PFC:
         self.t = MHD.timesteps[self.tIndexes[0]]
         self.controlfile = '_lamCTL.dat'
         self.controlfileStruct = '_struct_CTL.dat'
-        self.controlfilePath = MHD.dataPath + '/' + '{:06d}/'.format(self.t) + self.name + '/'
-        self.gridfile = MHD.dataPath + '/' + '{:06d}/'.format(self.t) + self.name + '/grid.dat'
-        self.gridfileStruct = MHD.dataPath + '/' + '{:06d}/'.format(self.t) + self.name + '/struct_grid.dat'
+        if MHD.dataPath[-1]=='/':
+            self.controlfilePath = MHD.dataPath + '{:06d}/'.format(self.t) + self.name + '/'
+            self.gridfile = MHD.dataPath + '{:06d}/'.format(self.t) + self.name + '/grid.dat'
+            self.gridfileStruct = MHD.dataPath + '{:06d}/'.format(self.t) + self.name + '/struct_grid.dat'
+        else:
+            self.controlfilePath = MHD.dataPath + '/' + '{:06d}/'.format(self.t) + self.name + '/'
+            self.gridfile = MHD.dataPath + '/' + '{:06d}/'.format(self.t) + self.name + '/grid.dat'
+            self.gridfileStruct = MHD.dataPath + '/' + '{:06d}/'.format(self.t) + self.name + '/struct_grid.dat'
         self.outputFile = self.controlfilePath + 'lam.dat'
         self.structOutfile = self.controlfilePath + 'struct.dat'
 

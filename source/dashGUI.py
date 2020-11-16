@@ -22,11 +22,77 @@ serve a single session @ 127.0.0.1:8050
 You will need to set a few variables below, based upon your system paths
 rootDir, PVPath
 """
+#========= VARIABLES THAT ARE SYSTEM DEPENDENT =================================
 import os
+import sys
+#If this code is being run inside an appImage, then we set our paths up accordingly
+try:
+    AppImage = os.environ["APPIMAGE"]
+    inAppImage = True
+except:
+    inAppImage = False
+
+if inAppImage == True:
+    print("Running in appImage mode\n")
+    AppDir = os.environ["APPDIR"]
+    #Include the location of the paraview binaries.  Specifically we need 'pvpython'
+    PVPath = AppDir + '/opt/paraview/ParaView-5.9.0-RC1-MPI-Linux-Python3.8-64bit/lib/python3.7/site-packages'
+    pvpythonCMD = AppDir + '/opt/paraview/ParaView-5.9.0-RC1-MPI-Linux-Python3.8-64bit/bin'
+
+    #Root HEAT source code directory
+    rootDir = AppDir + '/usr/src'
+    #openFOAM bashrc location
+    OFbashrc = AppDir + '/opt/OpenFOAM/OpenFOAM-v1912/etc/bashrc'
+    #default freecad path
+    FreeCADPath = AppDir + '/opt/freecad/squashfs-root/usr/lib'
+    #default source code location (EFIT class should be here)
+    EFITPath = AppDir + '/usr/src'
+
+else:
+    ###  If developing you will need to edit these manually!
+    #
+    print("Running in dev mode\n")
+    #Include the location of the paraview binaries.  Specifically we need 'pvpython'
+    PVPath = '/opt/paraview/ParaView-5.9.0-RC1-MPI-Linux-Python3.8-64bit/lib/python3.7/site-packages'
+    pvpythonCMD = '/opt/paraview/ParaView-5.9.0-RC1-MPI-Linux-Python3.8-64bit/bin'
+
+    #Root HEAT source code directory
+    rootDir = '/home/tom/source/HEAT/github/source'
+    #default HEAT output directory
+    dataPath = '/home/tom/data/HEAT/'
+    #openFOAM bashrc location
+    OFbashrc = '/opt/OpenFOAM/OpenFOAM-v1912/etc/bashrc'
+    #default freecad path
+    FreeCADPath = '/opt/freecad/squashfs-root/usr/lib'
+    #default source code location (EFIT class should be here)
+    EFITPath = '/home/tom/source'
+
+#default HEAT output directory
+homeDir = os.environ["HOME"]
+dataPath = homeDir + '/HEAT/data'
+#default logfile location
+logFile = dataPath + '/HEATlog.txt'
+
+#===============================================================================
+
+
+#=======UPDATE PATHS============================================================
+#orca installation location (for saving EQ plots)
+#pio.orca.config.executable='/usr/bin/orca'
+#append EFIT to python path
+sys.path.append(EFITPath)
+#append FreeCAD to python path
+sys.path.append(FreeCADPath)
+#append paraview to python path
+sys.path.append(PVPath)
+#append pvpython to binary path
+oldEnv = os.environ["PATH"]
+os.environ["PATH"] = oldEnv + ':' + pvpythonCMD
+#===============================================================================
+
 import shutil
 import base64
 import io
-import sys
 import json
 import numpy as np
 import pandas as pd
@@ -45,32 +111,15 @@ import dash_table
 import EFIT.equilParams_class as EP
 import toolsClass
 tools = toolsClass.tools()
-from urllib.parse import quote as urlquote
 from dash_extensions import Download
 from dash_extensions.snippets import send_file
 
-#========= VARIABLES THAT ARE SYSTEM DEPENDENT =================================
-#Include the location of the paraview binaries.  Specifically we need 'pvpython'
-PVPath = '/opt/paraview/ParaView-5.7.0-MPI-Linux-Python3.7-64bit/lib/python3.7/site-packages'
-sys.path.append(PVPath)
-#Root HEAT source code directory
-rootDir = '/u/tlooby/source/HEAT/v1.0/source/'
-#default HEAT output directory
-dataPath = '/u/tlooby/source/HEAT/v1.0/data/'
-#openFOAM bashrc location
-OFbashrc = '/opt/OpenFOAM/OpenFOAM-v1912/etc/bashrc'
-#orca installation location (for saving EQ plots)
-pio.orca.config.executable='/usr/bin/orca'
-#default freecad path
-FreeCADPath = '/opt/freecad/appImage/squashfs-root/usr/lib'
-
-
-#===============================================================================
-
-
 #Create log files that will be displayed in the HTML GUI
+from pathlib import Path
+if not os.path.exists(dataPath):
+    os.makedirs(dataPath)
+Path(logFile).touch()
 import logging
-logFile=rootDir + 'HEATlog.txt'
 logFlask = logging.getLogger('werkzeug')
 logFlask.disabled = True
 logging.basicConfig(filename=logFile, filemode="w", level=logging.INFO, format='%(message)s')
@@ -87,7 +136,7 @@ app = dash.Dash(server=server, meta_tags=[{"name": "viewport", "content": "width
 #Eventually need to fix this so that we are not using a global variable
 #dash can acces Flask Cache so we should cache data by userID or something
 #for R&D this works
-gui = GUIobj(logFile, rootDir)
+gui = GUIobj(logFile, rootDir, dataPath)
 
 """
 ==============================================================================
@@ -408,7 +457,8 @@ def inputDragDrop(file, contents, MachFlag):
                State('PVPath', 'value'),
                State('FreeCADPath', 'value'),
                State('dataPath', 'value'),
-               State('OFbashrc', 'value')]
+               State('OFbashrc', 'value')
+               ]
                )
 def saveGUIinputs(  n_clicks,
                     shot,
@@ -1645,7 +1695,7 @@ def bfieldTracePoint(value):
 
 #this function enables the inputs to be rendered on page load but hidden
 def loadBfieldTrace(Btrace=None, hidden=False):
-    if (Btrace is 'Btrace') or (hidden is True):
+    if (Btrace == 'Btrace') or (hidden == True):
         style={}
     else:
         style={"display":"hidden"}
@@ -1671,7 +1721,7 @@ def OFTracePoint(value):
 
 #this function enables the inputs to be rendered on page load but hidden
 def loadOFTrace(OFtrace=None, hidden=False):
-    if (OFtrace is 'OFtrace') or (hidden is True):
+    if (OFtrace == 'OFtrace') or (hidden == True):
         style={}
     else:
         style={"display":"hidden"}
@@ -2413,7 +2463,7 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
         log.info("Loading Default Input File")
         data = gui.loadDefaults()
         data['default_n_clicks'] = n_clicks
-    elif inputTs is None or inputTs is -1:
+    elif inputTs == None or inputTs == -1:
         pass
     #use data we saved into storage object that we got from user input file
     else:

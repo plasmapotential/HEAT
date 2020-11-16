@@ -6,9 +6,10 @@
 import sys
 import os
 
-FREECADPATH = '/opt/freecad/appImage/squashfs-root/usr/lib'
-oldpath = sys.path
-sys.path.append(FREECADPATH)
+#this happens in dashGUI.py now
+#FREECADPATH = '/opt/freecad/appImage/squashfs-root/usr/lib'
+#oldpath = sys.path
+#sys.path.append(FREECADPATH)
 #sys.path = [FREECADPATH]
 import FreeCAD
 import Part
@@ -56,8 +57,15 @@ class CAD:
 
 
     """
-    def __init__(self):
-        tools = toolsClass.tools()
+    def __init__(self, rootDir, dataPath):
+        """
+        dataPath is the location where we write all output to
+        """
+        self.rootDir = rootDir
+        tools.rootDir = self.rootDir
+        self.dataPath = dataPath
+        tools.dataPath = self.dataPath
+        return
 
     def allowed_class_vars(self):
         """
@@ -84,7 +92,7 @@ class CAD:
         self.allowed_vars = [
                             'rootDir',
                             'STPfile',
-                            'STLpath',
+                            #'STLpath',
                             'ROIGridRes',
                             'gridRes',
                             'FreeCADPath',
@@ -385,6 +393,11 @@ class CAD:
         if type(mesh) != list:
             mesh = [mesh]
             label = [label]
+
+        #Recursively make dirs for STLs
+        print("making STL directory")
+        log.info("making STL directory: "+path)
+        os.makedirs(path, exist_ok=True)
 
         for i in range(len(mesh)):
             # ___ (3 underdashes) is the str we use to separate mesh name from resolution

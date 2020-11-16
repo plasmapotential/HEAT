@@ -21,8 +21,16 @@ log = logging.getLogger(__name__)
 
 class MHD:
 
-    def __init__(self):
-        pass
+    def __init__(self, rootDir, dataPath):
+        """
+        rootDir is root location of python modules (where dashGUI.py lives)
+        dataPath is the location where we write all output to
+        """
+        self.rootDir = rootDir
+        tools.rootDir = self.rootDir
+        self.dataPath = dataPath
+        tools.dataPath = self.dataPath
+        return
 
     def allowed_class_vars(self):
         """
@@ -82,7 +90,7 @@ class MHD:
                             'Zmax',
                             'Rmin',
                             'Rmax',
-                            'dataPath']
+                            'shotPath']
         return
 
 
@@ -152,7 +160,7 @@ class MHD:
                                                                 self.tree,
                                                                 self.tmin,
                                                                 self.tmax,
-                                                                self.dataPath,
+                                                                self.shotPath,
                                                                 clobberwait=False)
         #load from file uploaded by user in GUI
         else:
@@ -170,10 +178,12 @@ class MHD:
         is a class from the ORNL_Fusion github repo, and was developed by
         A. Wingen
         """
-        if self.dataPath[-1]!='/':
-            dataPath = self.dataPath+'/'
+        if self.shotPath[-1]!='/':
+            shotPath = self.shotPath+'/'
+        else:
+            shotPath = self.shotPath
         if gfile is None:
-            gfile = dataPath+'{:06d}/g{:06d}.{:05d}'.format(t,shot,t)
+            gfile = shotPath+'{:06d}/g{:06d}.{:05d}'.format(t,shot,t)
         self.ep = EP.equilParams(gfile)
         #Correct for weird helicity and field directions that are occasionally
         #in gfile.  Here we assume that Ip is the CCW direction as viewed from
@@ -203,9 +213,11 @@ class MHD:
         """
         self.ep= ['None' for i in range(len(self.timesteps))]
         for idx,t in enumerate(self.timesteps):
-            if self.dataPath[-1]!='/':
-                dataPath = self.dataPath+'/'
-            gfile = dataPath+'{:06d}/g{:06d}.{:05d}'.format(t,self.shot,t)
+            if self.shotPath[-1]!='/':
+                shotPath = self.shotPath+'/'
+            else:
+                shotPath = self.shotPath
+            gfile = shotPath+'{:06d}/g{:06d}.{:05d}'.format(t,self.shot,t)
             self.ep[idx] = EP.equilParams(gfile)
         return
 
@@ -296,12 +308,12 @@ class MHD:
         if len(name.split('/')) > 1:
             save_location = name
         else:
-            save_location = self.dataPath + '/' + '{:06d}/'.format(t) + name
+            save_location = self.shotPath + '/' + '{:06d}/'.format(t) + name
         with open(save_location, 'w') as f:
 
             f.write('# Parameterfile for ' + self.MachFlag + ' Programs\n')
             f.write('# Shot: {:06d}\tTime: {:05d}ms\n'.format(int(self.shot), int(t)))
-            f.write('# Path: ' + self.dataPath + '/{:06d}\n'.format(t))
+            f.write('# Path: ' + self.shotPath + '/{:06d}\n'.format(t))
 
             f.write('Nphi=\t{:d}\n'.format(self.Nphi))
 
@@ -480,21 +492,47 @@ class MHD:
 
         return
 
-    def getMultipleFieldPaths(self, dphi, gridfile, controlfilePath,
-                    controlfile, paraview_mask=False):
+#    def getMultipleFieldPaths(self, dphi, gridfile, controlfilePath,
+#                    controlfile, paraview_mask=False):
+#
+#        if self.MachFlag == 'd3d':
+#            cmd = 'dtstructure '
+#        else:
+#            cmd = self.MachFlag + 'structure '
+#        flags = '-d {:f}'.format(float(dphi)) + ' '
+#        flags += '-P ' + gridfile + ' '
+##        flags += '-Z '
+#        flags += controlfile
+#        #Run shell command.  Will create file with results
+#        current_env = os.environ.copy()
+#        from subprocess import call
+#        call(cmd + flags, shell = True, cwd=controlfilePath, env=current_env)
+#        #call('rm log_*', shell = True, cwd=controlfilePath)	# clean up
+#        return
 
+    def getMultipleFieldPaths(self, dphi, gridfile, controlfilePath,
+                                controlfile, paraview_mask=False):
+
+        args = []
+        #args 0 is MAFOT structure binary call
         if self.MachFlag == 'd3d':
-            cmd = 'dtstructure '
+             args.append('dtstructure')
         else:
-            cmd = self.MachFlag + 'structure '
-        flags = '-d {:f}'.format(float(dphi)) + ' '
-        flags += '-P ' + gridfile + ' '
-#        flags += '-Z '
-        flags += controlfile
-        #Run shell command.  Will create file with results
-        from subprocess import call
-        call(cmd + flags, shell = True, cwd=controlfilePath)
-        #call('rm log_*', shell = True, cwd=controlfilePath)	# clean up
+            args.append(self.MachFlag + 'structure')
+        #args 1,2 are the number of degrees we want to run the trace for
+        args.append('-d')
+        args.append(str(dphi))
+        #args 3,4 are the points that we launch traces from
+        args.append('-P')
+        args.append(gridfile)
+        #args 5 is the MAFOT control file
+        args.append(controlfile)
+        #Copy the current environment (important when in appImage mode)
+        current_env = os.environ.copy()
+        #run MAFOT structure for points in gridfile
+        from subprocess import run
+        run(args, env=current_env, cwd=controlfilePath)
+        return
 
     def runMAFOTlaminar(self,gridfile,controlfilePath,controlfile,NCPUs):
         """
@@ -624,12 +662,17 @@ class MHD:
         name = 'g{:06d}.{:05d}'.format(shot,time)
         #make tree for this shot
         try:
-            os.mkdir(self.dataPath)
+            os.mkdir(self.shotPath)
         except:
             pass
         #make tree for this timestep
-        timeDir = self.dataPath + '/{:06d}/'.format(time)
+        if self.shotPath[-1] != '/': self.shotPath += '/'
+        timeDir = self.shotPath + '{:06d}/'.format(time)
         newgfile = timeDir + name
+        print("TEST===")
+        print(self.shotPath)
+        print(timeDir)
+        print(newgfile)
         try:
             os.mkdir(timeDir)
         except:

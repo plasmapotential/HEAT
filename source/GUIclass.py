@@ -45,22 +45,23 @@ def create_DASH_app(GUIobj):
     return app
 
 class GUIobj():
-    def __init__(self, logFile, rootDir):
+    def __init__(self, logFile, rootDir, dataPath):
         self.logFile = logFile
         self.rootDir = rootDir
+        self.dataPath = dataPath
         self.initializeEveryone()
         self.timestepMap = None
-        self.makeTmpDir()
+        self.makeTmpDir(dataPath)
         return
 
-    def makeTmpDir(self):
+    def makeTmpDir(self,dataPath):
         """
         makes a temp directory in rootDir path for user uploaded gfiles
 
         the self.tmpDir directory is accessible to the GUI users for uploading
         and downloading
         """
-        tempDir = self.rootDir + 'tmpDir/'
+        tempDir = dataPath + '/tmpDir/'
         self.tmpDir = tempDir
         self.MHD.tmpDir = tempDir
         try:
@@ -94,26 +95,29 @@ class GUIobj():
         if self.MachFlag == 'nstx':
             print('Loading NSTX-U Input Filestream')
             log.info('Loading NSTX-U Input Filestream')
-            self.infile = './inputs/NSTXU/NSTXU_input.csv'
-            self.pfcFile = './inputs/NSTXU/NSTXUpfcs.csv'
-            self.OF.meshDir = '/u/tlooby/NSTX/CAD/HEAT/3Dmeshes'
+            self.infile = self.rootDir + '/inputs/NSTXU/NSTXU_input.csv'
+            self.pfcFile = self.rootDir + '/inputs/NSTXU/NSTXUpfcs.csv'
+            self.OF.meshDir = self.dataPath + '/NSTX/3Dmeshes'
+            self.CAD.STLpath = self.dataPath + '/NSTX/STLs/'
 
         elif self.MachFlag == 'st40':
             print('Loading ST40 Input Filestream')
             log.info('Loading ST40 Input Filestream')
-            self.infile = './inputs/ST40/ST40_input.csv'
-            self.pfcFile = './inputs/ST40/ST40pfcs.csv'
-            self.OF.meshDir = '/u/tlooby/ST40/CAD/HEAT/3Dmeshes'
+            self.infile = self.rootDir + '/inputs/ST40/ST40_input.csv'
+            self.pfcFile = self.rootDir + '/inputs/ST40/ST40pfcs.csv'
+            self.OF.meshDir = self.dataPath + '/ST40/3Dmeshes'
+            self.CAD.STLpath = self.dataPath + '/ST40/STLs/'
 
         elif self.MachFlag == 'd3d':
             print('Loading DIII-D Input Filestream')
             log.info('Loading DIII-D Input Filestream')
-            self.infile = './inputs/D3D/D3D_input.csv'
-            self.pfcFile = './inputs/D3D/D3Dpfcs.csv'
-            self.OF.meshDir = '/u/tlooby/D3D/CAD/HEAT/3Dmeshes'
+            self.infile = self.rootDir + '/inputs/D3D/D3D_input.csv'
+            self.pfcFile = self.rootDir + '/inputs/D3D/D3Dpfcs.csv'
+            self.OF.meshDir = self.dataPath + '/D3D/3Dmeshes'
+            self.CAD.STLpath = self.dataPath + '/d3d/STLs/'
 
-        self.OF.templateCase = './openFoamTemplates/heatFoamTemplate'
-        self.OF.templateDir = './openFoamTemplates/templateDicts'
+        self.OF.templateCase = self.rootDir + '/openFoamTemplates/heatFoamTemplate'
+        self.OF.templateDir = self.rootDir + '/openFoamTemplates/templateDicts'
 
         return
 
@@ -123,10 +127,10 @@ class GUIobj():
         """
         Create objects that we can reference later on
         """
-        self.MHD = MHDClass.MHD()
-        self.CAD = CADClass.CAD()
-        self.HF = heatfluxClass.heatFlux()
-        self.OF = openFOAMclass.OpenFOAM()
+        self.MHD = MHDClass.MHD(self.rootDir, self.dataPath)
+        self.CAD = CADClass.CAD(self.rootDir, self.dataPath)
+        self.HF = heatfluxClass.heatFlux(self.rootDir, self.dataPath)
+        self.OF = openFOAMclass.OpenFOAM(self.rootDir, self.dataPath)
         return
 
     def getMHDInputs(self,shot=None,tmin=None,tmax=None,nTrace=None,
@@ -156,7 +160,10 @@ class GUIobj():
             self.MHD.plasma3Dmask = plasma3Dmask
 
         self.MHD.tree = 'EFIT02'
-        self.MHD.dataPath = self.MHD.dataPath + self.MHD.MachFlag +"_{:06d}".format(self.MHD.shot)
+        if self.dataPath[-1]!='/':
+            self.MHD.shotPath = self.dataPath + '/' + self.MHD.MachFlag +"_{:06d}".format(self.MHD.shot)
+        else:
+            self.MHD.shotPath = self.dataPath + self.MHD.MachFlag +"_{:06d}".format(self.MHD.shot)
 
         self.MHD.get_mhd_inputs('nstx',self.MHD.gFileList)
 
@@ -215,7 +222,7 @@ class GUIobj():
         """
         tIdx = np.where(t==self.MHD.timesteps)[0][0]
         ep = self.MHD.ep[tIdx]
-        gfile = self.MHD.dataPath + '/' + '{:06d}/'.format(t) + 'g{:6d}.{:05d}'.format(self.MHD.shot, t)
+        gfile = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + 'g{:6d}.{:05d}'.format(self.MHD.shot, t)
         #redefine LCFS to be tangent to CAD maximum R (because rNew=None)
         self.newLCFS(t, rNew=rNew, zNew=None, psiSep=None)
         print("CAD rTangent: {:f}".format(self.MHD.rTangent))
@@ -254,7 +261,7 @@ class GUIobj():
         Both MHD and PFC objects must be defined before running this function
         """
         tIdx = np.where(t==self.MHD.timesteps)[0][0]
-        gfile = self.MHD.dataPath + '/' + '{:06d}/'.format(t) + 'g{:6d}.{:05d}'.format(self.MHD.shot, t)
+        gfile = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + 'g{:6d}.{:05d}'.format(self.MHD.shot, t)
         #redefine LCFS to be tangent to CAD maximum R (because rNew=None)
         self.newLCFS(t, rNew=rNew, zNew=None, psiSep=None)
         print("CAD rTangent: {:f}".format(self.MHD.rTangent))
@@ -341,7 +348,7 @@ class GUIobj():
         self.MHD.rTangent = rNew
 
         #overwrite existing gfile
-        gfile = self.MHD.dataPath + '/' + '{:06d}/'.format(t) + 'g{:6d}.{:05d}'.format(self.MHD.shot, t)
+        gfile = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + 'g{:6d}.{:05d}'.format(self.MHD.shot, t)
         self.MHD.writeGfile(gfile, shot=self.MHD.shot, time=t, ep=ep)
         self.MHD.ep[idx] = EP.equilParams(gfile)
         for PFC in self.PFCs:
@@ -509,7 +516,7 @@ class GUIobj():
         self.PFCs = []
         #initialize PFC objects for each ROI part
         for i,row in enumerate(self.timestepMap.values):
-            PFC = pfcClass.PFC(row)
+            PFC = pfcClass.PFC(row, self.rootDir, self.dataPath)
             PFC.makePFC(self.MHD, self.CAD, i, self.timestepMap['MapDirection'][i], clobberFlag=True)
             self.PFCs.append(PFC)
 
@@ -530,7 +537,7 @@ class GUIobj():
         #Build HEAT file tree
         tools.buildDirectories(self.CAD.ROIList,
                                          self.MHD.timesteps,
-                                         self.MHD.dataPath,
+                                         self.MHD.shotPath,
                                          clobberFlag=True
                                          )
 
@@ -680,8 +687,8 @@ class GUIobj():
         dphi = 1.0
 
         self.MHD.ittStruct = self.MHD.nTrace+1
-        gridfile = self.MHD.dataPath + '/' + '{:06d}/struct_grid.dat'.format(t)
-        controlfilePath =  self.MHD.dataPath + '/' + '{:06d}/'.format(t)
+        gridfile = self.MHD.shotPath + '/' + '{:06d}/struct_grid.dat'.format(t)
+        controlfilePath =  self.MHD.shotPath + '/' + '{:06d}/'.format(t)
         self.MHD.writeControlFile(controlfile, t, mapDirection, mode='struct')
         self.MHD.writeMAFOTpointfile(xyz,gridfile)
         self.MHD.getFieldpath(dphi, gridfile, controlfilePath, controlfile, paraview_mask=True)
@@ -723,6 +730,7 @@ class GUIobj():
         log.info("HEAT FLUX MODULE INITIALIZED")
         #Initialize HF Object
         tools.initializeInput(self.HF, infile=self.infile)
+        return
 
     def runHEAT(self, runList):
         """
@@ -772,9 +780,9 @@ class GUIobj():
                     #set up file directory structure
                     PFC.controlfile = '_lamCTL.dat'
                     PFC.controlfileStruct = '_struct_CTL.dat'
-                    PFC.controlfilePath = self.MHD.dataPath + '/' + '{:06d}/'.format(t) + PFC.name + '/'
-                    PFC.gridfile = self.MHD.dataPath + '/' + '{:06d}/'.format(t) + PFC.name + '/grid.dat'
-                    PFC.gridfileStruct = self.MHD.dataPath + '/' + '{:06d}/'.format(t) + PFC.name + '/struct_grid.dat'
+                    PFC.controlfilePath = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/'
+                    PFC.gridfile = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/grid.dat'
+                    PFC.gridfileStruct = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/struct_grid.dat'
                     PFC.outputFile = PFC.controlfilePath + 'lam.dat'
                     PFC.structOutfile = PFC.controlfilePath + 'struct.dat'
                     #set up time and equilibrium
@@ -814,7 +822,7 @@ class GUIobj():
                         self.bdotnPC(PFC)
 
             #merge multiple pointclouds into one single pointcloud for visualization
-            tPath = self.MHD.dataPath + '/' + '{:06d}/'.format(t)
+            tPath = self.MHD.shotPath + '/' + '{:06d}/'.format(t)
             self.combinePFCpointcloud(runList, tPath)
             #copy each timestep's composite point clouds to central location for
             #paraview postprocessing (movies)
@@ -842,7 +850,8 @@ class GUIobj():
         log.info("Total Time Elapsed: {:f}".format(time.time() - t0))
         print("\nCompleted HEAT run")
         log.info("\nCompleted HEAT run")
-        os.system('spd-say -t female2 "HEAT run complete"')
+        #make a sound when complete
+#        os.system('spd-say -t female2 "HEAT run complete"')
 
         return
 
@@ -891,9 +900,9 @@ class GUIobj():
         #Create pointclouds for paraview
         R,Z,phi = tools.xyz2cyl(PFC.centers[:,0],PFC.centers[:,1],PFC.centers[:,2])
         PFC.write_shadow_pointcloud(PFC.centers,PFC.shadowed_mask,PFC.controlfilePath,PFC.tag)
-        self.HF.write_heatflux_pointcloud(PFC.centers,qDiv,PFC.controlfilePath, PFC.tag)
-        PFC.write_bdotn_pointcloud(PFC.centers, PFC.bdotn, PFC.controlfilePath, PFC.tag)
-        #structOutfile = MHD.dataPath + '/' + '{:06d}/struct.csv'.format(PFC.t)
+        self.HF.write_heatflux_pointcloud(PFC.centers,qDiv,PFC.controlfilePath,PFC.tag)
+        PFC.write_bdotn_pointcloud(PFC.centers, PFC.bdotn, PFC.controlfilePath,PFC.tag)
+        #structOutfile = MHD.shotPath + '/' + '{:06d}/struct.csv'.format(PFC.t)
         #HF.PointCloudfromStructOutput(structOutfile)
         return
 
@@ -992,8 +1001,8 @@ class GUIobj():
         save composite csv from each timestep into a single directory for
         making paraview movies
         """
-        movieDir = self.MHD.dataPath + '/paraview/'
-        tPath = self.MHD.dataPath + '/' + '{:06d}/'.format(t)
+        movieDir = self.MHD.shotPath + '/paraview/'
+        tPath = self.MHD.shotPath + '/' + '{:06d}/'.format(t)
         #first try to make new directory
         try:
             os.mkdir(movieDir)
@@ -1303,7 +1312,7 @@ class GUIobj():
         print('Setting Up OF run')
         log.info('Setting Up OF run')
         #set up base OF directory for this discharge
-        self.OF.caseDir = self.MHD.dataPath + '/openFoam/heatFoam'
+        self.OF.caseDir = self.MHD.shotPath + '/openFoam/heatFoam'
         tools.makeDir(self.OF.caseDir)
         #set up OF parts for each PFC part
         for PFC in self.PFCs:
@@ -1403,7 +1412,7 @@ class GUIobj():
                     #we explicitly calculated HF for this timestep
                     print("OF.timestep: {:d} in PFC.timesteps".format(t))
                     log.info("OF.timestep: {:d} in PFC.timesteps".format(t))
-                    HFcsv = self.MHD.dataPath + '/' + '{:06d}/'.format(t) + PFC.name + '/HeatfluxPointCloud.csv'
+                    HFcsv = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/HeatfluxPointCloud.csv'
                     qDiv = pd.read_csv(HFcsv)['HeatFlux'].values
                     #write boundary condition
                     print("Maximum qDiv for this PFC and time: {:f}".format(qDiv.max()))
@@ -1451,7 +1460,7 @@ class GUIobj():
         data = []
         pfcNames = []
         for PFC in self.PFCs:
-            partDir = self.MHD.dataPath + '/openFoam/heatFoam/'+PFC.name
+            partDir = self.MHD.shotPath + '/openFoam/heatFoam/'+PFC.name
             file = (partDir +
                     '/postProcessing/fieldMinMax1/{:f}'.format(self.OF.tMin).rstrip('0').rstrip('.')
                     +'/fieldMinMax.dat')

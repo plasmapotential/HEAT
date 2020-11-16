@@ -308,7 +308,71 @@ def nstxu_wall(oldwall=False):
     return R,Z
 
 
+def makePlotlyGfilePlot(ep):
+    """
+    plots Fpol, psiRZ (along midplane), psiSep, psiAxis, all on one plot
 
+    ep is equilibrium object (from equilParams_class)
+    """
+    #assuming plasma is centered in machine here
+    zMin = ep.g['ZmAxis'] - 0.25
+    zMax = ep.g['ZmAxis'] + 0.25
+    zWall = np.linspace(zMin, zMax, 1000)
+    zLCFS = ep.g['lcfs'][:,1]
+    #this prevents us from getting locations not at midplane
+    idx = np.where(np.logical_and(zLCFS>zMin,zLCFS<zMax))
+    RmaxLCFS = ep.g['lcfs'][:,0][idx].max()
+    RminLCFS = ep.g['lcfs'][:,0][idx].min()
+    rAxis = ep.g['RmAxis']
+    rMax = max(ep.g['R'])
+    zMid = ep.g['ZmAxis']
+    Fpol = ep.g['Fpol']
+    N = len(Fpol)
+    axis2sep = np.linspace(rAxis,RmaxLCFS,N)
+    psiAxis = ep.g['psiAxis']
+    psiSep = ep.g['psiSep']
+    zMidplane = np.ones(len(ep.g['R']))*zMid
+    #psiRZN = ep.psiFunc.ev(ep.g['R'],zMidplane)
+    psiRZ = ep.g['psiRZ'][int(ep.g['NZ']/2)][:]
+    psiRZN = (psiRZ - psiAxis)/(psiSep - psiAxis)
+
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    fig.add_trace(go.Scatter(x=ep.g['R'], y=Fpol,
+                    mode='lines',
+                    name='Fpol'),
+                    secondary_y=True)
+    fig.add_trace(go.Scatter(x=ep.g['R'], y=psiRZN,
+                    mode='lines',
+                    name='psiN'))
+    fig.add_trace(go.Scatter(x=ep.g['R'], y=psiRZ,
+                    mode='lines',
+                    name='psi'))
+    fig.add_trace(go.Scatter(x=[rAxis], y=[psiAxis],
+                    mode='markers',
+                    name='psiAxis'))
+    fig.add_trace(go.Scatter(x=[RmaxLCFS], y=[psiSep],
+                    mode='markers',
+                    name='psiSep'))
+
+    fig.update_layout(
+    title="gFile Parameters at Midplane",
+    xaxis_title="R [m]",
+    font=dict(
+        family="Arial",
+        size=16,
+        )
+    )
+    fig.update_yaxes(title_text="psi", secondary_y=False)
+    fig.update_yaxes(title_text="Fpol", secondary_y=True)
+    fig.update_layout(legend=dict(
+        yanchor="top",
+        y=0.99,
+        xanchor="left",
+        x=0.01
+    ))
+    return fig
 
 
 
