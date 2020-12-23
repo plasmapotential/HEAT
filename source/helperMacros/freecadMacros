@@ -1,0 +1,36 @@
+#to copy currently selected parts from assembly with global placement
+#with renaming to simplify names
+sel = FreeCADGui.Selection.getSelection()
+newObjs = []
+for i,obj in enumerate(sel):
+    print(obj.Label)
+    newObjs.append(App.ActiveDocument.copyObject(obj))
+    newObjs[-1].Placement = obj.getGlobalPlacement()
+    newObjs[-1].Label = 'T{:03d}'.format(i)
+    print(newObjs[-1].Label)
+
+#write stp file for an assembly, preserving global position for each part
+#and renaming to simplify PFC file
+allObjs = []
+file = '/u/tlooby/D3D/CAD/test.stp'
+count = 0
+for obj in FreeCAD.ActiveDocument.Objects:
+    if type(obj) == Part.Feature:
+        tmpObj = App.ActiveDocument.copyObject(obj)
+        tmpObj.Label = 'T{:03d}'.format(count)
+        tmpObj.Placement = obj.getGlobalPlacement()
+        allObjs.append(obj)
+        count += 1
+        
+ImportGui.export(allObjs, file)
+
+#append labels for a PFC intersect line that can be copied / pasted from python console
+#before running, select the intersect parts in FreeCAD GUI
+sel = FreeCADGui.Selection.getSelection()
+line = ''
+for obj in sel:
+    print(obj.Label)
+    line += ':'+obj.Label
+
+
+print(line)

@@ -2,28 +2,37 @@
 #this script should only be called by the appImage when running HEAT in
 #appImage mode.  User does not run this script (appImage does in AppRun)
 #It handles the different options and runs HEAT, paraview, or freecad
-
 # depending upon user input parameter, do different functions
-while [[ "$#" -gt 0 ]]; do
-    case $1 in
-        #run HEAT GUI
-        -H|--heat) runCase=1; shift ;;
-        #run paraview GUI
-        -p|--paraview) runCase=2 ;;
-        *) echo "Unknown parameter passed: $1";
-           echo "options are:";
-           echo "-H | --heat";
-           echo "-p | --paraview";
-           exit 1 ;;
-    esac
-    shift
-done
-#echo "Running: $runCase"
-if [ $runCase -eq 1 ]
-then
-  echo "Running HEAT python GUI"
-  $APPDIR/usr/bin/python3 $APPDIR/usr/src/dashGUI.py
-else
-  echo "Running ParaVIEW GUI"
-  $APPDIR/opt/paraview/$paraviewVersion/bin/paraview
-fi
+echo "Sourcing OF environment variables"
+echo "Depending upon OS, this may take several seconds or several minutes"
+. $APPDIR/usr/opt/openfoam/openfoam1912/etc/bashrc
+echo "Running HEAT python GUI"
+$APPDIR/usr/bin/python3 $APPDIR/usr/src/dashGUI.py
+
+#USE THIS VERSION IF YOU WANT MULTIPLE OPTIONS:
+#
+#while [[ "$#" -gt 0 ]]; do
+#    case $1 in
+#        #run HEAT GUI
+#        -H|--heat) runCase=1; shift ;;
+#        #run paraview GUI
+#        -p|--paraview) runCase=2 ;;
+#        *) echo "Unknown parameter passed: $1";
+#           echo "options are:";
+#           echo "-H | --heat";
+#           echo "-p | --paraview";
+#           exit 1 ;;
+#    esac
+#    shift
+#done
+##echo "Running: $runCase"
+#if [ $runCase -eq 1 ]
+#then
+#  echo "Running HEAT python GUI"
+#  source $APPDIR/usr/opt/openfoam/openfoam1912/etc/bashrc
+#  $APPDIR/usr/bin/python3 $APPDIR/usr/src/dashGUI.py
+#else
+#  echo "Running ParaVIEW GUI"
+#  export QT_DEBUG_PLUGINS=1
+#  $PVbin
+#fi

@@ -159,5 +159,5 @@ if __name__=='__main__':
     print("Finished")
 
     #sometimes pvpython hangs, so we kill by pid after our work is done
-    pid = int(check_output(["pidof","pvpython"]))
-    os.kill(pid, signal.SIGKILL)
+    #pid = int(check_output(["pidof","pvpython"]))
+    #os.kill(pid, signal.SIGKILL)

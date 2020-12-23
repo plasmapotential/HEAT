@@ -1,19 +1,17 @@
 # Input file for HEAT
 # Format is: Variable, Value
-
 #=============================================================
 #                CAD Variables
 #=============================================================
-STPfile, /home/tom/D3D/CAD/D3Dgfile5degLwrDiv.step
+STPfile, /home/tom/D3D/CAD/negTriPFCs4.stp
 STLpath, /home/tom/D3D/CAD/STLs/
 FreeCADPath, /opt/freecad/squashfs-root/usr/lib
 PVPath, /opt/paraview/ParaView-5.8.1-MPI-Linux-Python3.7-64bit/lib/python3.7/site-packages
-ROIGridRes, 5.0
-gridRes, 10.0
+ROIGridRes, 3.0
+gridRes, standard
 permute_mask, False
 unitConvert, 1.0
 assembly_mask, False
-
 #==============================================================
 #                MHD Variables
 #==============================================================
@@ -21,19 +19,18 @@ assembly_mask, False
 shot, 000001
 tree, EFIT02
 tmin, 0
-tmax, 3
-nTrace, 0
+tmax, 3200
+nTrace, 30
 dataPath, /home/tom/data/HEAT/
 ionDirection, -1
 plasma3Dmask, 0 #1=true, 0=false
-
 #==============================================================
 #                HF Variables
 #==============================================================
 hfMode, eich
 lqEich, 3.0
 S, 1.0
-Psol, 10
+Psol, 7
 qBG, 0.0
 lqCN, 3.0
 lqCF, 5.0
@@ -63,8 +60,8 @@ Rmin, 0.9
 Rmax, 2.5
 Nswall, 1
 phistart, 0 #(deg)
-MapDirection, 1
-MapDirectionStruct, 1
+MapDirection, -1
+MapDirectionStruct, -1
 PlasmaResponse, 0 #(0=no,>1=yes)
 Field, -1 #(-3=VMEC,-2=SIESTA,-1=gfile,M3DC1:0=Eq,1=I-coil,2=both)
 target, 0 #(0=useSwall)
@@ -82,7 +79,6 @@ Mass, 2
 useM3DC1, 0.0
 # pi, 3.141592653589793
 # 2*pi, 6.283185307179586
-
 #==============================================================
 #                OpenFOAM Variables
 #==============================================================
@@ -93,9 +89,9 @@ yMax, 635.0
 zMin, -910.0
 zMax, -800.0
 tMin, 0.0
-tMax, 5.0
-deltaT, 0.01
-writeDeltaT, 0.1
+tMax, 3200.0
+deltaT, 0.05
+writeDeltaT, 0.05
 xProbe, 295.0
 yProbe, 430.0
 zProbe, -847.0
@@ -105,4 +101,3 @@ meshMaxLevel, 3
 xMid, 295.0
 yMid, 430.0
 zMid, -847.0
-OFbashrc, /opt/OpenFOAM/OpenFOAM-v1912/etc/bashrc

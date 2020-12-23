@@ -78,7 +78,7 @@ class tools:
 
         return
 
-    def saveInputFile(self, data, path):
+    def saveInputFile(self, data, path, rootDir, dataPath):
         """
         saves a HEAT formatted data file from data, which is a dict
         file is saved to path location with the name HEATinput.csv
@@ -87,10 +87,10 @@ class tools:
         import MHDClass
         import heatfluxClass
         import openFOAMclass
-        MHD = MHDClass.MHD()
-        CAD = CADClass.CAD()
-        HF = heatfluxClass.heatFlux()
-        OF = openFOAMclass.OpenFOAM()
+        MHD = MHDClass.MHD(rootDir, dataPath)
+        CAD = CADClass.CAD(rootDir, dataPath)
+        HF = heatfluxClass.heatFlux(rootDir, dataPath)
+        OF = openFOAMclass.OpenFOAM(rootDir, dataPath)
         MHD.allowed_class_vars()
         CAD.allowed_class_vars()
         HF.allowed_class_vars()
@@ -276,28 +276,21 @@ class tools:
         """
         import os
         current_env = os.environ.copy()
-        #running in appImage (isolate PV environment from HEAT's)
-        try:
-            appDir = current_env['APPDIR']
-            pvVersion = current_env['paraviewVersion']
-            pvPyVersion = current_env['paraviewPythonVersion']
-            pvPythonRoot = appDir + '/opt/paraview/' + pvVersion + '/lib/' + pvPyVersion
-            current_env['PYTHONPATH'] = pvPythonRoot + ':' + pvPythonRoot + '/lib-dynload'
-
-        #running on dev machine
-        #(it is expected that you have set up env externally)
-        except:
-            pass
-
+        pvpythonCMD = current_env["pvpythonCMD"]
+#        #running in appImage (isolate PV environment from HEAT's)
+#        try:
+#            pvpythonCMD = current_env["pvpythonCMD"]
+#        #running on dev machine
+#        #(it is expected that you have set up env externally, perhaps in dashGUI.py)
+#        except:
+#            pvpythonCMD = 'pvpython'
         print("Spawning PVpython subprocess")
         log.info("Spawning PVpython subprocess")
-        pvpythonCMD = 'pvpython'
         args = [pvpythonCMD, self.rootDir + '/GUIscripts/csv2vtk.py', pcfile, outType, prefix]
-        subprocess.run(args, env=current_env)
+        from subprocess import run
+        run(args, env=current_env)
         print("PVpython subprocess complete")
-        print("Created VTK output ")
         log.info("PVpython subprocess complete")
-        log.info("Created VTK output ")
         return
 
     def intersectTestParallel(self, i):

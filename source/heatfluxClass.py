@@ -268,7 +268,7 @@ class heatFlux:
         if fG == None:
             fG = 0.6
         #Plasma current [MA]
-        Ip = ep.g['Ip'] / 1e6
+        Ip = np.abs(ep.g['Ip'] / 1e6) #abs to avoid complex numbers
         # Evaluate Bt at axis [T]
         Zaxis = ep.g['ZmAxis']
         Raxis = ep.g['RmAxis']
@@ -291,6 +291,11 @@ class heatFlux:
         Cb = -0.29 # +/- 0.06
         Ca = -0.33 # +/- 0.1
         Cf = 1.03 # +/-0.29
+        #print("MAKOWSKI PARAMETERS:")
+        #print('Ip [MA] = {:f}'.format(Ip))
+        #print('Bt [T] = {:f}'.format(Bt))
+        #print('Rminor [m] = {:f}'.format(a))
+        #print('Greenwald Fraction = {:f}'.format(fG))
 
         self.S = C * Ip**Ci * Bt**Cb * a**Ca * fG**Cf
         print('Found Gaussian spreading value of: {:f} mm'.format(self.S))
@@ -604,11 +609,12 @@ class heatFlux:
 
         #Calculate flux at midplane using gfile
         psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
-        psi = PFC.ep.psiFunc_noN.ev(R_omp,Z_omp)
+        psi = psiN*(psiedge - psiaxis) + psiaxis
+        #psi = PFC.ep.psiFunc_noN.ev(R_omp,Z_omp)
         PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
         s_hat = psiN - PFC.psiMinLCFS
         print('psiMinLCFS: {:f}'.format(PFC.psiMinLCFS))
-        print('un-normalized psiMinLCFS: {:f}'.format(PFC.ep.psiFunc_noN.ev(R_omp_sol,0.0)))
+#        print('un-normalized psiMinLCFS: {:f}'.format(PFC.ep.psiFunc_noN.ev(R_omp_sol,0.0)))
         print('Minimum s_hat: {:f}'.format(s_hat.min()))
 
 
@@ -842,9 +848,10 @@ class heatFlux:
         hfFile = openFoamDir + '/constant/boundaryData/STLpatch/{:f}'.format(timestep).rstrip('0').rstrip('.') + '/HF'
         timeDir = openFoamDir + '/constant/boundaryData/STLpatch/{:f}'.format(timestep).rstrip('0').rstrip('.')
         try:
-            os.mkdir(timeDir)
+            print("Creating OF timeDir: "+timeDir)
+            os.makedirs(timeDir)
         except:
-            print("COULD NOT CREATE HF BOUNDARY CONDITION DIRECTORY")
+            print("COULD NOT CREATE HF BOUNDARY CONDITION DIRECTORY, timeDir")
 
         with open(pointFile, 'w') as f:
             f.write('{:d}\n'.format(len(centers[:,0])))

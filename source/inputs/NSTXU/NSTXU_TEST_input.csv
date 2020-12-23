@@ -4,7 +4,8 @@
 #=============================================================
 #                CAD Variables
 #=============================================================
-STPfile, /home/workhorse/source/HEAT/squashfs-root/test/IBDH_2tiles.step
+#STPfile, /home/workhorse/source/HEAT/squashfs-root/test/IBDH_2tiles.step
+STPfile, /home/tom/NSTX/CAD/HEAT/IBDH_2tiles.step
 FreeCADPath, /opt/freecad/squashfs-root/usr/lib
 PVPath, /opt/paraview/ParaView-5.8.1-MPI-Linux-Python3.7-64bit/lib/python3.7/site-packages
 ROIGridRes, 5.0
@@ -19,7 +20,7 @@ MachFlag, nstx
 shot, 204118
 tree, EFIT02
 tmin, 0
-tmax, 5000
+tmax, 10
 nTrace, 10
 dataPath, /home/tom/data/HEAT/
 ionDirection, -1
@@ -87,9 +88,9 @@ yMax, 235.0
 zMin, -1660.0
 zMax, -1600.0
 tMin, 0
-tMax, 5050
-deltaT, 0.02
-writeDeltaT, 0.02
+tMax, 10
+deltaT, 0.002
+writeDeltaT, 0.002
 xProbe, 504.0
 yProbe, 128.0
 zProbe, -1605.21

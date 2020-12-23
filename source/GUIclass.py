@@ -25,6 +25,7 @@ import errno
 import copy
 import EFIT.equilParams_class as EP
 import GUIscripts.plotlyGUIplots as pgp
+import trimesh
 
 log = logging.getLogger(__name__)
 tools = toolsClass.tools()
@@ -45,13 +46,21 @@ def create_DASH_app(GUIobj):
     return app
 
 class GUIobj():
-    def __init__(self, logFile, rootDir, dataPath):
+    def __init__(self, logFile, rootDir, dataPath, OFbashrc):
+        #where HEAT log is written
         self.logFile = logFile
+        #where python source code is located (dashGUI.py)
         self.rootDir = rootDir
+        #where we are saving data / HEAT output
         self.dataPath = dataPath
+        #initialize all the HEAT python submodules (subclasses)
         self.initializeEveryone()
+        #Set timestepMap to nothing
         self.timestepMap = None
+        #Make a tmp dir that we will use for loading/unloading files from GUI
         self.makeTmpDir(dataPath)
+        #initialize bashrc for OF
+        self.OF.OFbashrc = OFbashrc
         return
 
     def makeTmpDir(self,dataPath):
@@ -99,6 +108,7 @@ class GUIobj():
             self.pfcFile = self.rootDir + '/inputs/NSTXU/NSTXUpfcs.csv'
             self.OF.meshDir = self.dataPath + '/NSTX/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/NSTX/STLs/'
+            self.CAD.STPpath = self.dataPath + '/NSTX/STPs/'
 
         elif self.MachFlag == 'st40':
             print('Loading ST40 Input Filestream')
@@ -107,6 +117,7 @@ class GUIobj():
             self.pfcFile = self.rootDir + '/inputs/ST40/ST40pfcs.csv'
             self.OF.meshDir = self.dataPath + '/ST40/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/ST40/STLs/'
+            self.CAD.STPpath = self.dataPath + '/ST40/STPs/'
 
         elif self.MachFlag == 'd3d':
             print('Loading DIII-D Input Filestream')
@@ -114,7 +125,35 @@ class GUIobj():
             self.infile = self.rootDir + '/inputs/D3D/D3D_input.csv'
             self.pfcFile = self.rootDir + '/inputs/D3D/D3Dpfcs.csv'
             self.OF.meshDir = self.dataPath + '/D3D/3Dmeshes'
-            self.CAD.STLpath = self.dataPath + '/d3d/STLs/'
+            self.CAD.STLpath = self.dataPath + '/D3D/STLs/'
+            self.CAD.STPpath = self.dataPath + '/D3D/STPs/'
+
+        elif self.MachFlag == 'step':
+            print('Loading STEP Input Filestream')
+            log.info('Loading STEP Input Filestream')
+            self.infile = self.rootDir + '/inputs/STEP/STEP_input.csv'
+            self.pfcFile = self.rootDir + '/inputs/STEP/STEPpfcs.csv'
+            self.OF.meshDir = self.dataPath + '/STEP/3Dmeshes'
+            self.CAD.STLpath = self.dataPath + '/STEP/STLs/'
+            self.CAD.STPpath = self.dataPath + '/STEP/STPs/'
+
+        elif self.MachFlag == 'sparc':
+            print('Loading SPARC Input Filestream')
+            log.info('Loading SPARC Input Filestream')
+            self.infile = self.rootDir + '/inputs/SPARC/SPARC_input.csv'
+            self.pfcFile = self.rootDir + '/inputs/SPARC/SPARCpfcs.csv'
+            self.OF.meshDir = self.dataPath + '/SPARC/3Dmeshes'
+            self.CAD.STLpath = self.dataPath + '/SPARC/STLs/'
+            self.CAD.STPpath = self.dataPath + '/SPARC/STPs/'
+
+        else:
+            print("INVALID MACHINE SELECTION!  Defaulting to NSTX-U!")
+            log.info("INVALID MACHINE SELECTION!  Defaulting to NSTX-U!")
+            self.infile = self.rootDir + '/inputs/NSTXU/NSTXU_input.csv'
+            self.pfcFile = self.rootDir + '/inputs/NSTXU/NSTXUpfcs.csv'
+            self.OF.meshDir = self.dataPath + '/NSTX/3Dmeshes'
+            self.CAD.STLpath = self.dataPath + '/NSTX/STLs/'
+            self.CAD.STPpath = self.dataPath + '/NSTX/STPs/'
 
         self.OF.templateCase = self.rootDir + '/openFoamTemplates/heatFoamTemplate'
         self.OF.templateDir = self.rootDir + '/openFoamTemplates/templateDicts'
@@ -189,18 +228,30 @@ class GUIobj():
             log.info('Solving for 2D plasmas with EFIT (no MAFOT)')
         return
 
-    def gfileClean(self, psiRZMult,psiSepMult,psiAxisMult,FpolMult, t):
+    def gfileClean(self, psiRZMult,psiSepMult,psiAxisMult,FpolMult,
+                   psiRZAdd,psiSepAdd,psiAxisAdd,FpolAdd, t):
         """
         multiplies values in MHD ep object with scalars defined by user in html gui
         """
         print("psiRZ Multiplier = {:f}".format(psiRZMult))
         log.info("psiRZ Multiplier = {:f}".format(psiRZMult))
+        print("psiRZ Addition = {:f}".format(psiRZAdd))
+        log.info("psiRZ Addition = {:f}".format(psiRZAdd))
+
         print("psiSep Multipltier = {:f}".format(psiSepMult))
         log.info("psiSep Multipltier = {:f}".format(psiSepMult))
+        print("psiSep Addition = {:f}".format(psiSepAdd))
+        log.info("psiSep Addition = {:f}".format(psiSepAdd))
+
         print("psiAxis Multipltier = {:f}".format(psiAxisMult))
         log.info("psiAxis Multipltier = {:f}".format(psiAxisMult))
-        print("Fpol Multiplie = {:f}".format(FpolMult))
-        log.info("Fpol Multiplie = {:f}".format(FpolMult))
+        print("psiAxis Addition = {:f}".format(psiAxisAdd))
+        log.info("psiAxis Addition = {:f}".format(psiAxisAdd))
+
+        print("Fpol Multiplier = {:f}".format(FpolMult))
+        log.info("Fpol Multiplier = {:f}".format(FpolMult))
+        print("Fpol Addition = {:f}".format(FpolAdd))
+        log.info("Fpol Addition = {:f}".format(FpolAdd))
 
         idx = np.where(t==self.MHD.timesteps)[0][0]
         ep = self.MHD.ep[idx]
@@ -208,6 +259,12 @@ class GUIobj():
         ep.g['psiSep'] *= psiSepMult
         ep.g['psiAxis'] *= psiAxisMult
         ep.g['Fpol'] *= FpolMult
+
+        ep.g['psiRZ'] += psiRZAdd
+        ep.g['psiSep'] += psiSepAdd
+        ep.g['psiAxis'] += psiAxisAdd
+        ep.g['Fpol'] += FpolAdd
+
         psi = ep.g['psiRZ']
         psiSep = ep.g['psiSep']
         psiAxis = ep.g['psiAxis']
@@ -348,7 +405,7 @@ class GUIobj():
         self.MHD.rTangent = rNew
 
         #overwrite existing gfile
-        gfile = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + 'g{:6d}.{:05d}'.format(self.MHD.shot, t)
+        gfile = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + 'g{:06d}.{:05d}'.format(self.MHD.shot, t)
         self.MHD.writeGfile(gfile, shot=self.MHD.shot, time=t, ep=ep)
         self.MHD.ep[idx] = EP.equilParams(gfile)
         for PFC in self.PFCs:
@@ -448,9 +505,9 @@ class GUIobj():
 
         return
 
-    def getCADInputs(self,ROIGridRes=None,gridRes=None,STPfile=None):
+    def getCADInputs(self,ROIGridRes=None,gridRes=None,STPfile=None,STPdata=None):
         """
-        Loads CAD file
+        Loads CAD file and settings
         """
         import numpy as np
         tools.initializeInput(self.CAD, infile=self.infile)
@@ -465,8 +522,19 @@ class GUIobj():
             else:
                 self.CAD.gridRes = "standard"
         if STPfile is not None:
-            self.CAD.STPfile = STPfile
-        self.CAD.loadSTEP()
+            #make STP path if it doesnt exist
+            try:
+                os.makedirs(self.CAD.STPpath)
+            except:
+                print("Did not create STPpath.  It probably exists already.")
+            newSTPpath = self.CAD.STPpath + STPfile
+            #check to see if this STP file exists and write data to the file
+            if os.path.isfile(newSTPpath) == False:
+                with open(newSTPpath, 'wb') as f:
+                    f.write(STPdata)
+            self.CAD.STPfile = newSTPpath
+            #load STP file using FreeCAD
+            self.CAD.loadSTEP()
         return
 
     def getPFCdataFromGUI(self, data):
@@ -670,7 +738,7 @@ class GUIobj():
         PFC.Bxyz = self.MHD.Bfield_pointcloud(PFC.ep, R, Z, phi, PFC.mapDirection)
         self.MHD.write_B_pointcloud(ctrs,PFC.Bxyz,PFC.controlfilePath)
 
-    def Btrace(self,x,y,z,t,mapDirection):
+    def Btrace(self,x,y,z,t,mapDirection, traceDeg):
         """
         Run a MAFOT structure trace from a point defined in the gui
         """
@@ -686,9 +754,13 @@ class GUIobj():
         controlfile = '_structCTL.dat'
         dphi = 1.0
 
-        self.MHD.ittStruct = self.MHD.nTrace+1
-        gridfile = self.MHD.shotPath + '/' + '{:06d}/struct_grid.dat'.format(t)
-        controlfilePath =  self.MHD.shotPath + '/' + '{:06d}/'.format(t)
+        self.MHD.ittStruct = float(traceDeg)
+        if self.MHD.shotPath[-1]=='/':
+            gridfile = self.MHD.shotPath + '{:06d}/struct_grid.dat'.format(t)
+            controlfilePath =  self.MHD.shotPath + '{:06d}/'.format(t)
+        else:
+            gridfile = self.MHD.shotPath + '/' + '{:06d}/struct_grid.dat'.format(t)
+            controlfilePath =  self.MHD.shotPath + '/' + '{:06d}/'.format(t)
         self.MHD.writeControlFile(controlfile, t, mapDirection, mode='struct')
         self.MHD.writeMAFOTpointfile(xyz,gridfile)
         self.MHD.getFieldpath(dphi, gridfile, controlfilePath, controlfile, paraview_mask=True)
@@ -780,9 +852,14 @@ class GUIobj():
                     #set up file directory structure
                     PFC.controlfile = '_lamCTL.dat'
                     PFC.controlfileStruct = '_struct_CTL.dat'
-                    PFC.controlfilePath = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/'
-                    PFC.gridfile = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/grid.dat'
-                    PFC.gridfileStruct = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/struct_grid.dat'
+                    if self.MHD.shotPath[-1]=='/':
+                        PFC.controlfilePath = self.MHD.shotPath + '{:06d}/'.format(t) + PFC.name + '/'
+                        PFC.gridfile = self.MHD.shotPath + '{:06d}/'.format(t) + PFC.name + '/grid.dat'
+                        PFC.gridfileStruct = self.MHD.shotPath + '{:06d}/'.format(t) + PFC.name + '/struct_grid.dat'
+                    else:
+                        PFC.controlfilePath = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/'
+                        PFC.gridfile = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/grid.dat'
+                        PFC.gridfileStruct = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/struct_grid.dat'
                     PFC.outputFile = PFC.controlfilePath + 'lam.dat'
                     PFC.structOutfile = PFC.controlfilePath + 'struct.dat'
                     #set up time and equilibrium
@@ -1260,11 +1337,14 @@ class GUIobj():
         self.OF.meshMaxLevel = OFmaxMeshLev
         self.OF.STLscale = OFSTLscale
         self.OF.cmd3Dmesh = 'meshAndPatch'
+        #the OF bashrc must be sourced before running OF
         self.OF.cmdSourceOF = 'source ' + OFbashrc
+        self.OF.OFbashrc = OFbashrc
         self.OF.cmdThermal = 'runThermal'
         self.OF.cmdTprobe = 'runTprobe'
         self.OF.deltaT = float(OFdeltaT) #this comes in [sec]
         self.OF.writeDeltaT = self.OF.deltaT
+
         print("Loaded OF data")
         log.info("Loaded OF data")
         return
@@ -1312,7 +1392,10 @@ class GUIobj():
         print('Setting Up OF run')
         log.info('Setting Up OF run')
         #set up base OF directory for this discharge
-        self.OF.caseDir = self.MHD.shotPath + '/openFoam/heatFoam'
+        if self.MHD.shotPath[-1]=='/':
+            self.OF.caseDir = self.MHD.shotPath + 'openFoam/heatFoam'
+        else:
+            self.OF.caseDir = self.MHD.shotPath + '/openFoam/heatFoam'
         tools.makeDir(self.OF.caseDir)
         #set up OF parts for each PFC part
         for PFC in self.PFCs:
@@ -1320,6 +1403,7 @@ class GUIobj():
             log.info("Running openFOAM for PFC: "+PFC.name)
             partDir = self.OF.caseDir + '/' + PFC.name
             self.OF.partDir = partDir
+            self.OF.partName = PFC.name
 
             # tools.makeDir(partDir)
             #copy heatFoam template directory to this location
@@ -1336,21 +1420,51 @@ class GUIobj():
             #set up timesteps
             tMin = self.OF.tMin*1000.0 #in [ms] for HEAT
             tMax = self.OF.tMax*1000.0 #in [ms] for HEAT
-            arr = np.linspace(tMin, tMax, (tMax-tMin)+1, dtype=int)
+            arr = np.linspace(int(tMin), int(tMax), int((tMax-tMin)+1), dtype=int)
             OFtimesteps = arr[0::int(self.OF.deltaT*1000.0)]
 
             #create symbolic link to STL file
             print("Creating openFOAM symlink to STL")
             log.info("Creating openFOAM symlink to STL")
-            PFC.OFpart = PFC.name + "___" + self.CAD.ROIGridRes
+            #old method used ROIGridRes, but this can sometimes create non-watertight mesh
+            #new method uses standard FreeCAD mesher (not mefisto) to make better volume mesh
+            #PFC.OFpart = PFC.name + "___" + self.CAD.ROIGridRes
+            PFC.OFpart = PFC.name + "___" + "standard"
             triSurfaceLocation = partDir+'/constant/triSurface/' + PFC.OFpart +"mm.stl"
+
             if self.CAD.STLpath[-1] == '/':
                 stlfile = self.CAD.STLpath + PFC.OFpart +"mm.stl"
             else:
                 stlfile = self.CAD.STLpath +'/'+ PFC.OFpart +"mm.stl"
+
+            #if the standard mesh for this part doesn't exist, create it using freecad
+            #in the HEAT CAD module
+            if os.path.exists(stlfile)==True:
+                pass
+            else:
+                partIdx = np.where(self.CAD.ROI == PFC.name)[0][0]
+                part = self.CAD.ROIparts[partIdx]
+                meshSTL = self.CAD.part2meshStandard(part)
+                self.CAD.writeMesh2file(meshSTL, PFC.name, path=self.CAD.STLpath, resolution='standard')
+
             #create hard link to STL
             os.link(stlfile,triSurfaceLocation)
 
+            #Test STL to make sure it is watertight
+            meshInQuestion = trimesh.load(stlfile)
+            validMesh = meshInQuestion.is_watertight
+            if validMesh == True:
+                print("STL file for "+PFC.name+" is watertight")
+                log.info("STL file for "+PFC.name+" is watertight")
+            else:
+                print("\n=====================================================")
+                print("WARNING!!!  STL file for "+PFC.name+"is NOT watertight.")
+                print("OpenFOAM thermal analysis will probably fail")
+                print("=====================================================\n")
+                log.info("\n=====================================================")
+                log.info("WARNING!!!  STL file for "+PFC.name+"is NOT watertight.")
+                log.info("OpenFOAM thermal analysis will probably fail")
+                print("=====================================================\n")
 
             #update middle points and blockmesh bounds for each PFC and
             # give 10mm of clearance on each side
@@ -1363,6 +1477,32 @@ class GUIobj():
             self.OF.xMid = (self.OF.xMax-self.OF.xMin)/2.0 + self.OF.xMin
             self.OF.yMid = (self.OF.yMax-self.OF.yMin)/2.0 + self.OF.yMin
             self.OF.zMid = (self.OF.zMax-self.OF.zMin)/2.0 + self.OF.zMin
+
+#            #setup openfoam environment
+#            try:
+#                AppImage = os.environ["APPIMAGE"]
+#                AppDir = os.environ["APPDIR"]
+#                inAppImage = True
+#            except:
+#                inAppImage = False
+#                AppDir = ''
+#            if inAppImage == True:
+#                print("Setting up OF apppImage environment")
+#                log.info("Setting up OF apppImage environment")
+#                OFplatformDir = AppDir + '/usr/share/openfoam/platforms/linux64GccDPInt32pt'
+#                OFbinDir = OFplatformDir + '/bin'
+#                OFlibDir = OFplatformDir + '/lib'
+#                #make openfoam platform directory
+#                os.mkdirs(OFplatformDir, exist_ok=True)
+#                #symlink AppDir/usr/bin to openfoam bin (same for lib)
+#                try:
+#                    os.symlink('/usr/bin', OFbinDir)
+#                    os.symlink('/usr/lib', OFlibDir)
+#                except:
+#                    print("could not link openfoam libs and bins")
+#                    log.info("could not link openfoam libs and bins")
+
+
 
             #dynamically write template variables to templateVarFile
             print("Building openFOAM templates and shell scripts")
@@ -1379,6 +1519,8 @@ class GUIobj():
                                        stlfile)
 
             #generate 3D volume mesh or coy from file
+            print("Generating volume mesh")
+            log.info("Generating volume mesh")
             self.OF.generate3Dmesh(PFC.OFpart)
 
             qDiv = np.zeros((len(PFC.centers)))
@@ -1404,6 +1546,7 @@ class GUIobj():
                 except:
                     print("***")
                     print("Could not create OF directory for timestep {:d}".format(t))
+                    print("(this is expected for t=0)")
                     print("***")
                     pass
 
@@ -1460,14 +1603,32 @@ class GUIobj():
         data = []
         pfcNames = []
         for PFC in self.PFCs:
-            partDir = self.MHD.shotPath + '/openFoam/heatFoam/'+PFC.name
+            if self.MHD.shotPath[-1]=='/':
+                partDir = self.MHD.shotPath + 'openFoam/heatFoam/'+PFC.name
+            else:
+                partDir = self.MHD.shotPath + '/openFoam/heatFoam/'+PFC.name
             file = (partDir +
                     '/postProcessing/fieldMinMax1/{:f}'.format(self.OF.tMin).rstrip('0').rstrip('.')
                     +'/fieldMinMax.dat')
             data.append(self.OF.getMinMaxData(file))
             pfcNames.append(PFC.name)
 
-        return pgp.plotlyOpenFOAMplot(data,pfcNames)
+        fig = pgp.plotlyOpenFOAMplot(data,pfcNames)
+
+        #save interactive plotly plot in shotPath/plotly/OFminmax.html
+        if self.MHD.shotPath[-1]=='/':
+            plotlyDir = self.MHD.shotPath + 'plotly'
+        else:
+            plotlyDir = self.MHD.shotPath + '/plotly'
+        try:
+            os.mkdir(plotlyDir)
+        except:
+            print("Could not make plotly directory")
+            log.info("Could not make plotly directory")
+
+        plotPath = plotlyDir + '/OFminmax.html'
+        fig.write_html(plotPath)
+        return fig
 
     def getHFdistPlots(self):
         """
@@ -1479,7 +1640,23 @@ class GUIobj():
             heatFluxes.append(PFC.qDiv)
             labels.append(PFC.name)
 
-        return pgp.plotlyqDivPlot(heatFluxes, labels, logPlot=True)
+        fig = pgp.plotlyqDivPlot(heatFluxes, labels, logPlot=True)
+
+        #save interactive plotly plot in shotPath/plotly/HFdist.html
+        if self.MHD.shotPath[-1]=='/':
+            plotlyDir = self.MHD.shotPath + 'plotly'
+        else:
+            plotlyDir = self.MHD.shotPath + '/plotly'
+        try:
+            os.mkdir(plotlyDir)
+        except:
+            print("Could not make plotly directory")
+            log.info("Could not make plotly directory")
+
+        plotPath = plotlyDir + '/HFdist.html'
+        fig.write_html(plotPath)
+
+        return fig
 
     def TprobeOF(self,x,y,z):
         """
@@ -1524,5 +1701,19 @@ class GUIobj():
                 log.info("Tprobe outside of PFC: "+PFC.name)
                 pass
 
-        import GUIscripts.plotlyGUIplots as pgp
-        return pgp.plotlyTprobes(tData,Tdata,names)
+        fig = pgp.plotlyTprobes(tData,Tdata,names)
+
+        #save interactive plotly plot in shotPath/plotly/Tprobes.html
+        if self.MHD.shotPath[-1]=='/':
+            plotlyDir = self.MHD.shotPath + 'plotly'
+        else:
+            plotlyDir = self.MHD.shotPath + '/plotly'
+        try:
+            os.mkdir(plotlyDir)
+        except:
+            print("Could not make plotly directory")
+            log.info("Could not make plotly directory")
+
+        plotPath = plotlyDir + '/Tprobes.html'
+        fig.write_html(plotPath)
+        return fig

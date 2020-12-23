@@ -157,7 +157,7 @@ def plotlyTprobes(t,T,names):
         x=[xMin, xMax],
         y=[1873, 1873],
         mode="lines+markers+text",
-        name="SGLR6510 Sublimation T",
+        name="Sublimation T",
         text=["Limit", "Limit"],
         textposition="top center",
         line=dict(color='firebrick', width=3, dash='dot'),

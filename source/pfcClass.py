@@ -119,14 +119,14 @@ class PFC:
         self.t = MHD.timesteps[self.tIndexes[0]]
         self.controlfile = '_lamCTL.dat'
         self.controlfileStruct = '_struct_CTL.dat'
-        if MHD.dataPath[-1]=='/':
-            self.controlfilePath = MHD.dataPath + '{:06d}/'.format(self.t) + self.name + '/'
-            self.gridfile = MHD.dataPath + '{:06d}/'.format(self.t) + self.name + '/grid.dat'
-            self.gridfileStruct = MHD.dataPath + '{:06d}/'.format(self.t) + self.name + '/struct_grid.dat'
+        if MHD.shotPath[-1]=='/':
+            self.controlfilePath = MHD.shotPath + '{:06d}/'.format(self.t) + self.name + '/'
+            self.gridfile = MHD.shotPath + '{:06d}/'.format(self.t) + self.name + '/grid.dat'
+            self.gridfileStruct = MHD.shotPath + '{:06d}/'.format(self.t) + self.name + '/struct_grid.dat'
         else:
-            self.controlfilePath = MHD.dataPath + '/' + '{:06d}/'.format(self.t) + self.name + '/'
-            self.gridfile = MHD.dataPath + '/' + '{:06d}/'.format(self.t) + self.name + '/grid.dat'
-            self.gridfileStruct = MHD.dataPath + '/' + '{:06d}/'.format(self.t) + self.name + '/struct_grid.dat'
+            self.controlfilePath = MHD.shotPath + '/' + '{:06d}/'.format(self.t) + self.name + '/'
+            self.gridfile = MHD.shotPath + '/' + '{:06d}/'.format(self.t) + self.name + '/grid.dat'
+            self.gridfileStruct = MHD.shotPath + '/' + '{:06d}/'.format(self.t) + self.name + '/struct_grid.dat'
         self.outputFile = self.controlfilePath + 'lam.dat'
         self.structOutfile = self.controlfilePath + 'struct.dat'
 

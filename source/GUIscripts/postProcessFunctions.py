@@ -1,4 +1,5 @@
 #helper script to do plots and other postprocessing functions
+#usually I just edit as needed, then copy and paste into a python terminal
 
 
 #===============================================================================
@@ -12,20 +13,20 @@ import plotly.graph_objects as go
 #data = np.genfromtxt(file,comments="#", autostrip=True)
 #fig = px.line(x=data[:,0],y=data[:,1])
 
-root='/u/tlooby/results/WGPFC_Validation/dynamicScans/memo010_case2scan4/5s_0.1Hz/HEAToutput/LwrOuterDiv/openFoam/heatFoam/'
-file1 = root+'E-ED1408-573/postProcessing/probes/0/T'
-file2 = root+'SOLID844/postProcessing/probes/0/T'
+root = '/home/tom/HEAT/data/d3d_000002/openFoam/heatFoam/'
+file1 = root+'T002/postProcessing/probes/0/T'
+file2 = root+'T101A/postProcessing/probes/0/T'
 
 data1 = np.genfromtxt(file1,comments="#", autostrip=True)
 data2 = np.genfromtxt(file2,comments="#", autostrip=True)
 fig = go.Figure()
-fig.add_trace(go.Scatter(x=data1[:,0], y=data1[:,1], name="OBD", line=dict(color='royalblue', width=6, dash='dashdot')))
-fig.add_trace(go.Scatter(x=data2[:,0],y=data2[:,1],name="IBDH", line=dict(color='magenta', width=6)))
+fig.add_trace(go.Scatter(x=data1[:,0], y=data1[:,1], name="T002", line=dict(color='royalblue', width=6, dash='dashdot')))
+fig.add_trace(go.Scatter(x=data2[:,0],y=data2[:,1],name="T101A", line=dict(color='magenta', width=6)))
 fig.add_trace(go.Scatter(
-    x=[0, 6],
+    x=[0, 3.2],
     y=[1873, 1873],
     mode="lines+markers+text",
-    name="SGLR6510 Sublimation T",
+    name="Sublimation T",
     text=["Limit", "Limit"],
     textposition="top center",
     line=dict(color='firebrick', width=3, dash='dot'),
@@ -34,7 +35,7 @@ fig.add_trace(go.Scatter(
 ))
 
 fig.update_layout(
-title="Temperature Probe Time Evolution: Case 1.21",
+title="Temperature Probe Time Evolution: D3D negD",
 xaxis_title="Time [s]",
 yaxis_title="Temperature [K]",
 font=dict(
@@ -64,9 +65,9 @@ fig = pgp.plotlyqDivPlot(hfs,nombres,logPlot=True)
 #read data file
 import plotlyGUIplots as pgp
 import pandas as pd
-nombres = ['E-ED1408-284','E-ED1408-573','SOLID844']
-names = ['OBD1','OBD2','SOLID844']
-root = '/u/tlooby/results/WGPFC_Validation/dynamicScans/memo010_case2scan4/5s_0.1Hz/HEAToutput/LwrOuterDiv/openFoam/heatFoam/'
+nombres = ['T002','T101A']
+names = ['Tprobe_T002','Tprobe_T101A']
+root = '/home/tom/HEAT/data/d3d_000002/openFoam/heatFoam/'
 data = []
 for name in nombres:
     outfile = root+name+'/postProcessing/fieldMinMax1/0/minMaxTnoTab.dat'
@@ -122,18 +123,12 @@ import plotlyGUIplots as pgp
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-root = '/u/tlooby/results/WGPFC_Validation/dynamicScans/memo010_case2scan4/'
-file1 = root+'5s_0.1Hz/HEAToutput/openFoam/heatFoam/E-ED1408-284/postProcessing/fieldMinMax1/0/minMaxTnoTab.dat'
-#file2 = root+'5s_0.5Hz/HEAToutput/openFoam/heatFoam/SOLID844/postProcessing/fieldMinMax1/0/minMaxTnoTab.dat'
-#file2 = root+'2s_0.25Hz/HEAToutput/openFoam/heatFoam/SOLID974/postProcessing/fieldMinMax1/0/minMaxTnoTab.dat'
-file3 = root+'5s_1.0Hz/HEAToutput/openFoam/heatFoam/E-ED1408-284/postProcessing/fieldMinMax1/0/minMaxTnoTab.dat'
-#file4 = root+'2s_1.0Hz/HEAToutput/openFoam/heatFoam/SOLID974/postProcessing/fieldMinMax1/0/minMaxTnoTab.dat'
-file5 = root+'5s_5.0Hz/HEAToutput/openFoam/heatFoam/E-ED1408-284/postProcessing/fieldMinMax1/0/minMaxTnoTab.dat'
-#file6 = root+'2s_3.0Hz/HEAToutput/openFoam/heatFoam/SOLID974/postProcessing/fieldMinMax1/0/minMaxTnoTab.dat'
-#file7 = root+'5s_1.0Hz/HEAToutput/openFoam/heatFoam/E-ED1408-573/postProcessing/fieldMinMax1/0/minMaxTnoTab.dat'
-#file8 = root+'5s_3.0Hz/HEAToutput/openFoam/heatFoam/E-ED1408-573/postProcessing/fieldMinMax1/0/minMaxTnoTab.dat'
-files = [file1, file3, file5]
-nombres = ['0.1 Hz', '1.0 Hz', '5.0 Hz']
+root = '/home/tom/HEAT/data/d3d_000002/openFoam/heatFoam/'
+file1 = root+'T101A/postProcessing/fieldMinMax1/0/minMaxTnoTab.dat'
+file2 = root+'T002/postProcessing/fieldMinMax1/0/minMaxTnoTab.dat'
+file3 = root+'T005/postProcessing/fieldMinMax1/0/minMaxTnoTab.dat'
+files = [file1, file2, file3]
+nombres = ['T101A', 'T002', 'T005']
 
 dashes = ['longdash', 'dashdot', 'solid'] #dashdot
 #colors = ['#0dd5db', '#ab0ddb', '#eb9215', '#1e0ddb']
@@ -162,7 +157,7 @@ fig.add_trace(go.Scatter(
     x=[0.05, t[-1]],
     y=[1873, 1873],
     mode="lines+markers+text",
-    name="SGLR6510 Sublimation T",
+    name="Sublimation T",
     text=["Limit", "Limit"],
     textposition="top center",
     line=dict(color='firebrick', width=3, dash='dot'),
@@ -171,7 +166,8 @@ fig.add_trace(go.Scatter(
 ))
 
 
-fig.update_layout(title='Peak Temp for Various Strike Point Frequencies',
+#fig.update_layout(title='Peak Temp for Various Strike Point Frequencies',
+fig.update_layout(title='Peak Temp for negD Tiles',
             xaxis_title='<b>Time [s]</b>',
             yaxis_title='<b>Temp [K]</b>',
             font=dict(

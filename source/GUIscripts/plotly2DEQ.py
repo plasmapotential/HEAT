@@ -7,7 +7,6 @@ import sys
 import os
 
 import numpy as np
-import MDSplus
 import EFIT.equilParams_class as EP
 from scipy import interpolate
 from scipy.interpolate import interp1d

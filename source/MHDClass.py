@@ -125,7 +125,7 @@ class MHD:
             self.useIcoil = int(self.useIcoil)
         elif(self.MachFlag == 'nstx'):
             self.useECcoil = int(self.useECcoil)
-        elif(self.MachFlag == 'st40'):
+        elif(self.MachFlag in ['st40', 'step', 'sparc']):
             self.useECcoil = int(self.useECcoil)
         elif(self.MachFlag == 'mast'):
             self.useCcoil = int(self.useCcoil)
@@ -308,12 +308,18 @@ class MHD:
         if len(name.split('/')) > 1:
             save_location = name
         else:
-            save_location = self.shotPath + '/' + '{:06d}/'.format(t) + name
+            if self.shotPath[-1] == '/':
+                save_location = self.shotPath + '{:06d}/'.format(t) + name
+            else:
+                save_location = self.shotPath + '/{:06d}/'.format(t) + name
         with open(save_location, 'w') as f:
 
             f.write('# Parameterfile for ' + self.MachFlag + ' Programs\n')
             f.write('# Shot: {:06d}\tTime: {:05d}ms\n'.format(int(self.shot), int(t)))
-            f.write('# Path: ' + self.shotPath + '/{:06d}\n'.format(t))
+            if self.shotPath[-1] == '/':
+                f.write('# Path: ' + self.shotPath + '{:06d}\n'.format(t))
+            else:
+                f.write('# Path: ' + self.shotPath + '/{:06d}\n'.format(t))
 
             f.write('Nphi=\t{:d}\n'.format(self.Nphi))
 
@@ -357,7 +363,7 @@ class MHD:
                 f.write('useIcoil(0=no,1=yes)=\t{:d}\n'.format(self.useIcoil))
             elif(self.MachFlag == 'nstx'):
                 f.write('useECcoil(0=no,1=yes)=\t{:d}\n'.format(self.useECcoil))
-            elif(self.MachFlag == 'st40'):
+            elif(self.MachFlag in ['st40', 'step', 'sparc']):
                 f.write('useECcoil(0=no,1=yes)=\t{:d}\n'.format(self.useECcoil))
             elif(self.MachFlag == 'mast'):
                 f.write('useCcoil(0=no,1=yes)=\t{:d}\n'.format(self.useCcoil))
@@ -367,9 +373,9 @@ class MHD:
                 f.write('useCcoil(0=no,1=yes)=\t{:d}\n'.format(self.useCcoil))
                 f.write('useIcoil(0=no,1=yes)=\t{:d}\n'.format(self.useIcoil))
 
-            if self.MachFlag in ['iter', 'nstx', 'mast', 'st40', 'd3d']:
+            if self.MachFlag in ['iter', 'nstx', 'mast', 'st40', 'd3d', 'step', 'sparc']:
                 f.write('useFilament(0=no)=\t{:d}\n'.format(self.useFilament))
-            if self.MachFlag in ['iter', 'nstx', 'st40', 'd3d']:
+            if self.MachFlag in ['iter', 'nstx', 'st40', 'd3d', 'step', 'sparc']:
                 f.write('useTe_profile(0=no)=	{:d}\n'.format(self.useTe_profile))
 
             f.write('ParticleDirection(1=co-pass,-1=ctr-pass,0=field-lines)=\t{:d}\n'
@@ -451,21 +457,24 @@ class MHD:
         """
         t0 = time.time()
         #Create MAFOT shell command
-        if self.MachFlag == 'd3d':
-            cmd = 'dtstructure '
-        else:
-            cmd = self.MachFlag + 'structure '
-        flags = '-d {:f}'.format(int(dphi)) + ' '
-        flags += '-P ' + gridfile + ' '
-        #flags += '-Z '
-        flags += controlfile
-        args = [cmd,'-d','{:f}'.format(dphi),'-P',gridfile,'-Z',controlfile]
-        #print("COMMAND:")
-        #print(cmd+flags)
-        #Run shell command.  Will create file with results
-        from subprocess import call
-        call(cmd + flags, shell = True, cwd=controlfilePath)
-        call('rm log_*', shell = True, cwd=controlfilePath)	# clean up
+        #MAFOT now runs a program called heatstructure that is generic for all machines
+        args = []
+        #MAFOT now runs a program called HEAT that is generic for all machines
+        args.append('heatstructure')
+        #args 1,2 are the number of degrees we want to run the trace for
+        args.append('-d')
+        args.append(str(dphi))
+        #args 3,4 are the points that we launch traces from
+        args.append('-P')
+        args.append(gridfile)
+        #args 5 is the MAFOT control file
+        args.append(controlfile)
+        #Copy the current environment (important when in appImage mode)
+        current_env = os.environ.copy()
+        #run MAFOT structure for points in gridfile
+        from subprocess import run
+        run(args, env=current_env, cwd=controlfilePath)
+        run(['rm', 'log_*'], env=current_env, cwd=controlfilePath)
 
         if paraview_mask:
             #This file is not in the format we want, so we read it in, and then
@@ -492,33 +501,13 @@ class MHD:
 
         return
 
-#    def getMultipleFieldPaths(self, dphi, gridfile, controlfilePath,
-#                    controlfile, paraview_mask=False):
-#
-#        if self.MachFlag == 'd3d':
-#            cmd = 'dtstructure '
-#        else:
-#            cmd = self.MachFlag + 'structure '
-#        flags = '-d {:f}'.format(float(dphi)) + ' '
-#        flags += '-P ' + gridfile + ' '
-##        flags += '-Z '
-#        flags += controlfile
-#        #Run shell command.  Will create file with results
-#        current_env = os.environ.copy()
-#        from subprocess import call
-#        call(cmd + flags, shell = True, cwd=controlfilePath, env=current_env)
-#        #call('rm log_*', shell = True, cwd=controlfilePath)	# clean up
-#        return
-
     def getMultipleFieldPaths(self, dphi, gridfile, controlfilePath,
                                 controlfile, paraview_mask=False):
 
         args = []
         #args 0 is MAFOT structure binary call
-        if self.MachFlag == 'd3d':
-             args.append('dtstructure')
-        else:
-            args.append(self.MachFlag + 'structure')
+        #MAFOT now runs a program called HEAT that is generic for all machines
+        args.append('heatstructure')
         #args 1,2 are the number of degrees we want to run the trace for
         args.append('-d')
         args.append(str(dphi))
@@ -540,20 +529,21 @@ class MHD:
         length, psi, penetration depth, etc.
         """
         #Create MAFOT shell command
-        if self.MachFlag == 'd3d':
-            tool = 'dtlaminar_mpi'
-        else:
-            tool = self.MachFlag + 'laminar_mpi'
+        #MAFOT now runs a program called HEAT that is generic for all machines
+        tool = 'heatlaminar_mpi'
         cmd = 'mpirun'
         args = [cmd,'-n','{:d}'.format(NCPUs),tool,controlfile,'-P',gridfile]
-        from subprocess import PIPE
-        from subprocess import Popen
-        #p = Popen(args,stdin=PIPE,stdout=PIPE,cwd=controlfilePath)
-        #print("Finished MAFOT Laminar run")
+        #Copy the current environment (important when in appImage mode)
+        current_env = os.environ.copy()
+        #run MAFOT structure for points in gridfile
+        from subprocess import run
+        run(args, env=current_env, cwd=controlfilePath)
 
-        from subprocess import call
-        flags = ' -n {:d} '.format(NCPUs) + tool + ' ' + controlfile + ' ' + '-P '+gridfile
-        call(cmd + flags, shell = True, cwd=controlfilePath)
+        #you rewrote with the above subprocess.run method but never tested
+        #this is what it was before:
+        #from subprocess import call
+        #flags = ' -n {:d} '.format(NCPUs) + tool + ' ' + controlfile + ' ' + '-P '+gridfile
+        #call(cmd + flags, shell = True, cwd=controlfilePath)
         #call('rm log_*', shell = True, cwd=controlfilePath)	# clean up
         #os.remove(controlfilePath+'log_*') #clean up
 
@@ -589,8 +579,13 @@ class MHD:
             zMax = g['ZmAxis'] + 0.25
             zWall = np.linspace(zMin, zMax, 100000)
             rWall = np.ones((len(zWall)))*rNew
-            psiWall = ep.psiFunc_noN.ev(rWall, zWall)
-            psiNew = ep.psiFunc_noN.ev(rWall, zWall).min()
+#            psiWall = ep.psiFunc_noN.ev(rWall, zWall)
+#            psiNew = ep.psiFunc_noN.ev(rWall, zWall).min()
+            psiaxis = g['psiAxis']
+            psiedge = g['psiSep']
+            psiNwall = ep.psiFunc.ev(rWall, zWall)
+            psiWall = psiNwall*(psiedge - psiaxis) + psiaxis
+            psiNew = psiWall.min()
             psiNewNormalized = ep.psiFunc.ev(rWall, zWall).min()
             idx = np.argmin(psiWall)
             idx2 = np.argmin(ep.psiFunc.ev(rWall, zWall))
@@ -669,10 +664,6 @@ class MHD:
         if self.shotPath[-1] != '/': self.shotPath += '/'
         timeDir = self.shotPath + '{:06d}/'.format(time)
         newgfile = timeDir + name
-        print("TEST===")
-        print(self.shotPath)
-        print(timeDir)
-        print(newgfile)
         try:
             os.mkdir(timeDir)
         except:

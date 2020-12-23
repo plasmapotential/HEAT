@@ -25,6 +25,7 @@ rootDir, PVPath
 #========= VARIABLES THAT ARE SYSTEM DEPENDENT =================================
 import os
 import sys
+import subprocess
 #If this code is being run inside an appImage, then we set our paths up accordingly
 try:
     AppImage = os.environ["APPIMAGE"]
@@ -32,46 +33,62 @@ try:
 except:
     inAppImage = False
 
-if inAppImage == True:
-    print("Running in appImage mode\n")
-    AppDir = os.environ["APPDIR"]
-    #Include the location of the paraview binaries.  Specifically we need 'pvpython'
-    PVPath = AppDir + '/opt/paraview/ParaView-5.9.0-RC1-MPI-Linux-Python3.8-64bit/lib/python3.7/site-packages'
-    pvpythonCMD = AppDir + '/opt/paraview/ParaView-5.9.0-RC1-MPI-Linux-Python3.8-64bit/bin'
-
-    #Root HEAT source code directory
-    rootDir = AppDir + '/usr/src'
-    #openFOAM bashrc location
-    OFbashrc = AppDir + '/opt/OpenFOAM/OpenFOAM-v1912/etc/bashrc'
-    #default freecad path
-    FreeCADPath = AppDir + '/opt/freecad/squashfs-root/usr/lib'
-    #default source code location (EFIT class should be here)
-    EFITPath = AppDir + '/usr/src'
-
-else:
-    ###  If developing you will need to edit these manually!
-    #
-    print("Running in dev mode\n")
-    #Include the location of the paraview binaries.  Specifically we need 'pvpython'
-    PVPath = '/opt/paraview/ParaView-5.9.0-RC1-MPI-Linux-Python3.8-64bit/lib/python3.7/site-packages'
-    pvpythonCMD = '/opt/paraview/ParaView-5.9.0-RC1-MPI-Linux-Python3.8-64bit/bin'
-
-    #Root HEAT source code directory
-    rootDir = '/home/tom/source/HEAT/github/source'
-    #default HEAT output directory
-    dataPath = '/home/tom/data/HEAT/'
-    #openFOAM bashrc location
-    OFbashrc = '/opt/OpenFOAM/OpenFOAM-v1912/etc/bashrc'
-    #default freecad path
-    FreeCADPath = '/opt/freecad/squashfs-root/usr/lib'
-    #default source code location (EFIT class should be here)
-    EFITPath = '/home/tom/source'
-
 #default HEAT output directory
 homeDir = os.environ["HOME"]
 dataPath = homeDir + '/HEAT/data'
+
+if inAppImage == True:
+    print("Running in appImage mode\n")
+    AppDir = os.environ["APPDIR"]
+    #Include the location of the paraview binaries
+    #Specifically we need the python libs and pvpython
+    PVPath = os.environ["PVPath"]
+    pvpythonCMD = os.environ["pvpythonCMD"]
+    #Root HEAT source code directory
+    rootDir = AppDir + '/usr/src'
+    #openFOAM bashrc location
+    OFbashrc = AppDir + '/usr/opt/openfoam/openfoam1912/etc/bashrc'
+    OFdir = AppDir+'/usr/opt/openfoam/openfoam1912'
+    #default freecad path
+    #FreeCADPath = AppDir + '/opt/freecad/squashfs-root/usr/lib'
+    FreeCADPath = AppDir + '/usr/lib/freecad-python3/lib'
+    #default source code location (EFIT class should be here)
+    EFITPath = AppDir + '/usr/src'
+    #python site packages where PyFoam resides
+    pyFoamPath = AppDir + '/lib/python3.8/site-packages'
+
+else:
+    ###  If developing you will need to edit these manually!
+    print("Running in dev mode\n")
+    #Include the location of the paraview binaries.
+    #Specifically we need the python libs and pvpython
+    PVPath = '/opt/paraview/ParaView-5.9.0-RC2-MPI-Linux-Python3.8-64bit/lib/python3.8/site-packages'
+    pvpythonCMD = '/opt/paraview/ParaView-5.9.0-RC2-MPI-Linux-Python3.8-64bit/bin/pvpython'
+    #Root HEAT source code directory
+    rootDir = '/home/tom/source/HEAT/github/source'
+    #default freecad path
+#    FreeCADPath = '/opt/freecad/squashfs-root/usr/lib'
+    #FreeCADPath = '/usr/lib/freecad/lib'
+    FreeCADPath = '/usr/lib/freecad-python3/lib'
+    #default source code location (EFIT class should be here)
+    EFITPath = '/home/tom/source'
+    #default openFOAM source path
+    OFbashrc = '/opt/openfoam/openfoam-OpenFOAM-v1912/etc/bashrc'
+#    OFbashrc = '/opt/OpenFOAM/OpenFOAM-v1912/etc/bashrc'
+    #python site packages where PyFoam resides
+    pyFoamPath = '/home/tom/.local/lib/python3.8/site-packages'
+    #pyFoam python scripts
+    pyFoamPath = '/'
+    #default AppDir for when running in dev mode
+    AppDir = 'not in appImage mode'
+    #create necessary environment variables when outside appImage
+    os.environ["PVPath"] = PVPath
+    os.environ["pvpythonCMD"] = pvpythonCMD
+
 #default logfile location
 logFile = dataPath + '/HEATlog.txt'
+#list of tokamak flags that are options in HEAT (if adding new tokamak add flag to list)
+machineList = ['d3d','nstx','st40','step','sparc']
 
 #===============================================================================
 
@@ -85,9 +102,11 @@ sys.path.append(EFITPath)
 sys.path.append(FreeCADPath)
 #append paraview to python path
 sys.path.append(PVPath)
+#append pyFoam site-packages location to python path
+sys.path.append(pyFoamPath)
 #append pvpython to binary path
 oldEnv = os.environ["PATH"]
-os.environ["PATH"] = oldEnv + ':' + pvpythonCMD
+#os.environ["PATH"] = oldEnv + ':' + pvpythonCMD
 #===============================================================================
 
 import shutil
@@ -114,6 +133,7 @@ tools = toolsClass.tools()
 from dash_extensions import Download
 from dash_extensions.snippets import send_file
 
+
 #Create log files that will be displayed in the HTML GUI
 from pathlib import Path
 if not os.path.exists(dataPath):
@@ -136,7 +156,7 @@ app = dash.Dash(server=server, meta_tags=[{"name": "viewport", "content": "width
 #Eventually need to fix this so that we are not using a global variable
 #dash can acces Flask Cache so we should cache data by userID or something
 #for R&D this works
-gui = GUIobj(logFile, rootDir, dataPath)
+gui = GUIobj(logFile, rootDir, dataPath, OFbashrc)
 
 """
 ==============================================================================
@@ -316,18 +336,21 @@ def buildDefaultPaths():
     rootDir is location of HEAT source code and is not included in GUI
     because it would be impossible to run GUI if this was not already set.
     rootDir (and some other defaults) are hardcoded at the top of this file
+
+    if className is Hidden, then the input exists in html but is hidden from user
     """
     return html.Div(
         id="defaultPaths",
         children=[
-            html.Label("ParaVIEW Path"),
-            dcc.Input(id="PVPath", className="textInput", value=PVPath),
-            html.Label("FreeCAD Path"),
-            dcc.Input(id="FreeCADPath", className="textInput", value=FreeCADPath),
+            html.Label("ParaVIEW Path", className="textInputHidden"),
+            dcc.Input(id="PVPath", className="textInputHidden", value=PVPath),
+            html.Label("FreeCAD Path", className="textInputHidden"),
+            dcc.Input(id="FreeCADPath", className="textInputHidden", value=FreeCADPath),
             html.Label("Data Directory"),
             dcc.Input(id="dataPath", className="textInput", value=dataPath),
-            html.Label("OpenFOAM bashrc file"),
-            dcc.Input(id="OFbashrc", className="textInput", value=OFbashrc),
+            html.Label("OpenFOAM bashrc file", className="textInputHidden"),
+            dcc.Input(id="OFbashrc", className="textInputHidden", value=OFbashrc),
+            html.Label("AppImage Mount Directory: "+AppDir)
         ],
         className="colBox"
     )
@@ -349,23 +372,13 @@ def buildMachineSelector():
                     options=[
                         {'label': 'NSTX-U', 'value': 'nstx'},
                         {'label': 'DIII-D', 'value': 'd3d'},
-                        {'label': 'ST40', 'value': 'st40'}
+                        {'label': 'ST40', 'value': 'st40'},
+                        {'label': 'STEP', 'value': 'step'},
+                        {'label': 'SPARC', 'value': 'sparc'}
                         ],
                     value=None
                     ),
-                html.Button("Load This Machine's Defaults", id="loadDefaults", n_clicks=0, className="defaultButtons"),
-                html.Div(id="hiddenDivDefaults"),
-            ],
-        )
-
-def buildInputButtons():
-    """
-    returns Load Defaults drag and drop and Upload Input buttons
-    """
-    return html.Div(
-            id="buttonInputs",
-            className="defaultButtonBox",
-            children=[
+                html.Div(id="hiddenDivMachFlag"),
                 dcc.Upload(
                     className="inputUpload",
                     id='input-upload',
@@ -381,7 +394,19 @@ def buildInputButtons():
                         },
                     multiple=True,
                     ),
+            ],
+        )
+
+def buildInputButtons():
+    """
+    returns Load Defaults drag and drop and Upload Input buttons
+    """
+    return html.Div(
+            id="buttonInputs",
+            className="defaultButtonBox",
+            children=[
                 html.Div(id="hiddenDivInput"),
+                html.Button("Load Defaults (optional)", id="loadDefaults", n_clicks=0, className="defaultButtons"),
                 html.Button("Save Settings\nInto Input File", id="saveInputs",
                             n_clicks=0, className="defaultButtons"),
                 Download(id="downloadInputs"),
@@ -389,14 +414,18 @@ def buildInputButtons():
             ],
         )
 
-@app.callback(Output('hiddenDiv', 'children'),
+@app.callback(Output('hiddenDivMachFlag', 'children'),
               [Input('MachFlag', 'value')])
 def machineSelector(MachFlag):
     """
     callback to handle machine selector drop down
     """
+    if MachFlag == None:
+        machFlagChosen = "Select a machine"
+        return [html.Label(machFlagChosen, style={'color':'#fc0313'})]
     gui.machineSelect(MachFlag)
-    return
+    machFlagChosen = "Selected "+MachFlag
+    return [html.Label(machFlagChosen, style={'color':'#f5d142'})]
 
 
 @app.callback([Output('hiddenDivInput', 'children'),
@@ -408,6 +437,9 @@ def inputDragDrop(file, contents, MachFlag):
     """
     callback to handle user input file drag and drop
     """
+    if MachFlag is None:
+        print("Select a machine before uploading input file")
+        log.info("Select a machine before uploading input file")
     if file is None:
         raise PreventUpdate
     else:
@@ -431,7 +463,6 @@ def inputDragDrop(file, contents, MachFlag):
                State('ionDir', 'value'),
                State('ROIGridRes', 'value'),
                State('gridRes', 'value'),
-               State('STPfile', 'value'),
                State('lqEich', 'value'),
                State('S', 'value'),
                State('lqCN', 'value'),
@@ -468,7 +499,6 @@ def saveGUIinputs(  n_clicks,
                     ionDir,
                     ROIGridRes,
                     gridRes,
-                    STPfile,
                     lqEich,
                     S,
                     lqCN,
@@ -511,7 +541,6 @@ def saveGUIinputs(  n_clicks,
     data['ionDir'] = ionDir
     data['ROIGridRes'] = ROIGridRes
     data['gridRes'] = gridRes
-    data['STPfile'] = STPfile
     data['lqEich'] = lqEich
     data['S'] = S
     data['lqCN'] = lqCN
@@ -539,7 +568,7 @@ def saveGUIinputs(  n_clicks,
     data['dataPath'] = dataLoc
     data['OFbashrc'] = OFbashrcLoc
 
-    tools.saveInputFile(data, gui.tmpDir)
+    tools.saveInputFile(data, gui.tmpDir, gui.rootDir, gui.dataPath)
 
     outputDiv = html.Label("Saved File", style={'color':'#f5d142'})
     return [outputDiv, send_file(gui.tmpDir + "HEATinput.csv")]
@@ -580,7 +609,8 @@ def buildMHDbox():
                         },
                     multiple=True,
                     ),
-
+                html.Div(id="hiddenDivGfileUpload"),
+                html.Br(),
                 dcc.RadioItems(
                                 id="plasma3Dmask",
                                 options=[
@@ -589,7 +619,6 @@ def buildMHDbox():
                                         ],
                                         value='plasma2D'
                                 ),
-                html.Br(),
                 html.Button("Load MHD", id="loadMHD", n_clicks=0, style={'margin':'10px 10px 10px 10px'}),
                 html.Br(),
                 #save EQ plots as png buttons / forms
@@ -622,6 +651,7 @@ def buildMHDbox():
 
 
 #==========MHD Callbacks
+
 @app.callback([Output('timeSlider', 'min'),
                Output('timeSlider', 'max'),
                Output('timeSlider', 'marks'),
@@ -782,6 +812,15 @@ def saveEQplots(n_clicks, x, y):
     return [html.Label("Saved EQs to file", style={'color':'#f5d142'}),
             send_file(zipFile)]
 
+#Load CAD button connect
+@app.callback([Output('hiddenDivGfileUpload', 'children')],
+              [Input('gfiletable-upload', 'filename')],
+              [State('MachFlag', 'value')])
+def gfileUpload(gFile, MachFlag):
+    if MachFlag is None:
+        raise PreventUpdate
+    else:
+        return [html.Label("Loaded gFile: "+gFile[0], style={'color':'#f5d142'})]
 
 #==========CAD==========
 def buildCADbox():
@@ -797,30 +836,58 @@ def buildCADbox():
                 dcc.Input(id="ROIGridRes", className="textInput"),
                 html.Label(id="gridResLabel", children="Intersect Resolution [mm]"),
                 dcc.Input(id="gridRes", className="textInput"),
-                html.Label(id="STPfileLabel", children="STP File Path"),
-                dcc.Input(id="STPfile", className="textInput"),
-                html.Br(),
-                html.Button("Load CAD", id="loadCAD", style={'margin':'10px 10px 10px 10px'}),
-                html.Div(id="hiddenDivCAD")
+                html.Button("Load Res Settings", id="loadRes", style={'margin':'10px 10px 10px 10px'}),
+                html.Div(id="hiddenDivCAD1"),
+                html.Label(id="STPdropLabel", children="STP File Direct Upload:"),
+                dcc.Upload(
+                    className="PFCupload",
+                    id='CAD-upload',
+                    children=html.Div([
+                        'Drag and Drop or ',
+                        html.A('Select STP file')
+                    ]),
+                    style={
+                        'width': '60%', 'height': '60px', 'lineHeight': '60px',
+                        'borderWidth': '1px', 'borderStyle': 'dashed',
+                        'borderRadius': '5px', 'textAlign': 'center', 'margin': '10px',
+                        },
+                    multiple=True,
+                    ),
+                html.Div(id="hiddenDivCAD2"),
             ],
             className="box",
         )
 
-#Load CAD button connect
-@app.callback([Output('hiddenDivCAD', 'children')],
-              [Input('loadCAD', 'n_clicks')],
+#Load res button connect
+@app.callback([Output('hiddenDivCAD1', 'children')],
+              [Input('loadRes', 'n_clicks')],
               [State('ROIGridRes', 'value'),
                State('gridRes', 'value'),
-               State('STPfile', 'value'),
                State('MachFlag', 'value')])
-def loadCAD(n_clicks, ROIGridRes, gridRes, STPfile, MachFlag):
-    if MachFlag is None:
+def loadRes(n_clicks, ROIGridRes, gridRes, MachFlag):
+    if n_clicks is None:
         raise PreventUpdate
+    if MachFlag is None:
+        return [html.Label("Select a machine", style={'color':'#fc0313'})]
+    gui.getCADInputs(ROIGridRes,gridRes,STPfile=None,STPdata=None)
+    return [html.Label("Loaded Resolution Settings", style={'color':'#f5d142'})]
+
+#Load CAD button connect
+@app.callback([Output('hiddenDivCAD2', 'children')],
+              [Input('CAD-upload', 'filename')],
+              [State('CAD-upload', 'contents'),
+               State('MachFlag', 'value')])
+def loadCAD(STPfile, STPcontents, MachFlag):
+    if STPfile is None:
+        raise PreventUpdate
+    if MachFlag is None:
+        return [html.Label("Select a machine first", style={'color':'#fc0313'})]
     else:
-        gui.getCADInputs(ROIGridRes,gridRes,STPfile)
-    return [html.Label("Loaded CAD File", style={'color':'#f5d142'})]
-
-
+        contents = STPcontents[0]
+        content_type, content_string = contents.split(',')
+        STPdata= base64.b64decode(content_string)
+        gui.getCADInputs(ROIGridRes=None,gridRes=None,STPfile=STPfile[0],STPdata=STPdata)
+    return [html.Label("Loaded CAD: "+STPfile[0], style={'color':'#f5d142'})]
 
 #==========HF==========
 def buildHFbox():
@@ -1223,7 +1290,7 @@ def limiterParameters(className):
                     className="SelectorBoxInput",
                     style={'backgroundColor': 'transparent', 'color':'transparent'},
                     options=[
-                        {'label': 'From Horaceck Scaling', 'value': 'horaceck'},
+                        #{'label': 'From Horaceck Scaling', 'value': 'horaceck'},
                         {'label': 'User Defined', 'value': 'user'}
                         ],
                     value=None,
@@ -1466,6 +1533,7 @@ def parse_contents(contents, filename):
         # Assume that the user uploaded an excel file
         return pd.read_excel(io.BytesIO(decoded))
 
+
 #Uploading files and button presses update table and HTML storage object
 @app.callback([Output('PFCdataStorage', 'data'),
                Output('pfcTable', 'data'),
@@ -1701,17 +1769,29 @@ def loadBfieldTrace(Btrace=None, hidden=False):
         style={"display":"hidden"}
     return html.Div(
                 children=[
-                    html.Label("x [mm]"),
-                    dcc.Input(id="xBtrace", className="xyzBoxInput"),
-                    html.Label("y [mm]"),
-                    dcc.Input(id="yBtrace", className="xyzBoxInput"),
-                    html.Label("z [mm]"),
-                    dcc.Input(id="zBtrace", className="xyzBoxInput"),
-                    html.Label("ionDirection"),
-                    dcc.Input(id="ionDir", className="xyzBoxInput"),
+                    html.Div(
+                        children=[
+                            html.Label("x [mm]"),
+                            dcc.Input(id="xBtrace", className="xyzBoxInput"),
+                            html.Label("y [mm]"),
+                            dcc.Input(id="yBtrace", className="xyzBoxInput"),
+                            html.Label("z [mm]"),
+                            dcc.Input(id="zBtrace", className="xyzBoxInput"),
+                        ],
+                        className="xyzBox"
+                    ),
+                    html.Div(
+                        children=[
+                            html.Label("ionDirection"),
+                            dcc.Input(id="ionDir", className="xyzBoxInput"),
+                            html.Label("Degrees"),
+                            dcc.Input(id="traceDeg", className="xyzBoxInput"),
+                        ],
+                        className="xyzBox"
+                    )
                     ],
                 style=style,
-                className="xyzBox",
+                className="xyzBoxVert",
                     )
 
 @app.callback(Output('OFTracePoints', 'children'),
@@ -1757,15 +1837,16 @@ def loadOFTrace(OFtrace=None, hidden=False):
                State('zOFtrace','value'),
                State('timeSlider', 'value'),
                State('ionDir', 'value'),
+               State('traceDeg', 'value')
                ])
 def runHEAT(n_clicks,runList,Btrace,OFtrace,
             xBtrace,yBtrace,zBtrace,
-            xOFtrace,yOFtrace,zOFtrace,t,ionDir):
+            xOFtrace,yOFtrace,zOFtrace,t,ionDir,traceDeg):
     if n_clicks == 0:
         raise PreventUpdate
 
     if 'Btrace' in Btrace:
-        gui.Btrace(xBtrace,yBtrace,zBtrace,t,ionDir)
+        gui.Btrace(xBtrace,yBtrace,zBtrace,t,ionDir,traceDeg)
 
     gui.runHEAT(runList)
 
@@ -1894,13 +1975,21 @@ def gFileMultipiers():
         children=[
             html.Label("psiRZ Multiplier", style={'margin':'0 10px 0 10px'}),
             dcc.Input(id="psiRZMult", className="gfileBoxInput", value="1.0"),
+            html.Label("psiRZ Addition", style={'margin':'0 10px 0 10px'}),
+            dcc.Input(id="psiRZAdd", className="gfileBoxInput", value="0.0"),
             html.Label("psiSep Multiplier", style={'margin':'0 10px 0 10px'}),
             dcc.Input(id="psiSepMult", className="gfileBoxInput", value="1.0"),
+            html.Label("psiSep Addition", style={'margin':'0 10px 0 10px'}),
+            dcc.Input(id="psiSepAdd", className="gfileBoxInput", value="0.0"),
             html.Label("psiAxis Multiplier", style={'margin':'0 10px 0 10px'}),
             dcc.Input(id="psiAxisMult", className="gfileBoxInput", value="1.0"),
+            html.Label("psiAxis Addition", style={'margin':'0 10px 0 10px'}),
+            dcc.Input(id="psiAxisAdd", className="gfileBoxInput", value="0.0"),
             html.Label("Fpol Multiplier", style={'margin':'0 10px 0 10px'}),
             dcc.Input(id="FpolMult", className="gfileBoxInput", value="1.0"),
-            html.Button("Apply Multipliers", id="applyMult", n_clicks=0, style={'margin':'0 10px 10px 0'}),
+            html.Label("Fpol Addition", style={'margin':'0 10px 0 10px'}),
+            dcc.Input(id="FpolAdd", className="gfileBoxInput", value="0.0"),
+            html.Button("Apply Corrections", id="applyMult", n_clicks=0, style={'margin':'0 10px 10px 0'}),
             html.Div(id="hiddenDivMult")
         ],
         className="gfileBox",
@@ -2033,8 +2122,13 @@ def interpolateNsteps(n_clicks, N, data):
                State('psiSepMult','value'),
                State('psiAxisMult','value'),
                State('FpolMult','value'),
+               State('psiRZAdd','value'),
+               State('psiSepAdd','value'),
+               State('psiAxisAdd','value'),
+               State('FpolAdd','value'),
                State('timeSlider', 'value')])
-def applyMult(n_clicks, psiRZMult, psiSepMult, psiAxisMult, FpolMult,t):
+def applyMult(n_clicks, psiRZMult, psiSepMult, psiAxisMult, FpolMult,
+              psiRZAdd,psiSepAdd,psiAxisAdd,FpolAdd,t):
     """
     apply multiplier to psiRZ, psiSep, psiAxis, Fpol for currently
     selected equilibrium timestep
@@ -2043,13 +2137,21 @@ def applyMult(n_clicks, psiRZMult, psiSepMult, psiAxisMult, FpolMult,t):
         raise PreventUpdate
     #parse user formulas and convert then to number via python compiler
     pi = np.pi
+    #NEED TO ADAPT THIS TO HANDLE ADDITION
     psiRZMult = eval(parser.expr(psiRZMult).compile())
     psiSepMult = eval(parser.expr(psiSepMult).compile())
     psiAxisMult = eval(parser.expr(psiAxisMult).compile())
     FpolMult = eval(parser.expr(FpolMult).compile())
 
-    gui.gfileClean(psiRZMult,psiSepMult,psiAxisMult,FpolMult, t)
-    return [html.Label("Multipliers Applied", style={'color':'#f5d142'})]
+    psiRZAdd = eval(parser.expr(psiRZAdd).compile())
+    psiSepAdd = eval(parser.expr(psiSepAdd).compile())
+    psiAxisAdd = eval(parser.expr(psiAxisAdd).compile())
+    FpolAdd = eval(parser.expr(FpolAdd).compile())
+
+
+    gui.gfileClean(psiRZMult,psiSepMult,psiAxisMult,FpolMult,
+                   psiRZAdd,psiSepAdd,psiAxisAdd,FpolAdd,t)
+    return [html.Label("Corrections Applied", style={'color':'#f5d142'})]
 
 @app.callback(Output('hiddenDivSep', 'children'),
               [Input('newLCFSbutton', 'n_clicks')],
@@ -2110,6 +2212,10 @@ def outputChildren():
     return html.Div(
         children = [
             html.H4("HEAT outputs", style={"text-align":"center", "width":"100%"}),
+            html.Button("Download HEAT Results", id="downloadResults", n_clicks=0, style={'margin':'0 10px 10px 0', "width":"95%" }),
+            html.Br(),
+            html.Div(id="hiddenDivDownloadResults", style={"width":"100%"}),
+            Download(id="downloadResultsDir"),
             html.H6("Heat Flux Parameters:"),
             html.Div( children=buildHFtable(), className="gfileTable" ),
             #qDiv plot
@@ -2139,6 +2245,28 @@ def outputChildren():
             ],
         className="wideBoxDark",
         )
+
+@app.callback([Output('hiddenDivDownloadResults', 'children'),
+               Output('downloadResultsDir', 'data')],
+              [Input('downloadResults', 'n_clicks')],
+              [State('MachFlag','value'),
+               State('shot', 'value')])
+def saveResults(n_clicks, MachFlag, shot):
+    if n_clicks is None:
+        raise PreventUpdate
+    if MachFlag is None:
+        raise PreventUpdate
+    #create zip archive of data folder for this shot #
+    file = gui.tmpDir + 'HEATresults'
+    print("Creating HEAT results zip.  This may take a while for large OF runs")
+    log.info("Creating HEAT results zip.  This may take a while for large OF runs")
+    shutil.make_archive(file, 'zip', gui.MHD.shotPath)
+    print("Zipped results")
+    log.info("Zipped results")
+    return [html.Label("Saved HEAT output", style={'color':'#f5d142'}),
+            send_file(file+'.zip')]
+
+
 
 def buildHFtable(data=None):
     cols = getOutputColumns()
@@ -2412,7 +2540,6 @@ Session storage callbacks and functions
                Output('ionDir', 'value'),
                Output('ROIGridRes', 'value'),
                Output('gridRes', 'value'),
-               Output('STPfile', 'value'),
                Output('lqEich', 'value'),
                Output('S', 'value'),
                Output('lqCN', 'value'),
@@ -2436,7 +2563,7 @@ Session storage callbacks and functions
                Output('OFSTLscale', 'value'),
                Output('OFdeltaT', 'value'),
                Output('session', 'data'),
-               Output('hiddenDivDefaults', 'children')
+#               Output('hiddenDivMachFlag', 'children')
                ],
                [Input('loadDefaults', 'n_clicks'),
                 Input('userInputFileData', 'modified_timestamp')],
@@ -2446,13 +2573,16 @@ Session storage callbacks and functions
                 State('userInputFileData', 'data')])
 def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
     #default case
-    if ts is None or MachFlag not in ['nstx', 'd3d', 'st40']:
+    if ts is None or MachFlag not in machineList:
         print('Initializing Data Store')
+        if MachFlag not in machineList:
+            print("Machine not in machine list")
+            log.info("Machine not in machine list")
         data = gui.getDefaultDict()
         data.update({'default_n_clicks':n_clicks})
 
     #Let the user know if this worked or if we still need a MachFlag
-    if MachFlag not in ['nstx', 'd3d', 'st40']:
+    if MachFlag not in machineList:
         outputDiv = html.Label("Select Machine First", style={'color':'#f51b60'})
     else:
         outputDiv = html.Label("Loaded Input File", style={'color':'#f5d142'})
@@ -2481,7 +2611,6 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('ionDirection', ''),
             data.get('ROIGridRes', ''),
             data.get('gridRes', ''),
-            data.get('STPfile', ''),
             data.get('lqEich', ''),
             data.get('S', ''),
             data.get('lqCN', ''),
@@ -2505,7 +2634,7 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('STLscale', ''),
             data.get('deltaT', ''),
             data,
-            outputDiv
+#            outputDiv
             ]
 
 

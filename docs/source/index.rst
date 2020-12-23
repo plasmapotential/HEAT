@@ -1,0 +1,120 @@
+**********************
+H.E.A.T. Documentation
+**********************
+
+General Information
+-------------------
+
+The Heat flux Engineering Analysis Toolkit (HEAT) is a suite of tools for predicting the heat flux
+incident upon PFCs in tokamaks, and the associated temperature distribution throughout the PFCs.
+The toolkit connects CAD, FVM, MHD, Plasma Physics, Visualization, HPC, and more, in one streamlined package.
+The objective is to enable engineers and physicists to quickly ascertain heat loads given specific magnetic
+configurations and geometric configurations.
+
+In its current form, HEAT can predict 3D heat loads from 2D plasmas for limited and diverted discharges.
+It can calculate time varying heat loads and temperature profiles.  HEAT can also be used to perform
+field line traces.  In the coming year, the following modules are scheduled to be added to HEAT:
+  * Gyro orbit effects
+  * 3D plasmas
+  * Radiated power (detachment) scenarios
+  * ELMs
+
+There were three objectives taken into consideration when designing HEAT:
+  1) pre-shot estimation of heat loads and temperature
+  2) post-shot confirmation of heat loads and associated physics models
+  3) design optimization
+
+HEAT has been compiled into an appImage.  For appImage documentation see `<https://appimage.org/>`_ .
+The appImage allows HEAT to be deployed as a single file, for use across linux distros.
+The user sets the appImage to executable, then runs it as if it were a binary file.
+The appImage is available under 'releases' on github and has been tested on Ubuntu18.04, Ubuntu20.04,
+Centos7, Centos8.  The appImage release is still in beta version, so there are likely still bugs.
+Bugs can be submitted to the github repo.  See Installation section for more info on running
+HEAT with the appImage.
+
+Running HEAT requires the following (recommended version in parentheses):
+  * Linux machine (Ubuntu18-20,Centos7-8)
+  * Web Browser (Google Chrome)
+
+To visualize HEAT results, the user will need an installation of ParaVIEW.
+There has been some work to include paraview into the HEAT html interface using
+paraviewweb, but this is NOT included in the appImage.  More information on
+ParaVIEW can be found at `<https://www.paraview.org/>`_ and ParaVIEW can be
+downloaded here `<https://www.paraview.org/download/>`_.
+
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Further Information:
+
+   license
+   contact
+
+
+
+
+
+Installation
+------------
+
+HEAT installation is relatively simple, and consists of downloading the latest HEAT
+appImage from github (`<https://github.com/plasmapotential/HEAT>`_).  For
+visualizing HEAT output, the user should have a local copy of ParaVIEW (preferably 5.8+).
+
+To download the appImage
+^^^^^^^^^^^^^^^^^^^^^^^^
+In linux terminal run the following command from a directory of your choosing::
+
+    wget https://github.com/plasmapotential/HEAT/releases/download/v1.1-beta/HEAT_AppImage-v1.1-beta-x86_64.AppImage
+
+Alternatively, you may download the latest release directly from github:
+`<https://github.com/plasmapotential/HEAT/releases>`_
+
+After downloading, make file executable::
+
+    chmod +x HEAT_AppImage-v1.1-beta-x86_64.AppImage
+
+To download test HEAT case
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+After downloading, you can test your HEAT installation by using a test case we
+have prepared.  The test case can be downloaded and extracted by using the following commands::
+
+    wget https://github.com/plasmapotential/HEAT/releases/download/v1.1-beta/testRun.tar.gz
+    tar -xvzf testRun.tar.gz
+
+
+To download ParaVIEW
+^^^^^^^^^^^^^^^^^^^^
+In a web browser, go to: `<https://www.paraview.org/download/>`_.  Download version
+for your operating system and follow instructions to run.
+
+
+
+Tutorials
+---------
+Accessing the HEAT graphical user interface
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+After downloading appImage and making it executable, run the appImage to start
+the HEAT server::
+
+    ./HEAT_AppImage-v1.1-beta-x86_64.AppImage
+
+By default, this will start HEAT and launch a Flask server on the localhost at port 8050.
+To access the GUI, open a web browser and navigate to 127.0.0.1:8050::
+
+    google-chrome 127.0.0.1:8050
+
+You should now see the HEAT user interface.  The following video will walk you through
+your first HEAT run.  Be sure to install the testRun folder as described in the Installation
+section beforehand.
+
+
+
+
+
+Indices and tables
+==================
+
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`

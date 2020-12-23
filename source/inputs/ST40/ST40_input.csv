@@ -4,9 +4,9 @@
 #                CAD Variables
 #=============================================================
 STPfile, /home/tom/ST40/CAD/ST40_2.2Divertor_45deg.stp
-#STLpath, /home/tom/ST40/CAD/STLs/
+STPfile, /home/tom/ST40/CAD/limiterPFCs.step
 FreeCADPath, /opt/freecad/squashfs-root/usr/lib
-PVPath, /opt/paraview/ParaView-5.8.1-MPI-Linux-Python3.7-64bit/lib/python3.7/site-packages
+PVPath, /opt/paraview/ParaView-5.9.0-RC2-MPI-Linux-Python3.8-64bit/lib/python3.8/site-packages
 ROIGridRes, 5.0
 gridRes, standard
 permute_mask, False
@@ -20,7 +20,7 @@ shot, 000001
 tree, EFIT02
 tmin, 0
 tmax, 200
-nTrace, 50
+nTrace, 30
 dataPath, /home/tom/data/HEAT/
 ionDirection, -1
 plasma3Dmask, 0 #1=true, 0=false
@@ -40,10 +40,10 @@ fracCN, 0.6
 fracCF, 0.4
 fracPN, 0.1
 fracPF, 0.0
-fracUI,0.1
-fracUO,0.4
-fracLI,0.1
-fracLO,0.4
+fracUI,0.5
+fracUO,0.0
+fracLI,0.5
+fracLO,0.0
 #==============================================================
 #                MAFOT Variables
 #==============================================================
@@ -99,4 +99,3 @@ meshMaxLevel, 3
 xMid, 295.0
 yMid, 430.0
 zMid, -847.0
-OFbashrc, /opt/OpenFOAM/OpenFOAM-v1912/etc/bashrc

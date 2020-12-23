@@ -184,7 +184,6 @@ class CAD:
         self.intersectNorms,self.intersectCtrs,self.intersectAreas = self.normsCentersAreas(self.intersectMeshes)
         return
 
-
     def ROIobjFromPartnum(self, partslist, idx):
         """
         Generates ROI objects from list of part numbers.
@@ -237,6 +236,8 @@ class CAD:
                 log.info("Part "+part+" not found in CAD.  Cannot Mesh!")
 
         return
+
+
 
     def loadSTEP(self):
         """
@@ -392,7 +393,10 @@ class CAD:
         #Check if this is a single file or list and make it a list
         if type(mesh) != list:
             mesh = [mesh]
-            label = [label]
+        if type(label)!= np.ndarray:
+            if type(label) != list:
+                label = [label]
+
 
         #Recursively make dirs for STLs
         print("making STL directory")

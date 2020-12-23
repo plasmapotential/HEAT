@@ -59,7 +59,7 @@ castellatedMeshControls
     // Note that this is the number of cells before removing the part which
     // is not 'visible' from the keepPoint. The final number of cells might
     // actually be a lot less.
-    maxGlobalCells 2000000;
+    maxGlobalCells 10000000;
 
     // The surface refinement loop might spend lots of iterations refining just a
     // few cells. This setting will cause refinement to stop if <= minimumRefine
@@ -169,7 +169,7 @@ snapControls
 {
     //- Number of patch smoothing iterations before finding correspondence
     //  to surface
-    nSmoothPatch 3;
+    nSmoothPatch 5;
 
     //- Relative distance for points to be attracted by surface feature point
     //  or edge. True distance is this factor times local
