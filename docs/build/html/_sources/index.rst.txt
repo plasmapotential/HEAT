@@ -65,14 +65,14 @@ To download the appImage
 ^^^^^^^^^^^^^^^^^^^^^^^^
 In linux terminal run the following command from a directory of your choosing::
 
-    wget https://github.com/plasmapotential/HEAT/releases/download/v1.1-beta/HEAT_AppImage-v1.1-beta-x86_64.AppImage
+    wget https://github.com/plasmapotential/HEAT/releases/download/v1.1-beta/HEAT_AppImage-v1.1-beta-20201223-x86_64.AppImage
 
 Alternatively, you may download the latest release directly from github:
 `<https://github.com/plasmapotential/HEAT/releases>`_
 
 After downloading, make file executable::
 
-    chmod +x HEAT_AppImage-v1.1-beta-x86_64.AppImage
+    chmod +x HEAT_AppImage-v1.1-beta-20201223-x86_64.AppImage
 
 To download test HEAT case
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -97,7 +97,7 @@ Accessing the HEAT graphical user interface
 After downloading appImage and making it executable, run the appImage to start
 the HEAT server::
 
-    ./HEAT_AppImage-v1.1-beta-x86_64.AppImage
+    ./HEAT_AppImage-v1.1-beta-20201223-x86_64.AppImage
 
 By default, this will start HEAT and launch a Flask server on the localhost at port 8050.
 To access the GUI, open a web browser and navigate to 127.0.0.1:8050::
