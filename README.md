@@ -28,7 +28,7 @@ Centos7, Centos8.  The appImage release is still in beta version, so there are l
 Bugs can be submitted to this github repo.
 
 HEAT installation instructions and tutorials can be found here:
-https://readthedocs.org/projects/heat-flux-engineering-analysis-toolkit-heat/
+https://heat-flux-engineering-analysis-toolkit-heat.readthedocs.io/en/latest/
 
 The author engineer is Tom Looby, a PhD candidate for Oak Ridge National Lab.
 This project is openSource under the MIT license.
