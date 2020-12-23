@@ -104,12 +104,26 @@ To access the GUI, open a web browser and navigate to 127.0.0.1:8050::
 
     google-chrome 127.0.0.1:8050
 
-You should now see the HEAT user interface.  The following video will walk you through
-your first HEAT run.  Be sure to install the testRun folder as described in the Installation
-section beforehand.
+You should now see the HEAT user interface.  Be sure to install the testRun folder as described in the Installation
+section beforehand. For the test case, the files in the testRun folder can be used in the following workflow:
 
+  1) Select a machine
+  2) Drag NSTXU_TEST_input.csv into "Select input file" box
+  3) Drag gFile g204118.000004 into "Select gFiles" box
+  4) Click "Load MHD" button
+  5) Click "Load res settings" button to load CAD resolution
+  6) Drag STP file IBDH_2tiles.step into "Select STP file" box
+  7) Drag PFC file IBDH_2tiles.csv into "PFC Settings > Select Files"
+  8) Choose heat flux setting "Gaussian Spreading".  HEAT will default to Eich profile settings
+  9) Click "Load HF" button
+  10) Click "Load OF Settings" button
+  11) Click on "Run HEAT" tab in left ribbon
+  12) Select "Heat flux point cloud"
+  13) Select "openFOAM thermal analysis"
+  14) Click "Run HEAT" button
+  15) To watch logFiles, either watch original linux terminal or click "LogFile" tab from left ribbon
 
-
+A series of videos will be added soon to describe this process and others.
 
 
 Indices and tables
