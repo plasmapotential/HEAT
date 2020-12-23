@@ -122,7 +122,7 @@ section beforehand. For the test case, the files in the testRun folder can be us
   13) Select "openFOAM thermal analysis"
   14) Click "Run HEAT" button
   15) To watch logFiles, either watch original linux terminal or click "LogFile" tab from left ribbon
-  16) All results are saved into directory $HOME/HEAT/data
+  16) All results are saved into directory $HOME/HEAT/data, where $HOME is user linux home directory
   17) For heat flux results, open paraview and import: $HOME/HEAT/data/nstx_204118/000004/paraview/HeatFlux_all.vtk
   18) For temperature results, open paraview and import: $HOME/HEAT/data/nstx_204118/openFoam/heatFoam/SOLID843/SOLID843.foam
 
