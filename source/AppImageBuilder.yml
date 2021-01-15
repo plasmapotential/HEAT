@@ -2,6 +2,8 @@ version: 1
 #notes:
   #if you get a permission denied error from self.unix_socket, run this command:
   #    sudo chmod 0666 /var/run/docker.sock
+  #
+  #  You need to make sure MAFOT was compiled into the HEAT directory
 
 script:
   # Remove any previous build
@@ -39,8 +41,11 @@ script:
   - cp -rn /opt/openfoam/openfoam-OpenFOAM-v1912/etc AppDir/usr/opt/openfoam/openfoam1912/etc
   - cp -rn /opt/openfoam/openfoam-OpenFOAM-v1912/bin AppDir/usr/opt/openfoam/openfoam1912/bin
   - cp -rn /opt/openfoam/openfoam-OpenFOAM-v1912/platforms AppDir/usr/opt/openfoam/openfoam1912/platforms
+  # set up environment var files for openfoam inside appimage
   - rm AppDir/usr/opt/openfoam/openfoam1912/etc/bashrc
   - mv AppDir/usr/opt/openfoam/openfoam1912/etc/bashrc_HEAT AppDir/usr/opt/openfoam/openfoam1912/etc/bashrc
+  - rm AppDir/usr/opt/openfoam/openfoam1912/etc/config.sh/setup
+  - mv AppDir/usr/opt/openfoam/openfoam1912/etc/config.sh/setupHEAT AppDir/usr/opt/openfoam/openfoam1912/etc/config.sh/setup
   # copy swak4foam bins and libs (for groovyBC)
   - cp -rn /home/tom/OpenFOAM/tom-v1912/platforms/linux64GccDPInt32Opt/bin/* AppDir/usr/opt/openfoam/openfoam1912/platforms/linux64GccDPInt32Opt/bin
   - cp -rn /home/tom/OpenFOAM/tom-v1912/platforms/linux64GccDPInt32Opt/lib/* AppDir/usr/opt/openfoam/openfoam1912/platforms/linux64GccDPInt32Opt/lib
@@ -68,7 +73,7 @@ AppDir:
     id: HEATAppimage
     name: HEAT_AppImage
     icon: flame
-    version: v1.1-beta
+    version: v1.2-beta
 #    # Set the python executable as entry point
 #    exec: usr/bin/python3
 #    # Set the application main script path as argument. Use '$@' to forward CLI parameters
@@ -89,6 +94,7 @@ AppDir:
 #        key_url: 'https://dl.openfoam.com/pubkey.gpg'
 
     include:
+      - qt5-default
       - libc6-dev
       - bash
       - libnglib-6.2.1804
@@ -96,8 +102,8 @@ AppDir:
       - python3
       - python3-pkg-resources
       - python3-tk
-      - mdsplus-python
       - python3-distutils
+      - mdsplus-python
       # FreeCAD
 #      - freecad-python3 #
       - freecad
@@ -175,6 +181,10 @@ AppDir:
       PyLib: '3.8'
       MATPLOTLIBDATA: '${APPDIR}/usr/lib/python3.8/site-packages/matplotlib/mpl-data'
       MATPLOTLIBRC: '${APPDIR}/usr/lib/python3.8/site-packages/matplotlib/mpl-data/matplotlibrc'
+      # openFOAM no user files
+      FOAM_CONFIG_NOUSER: 'True'
+      # for debbuging qt errors
+      #QT_DEBUG_PLUGINS: '1'
 
   test:
     fedora:

@@ -13,39 +13,79 @@ import plotly.graph_objects as go
 #data = np.genfromtxt(file,comments="#", autostrip=True)
 #fig = px.line(x=data[:,0],y=data[:,1])
 
-root = '/home/tom/HEAT/data/d3d_000002/openFoam/heatFoam/'
-file1 = root+'T002/postProcessing/probes/0/T'
-file2 = root+'T101A/postProcessing/probes/0/T'
+root = '/home/tom/results/WGPFC_Validation/staticScans/memo010_1.1/nstx_116313_LwrOut/openFoam/heatFoam/'
+file1 = root+'SOLID844/postProcessing/probes/0/T'
+file2 = root+'E-ED1408-284/postProcessing/probes/0/T'
 
 data1 = np.genfromtxt(file1,comments="#", autostrip=True)
 data2 = np.genfromtxt(file2,comments="#", autostrip=True)
 fig = go.Figure()
-fig.add_trace(go.Scatter(x=data1[:,0], y=data1[:,1], name="T002", line=dict(color='royalblue', width=6, dash='dashdot')))
-fig.add_trace(go.Scatter(x=data2[:,0],y=data2[:,1],name="T101A", line=dict(color='magenta', width=6)))
+fig.add_trace(go.Scatter(x=data1[:,0], y=data1[:,1], name="IBDH", line=dict(color='royalblue', width=6, dash='dot')))
+fig.add_trace(go.Scatter(x=data2[:,0],y=data2[:,1],name="OBD", line=dict(color='magenta', width=6)))
 fig.add_trace(go.Scatter(
-    x=[0, 3.2],
+    x=[0, 6],
     y=[1873, 1873],
     mode="lines+markers+text",
-    name="Sublimation T",
+    name="Limit",
     text=["Limit", "Limit"],
     textposition="top center",
     line=dict(color='firebrick', width=3, dash='dot'),
-    textfont=dict(family="Arial", size=16, color="firebrick"),
+    textfont=dict(family="Arial", size=18, color="firebrick"),
 
 ))
 
 fig.update_layout(
-title="Temperature Probe Time Evolution: D3D negD",
+#title="Temperature Probe Time Evolution",
 xaxis_title="Time [s]",
 yaxis_title="Temperature [K]",
 font=dict(
-family="Arial",
-size=24,
-color="Black"
+    family="Arial",
+    size=24,
+    color="Black"
+),
+margin=dict(
+    l=5,
+    r=5,
+    b=5,
+    t=5,
+    pad=2
 ),
 )
+
+fig.update_layout(legend=dict(
+    yanchor="top",
+    y=0.99,
+    xanchor="left",
+    x=0.01
+))
+
+fig.add_annotation(x=3.0, y=1000,
+            text="IBDH T(5s) = 2533 K",
+            showarrow=False,
+            yshift=20,
+            font=dict(
+            family="Arial",
+            size=24,
+            color="royalblue",
+            ),
+            )
+
+fig.add_annotation(x=3.0, y=850,
+            text=" OBD T(5s) = 1935 K",
+            showarrow=False,
+            yshift=20,
+            font=dict(
+            family="Arial",
+            size=24,
+            color="magenta",
+            ),
+            )
+
+
+
 fig.show()
 
+fig.write_image("/home/tom/phd/papers/2020Fall_FST_HEATintro/HEATintro/figures/hf_case1_2.svg")
 
 
 import pandas as pd

@@ -318,7 +318,7 @@ class GUIobj():
         Both MHD and PFC objects must be defined before running this function
         """
         tIdx = np.where(t==self.MHD.timesteps)[0][0]
-        gfile = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + 'g{:6d}.{:05d}'.format(self.MHD.shot, t)
+        gfile = self.MHD.shotPath + '{:06d}/'.format(t) + 'g{:06d}.{:05d}'.format(self.MHD.shot, t)
         #redefine LCFS to be tangent to CAD maximum R (because rNew=None)
         self.newLCFS(t, rNew=rNew, zNew=None, psiSep=None)
         print("CAD rTangent: {:f}".format(self.MHD.rTangent))
@@ -405,7 +405,7 @@ class GUIobj():
         self.MHD.rTangent = rNew
 
         #overwrite existing gfile
-        gfile = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + 'g{:06d}.{:05d}'.format(self.MHD.shot, t)
+        gfile = self.MHD.shotPath + '{:06d}/'.format(t) + 'g{:06d}.{:05d}'.format(self.MHD.shot, t)
         self.MHD.writeGfile(gfile, shot=self.MHD.shot, time=t, ep=ep)
         self.MHD.ep[idx] = EP.equilParams(gfile)
         for PFC in self.PFCs:

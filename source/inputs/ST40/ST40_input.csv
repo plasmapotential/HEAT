@@ -49,7 +49,7 @@ fracLO,0.0
 #==============================================================
 Nphi, 1
 ittLaminar, 10.0
-ittStruct, 1.0
+ittStruct, 30.0
 Smin, 0.0
 Smax, 5.0
 phimin, 0.0

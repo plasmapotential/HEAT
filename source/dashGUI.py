@@ -878,8 +878,6 @@ def loadRes(n_clicks, ROIGridRes, gridRes, MachFlag):
               [State('CAD-upload', 'contents'),
                State('MachFlag', 'value')])
 def loadCAD(STPfile, STPcontents, MachFlag):
-    if STPfile is None:
-        raise PreventUpdate
     if MachFlag is None:
         return [html.Label("Select a machine first", style={'color':'#fc0313'})]
     else:
