@@ -65,7 +65,7 @@ To download the appImage
 ^^^^^^^^^^^^^^^^^^^^^^^^
 In linux terminal run the following command from a directory of your choosing::
 
-    wget https://github.com/plasmapotential/HEAT/releases/download/v1.1-beta/HEAT_AppImage-v1.2-beta-x86_64.AppImage
+    wget https://github.com/plasmapotential/HEAT/releases/download/v1.2-beta/HEAT_AppImage-v1.2-beta-x86_64.AppImage
 
 Alternatively, you may download the latest release directly from github:
 `<https://github.com/plasmapotential/HEAT/releases>`_
