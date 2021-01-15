@@ -63,6 +63,15 @@ visualizing HEAT output, the user should have a local copy of ParaVIEW (preferab
 
 To download the appImage
 ^^^^^^^^^^^^^^^^^^^^^^^^
+The following video describes the installation process:
+
+.. raw:: html
+
+    <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; height: auto;">
+        <iframe src="https://youtu.be/mDui3_z_2oM" frameborder="0" allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe>
+    </div>
+
+
 In linux terminal run the following command from a directory of your choosing::
 
     wget https://github.com/plasmapotential/HEAT/releases/download/v1.2-beta/HEAT_AppImage-v1.2-beta-x86_64.AppImage
