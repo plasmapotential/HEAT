@@ -78,6 +78,7 @@ After downloading, make file executable::
 
 
 HEAT Installation Video:
+
 .. raw:: html
     <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; height: auto;">
         <iframe src="https://youtube.com/embed/mDui3_z_2oM" frameborder="0" allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe>
@@ -94,6 +95,7 @@ have prepared.  The test case can be downloaded and extracted by using the follo
 
 
 Test Case Installation Video:
+
 .. raw:: html
     <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; height: auto;">
         <iframe src="https://youtube.com/embed/SQXY8lI4s-o" frameborder="0" allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe>
