@@ -63,14 +63,7 @@ visualizing HEAT output, the user should have a local copy of ParaVIEW (preferab
 
 To download the appImage
 ^^^^^^^^^^^^^^^^^^^^^^^^
-The following video describes the installation process:
-
-.. raw:: html
-
-    <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; height: auto;">
-        <iframe src="https://youtube.com/embed/mDui3_z_2oM" frameborder="0" allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe>
-    </div>
-
+Commands for installing HEAT are given below.  A video installation tutorial is provided below the commands.
 
 In linux terminal run the following command from a directory of your choosing::
 
@@ -83,6 +76,14 @@ After downloading, make file executable::
 
     chmod +x HEAT_AppImage-v1.2-beta-x86_64.AppImage
 
+
+HEAT Installation Video:
+.. raw:: html
+    <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; height: auto;">
+        <iframe src="https://youtube.com/embed/mDui3_z_2oM" frameborder="0" allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe>
+    </div>
+
+
 To download test HEAT case
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 After downloading, you can test your HEAT installation by using a test case we
@@ -90,6 +91,13 @@ have prepared.  The test case can be downloaded and extracted by using the follo
 
     wget https://github.com/plasmapotential/HEAT/releases/download/v1.2-beta/testRun.tar.gz
     tar -xvzf testRun.tar.gz
+
+
+Test Case Installation Video:
+.. raw:: html
+    <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; height: auto;">
+        <iframe src="https://youtube.com/embed/SQXY8lI4s-o" frameborder="0" allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe>
+    </div>
 
 
 To download ParaVIEW
