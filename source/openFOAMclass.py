@@ -332,8 +332,9 @@ class OpenFOAM():
         log.info('Generating 3D Mesh in OpenFOAM')
 
         #Check to see if 3D mesh exists for these settings
-        minLev = self.meshMinLevel
-        maxLev = self.meshMaxLevel
+        minLev = int(self.meshMinLevel)
+        maxLev = int(self.meshMaxLevel)
+
         if self.meshDir[-1] == '/':
             file = self.meshDir + part + '_{:d}_{:d}'.format(minLev,maxLev)
         else:
