@@ -115,6 +115,21 @@ Tutorials
 ---------
 Accessing the HEAT graphical user interface
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The following video provides an introduction to HEAT and guides you through running
+the test case:
+
+
+    .. raw:: html
+
+        <div style="position: relative; padding-bottom: 2%; height: 0; overflow: hidden; max-width: 100%; height: auto;">
+            <iframe width="560" height="315" src="https://www.youtube.com/embed/ezdfC84ANTk" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+        </div>
+
+
+
+
+
 After downloading appImage and making it executable, run the appImage to start
 the HEAT server::
 
