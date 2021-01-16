@@ -27,13 +27,14 @@ file.  appImage is available under 'releases' and has been tested on Ubuntu18.04
 Centos7, Centos8.  The appImage release is still in beta version, so there are likely still bugs.
 Bugs can be submitted to this github repo.
 
-HEAT installation instructions and tutorials can be found here:
-https://heat-flux-engineering-analysis-toolkit-heat.readthedocs.io/en/latest/
-
 The author engineer is Tom Looby, a PhD candidate for Oak Ridge National Lab.
 This project is openSource under the MIT license.
 
 Tom's email:  tlooby@vols.utk.edu
+
+## Installation and Tutorials
+HEAT installation instructions and tutorials can be found here:
+https://heat-flux-engineering-analysis-toolkit-heat.readthedocs.io/en/latest/
 
 ## Examples:
 Below are a few examples of HEAT output.  HEAT produces time varying 3D heat fluxes, and can easily create visualizations leveraging the power of ParaVIEW.  There is also a HEAT presentation from Aug 2020 available [here](https://docs.google.com/presentation/d/1aqJRaxt97P6R4Kqz7xyaoegtxssHQQPuwvJgVM4cCII/edit?usp=sharing).
