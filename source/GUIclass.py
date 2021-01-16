@@ -505,9 +505,9 @@ class GUIobj():
 
         return
 
-    def getCADInputs(self,ROIGridRes=None,gridRes=None,STPfile=None,STPdata=None):
+    def getCADResInputs(self,ROIGridRes=None,gridRes=None):
         """
-        Loads CAD file and settings
+        Loads CAD inputs
         """
         import numpy as np
         tools.initializeInput(self.CAD, infile=self.infile)
@@ -521,6 +521,19 @@ class GUIobj():
                 self.CAD.gridRes = gridRes
             else:
                 self.CAD.gridRes = "standard"
+        return
+
+    def getCAD(self,STPfile=None,STPdata=None):
+        """
+        Loads CAD file
+        """
+        import numpy as np
+        if hasattr(self.CAD, 'gridRes'):
+            pass
+        else:
+            tools.initializeInput(self.CAD, infile=self.infile)
+        self.CAD.rootDir = self.rootDir #set HEAT rootDir from HEATgui.py
+
         if STPfile is not None:
             #make STP path if it doesnt exist
             try:
@@ -535,6 +548,7 @@ class GUIobj():
             self.CAD.STPfile = newSTPpath
             #load STP file using FreeCAD
             self.CAD.loadSTEP()
+
         return
 
     def getPFCdataFromGUI(self, data):
@@ -590,6 +604,8 @@ class GUIobj():
 
         #Find potential intersections by file as they correspond to ROI PFCs,
         # then mesh 'em using FreeCAD Standard mesh algorithm
+        print("TEST")
+        print(self.CAD.gridRes)
         self.CAD.getIntersectsFromFile(self.timestepMap)
         self.CAD.getIntersectMeshes(resolution=self.CAD.gridRes)
         self.CAD.writeMesh2file(self.CAD.intersectMeshes,

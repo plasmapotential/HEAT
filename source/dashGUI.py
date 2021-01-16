@@ -869,7 +869,7 @@ def loadRes(n_clicks, ROIGridRes, gridRes, MachFlag):
         raise PreventUpdate
     if MachFlag is None:
         return [html.Label("Select a machine", style={'color':'#fc0313'})]
-    gui.getCADInputs(ROIGridRes,gridRes,STPfile=None,STPdata=None)
+    gui.getCADResInputs(ROIGridRes,gridRes)
     return [html.Label("Loaded Resolution Settings", style={'color':'#f5d142'})]
 
 #Load CAD button connect
@@ -884,7 +884,7 @@ def loadCAD(STPfile, STPcontents, MachFlag):
         contents = STPcontents[0]
         content_type, content_string = contents.split(',')
         STPdata= base64.b64decode(content_string)
-        gui.getCADInputs(ROIGridRes=None,gridRes=None,STPfile=STPfile[0],STPdata=STPdata)
+        gui.getCAD(STPfile=STPfile[0],STPdata=STPdata)
     return [html.Label("Loaded CAD: "+STPfile[0], style={'color':'#f5d142'})]
 
 #==========HF==========

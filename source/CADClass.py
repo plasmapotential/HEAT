@@ -171,6 +171,8 @@ class CAD:
         If they don't, create them.
         """
         if resolution == None:  resolution=self.gridRes
+        print("TEST")
+        print(resolution)
         for partnum in self.intersectList:
             name = self.STLpath + partnum + "___" + resolution +"mm.stl"
             if os.path.exists(name):
