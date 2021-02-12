@@ -155,6 +155,8 @@ fig.update_yaxes(title_text="<b>Maximum PFC Temperature [K]</b>", secondary_y=Fa
 
 fig.show()
 
+
+
 #===============================================================================
 #                       Plot maxT for different sweeps / OF results
 #===============================================================================
@@ -163,15 +165,19 @@ import plotlyGUIplots as pgp
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-root = '/home/tom/HEAT/data/d3d_000002/openFoam/heatFoam/'
-file1 = root+'T101A/postProcessing/fieldMinMax1/0/minMaxTnoTab.dat'
-file2 = root+'T002/postProcessing/fieldMinMax1/0/minMaxTnoTab.dat'
-file3 = root+'T005/postProcessing/fieldMinMax1/0/minMaxTnoTab.dat'
+root = '/home/tom/results/WGPFC_Validation/dynamicScans/memo010_case2scan4'
+file1 = root+'/5s_0.1Hz/HEAToutput/openFoam/heatFoam/SOLID844/postProcessing/fieldMinMax1/0/minMaxTnoTab.dat'
+file2 = root+'/5s_1.0Hz/HEAToutput/openFoam/heatFoam/SOLID844/postProcessing/fieldMinMax1/0/minMaxTnoTab.dat'
+file3 = root+'/5s_10.0Hz/HEAToutput/openFoam/heatFoam/SOLID844/postProcessing/fieldMinMax1/0/minMaxTnoTab.dat'
 files = [file1, file2, file3]
-nombres = ['T101A', 'T002', 'T005']
+nombres = ['0.1 Hz', '1 Hz', '10 Hz']
 
-dashes = ['longdash', 'dashdot', 'solid'] #dashdot
-#colors = ['#0dd5db', '#ab0ddb', '#eb9215', '#1e0ddb']
+dashes = ['dot', 'solid', 'solid'] #dashdot
+colors = ['#DA16FF', '#54A24B', '#1F77B4']
+width = [2, 2, 2]
+modes = ['lines+markers','lines+markers','lines']
+markerSize = [8,8,8]
+markerType = ['circle-open-dot','cross','circle']
 fields = ['T']
 data = []
 for file in files:
@@ -188,8 +194,10 @@ for idx,name in enumerate(nombres):
         mask = df['field'] == field
         t = df[mask].sort_values('# Time')['# Time'].values
         varMax = df[mask].sort_values('# Time')['max'].values
-        fig.add_trace(go.Scatter(x=t, y=varMax, name=name, line=dict(width=6, dash=dashes[idx],
-                                 #color=colors[idx]
+        fig.add_trace(go.Scatter(x=t, y=varMax, name=name, mode=modes[idx], marker_size=markerSize[idx],
+                                 marker_symbol=markerType[idx],
+                                 line=dict(width=width[idx], dash=dashes[idx],
+                                 color=colors[idx]
                                  ))
                                  )
 
@@ -197,26 +205,78 @@ fig.add_trace(go.Scatter(
     x=[0.05, t[-1]],
     y=[1873, 1873],
     mode="lines+markers+text",
-    name="Sublimation T",
-    text=["Limit", "Limit"],
+    name="Limit",
+    text=["Limit", ""],
     textposition="top center",
     line=dict(color='firebrick', width=3, dash='dot'),
-    textfont=dict(family="Arial", size=16, color="firebrick"),
+    textfont=dict(family="Arial", size=20, color="firebrick"),
 
 ))
 
 
 #fig.update_layout(title='Peak Temp for Various Strike Point Frequencies',
-fig.update_layout(title='Peak Temp for negD Tiles',
+fig.update_layout(
+            #title='Peak Temp for negD Tiles',
             xaxis_title='<b>Time [s]</b>',
-            yaxis_title='<b>Temp [K]</b>',
+            yaxis_title='<b>Max Temp on IBDH [K]</b>',
             font=dict(
-                family='Arial, sans-serif',
-                size=18,
+            family="Arial",
+            size=24,
+            color="Black"
+            ),
+            margin=dict(
+                l=5,
+                r=5,
+                b=5,
+                t=5,
+                pad=2
+            ),
                 )
-                )
-fig.show()
 
+
+
+#fig.add_annotation(x=1.0, y=4000,
+#            text="0.1 Hz time of sublimation = 0.92 s",
+#            showarrow=False,
+#            yshift=20,
+#            font=dict(
+#            family="Arial",
+#            size=24,
+#            color="#DA16FF",
+#            ),
+#            )
+#
+#fig.add_annotation(x=1.0, y=3750,
+#            text="1 Hz time of sublimation = 0.55 s",
+#            showarrow=False,
+#            yshift=20,
+#            font=dict(
+#            family="Arial",
+#            size=24,
+#            color="#54A24B",
+#            ),
+#            )
+#
+#fig.add_annotation(x=1.0, y=3500,
+#            text="10 Hz time of sublimation = 3.36 s",
+#            showarrow=False,
+#            yshift=20,
+#            font=dict(
+#            family="Arial",
+#            size=24,
+#            color="#1F77B4",
+#            ),
+#            )
+
+fig.update_layout(legend=dict(
+    yanchor="top",
+    y=0.99,
+    xanchor="left",
+    x=0.01
+))
+
+fig.show()
+fig.write_image("/home/tom/phd/papers/2020Fall_FST_HEATintro/HEATintro/figures/sweepFreqs.svg")
 
 #===============================================================================
 #                       generate sweep gfiles

@@ -1442,7 +1442,12 @@ def loadHF(n_clicks,hfMode,lqEich,S,qBG,lqCN,lqCF,lqPN,lqPF,
             fracCN = limfracCN
             fracCF = limfracCF
         elif hfMode == 'multiExp':
-            lqCNmode = multiExplqCNMode
+            #add this back in after brunner scaling is in HEAT:
+            # lqCNmode = multiExplqCNMode
+            lqCNmode = 'user'
+            lqCFmode = 'user'
+            lqPNmode = 'user'
+            lqPFmode = 'user'
         else: #eich mode is default
             lqCNmode = eichlqCNMode
             lqCFmode = None

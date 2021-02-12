@@ -7,6 +7,11 @@
 # but each PFC needs its own line (and sometimes two if you need to trace in both directions)
 # commas are the delimiter here, so don't use them inside columns or you'll break pandas
 #
+# each divertor is associated with a name.  default is:
+#   UI: Upper Inner
+#   UO: Upper Outer
+#   LI: Lower Inner
+#   LO: Lower Outer
 # Example
 # 100:105, E-ED1450-013, -1, E-ED1450-013:E-ED1390-003:E-ED1450-071
 #
@@ -16,21 +21,15 @@
 #
 #
 #
-# 40-1783_2 TILE UPPER
-# 40-1782_3 TILE LOWER TYPE A0
 timesteps, PFCname, MapDirection, DivCode, intersectName
-#requires Bt0 flipped from original TE gFile
-### Power comes from bottom left and top right, no self intersections
-#0:250, T029, 1, UI, T028:T040:T041
-#0:250, T030, 1, UI, T029:T039:T040
-#0:250, T031, 1, UI, T030:T038:T039
-#0:250, T031, -1, LI, T032:T023:T024
-#0:250, T032, -1, LI, T033:T022:T023
-#0:250, T033, -1, LI, T034:T021:T022
-### With self-intersections
-0:250, T029, 1, UI, T029:T028:T040:T041
-0:250, T030, 1, UI, T030:T029:T039:T040
-0:250, T031, 1, UI, T031:T030:T038:T039
-0:250, T031, -1, LI, T031:T032:T023:T024
-0:250, T032, -1, LI, T032:T033:T022:T023
-0:250, T033, -1, LI, T033:T034:T021:T022
+#=====limiter
+0:5000, T000, 1, LO, T000:T005:T028:T019:T027:T026
+0:5000, T005, 1, LO, T005:T006:T019:T020:T026:T025
+0:5000, T006, 1, LO, T006:T007:T020:T021:T025:T024
+0:5000, T007, 1, LO, T007:T008:T021:T022:T024:T023
+0:5000, T008, 1, LO, T008:T022:T023
+0:5000, T000, -1, UO, T000:T001:T018:T009:T016:T017
+0:5000, T001, -1, UO, T001:T009:T016:T015:T010:T002
+0:5000, T002, -1, UO, T002:T010:T015:T003:T011:T014
+0:5000, T003, -1, UO, T003:T011:T014:T004:T012:T013
+0:5000, T004, -1, UO, T004:T012:T013

@@ -88,8 +88,8 @@ zMin, -1660.0
 zMax, -1600.0
 tMin, 0
 tMax, 5050
-deltaT, 0.02
-writeDeltaT, 0.02
+deltaT, 0.01
+writeDeltaT, 0.01
 xProbe, 504.0
 yProbe, 128.0
 zProbe, -1605.21

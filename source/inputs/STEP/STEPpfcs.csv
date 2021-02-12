@@ -19,21 +19,28 @@
 # 40-1783_2 TILE UPPER
 # 40-1782_3 TILE LOWER TYPE A0
 timesteps, PFCname, MapDirection, DivCode, intersectName
-### LIMITERS
-# FORWARD TRACE
-#0:250, OMPlim, -1, LO, OMPlim:OMPlim001
-#0:250, lwrOutLim, -1, LO, lwrOutLim:lwrOutLim001
-#0:250, upOutLim, -1, LO, upOutLim:upOutLim001
-#0:250, IMPlim, -1, LO, IMPlim:IMPlim001
-# REVERSE TRACE
-#0:250, OMPlim, 1, LO, OMPlim:OMPlim002
-#0:250, lwrOutLim, 1, LO, lwrOutLim:lwrOutLim002
-#0:250, upOutLim, 1, LO, upOutLim:upOutLim002
-#0:250, IMPlim, 1, LO, IMPlim:IMPlim002
-#
-### DIVERTOR
-#0:250, divertor, -1, LO, divertor
-#0:250, outerDiv1section, -1, LO, outerDiv1section
-#
-### FIRST WALL
-0:250, ROB, -1, LO, ROB:COB:LOB
+### OUTER DIVERTOR
+#0:250, outDivLeft, -1, LO, outDivLeft:outDivCenter:outDivRight:ROB:COB:LOB
+#0:250, outDivCenter, -1, LO, outDivCenter:outDivRight:DivIntersect:COB:LOB:ROBrotated
+#0:250, outDivRight, -1, LO, outDivRight:DivIntersect:ROB:LOBrotated:COBrotated
+### OUTER WALL (DIVERTED)
+#0:250, LOB, -1, LO, LOB:COB:lim4
+#0:250, COB, -1, LO, COB:ROB:lim4
+#0:250, ROB, -1, LO, ROB:LOBrotated:lim008
+### OUTER WALL (ALL INTERSECTIONS)
+#0:250, LOB, -1, LO, LOB:COB:lim4:lim2:lim1
+#0:250, COB, -1, LO, COB:ROB:lim4:lim2:lim1
+#0:250, ROB, -1, LO, ROB:LOBrotated:lim008:lim005:lim006
+### OUTER LIMITERS
+0:250, lim2, -1, LO, lim2:COB:ROB:lim006:UPFW2:UPFW1
+0:250, lim1, -1, LO, lim1:LOB:COB:lim005:lim006
+0:250, lim4, -1, LO, lim4:LOB:COB:lim008:lim005
+### INNER DIVERTOR
+#0:250, inDivLeftCut, 1, LI, inDivLeftCut:inDivRight001:CS2:CS003
+#0:250, inDivCenterCut, 1, LI, inDivCenterCut:inDivLeftCut:CS1:CS2
+#0:250, inDivRightCut, 1, LI, inDivRightCut:inDivCenterCut:CS1:CS2
+### INNER WALL (ALL INTERSECTIONS)
+#0:250, CS1, 1, LI, CS1:CS2:lim3
+#0:250, CS2, 1, LI, CS2:lim3:CS003:lim009
+### INNER LIMITERS
+0:250, lim3, 1, LI, lim3:CS2:lim009

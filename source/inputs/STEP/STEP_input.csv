@@ -23,7 +23,7 @@ shot, 000001
 tree, EFIT02
 tmin, 0
 tmax, 200
-nTrace, 25
+nTrace, 30
 dataPath, /home/tom/data/HEAT/
 ionDirection, -1
 plasma3Dmask, 0 #1=true, 0=false
@@ -35,7 +35,7 @@ lqEich, 3.0
 S, 1.0
 Psol, 1
 qBG, 0.0
-lqCN, 3.0
+lqCN, 50.0
 lqCF, 5.0
 lqPN, 1.0
 lqPF, 1.0
@@ -43,10 +43,10 @@ fracCN, 0.6
 fracCF, 0.4
 fracPN, 0.1
 fracPF, 0.0
-fracUI,0.1
-fracUO,0.4
-fracLI,0.1
-fracLO,0.4
+fracUI,0.0
+fracUO,0.0
+fracLI,0.5
+fracLO,0.5
 #==============================================================
 #                MAFOT Variables
 #==============================================================

@@ -359,7 +359,7 @@ class CAD:
         correctly.  Returns a list of mesh objects
 
         This function uses the FreeCAD Standard algorithm, and defines mesh
-        by surface and angular deviation.  Default surface deviation is 1mm,
+        by surface and angular deviation.  Default surface deviation is 0.1mm,
         and default angular deviation is 0.523599rad (30deg)
         """
         #Check if this is a single file or list and make it a list
