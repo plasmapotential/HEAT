@@ -169,8 +169,7 @@ A series of videos will be added soon to describe this process and others.
 Running a field line trace
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The following video provides an introduction to HEAT and guides you through running
-the test case:
+The following video provides an example of running a field line trace.
 
 
     .. raw:: html
