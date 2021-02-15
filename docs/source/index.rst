@@ -221,6 +221,41 @@ need to be adjusted.  HEAT has a suite of tools for dealing with GEQDSK files on
 Email Tom for more information on using HEAT to fix gFiles.
 
 
+
+
+Running HEAT on a Local Area Network (LAN)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The default HEAT settings enable the user to access the GUI in a web browser at
+the localhost via port 8050 (127.0.0.1:8050).  When HEAT is being utilized on a
+local machine, this is ideal, but when the user desires to run HEAT as a server
+(such as on a cluster) and connect to it from a client machine across a network,
+then the IP address and port number must be included as command line arguments.
+
+This method can be useful for users who do not have linux operating systems
+(ie macOS, windows, android), or for users who want to use HEAT without
+downloading and configuring on their local machine.  The limitations to this method
+are:
+    1) Only one user can access HEAT at a time.  There is work underway to enable
+       multiple user sessions, but HEAT can only serve a single session currently.
+    2) The IP address assigned to HEAT must be the IP address assigned to that
+       machine's network interface card (NIC) by the network DHCP server.  The
+       user cannot assign a random IP address to HEAT.
+    3) The port must allow TCP/IP traffic.
+
+To do this, include the IP address and desired port number as
+switches when executing the HEAT appImage command in a terminal::
+
+    ./HEAT_AppImage-v1.2-beta-x86_64.AppImage -a <address> -p <port>
+
+The -a switch precedes the intended IP address and the -p switch precedes the
+port number.  For example, to run HEAT at 192.168.0.100 on port 7500, the following command would
+be used::
+    ./HEAT_AppImage-v1.2-beta-x86_64.AppImage -a 192.168.0.100 -p 7500
+
+Then, on the client machine, HEAT can be accessed by opening a web browser and
+navigating to 192.168.0.100:7500
+
+
 Indices and tables
 ==================
 

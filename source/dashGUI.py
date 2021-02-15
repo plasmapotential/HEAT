@@ -16,8 +16,11 @@ There are css files that go with this program.  They are located in the
 
 If you want to use this in a production environment serving multiple sessions
 simultaneously, you will need to run a gunicorn server or something to isolate
-different users' class variables from each other.  For now this is just set up to
-serve a single session @ 127.0.0.1:8050
+different users' class variables from each other.
+
+dashGUI.py should be called with no arguments to run on 127.0.0.1:8050 (default)
+to run on address:port, use command line:
+dashGUI.py <address> <port>
 
 You will need to set a few variables below, based upon your system paths
 rootDir, PVPath
@@ -132,7 +135,7 @@ import toolsClass
 tools = toolsClass.tools()
 from dash_extensions import Download
 from dash_extensions.snippets import send_file
-
+import ipaddress
 
 #Create log files that will be displayed in the HTML GUI
 from pathlib import Path
@@ -2643,4 +2646,24 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
 
 
 if __name__ == '__main__':
-    app.run_server(debug=True, dev_tools_ui=True)
+# dashGUI.py should be called with no arguments to run on 127.0.0.1:8050 (default)
+# to run on address:port, use command line:
+# dashGUI.py <address> <port>
+
+    try:
+        ipaddress.ip_address(sys.argv[1]) #validate it is an ip address
+        address = sys.argv[1]
+    except:
+        address = '127.0.0.1' #default
+    try:
+        port = int(sys.argv[2])
+    except:
+        port = 8050 # default
+
+
+    app.run_server(
+                    debug=True,
+                    dev_tools_ui=True,
+                    port=port,
+                    host=address
+                   )
