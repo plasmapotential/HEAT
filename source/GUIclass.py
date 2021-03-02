@@ -604,8 +604,6 @@ class GUIobj():
 
         #Find potential intersections by file as they correspond to ROI PFCs,
         # then mesh 'em using FreeCAD Standard mesh algorithm
-        print("TEST")
-        print(self.CAD.gridRes)
         self.CAD.getIntersectsFromFile(self.timestepMap)
         self.CAD.getIntersectMeshes(resolution=self.CAD.gridRes)
         self.CAD.writeMesh2file(self.CAD.intersectMeshes,

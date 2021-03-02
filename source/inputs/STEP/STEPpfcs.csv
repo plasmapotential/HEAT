@@ -32,9 +32,10 @@ timesteps, PFCname, MapDirection, DivCode, intersectName
 #0:250, COB, -1, LO, COB:ROB:lim4:lim2:lim1
 #0:250, ROB, -1, LO, ROB:LOBrotated:lim008:lim005:lim006
 ### OUTER LIMITERS
-0:250, lim2, -1, LO, lim2:COB:ROB:lim006:UPFW2:UPFW1
-0:250, lim1, -1, LO, lim1:LOB:COB:lim005:lim006
-0:250, lim4, -1, LO, lim4:LOB:COB:lim008:lim005
+0:250, lim2, 1, LI, lim2:lim010:lim011
+0:250, lim1, 1, LI, lim1:lim011:lim012
+0:250, lim1, -1, LO, lim1:lim005:lim006
+0:250, lim4, -1, LO, lim4:lim008:lim005
 ### INNER DIVERTOR
 #0:250, inDivLeftCut, 1, LI, inDivLeftCut:inDivRight001:CS2:CS003
 #0:250, inDivCenterCut, 1, LI, inDivCenterCut:inDivLeftCut:CS1:CS2
@@ -43,4 +44,4 @@ timesteps, PFCname, MapDirection, DivCode, intersectName
 #0:250, CS1, 1, LI, CS1:CS2:lim3
 #0:250, CS2, 1, LI, CS2:lim3:CS003:lim009
 ### INNER LIMITERS
-0:250, lim3, 1, LI, lim3:CS2:lim009
+#0:250, lim3, 1, LI, lim3:CS2:lim009
