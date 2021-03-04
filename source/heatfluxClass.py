@@ -827,6 +827,33 @@ class heatFlux:
         log.info("Created Psi Point Cloud")
         return
 
+    def write_psiNThresh_pointcloud(self,centers,psiN,dataPath,tag=None):
+        print("Creating Psi Point Cloud")
+        log.info("Creating Psi Point Cloud")
+        if tag is None:
+            pcfile = dataPath + 'psiPointCloud.csv'
+        else:
+            pcfile = dataPath + 'psiPointCloud_'+tag+'.csv'
+
+        use = np.where(np.abs(psiN - 0.969649) < 0.05)
+
+        pc = np.zeros((len(centers[use]), 4))
+        pc[:,0] = centers[use][:,0]*1000.0
+        pc[:,1] = centers[use][:,1]*1000.0
+        pc[:,2] = centers[use][:,2]*1000.0
+        pc[:,3] = psiN[use]
+        head = "X,Y,Z,psi"
+        np.savetxt(pcfile, pc, delimiter=',',fmt='%.10f', header=head)
+
+        #Now save a vtk file for paraviewweb
+        if tag is None:
+            tools.createVTKOutput(pcfile, 'points', 'psiN')
+        else:
+            name = 'psiN_'+tag
+            tools.createVTKOutput(pcfile, 'points', name)
+        print("Created Psi Point Cloud")
+        log.info("Created Psi Point Cloud")
+        return
 
     def write_openFOAM_boundary(self, centers, hf, openFoamDir, timestep):
         """

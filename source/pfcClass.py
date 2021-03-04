@@ -261,7 +261,7 @@ class PFC:
         numSteps = MHD.nTrace #actual trace is (numSteps + 1)*dphi degrees
         #If numSteps = 0, dont do intersection checking
         if numSteps > 0:
-            print("Intersection Test #1")
+            print("\nIntersection Test #1")
             CTLfile = self.controlfilePath + self.controlfileStruct
             MHD.writeControlFile(CTLfile, self.t, self.mapDirectionStruct, mode='struct')
 
@@ -272,14 +272,30 @@ class PFC:
             os.remove(self.structOutfile) #clean up
 
             #this is for printing information about a specific mesh element
-#            ptIdx = np.where(use==16886)[0]
-            ptIdx = None
+            #you can get the element # from paraview Point ID
+            #paraviewIndex = None
+            paraviewIndex = 6814
+            if paraviewIndex is not None:
+                ptIdx = np.where(use==paraviewIndex)[0]
+                print("Finding intersection face for point at:")
+                print(self.centers[paraviewIndex])
+            else:
+                ptIdx = None
+
+            #find psi for all points we launch traces from
+            R,Z,Phi = tools.xyz2cyl(self.centers[:,0], self.centers[:,1], self.centers[:,2])
+            psiSource = self.ep.psiFunc.ev(R,Z)
+
+            #find psi for all points we potentially intersect with
+            targetCtrs = self.getTargetCenters(targetPoints)
+            R,Z,Phi = tools.xyz2cyl(targetCtrs[:,0], targetCtrs[:,1], targetCtrs[:,2])
+            psiIntersect = self.ep.psiFunc.ev(R,Z)
 
             #First we do basic intersection checking
             intersect_mask = self.intersectTestBasic(structData,self.norms[use],
                                                     targetPoints,targetNorms,
                                                     MHD,self.ep,self.mapDirectionStruct,
-                                                    ptIdx)
+                                                    psiSource[use], psiIntersect, ptIdx)
 
             self.shadowed_mask[use] = intersect_mask
 
@@ -290,10 +306,17 @@ class PFC:
         #===INTERSECTION TEST 2 (multiple steps up field line)
         #Starts at second step up field line
         if numSteps > 1:
-            print("Intersection Test #2")
+            print("\nIntersection Test #2")
             MHD.writeControlFile(self.controlfileStruct, self.t, self.mapDirectionStruct, mode='struct')
             use = np.where(self.shadowed_mask == 0)[0]
             intersect_mask2 = np.zeros((len(use)))
+
+            if paraviewIndex is not None:
+                ptIdx = np.where(use==paraviewIndex)[0]
+                print("Finding intersection face for point at:")
+                print(self.centers[paraviewIndex])
+            else:
+                ptIdx = None
 
             #Perform fist integration step but dont use for finding intersections
             MHD.writeMAFOTpointfile(self.centers[use],self.gridfileStruct)
@@ -306,6 +329,9 @@ class PFC:
             #This amounts to 'walking' up the field line looking for intersections,
             #which is important when field line curvature makes intersections happen
             #farther than 1-2 degrees from PFC surface.
+            #
+            #if you need to reference stuff from the original arrays (ie self.centers)
+            #you need to do nested uses (ie: self.centers[use][use2]).
             use2 = np.where(intersect_mask2 == 0)[0]
             for i in range(numSteps):
                 print("\nIntersect Trace #2 Step {:d}".format(i))
@@ -317,15 +343,19 @@ class PFC:
                     print("All faces shadowed on this PFC. Moving onto next PFC...")
                     log.info("All faces shadowed on this PFC. Moving onto next PFC...")
                     break
+
                 indexes = np.where([x==useOld for x in use2])[1] #map current steps's index back to intersect_mask2 index
+                if paraviewIndex is not None:
+                    ptIdx = np.where(use2==useOld[ptIdx])[0] #for tracing intersection locations
+                else:
+                    ptIdx = None
 
                 StartPoints = structData[startIdx::2,:][indexes] #odd indexes are second trace point
                 MHD.writeMAFOTpointfile(StartPoints,self.gridfileStruct)
                 MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
                 structData = self.readStructOutput(self.structOutfile)
                 os.remove(self.structOutfile) #clean up
-                intersect_mask2[use2] = self.intersectTest2(structData,targetPoints,self.mapDirectionStruct)
-                print("Assigned Mask")
+                intersect_mask2[use2] = self.intersectTest2(structData,targetPoints,self.mapDirectionStruct, psiSource[use][use2], psiIntersect, ptIdx)
                 #for debugging, save a shadowmask at each step up fieldline
                 if shadowMaskClouds == True:
                     self.shadowed_mask[use] = intersect_mask2
@@ -338,63 +368,9 @@ class PFC:
         print("Completed Intersection Check")
         return
 
-    def longRangeIntersectCheck(self,qDiv,thresh,distPhi,MHD,CAD):
-        """
-        Runs a long range intersection check.
-
-        Because some PFC components may have STL faces that are in locations
-        with very high Bt/(Br+Bz) ratio, it might take longer than 10-20 degrees
-        for them to intersect with anything.
-
-        This function requires a threshold power.  Any PFC face with power
-        higher than the threshold is checked.
-
-        The flagged faces are then checked for intersections over distPhi degrees
-        """
-        print("\nLong Range Trace Begins")
-        log.info("\nLong Range Trace Begins")
-
-        numTargetFaces = 0
-        targetPoints = []
-        print('Number of target parts: {:f}'.format(len(self.intersects)))
-        for i,target in enumerate(CAD.intersectMeshes):
-            #check if this target is a potential intersection
-            if CAD.intersectList[i] in self.intersects:
-                numTargetFaces += target.CountFacets
-                #append target data
-                for face in target.Facets:
-                    targetPoints.append(face.Points)
-        targetPoints = np.asarray(targetPoints)/1000.0 #scale to m
-
-        use = np.where(np.abs(qDiv) > thresh)[0]
-        found = 0
-        print('Number of points above threshold: {:f}'.format(len(use)))
-        log.info('Number of points above threshold: {:f}'.format(len(use)))
-        for idx in use:
-            startPoint = self.centers[idx]
-#            print("Start Point")
-#            print(startPoint)
-            MHD.writeMAFOTpointfile(startPoint,self.gridfileStruct)
-            MHD.getMultipleFieldPaths(distPhi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
-            structData = self.readStructOutput(self.structOutfile)
-            os.remove(self.structOutfile) #clean up
-            #create source format that intersectTest2 reads (odd start points, even end points)
-            x = np.insert(structData[:,0], np.arange(len(structData[:,0])), structData[:,0])
-            y = np.insert(structData[:,1], np.arange(len(structData[:,1])), structData[:,1])
-            z = np.insert(structData[:,2], np.arange(len(structData[:,2])), structData[:,2])
-            sources = np.array([x,y,z]).T[1:-1]
-            intersects = self.intersectTest2(sources,targetPoints,self.mapDirectionStruct)
-            if np.sum(intersects) > 0:
-#                print("Found long range intersection")
-#                log.info("Found long range intersection")
-                qDiv[idx] = 0.0
-                found +=1
-        print("Long range trace found {:f} intersections".format(found))
-        log.info("Long range trace found {:f} intersections".format(found))
-        return qDiv
-
     def intersectTestBasic(self,sources,sourceNorms,
-                        targets,targetNorms,MHD,ep,ionDir,ptIdx=None):
+                        targets,targetNorms,MHD,ep,ionDir,
+                        psiSource, psiTarget, ptIdx=None):
         """
         checks if any of the lines (field line traces) generated by MAFOT
         struct program intersect any of the target mesh faces.
@@ -426,29 +402,16 @@ class PFC:
 
         N = len(q2)
         Nt = len(p1)
-        print('{:d} Source Faces and {:d} Target Faces'.format(N,Nt))
+        print('{:d} Source Faces and {:d} Target Faces in PFC object'.format(N,Nt))
 
 
         #Cull target front face (PFC front faces will only intersect with
         # other PFC shadowed faces)
-        x = np.zeros((Nt,3))
-        y = np.zeros((Nt,3))
-        z = np.zeros((Nt,3))
-        x[:,0] = p1[:,0]
-        x[:,1] = p2[:,0]
-        x[:,2] = p3[:,0]
-        y[:,0] = p1[:,1]
-        y[:,1] = p2[:,1]
-        y[:,2] = p3[:,1]
-        z[:,0] = p1[:,2]
-        z[:,1] = p2[:,2]
-        z[:,2] = p3[:,2]
-        tools.targetCtrs = tools.faceCenters(x,y,z)
+        tools.targetCtrs = self.getTargetCenters(targets)
         targetBackfaceMask = self.backfaceCulling(tools.targetCtrs,targetNorms,MHD,ep,ionDir)
 
-        #Potential intersection faces
+        #Potential intersection faces from backface culling
         use = np.where(targetBackfaceMask == 1)[0]
-#        use = np.arange(0,Nt)
         Nt_use = len(use)
 
         tools.q1 = q1
@@ -457,6 +420,19 @@ class PFC:
         tools.p2 = p2[use]
         tools.p3 = p3[use]
         tools.Nt = Nt_use
+        tools.ptIdx = ptIdx #for finding which face a specific point intersects with
+
+        #create psiMask, which will be used to eliminate intersection checking
+        #on any face that is not on the same flux surface as the source face
+        #this is a form of dimensionality reduction
+        print("Calculating psiMask")
+        tools.psiMask = tools.buildMask(psiSource, psiTarget[use])
+        print(tools.psiMask.shape)
+        print("psiMask reduction ratio: {:f}".format(np.sum(tools.psiMask) / (Nt_use*N)))
+        print("Example # points within psi bounds: {:f}".format(np.sum(tools.psiMask[:,0])))
+        print("Compared to # of potential points: {:f}".format(Nt_use))
+        if ptIdx is not None:
+            print("psiMask for ptIDX: {:f}".format(np.sum(tools.psiMask[:,ptIdx])))
 
         print('Entering basic intersection test for {:d} potential intersection faces'.format(Nt_use))
         log.info('Entering basic intersection test for {:d} potential intersection faces'.format(Nt_use))
@@ -515,7 +491,7 @@ class PFC:
 
 
 
-    def intersectTest2(self,sources,targets,mapDirection):
+    def intersectTest2(self,sources,targets,mapDirection,psiSource,psiTarget,ptIdx=None):
         """
         Run an intersection test against all possible source faces
         sources is endpoints of line
@@ -540,6 +516,19 @@ class PFC:
         N = len(q2)
         Nt = len(p1)
         tools.Nt = Nt
+        tools.ptIdx = ptIdx
+
+        #create psiMask, which will be used to eliminate intersection checking
+        #on any face that is not on the same flux surface as the source face
+        #this is a form of dimensionality reduction
+        print("Calculating psiMask")
+        tools.psiMask = tools.buildMask(psiSource, psiTarget)
+        print(tools.psiMask.shape)
+        print("psiMask reduction ratio: {:f}".format(np.sum(tools.psiMask) / (Nt*N)))
+        print("Example # points within psi bounds: {:f}".format(np.sum(tools.psiMask[:,0])))
+        print("Compared to # of potential points: {:f}".format(Nt))
+        if ptIdx is not None:
+            print("psiMask for ptIDX: {:f}".format(np.sum(tools.psiMask[:,ptIdx])))
 
         print('Entering intersection Test #1 for {:d} potential intersection faces'.format(Nt))
         log.info('Entering intersection Test #1 for {:d} potential intersection faces'.format(Nt))
@@ -569,8 +558,92 @@ class PFC:
         log.info('Found {:f} shadowed faces'.format(np.sum(mask)))
         print('Time elapsed: {:f}'.format(time.time() - t0))
         log.info('Time elapsed: {:f}'.format(time.time() - t0))
+
         print("Returning")
         return mask
+
+    def longRangeIntersectCheck(self,qDiv,thresh,distPhi,MHD,CAD):
+        """
+        Runs a long range intersection check.
+
+        Because some PFC components may have STL faces that are in locations
+        with very high Bt/(Br+Bz) ratio, it might take longer than 10-20 degrees
+        for them to intersect with anything.
+
+        This function requires a threshold power.  Any PFC face with power
+        higher than the threshold is checked.
+
+        The flagged faces are then checked for intersections over distPhi degrees
+        """
+        print("\nLong Range Trace Begins")
+        log.info("\nLong Range Trace Begins")
+
+        numTargetFaces = 0
+        targetPoints = []
+        print('Number of target parts: {:f}'.format(len(self.intersects)))
+        for i,target in enumerate(CAD.intersectMeshes):
+            #check if this target is a potential intersection
+            if CAD.intersectList[i] in self.intersects:
+                numTargetFaces += target.CountFacets
+                #append target data
+                for face in target.Facets:
+                    targetPoints.append(face.Points)
+        targetPoints = np.asarray(targetPoints)/1000.0 #scale to m
+
+        use = np.where(np.abs(qDiv) > thresh)[0]
+        found = 0
+        print('Number of points above threshold: {:f}'.format(len(use)))
+        log.info('Number of points above threshold: {:f}'.format(len(use)))
+        for idx in use:
+            startPoint = self.centers[idx]
+#            print("Start Point")
+#            print(startPoint)
+            MHD.writeMAFOTpointfile(startPoint,self.gridfileStruct)
+            MHD.getMultipleFieldPaths(distPhi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+            structData = self.readStructOutput(self.structOutfile)
+            os.remove(self.structOutfile) #clean up
+            #create source format that intersectTest2 reads (odd start points, even end points)
+            x = np.insert(structData[:,0], np.arange(len(structData[:,0])), structData[:,0])
+            y = np.insert(structData[:,1], np.arange(len(structData[:,1])), structData[:,1])
+            z = np.insert(structData[:,2], np.arange(len(structData[:,2])), structData[:,2])
+            sources = np.array([x,y,z]).T[1:-1]
+            intersects = self.intersectTest2(sources,targetPoints,self.mapDirectionStruct)
+            if np.sum(intersects) > 0:
+#                print("Found long range intersection")
+#                log.info("Found long range intersection")
+                qDiv[idx] = 0.0
+                found +=1
+        print("Long range trace found {:f} intersections".format(found))
+        log.info("Long range trace found {:f} intersections".format(found))
+        return qDiv
+
+
+    def getTargetCenters(self, targets):
+        """
+        returns target centers
+
+        targets is 3 points [[p1],[p2],[p3]] that comprise a mesh triangle
+        where [pN] = [xN,yN,zN]
+        """
+        p1 = targets[:,0,:]  #point 1 of mesh triangle
+        p2 = targets[:,1,:]  #point 2 of mesh triangle
+        p3 = targets[:,2,:]  #point 3 of mesh triangle
+        Nt = len(p1)
+
+        x = np.zeros((Nt,3))
+        y = np.zeros((Nt,3))
+        z = np.zeros((Nt,3))
+
+        x[:,0] = p1[:,0]
+        x[:,1] = p2[:,0]
+        x[:,2] = p3[:,0]
+        y[:,0] = p1[:,1]
+        y[:,1] = p2[:,1]
+        y[:,2] = p3[:,1]
+        z[:,0] = p1[:,2]
+        z[:,1] = p2[:,2]
+        z[:,2] = p3[:,2]
+        return tools.faceCenters(x,y,z)
 
     def readStructOutput(self,file):
         """

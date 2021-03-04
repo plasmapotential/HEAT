@@ -296,17 +296,46 @@ class tools:
     def intersectTestParallel(self, i):
         """
         Intersection test that does not check for self intersections
+
+        i is index of parallel run from multiprocessing
+
+        q1 and q2 are start/end points of trace
+        p1,p2,p3 are points of potential intersection faces
+
+        using line + triangle intersection rule
         """
-        q13D = np.repeat(self.q1[i,np.newaxis], self.Nt, axis=0)
-        q23D = np.repeat(self.q2[i,np.newaxis], self.Nt, axis=0)
-        sign1 = np.sign(self.signedVolume2(q13D,self.p1,self.p2,self.p3))
-        sign2 = np.sign(self.signedVolume2(q23D,self.p1,self.p2,self.p3))
-        sign3 = np.sign(self.signedVolume2(q13D,q23D,self.p1,self.p2))
-        sign4 = np.sign(self.signedVolume2(q13D,q23D,self.p2,self.p3))
-        sign5 = np.sign(self.signedVolume2(q13D,q23D,self.p3,self.p1))
+        use = np.where(self.psiMask[:,i] == 1)[0]
+        Nt = len(use)
+#        print("==================TEST")
+#        print(self.psiMask.shape)
+#        print(self.q1.shape)
+#        print(use.shape)
+#        print(self.p1.shape)
+#        print(Nt)
+#        print(len(self.p1))
+#        print(len(self.p1[use,:]))
+
+        q13D = np.repeat(self.q1[i,np.newaxis], Nt, axis=0)
+        q23D = np.repeat(self.q2[i,np.newaxis], Nt, axis=0)
+        sign1 = np.sign(self.signedVolume2(q13D,self.p1[use],self.p2[use],self.p3[use]))
+        sign2 = np.sign(self.signedVolume2(q23D,self.p1[use],self.p2[use],self.p3[use]))
+        sign3 = np.sign(self.signedVolume2(q13D,q23D,self.p1[use],self.p2[use]))
+        sign4 = np.sign(self.signedVolume2(q13D,q23D,self.p2[use],self.p3[use]))
+        sign5 = np.sign(self.signedVolume2(q13D,q23D,self.p3[use],self.p1[use]))
         test1 = (sign1 != sign2)
         test2 = np.logical_and(sign3==sign4,sign3==sign5)
-        targetIdx = np.where(np.logical_and(test1,test2))[0]
+
+        #print which face we intersect with if ptIdx is this i
+        if self.ptIdx is not None:
+            if self.ptIdx == i:
+                targetIdx = np.where(np.logical_and(test1,test2))[0]
+                if len(targetIdx)>0:
+                    self.targetIdx = targetIdx
+                    print("Found ptIdx's intersection target vertices:")
+                    print(self.p1[self.targetIdx])
+                    print(self.p2[self.targetIdx])
+                    print(self.p3[self.targetIdx])
+
 
         #if we found an intersection return 1
         if np.sum(np.logical_and(test1,test2)) > 0:
@@ -352,6 +381,25 @@ class tools:
                     result = 0
 
         return result
+
+    def buildMask(self, source, target, thresh=0.01):
+        """
+        builds a mask matrix of size (Ntarget, Nsource)
+        elements are 1 if abs(source - target) < thresh
+        otherwise 0
+        """
+        sourceMat = np.repeat(source[np.newaxis,:], len(target), axis=0)
+        targetMat = np.repeat(target[:,np.newaxis], len(source), axis=1)
+        mask = np.abs(sourceMat-targetMat)<thresh
+
+#        mask = np.zeros((len(target), len(source)))
+#        for i,elem1 in enumerate(source):
+#            for j,elem2 in enumerate(target):
+#                if np.abs(elem2-elem1) < thresh:
+#                    mask[j,i] = 1
+#                else:
+#                    pass
+        return mask
 
 
     def readLaminarParallel(self,i):

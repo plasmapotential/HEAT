@@ -1075,7 +1075,8 @@ class GUIobj():
         if 'bdotnPC' in runList:
             PFC.write_bdotn_pointcloud(centers,bdotnNumpy, tPath,tag)
         if 'psiPC' in runList:
-            self.HF.write_psiN_pointcloud(centers,psiNumpy,tPath,tag)
+            #self.HF.write_psiN_pointcloud(centers,psiNumpy,tPath,tag)
+            self.HF.write_psiNThresh_pointcloud(centers,psiNumpy,tPath,tag)
         if 'NormPC' in runList:
             norm = norm.reshape(Npoints,3)
             self.CAD.write_normal_pointcloud(centers,norm,tPath,tag)
