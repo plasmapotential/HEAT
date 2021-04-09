@@ -463,7 +463,7 @@ def inputDragDrop(file, contents, MachFlag):
                State('tmin', 'value'),
                State('tmax', 'value'),
                State('nTrace', 'value'),
-               State('ionDir', 'value'),
+               State('powerDir', 'value'),
                State('ROIGridRes', 'value'),
                State('gridRes', 'value'),
                State('lqEich', 'value'),
@@ -499,7 +499,7 @@ def saveGUIinputs(  n_clicks,
                     tmin,
                     tmax,
                     nTrace,
-                    ionDir,
+                    powerDir,
                     ROIGridRes,
                     gridRes,
                     lqEich,
@@ -541,7 +541,7 @@ def saveGUIinputs(  n_clicks,
     data['tmin'] = tmin
     data['tmax'] = tmax
     data['nTrace'] = nTrace
-    data['ionDir'] = ionDir
+    data['powerDir'] = powerDir
     data['ROIGridRes'] = ROIGridRes
     data['gridRes'] = gridRes
     data['lqEich'] = lqEich
@@ -594,8 +594,8 @@ def buildMHDbox():
                 dcc.Input(id="tmax", className="textInput"),
                 html.Label(id="nTraceLabel", children="Number of Trace Steps (degrees)"),
                 dcc.Input(id="nTrace", className="textInput"),
-#                html.Label(id="ionDirLabel", children="Ion Direction"),
-#                dcc.Input(id="ionDir", className="textInput"),
+#                html.Label(id="powerDirLabel", children="Ion Direction"),
+#                dcc.Input(id="powerDir", className="textInput"),
 #                html.Label(id="gfileLabel", children="Path to gFile"),
 #                dcc.Input(id="gfilePath", type='text', className="textInput"),
                 dcc.Upload(
@@ -665,7 +665,7 @@ def buildMHDbox():
               State('tmin', 'value'),
               State('tmax', 'value'),
               State('nTrace', 'value'),
-              #State('ionDir', 'value'),
+              #State('powerDir', 'value'),
               #State('gfilePath', 'value'),
               State('gfiletable-upload', 'filename'),
               State('gfiletable-upload', 'contents'),
@@ -701,7 +701,7 @@ def loadMHD(n_clicks,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask,data
     if tmin is not None: tmin = int(tmin)
     if tmax is not None: tmax = int(tmax)
     if nTrace is not None: nTrace = int(nTrace)
-#    if ionDir is not None: ionDir = int(ionDir)
+#    if powerDir is not None: poweDir = int(powerDir)
     if gFileList is not None:
         if type(gFileList) is not list:
             gFileList = [gFileList]
@@ -1510,7 +1510,7 @@ def buildPFCbox():
             )
 
 def loadPFCtable():
-    params = ['timesteps','PFCname','MapDirection','DivCode','intersectName']
+    params = ['timesteps','PFCname','powerDirection','DivCode','intersectName']
     cols = [{'id': p, 'name': p} for p in params]
     data = [{}]
     return dash_table.DataTable(
@@ -1694,6 +1694,9 @@ def loadOF(n_clicks,OFstartTime,OFstopTime,
     return [html.Label("Loaded OF Data into HEAT", style={'color':'#f5d142'})]
 
 
+
+
+
 """
 ==============================================================================
 Tab Contents: run tab
@@ -1757,7 +1760,12 @@ def runTabTraces():
                     id="OFtrace",
                         ),
                 html.Div(id="OFTracePoints", children=[loadOFTrace(hidden=True)]),
-
+                dcc.Checklist(
+                    options=[{'label': 'Gyro Orbit Trace ', 'value': 'gyrotrace'}],
+                    value=[''],
+                    id="gyrotrace",
+                        ),
+                html.Div(id="gyroTracePoints", children=[loadGyroTrace(hidden=True)]),
                     ],
                 className="PCbox",
                 )
@@ -1788,8 +1796,8 @@ def loadBfieldTrace(Btrace=None, hidden=False):
                     ),
                     html.Div(
                         children=[
-                            html.Label("ionDirection"),
-                            dcc.Input(id="ionDir", className="xyzBoxInput"),
+                            html.Label("powerDirection"),
+                            dcc.Input(id="powerDir", className="xyzBoxInput"),
                             html.Label("Degrees"),
                             dcc.Input(id="traceDeg", className="xyzBoxInput"),
                         ],
@@ -1804,6 +1812,7 @@ def loadBfieldTrace(Btrace=None, hidden=False):
               [Input('OFtrace', 'value')])
 def OFTracePoint(value):
     return [loadOFTrace(OFtrace=value)]
+
 
 #this function enables the inputs to be rendered on page load but hidden
 def loadOFTrace(OFtrace=None, hidden=False):
@@ -1826,6 +1835,51 @@ def loadOFTrace(OFtrace=None, hidden=False):
                 className="xyzBox",
                     )
 
+@app.callback(Output('gyroTracePoints', 'children'),
+              [Input('gyrotrace', 'value')])
+def gyroTracePoints(value):
+    return [loadGyroTrace(gyrotrace=value)]
+
+#this function enables the inputs to be rendered on page load but hidden
+def loadGyroTrace(gyrotrace=None, hidden=False):
+    if (gyrotrace == 'gyrotrace') or (hidden == True):
+        style={}
+    else:
+        style={"display":"hidden"}
+    return html.Div(
+                children=[
+                    html.Div(
+                        children=[
+                            html.Label("x [mm]"),
+                            dcc.Input(id="xGyroTrace", className="xyzBoxInput"),
+                            html.Label("y [mm]"),
+                            dcc.Input(id="yGyroTrace", className="xyzBoxInput"),
+                            html.Label("z [mm]"),
+                            dcc.Input(id="zGyroTrace", className="xyzBoxInput"),
+                        ],
+                        className="xyzBox"
+                    ),
+                    html.Div(
+                        children=[
+                            html.Label("Temperature [eV]"),
+                            dcc.Input(id="gyroT_eV", className="xyzBoxInput"),
+                            html.Label("Gyro Phase [deg]"),
+                            dcc.Input(id="gyroPhase", className="xyzBoxInput"),
+                            html.Label("Trace Length [deg]"),
+                            dcc.Input(id="gyroDeg", className="xyzBoxInput"),
+                            html.Label("# Helix Discretizations"),
+                            dcc.Input(id="N_gyroSteps", className="xyzBoxInput"),
+                            html.Label("Trace Direction"),
+                            dcc.Input(id="gyroDir", className="xyzBoxInput"),
+                        ],
+                        className="xyzBox"
+                    )
+                    ],
+                style=style,
+                className="xyzBoxVert",
+                    )
+
+
 
 @app.callback([Output('hiddenDivRun', 'children'),
                Output('qDivDist', 'children'),
@@ -1835,24 +1889,39 @@ def loadOFTrace(OFtrace=None, hidden=False):
               [State('checklistPC','value'),
                State('Btrace','value'),
                State('OFtrace','value'),
+               State('gyrotrace','value'),
                State('xBtrace','value'),
                State('yBtrace','value'),
                State('zBtrace','value'),
                State('xOFtrace','value'),
                State('yOFtrace','value'),
                State('zOFtrace','value'),
-               State('timeSlider', 'value'),
-               State('ionDir', 'value'),
-               State('traceDeg', 'value')
+               State('xGyroTrace','value'),
+               State('yGyroTrace','value'),
+               State('zGyroTrace','value'),
+               State('timeSlider','value'),
+               State('powerDir','value'),
+               State('traceDeg','value'),
+               State('gyroT_eV','value'),
+               State('gyroDeg','value'),
+               State('N_gyroSteps','value'),
+               State('gyroDir','value'),
+               State('gyroPhase','value'),
                ])
-def runHEAT(n_clicks,runList,Btrace,OFtrace,
+def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
             xBtrace,yBtrace,zBtrace,
-            xOFtrace,yOFtrace,zOFtrace,t,ionDir,traceDeg):
+            xOFtrace,yOFtrace,zOFtrace,
+            xGyroTrace,yGyroTrace,zGyroTrace,
+            t,powerDir,traceDeg,
+            gyroT_eV,gyroDeg,N_gyroSteps,gyroDir,gyroPhase):
     if n_clicks == 0:
         raise PreventUpdate
 
     if 'Btrace' in Btrace:
-        gui.Btrace(xBtrace,yBtrace,zBtrace,t,ionDir,traceDeg)
+        gui.Btrace(xBtrace,yBtrace,zBtrace,t,powerDir,traceDeg)
+
+    if 'gyrotrace' in gyrotrace:
+        gui.gyroTrace(xGyroTrace,yGyroTrace,zGyroTrace,t,gyroPhase,gyroDeg,N_gyroSteps,gyroDir,gyroT_eV)
 
     gui.runHEAT(runList)
 
@@ -2543,7 +2612,7 @@ Session storage callbacks and functions
                Output('tmin', 'value'),
                Output('tmax', 'value'),
                Output('nTrace', 'value'),
-               Output('ionDir', 'value'),
+               Output('powerDir', 'value'),
                Output('ROIGridRes', 'value'),
                Output('gridRes', 'value'),
                Output('lqEich', 'value'),
@@ -2614,7 +2683,7 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('tmin', ''),
             data.get('tmax', ''),
             data.get('nTrace', ''),
-            data.get('ionDirection', ''),
+            data.get('powerDirection', ''),
             data.get('ROIGridRes', ''),
             data.get('gridRes', ''),
             data.get('lqEich', ''),

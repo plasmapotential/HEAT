@@ -12,7 +12,7 @@ for i,obj in enumerate(sel):
 #write stp file for an assembly, preserving global position for each part
 #and renaming to simplify PFC file
 allObjs = []
-file = '/u/tlooby/D3D/CAD/test.stp'
+file = '/home/tom/SPARC/CAD/test.stp'
 count = 0
 for obj in FreeCAD.ActiveDocument.Objects:
     if type(obj) == Part.Feature:
@@ -21,7 +21,7 @@ for obj in FreeCAD.ActiveDocument.Objects:
         tmpObj.Placement = obj.getGlobalPlacement()
         allObjs.append(obj)
         count += 1
-        
+
 ImportGui.export(allObjs, file)
 
 #append labels for a PFC intersect line that can be copied / pasted from python console

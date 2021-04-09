@@ -68,7 +68,7 @@ class MHD:
                             'MapDirection',
                             'MapDirectionStruct',
                             'structMapDirMultiply',
-                            'ionDirection',
+                            'powerDirection',
                             'PlasmaResponse',
                             'Field',
                             'target',
@@ -112,7 +112,7 @@ class MHD:
         self.phistart = float(self.phistart)
         self.MapDirection =float(self.MapDirection)
         self.MapDirectionStruct = float(self.MapDirectionStruct)
-        self.ionDirection = float(self.ionDirection)
+        self.powerDirection = float(self.powerDirection)
         self.PlasmaResponse = int(self.PlasmaResponse)
         self.Field = int(self.Field)
         self.target = int(self.target)
@@ -233,7 +233,7 @@ class MHD:
 
 
 
-    def Bfield_pointcloud(self, ep, R, Z, phi, ionDirection, normal=False):
+    def Bfield_pointcloud(self, ep, R, Z, phi, powerDirection, normal=False):
         """
         Creates a Bfield Pointcloud that can be saved in a .csv file
         This pointcloud is then used by ParaView to overlay the
@@ -244,12 +244,15 @@ class MHD:
         Calculator should have this formula:
         (iHat*Bx) + (jHat*By) + (kHat*Bz)
 
+        powerDirection is the direction power flows onto the PFC
+
         Note: this function returns the normal Bfield components if normal=True
 
         """
-        Bt = ep.BtFunc.ev(R,Z)*ionDirection
-        BR = ep.BRFunc.ev(R,Z)*ionDirection
-        BZ = ep.BZFunc.ev(R,Z)*ionDirection
+        Bt0Direction = np.sign(ep.g['Bt0']) #account for machine Bt direction
+        Bt = ep.BtFunc.ev(R,Z)*powerDirection*Bt0Direction
+        BR = ep.BRFunc.ev(R,Z)*powerDirection*Bt0Direction
+        BZ = ep.BZFunc.ev(R,Z)*powerDirection*Bt0Direction
         #print(BR)
         #print(Bt)
         #print(BZ)

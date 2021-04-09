@@ -715,7 +715,7 @@ class heatFlux:
         """
         xyz = PFC.centers
         r,z,phi = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
-        BNorms = MHD.Bfield_pointcloud(PFC.ep, r, z, phi, PFC.ionDirection, normal=True)
+        BNorms = MHD.Bfield_pointcloud(PFC.ep, r, z, phi, PFC.powerDirection, normal=True)
         PFC.bdotn = np.multiply(PFC.norms, BNorms).sum(1)
         return
 

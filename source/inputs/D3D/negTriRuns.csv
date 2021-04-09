@@ -15,7 +15,7 @@
 # and E-ED1450-071, with traces running in the reversed MapDirection
 # 40-1783_2 TILE UPPER
 # 40-1782_3 TILE LOWER TYPE A0
-timesteps, PFCname, MapDirection, DivCode, intersectName
+timesteps, PFCname, mapDirection, DivCode, intersectName
 #============================================================
 #===OUTER DIVERTOR
 0:3200, T101A, -1, LO, T101A:T101B:T102:T112:T002:T001:T117

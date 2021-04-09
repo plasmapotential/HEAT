@@ -15,6 +15,7 @@ import toolsClass
 import heatfluxClass
 import openFOAMclass
 import pfcClass
+import gyroClass
 import time
 import numpy as np
 import logging
@@ -170,6 +171,7 @@ class GUIobj():
         self.CAD = CADClass.CAD(self.rootDir, self.dataPath)
         self.HF = heatfluxClass.heatFlux(self.rootDir, self.dataPath)
         self.OF = openFOAMclass.OpenFOAM(self.rootDir, self.dataPath)
+        self.GYRO = gyroClass.GYRO(self.rootDir, self.dataPath)
         return
 
     def getMHDInputs(self,shot=None,tmin=None,tmax=None,nTrace=None,
@@ -599,7 +601,7 @@ class GUIobj():
         #initialize PFC objects for each ROI part
         for i,row in enumerate(self.timestepMap.values):
             PFC = pfcClass.PFC(row, self.rootDir, self.dataPath)
-            PFC.makePFC(self.MHD, self.CAD, i, self.timestepMap['MapDirection'][i], clobberFlag=True)
+            PFC.makePFC(self.MHD, self.CAD, i, self.timestepMap['powerDirection'][i], clobberFlag=True)
             self.PFCs.append(PFC)
 
         #Find potential intersections by file as they correspond to ROI PFCs,
@@ -749,7 +751,7 @@ class GUIobj():
         """
         ctrs = PFC.centers
         R,Z,phi = tools.xyz2cyl(ctrs[:,0],ctrs[:,1],ctrs[:,2])
-        PFC.Bxyz = self.MHD.Bfield_pointcloud(PFC.ep, R, Z, phi, PFC.mapDirection)
+        PFC.Bxyz = self.MHD.Bfield_pointcloud(PFC.ep, R, Z, phi, PFC.powerDirection)
         self.MHD.write_B_pointcloud(ctrs,PFC.Bxyz,PFC.controlfilePath)
 
     def Btrace(self,x,y,z,t,mapDirection, traceDeg):
@@ -779,6 +781,47 @@ class GUIobj():
         self.MHD.writeMAFOTpointfile(xyz,gridfile)
         self.MHD.getFieldpath(dphi, gridfile, controlfilePath, controlfile, paraview_mask=True)
         return
+
+    def gyroTrace(self,x,y,z,t,gyroPhase,gyroDeg,N_gyroSteps,gyroDir,gyroT_eV):
+        """
+        performs a gyro orbit trace from GUI defined location
+
+        (x,y,z) are locations where we launch trace from
+        gyroPhase is initial phase angle of orbit in degrees
+        gyroDeg is the number of degrees we will trace for
+        N_gyroSteps is the number of discrete lines we approximate helical path by
+        """
+        print("\n========Gyro Trace Initialized========")
+        #get bField trace from this point
+        self.Btrace(x,y,z,t,gyroDir,gyroDeg)
+        #read bField trace csv output
+        if self.MHD.shotPath[-1]=='/':
+            structOutfile = self.MHD.shotPath + '{:06d}/struct.dat'.format(t)
+            controlfilePath =  self.MHD.shotPath + '{:06d}/'.format(t)
+        else:
+            structOutfile = self.MHD.shotPath + '/' + '{:06d}/struct.dat'.format(t)
+            controlfilePath =  self.MHD.shotPath + '/' + '{:06d}/'.format(t)
+        BtraceXYZ = tools.readStructOutput(structOutfile) #[m]
+        #Setup gyro orbit trace constants and velocities
+        self.GYRO.setupConstants(species='D')
+        vPerp = self.GYRO.temp2thermalVelocity(gyroT_eV)
+        vParallel = self.GYRO.temp2thermalVelocity(gyroT_eV)
+        # Evaluate B
+        R,Z,phi = tools.xyz2cyl(float(x),float(y),float(z))
+        tIdx = np.where(float(t)==self.MHD.timesteps)[0][0]
+        ep = self.MHD.ep[tIdx]
+        Bp = ep.BpFunc.ev(R,Z)
+        Bt = ep.BtFunc.ev(R,Z)
+        B = np.sqrt(Bp**2 + Bt**2)
+        #Calculate frequencies and gyro radius
+        self.GYRO.setupFreqs(B, vPerp)
+        #trace helix and save to CSV and VTK formats
+        self.GYRO.singleGyroTrace(vPerp,vParallel,float(gyroPhase),float(N_gyroSteps),BtraceXYZ,controlfilePath)
+        print("Temp of {:f} eV yields thermal velocity of {:f} m/s".format(float(gyroT_eV), float(vPerp)))
+        print("B magntidude = {:f}".format(B))
+        return
+
+
 
     def NormPC(self, PFC):
         """
@@ -997,6 +1040,7 @@ class GUIobj():
         #HF.PointCloudfromStructOutput(structOutfile)
         return
 
+
     def combinePFCpointcloud(self, runList, tPath):
         """
         Combines multiple pointclouds into a single pointcloud then saves to file
@@ -1075,8 +1119,8 @@ class GUIobj():
         if 'bdotnPC' in runList:
             PFC.write_bdotn_pointcloud(centers,bdotnNumpy, tPath,tag)
         if 'psiPC' in runList:
-            #self.HF.write_psiN_pointcloud(centers,psiNumpy,tPath,tag)
-            self.HF.write_psiNThresh_pointcloud(centers,psiNumpy,tPath,tag)
+            self.HF.write_psiN_pointcloud(centers,psiNumpy,tPath,tag)
+            #self.HF.write_psiNThresh_pointcloud(centers,psiNumpy,tPath,tag)
         if 'NormPC' in runList:
             norm = norm.reshape(Npoints,3)
             self.CAD.write_normal_pointcloud(centers,norm,tPath,tag)
@@ -1173,7 +1217,7 @@ class GUIobj():
                     'tmin':None,
                     'tmax':None,
                     'nTrace': None,
-                    'ionDirection': None,
+                    'powerDirection': None,
                     'ROIGridRes': None,
                     'gridRes': None,
                     'STPfile': None,
@@ -1237,7 +1281,7 @@ class GUIobj():
                     'tmin': self.MHD.tmin,
                     'tmax': self.MHD.tmax,
                     'nTrace': self.MHD.nTrace,
-                    'ionDirection': self.MHD.ionDirection,
+                    'powerDirection': self.MHD.powerDirection,
                     'ROIGridRes': self.CAD.ROIGridRes,
                     'gridRes': self.CAD.gridRes,
                     'STPfile': self.CAD.STPfile,

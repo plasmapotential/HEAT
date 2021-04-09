@@ -22,7 +22,7 @@ tmin, 0
 tmax, 200
 nTrace, 30
 dataPath, /home/tom/data/HEAT/
-ionDirection, -1
+powerDirection, -1
 plasma3Dmask, 0 #1=true, 0=false
 #==============================================================
 #                HF Variables

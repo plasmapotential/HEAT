@@ -4,11 +4,11 @@
 #=============================================================
 #                CAD Variables
 #=============================================================
-STPfile, /home/workhorse/source/HEAT/squashfs-root/test/IBDH_2tiles.step
-FreeCADPath, /opt/freecad/squashfs-root/usr/lib
-PVPath, /opt/paraview/ParaView-5.8.1-MPI-Linux-Python3.7-64bit/lib/python3.7/site-packages
+#STPfile, /home/workhorse/source/HEAT/squashfs-root/test/IBDH_2tiles.step
+#FreeCADPath, /opt/freecad/squashfs-root/usr/lib
+#PVPath, /opt/paraview/ParaView-5.8.1-MPI-Linux-Python3.7-64bit/lib/python3.7/site-packages
 ROIGridRes, 5.0
-gridRes, 25.0
+gridRes, standard
 permute_mask, True
 unitConvert, 1.0
 assembly_mask, True
@@ -22,7 +22,7 @@ tmin, 0
 tmax, 5000
 nTrace, 10
 dataPath, /home/tom/data/HEAT/
-ionDirection, -1
+powerDirection, -1
 plasma3Dmask, 0 #1=true, 0=false
 #==============================================================
 #                HF Variables

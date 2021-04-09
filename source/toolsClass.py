@@ -228,10 +228,9 @@ class tools:
         NOTE: true signed volume would be multiplied by 1/6 but we don't
         do that here
         """
-
         return np.sum(np.cross(b-a, c-a) * (d-a))
 
-    def signedVolume2(self,a,b,c,d):
+    def signedVolume2(self,a,b,c,d, ax=1):
         """
         Calculates signed volume
         NOTE: true signed volume would be multiplied by 1/6 but we don't
@@ -239,7 +238,7 @@ class tools:
         """
         #return (1.0/6.0)*np.diagonal(np.matmul(np.cross(b-a,c-a),(d-a).T))
         #return (1.0/6.0) * np.dot(np.cross(b-a,c-a), d-a)
-        return np.sum(np.cross(b-a, c-a) * (d-a), axis=1)
+        return np.sum(np.cross(b-a, c-a) * (d-a), axis=ax)
 
     def faceCenters(self, x, y, z):
         """
@@ -304,17 +303,11 @@ class tools:
 
         using line + triangle intersection rule
         """
+        #Filter by psi
         use = np.where(self.psiMask[:,i] == 1)[0]
         Nt = len(use)
-#        print("==================TEST")
-#        print(self.psiMask.shape)
-#        print(self.q1.shape)
-#        print(use.shape)
-#        print(self.p1.shape)
-#        print(Nt)
-#        print(len(self.p1))
-#        print(len(self.p1[use,:]))
 
+        #Perform Intersection Test
         q13D = np.repeat(self.q1[i,np.newaxis], Nt, axis=0)
         q23D = np.repeat(self.q2[i,np.newaxis], Nt, axis=0)
         sign1 = np.sign(self.signedVolume2(q13D,self.p1[use],self.p2[use],self.p3[use]))
@@ -345,8 +338,39 @@ class tools:
 
         return result
 
+
+    def intersectTestNoLoop(self):
+        """
+        LEGACY FUNCTION: left here for reference
+
+        Intersection test that does not check for self intersections
+
+        creates matrices instead of parallel processing, but this can
+        easily saturate RAM.
+
+        q1 and q2 are start/end points of trace
+        p1,p2,p3 are points of potential intersection faces
+
+        using line + triangle intersection rule
+        """
+
+        q13D = np.repeat(self.q1[:,np.newaxis], self.Nt, axis=1)
+        q23D = np.repeat(self.q2[:,np.newaxis], self.Nt, axis=1)
+
+        sign1 = np.sign(self.signedVolume2(q13D,self.p1,self.p2,self.p3,ax=2))
+        sign2 = np.sign(self.signedVolume2(q23D,self.p1,self.p2,self.p3,ax=2))
+        sign3 = np.sign(self.signedVolume2(q13D,q23D,self.p1,self.p2,ax=2))
+        sign4 = np.sign(self.signedVolume2(q13D,q23D,self.p2,self.p3,ax=2))
+        sign5 = np.sign(self.signedVolume2(q13D,q23D,self.p3,self.p1,ax=2))
+        test1 = (sign1 != sign2)
+        test2 = np.logical_and(sign3==sign4,sign3==sign5)
+        return np.logical_and(test1,test2)
+
+
     def intersectTestParallel_selfCheck(self,i):
         """
+        LEGACY FUNCTION: left here for reference
+
         Intersection test for first step up field line.  Not only checks for
         intersections, but also determines if these intersections are self
         intersections
@@ -382,7 +406,7 @@ class tools:
 
         return result
 
-    def buildMask(self, source, target, thresh=0.01):
+    def buildMask(self, source, target, thresh=1):
         """
         builds a mask matrix of size (Ntarget, Nsource)
         elements are 1 if abs(source - target) < thresh
@@ -391,16 +415,7 @@ class tools:
         sourceMat = np.repeat(source[np.newaxis,:], len(target), axis=0)
         targetMat = np.repeat(target[:,np.newaxis], len(source), axis=1)
         mask = np.abs(sourceMat-targetMat)<thresh
-
-#        mask = np.zeros((len(target), len(source)))
-#        for i,elem1 in enumerate(source):
-#            for j,elem2 in enumerate(target):
-#                if np.abs(elem2-elem1) < thresh:
-#                    mask[j,i] = 1
-#                else:
-#                    pass
         return mask
-
 
     def readLaminarParallel(self,i):
         """
@@ -504,3 +519,18 @@ class tools:
             return True
         except ValueError:
             return False
+
+    def readStructOutput(self,file):
+        """
+        Reads output file from MAFOT structure program
+        """
+        structdata = np.genfromtxt(file,comments='#')
+        xyz = np.zeros((len(structdata),3))
+        xyz[:,0] = structdata[:,0]
+        xyz[:,1] = structdata[:,1]
+        xyz[:,2] = structdata[:,2]
+        #remove rows with zeros (invalids)
+        #xyzFinal = xyz[~(np.abs(xyz)<1e-99).any(axis=1)]
+        print('Read structure output for {:d} points'.format(len(xyz)))
+        log.info('Read structure output for {:d} points'.format(len(xyz)))
+        return xyz
