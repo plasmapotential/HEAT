@@ -230,6 +230,7 @@ def build_tabs():
                                 buildPFCbox(),
                                 buildHFbox(),
                                 buildOFbox(),
+                                buildGYRObox(),
                                 ]
                                 )
                         ]
@@ -1607,6 +1608,84 @@ def downloadPFCfile(n_clicks):
 
 
 
+#==========gyro orbits==========
+def buildGYRObox():
+    return html.Div(
+        id="gyrobox",
+        children=[
+            html.H6("Gyro Orbit Settings"),
+            gyroInputBoxes(),
+            html.Br(),
+            html.Button("Load Gyro Settings", id="loadGYRO", n_clicks=0, style={'margin':'0 10px 10px 0'}),
+            html.Div(id="hiddenDivGyro")
+        ],
+        className="HFbox",
+    )
+
+def gyroInputBoxes():
+    return html.Div(
+            children=[
+            html.Div(
+                children=[
+                    html.Label("# steps per helix"),
+                    dcc.Input(id="N_gyroSteps", className="textInput"),
+                ],
+                className="OFInput",
+            ),
+            html.Div(
+                children=[
+                    html.Label("# Traces Per Mesh Element"),
+                    dcc.Input(id="N_MC", className="textInput"),
+                ],
+                className="OFInput"
+            ),
+            html.Div(
+                children=[
+                    html.Label("Gyro Trace Length [deg]"),
+                    dcc.Input(id="gyroDeg", className="textInput"),
+                ],
+                className="OFInput"
+            ),
+            html.Div(
+                children=[
+                    html.Label("Average Temperature [eV]"),
+                    dcc.Input(id="gyroT_eV", className="textInput"),
+                ],
+                className="OFInput"
+            ),
+
+            html.Div(
+                children=[
+                    html.Label("Species [H,D,T]"),
+                    dcc.Input(id="species", className="textInput"),
+                ],
+                className="OFInput"
+            ),
+
+            ],
+            className="wideBoxNoColor",
+            )
+
+#Load GYRO button connect
+@app.callback([Output('hiddenDivGyro', 'children')],
+              [Input('loadGYRO', 'n_clicks')],
+              [State('N_gyroSteps', 'value'),
+               State('gyroDeg', 'value'),
+               State('gyroT_eV', 'value'),
+               State('N_MC', 'value'),
+               State('species', 'value')
+              ])
+def loadGYRO(n_clicks,N_gyroSteps,gyroDeg,gyroT_eV,N_MC,species):
+    """
+    sets up GYRO module
+    """
+    if n_clicks == 0:
+        raise PreventUpdate
+    gui.getGyroInputs(N_gyroSteps,gyroDeg,gyroT_eV,N_MC,species)
+    return [html.Label("Loaded Gyro Orbit Data into HEAT", style={'color':'#f5d142'})]
+
+
+
 #==========openFOAM==========
 def buildOFbox():
     return html.Div(
@@ -1736,7 +1815,8 @@ def runTabChecklist():
                         {'label': 'psiN point cloud', 'value': 'psiPC'},
                         {'label': 'bdotn point cloud', 'value': 'bdotnPC'},
                         {'label': 'Heat flux point cloud', 'value': 'HFpc'},
-                        {'label': 'openFOAM thermal analysis', 'value': 'OFpc'}
+                        {'label': 'Gyro Orbit heat flux point cloud', 'value': 'GyroPC'},
+                        {'label': 'openFOAM thermal analysis', 'value': 'OFpc'},
                         ],
                         value=['HFpc'],
                         id='checklistPC',
@@ -1862,15 +1942,15 @@ def loadGyroTrace(gyrotrace=None, hidden=False):
                     html.Div(
                         children=[
                             html.Label("Temperature [eV]"),
-                            dcc.Input(id="gyroT_eV", className="xyzBoxInput"),
+                            dcc.Input(id="gyroT_eV_trace", className="xyzBoxInput"),
                             html.Label("Gyro Phase [deg]"),
-                            dcc.Input(id="gyroPhase", className="xyzBoxInput"),
+                            dcc.Input(id="gyroPhase_trace", className="xyzBoxInput"),
                             html.Label("Trace Length [deg]"),
-                            dcc.Input(id="gyroDeg", className="xyzBoxInput"),
+                            dcc.Input(id="gyroDeg_trace", className="xyzBoxInput"),
                             html.Label("# Helix Discretizations"),
-                            dcc.Input(id="N_gyroSteps", className="xyzBoxInput"),
+                            dcc.Input(id="N_gyroSteps_trace", className="xyzBoxInput"),
                             html.Label("Trace Direction"),
-                            dcc.Input(id="gyroDir", className="xyzBoxInput"),
+                            dcc.Input(id="gyroDir_trace", className="xyzBoxInput"),
                         ],
                         className="xyzBox"
                     )
@@ -1902,18 +1982,19 @@ def loadGyroTrace(gyrotrace=None, hidden=False):
                State('timeSlider','value'),
                State('powerDir','value'),
                State('traceDeg','value'),
-               State('gyroT_eV','value'),
-               State('gyroDeg','value'),
-               State('N_gyroSteps','value'),
-               State('gyroDir','value'),
-               State('gyroPhase','value'),
+               State('gyroT_eV_trace','value'),
+               State('gyroDeg_trace','value'),
+               State('N_gyroSteps_trace','value'),
+               State('gyroDir_trace','value'),
+               State('gyroPhase_trace','value'),
                ])
 def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
             xBtrace,yBtrace,zBtrace,
             xOFtrace,yOFtrace,zOFtrace,
             xGyroTrace,yGyroTrace,zGyroTrace,
             t,powerDir,traceDeg,
-            gyroT_eV,gyroDeg,N_gyroSteps,gyroDir,gyroPhase):
+            gyroT_eV_trace,gyroDeg_trace,N_gyroSteps_trace,
+            gyroDir_trace,gyroPhase_trace):
     if n_clicks == 0:
         raise PreventUpdate
 
@@ -1921,7 +2002,8 @@ def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
         gui.Btrace(xBtrace,yBtrace,zBtrace,t,powerDir,traceDeg)
 
     if 'gyrotrace' in gyrotrace:
-        gui.gyroTrace(xGyroTrace,yGyroTrace,zGyroTrace,t,gyroPhase,gyroDeg,N_gyroSteps,gyroDir,gyroT_eV)
+        gui.gyroTrace(xGyroTrace,yGyroTrace,zGyroTrace,t,gyroPhase_trace,
+                      gyroDeg_trace,N_gyroSteps_trace,gyroDir_trace,gyroT_eV_trace)
 
     gui.runHEAT(runList)
 

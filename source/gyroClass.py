@@ -61,45 +61,72 @@ class GYRO:
         return np.sqrt(2*float(T_eV)/(self.mass_eV/self.c**2))
 
 
-    def setupFreqs(self, B, v_perp0):
+    def setupFreqs(self, B):
         """
-        Calculates frequencies, periods, radii, that are dependent upon B and vPerp
-        These definitions follow Freidberg Section 7.7
+        Calculates frequencies, periods, that are dependent upon B
+        These definitions follow Freidberg Section 7.7.  returns an array
 
         B is magnetic field magnitude
 
         """
-        #User defined but can be set here for tests
-        #B = 5 #tesla
-        #T0_eV = 15000 # eV
-
         self.omegaGyro = self.Z * self.e * B / (self.mass_eV / self.kg2eV)
         self.fGyro = self.omegaGyro/(2*np.pi)
         self.TGyro = 1.0/self.fGyro
-        #gyro radius
-        self.rGyro = v_perp0 / self.omegaGyro
+
+        if np.isscalar(self.omegaGyro):
+            self.omegaGyro = np.array([self.omegaGyro])
+            self.fGyro = self.omegaGyro/(2*np.pi)
+            self.TGyro = 1.0/self.fGyro
+        return
+
+    def setupRadius(self, vPerp):
+        """
+        calculates gyro radius.
+
+        rGyro has columns that correspond to points (omegaGyro calculated at
+        each PFC.center), and rows that correspond to monte carlo runs (N_MC).
+        """
+        N_omega = len(self.omegaGyro)
+        #get number of vPerps
+        if np.isscalar(vPerp):
+            vPerp = np.array([vPerp])
+            N_vPerp = 1
+        else:
+            N_vPerp = len(vPerp)
+
+        self.rGyro = np.zeros((N_omega,N_vPerp))
+
+        for i in range(N_vPerp):
+            self.rGyro[:,i] = vPerp[i] / self.omegaGyro
+
         return
 
 
-    def randomVelocity(self, T0, N=1):
+    def randomMaxwellianVelocity(self):
         """
         Monte Carlo sampling of Maxwellian velocity distribution
 
-        Returns N velocities distributed about T0 per the Maxwellian distribution
+        Returns N_MC velocities distributed about gyroT_eV per the Maxwellian distribution
         """
+        ###NEED TO CODE THIS MC PULLER TO SAMPLE MAXWELLIAN
+        #for now is just returns vThermal
+        v = self.temp2thermalVelocity(self.gyroT_eV)
+        self.vPerp = np.ones((self.N_MC))*v
+
         return
 
-    def randomPhaseAngle(self, N=1):
+    def randomPhaseAngle(self):
         """
         Monte Carlo sampling of a uniform distribution between 0 and 2pi
 
-        returns an array of N random values in radians
+        returns an array of N_MC random values in radians
         """
-        gyroPhase = np.random.uniform(0, 2*np.pi, N)
-        return gyroPhase
+        self.gyroPhase = np.random.uniform(0, 2*np.pi, self.N_MC)
+        return
 
     def singleGyroTrace(self,vPerp,vParallel,gyroPhase,N_gyroSteps,
-                        BtraceXYZ,controlfilePath,verbose=True):
+                        BtraceXYZ,controlfilePath,TGyro,rGyro,omegaGyro,
+                        verbose=True):
         """
         Calculates the gyro-Orbit path and saves to .csv and .vtk
 
@@ -174,9 +201,9 @@ class GYRO:
         if verbose==True:
             print("V_perp = {:f} [m/s]".format(vPerp))
             print("V_parallel = {:f} [m/s]".format(vParallel))
-            print("Cyclotron Freq = {:f} [rad/s]".format(self.omegaGyro))
-            print("Cyclotron Freq = {:f} [Hz]".format(self.fGyro))
-            print("Gyro Radius = {:f} [m]".format(self.rGyro))
+            print("Cyclotron Freq = {:f} [rad/s]".format(self.omegaGyro[0]))
+            print("Cyclotron Freq = {:f} [Hz]".format(self.fGyro[0]))
+            print("Gyro Radius = {:f} [m]".format(self.rGyro[0][0]))
             print("Number of gyro points = {:f}".format(len(helixTrace)))
             print("Longitudinal dist between gyro points = {:f} [m]".format(magP/float(Nsteps)))
             print("Each line segment length ~ {:f} [m]".format(magP))

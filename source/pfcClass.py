@@ -375,6 +375,73 @@ class PFC:
         print("Completed Intersection Check")
         return
 
+    def findGyroShadows(self, MHD, CAD, GYRO):
+        """
+        finds shadows via gyro orbit tracing
+        """
+        print('\n===')
+        print('Gyro Orbit Intersection Calculation begins')
+        log.info('Gyro Orbit Intersection Calculation begins')
+
+        totalMeshCounter = 0
+        for i,target in enumerate(CAD.intersectMeshes):
+            totalMeshCounter+=target.CountFacets
+            #check if this target is a potential intersection
+            if CAD.intersectList[i] in self.intersects:
+                numTargetFaces += target.CountFacets
+                #append target data
+                for face in target.Facets:
+                    targetPoints.append(face.Points)
+                    targetNorms.append(face.Normal)
+        targetPoints = np.asarray(targetPoints)/1000.0 #scale to m
+        targetNorms = np.asarray(targetNorms)
+        print("TOTAL INTERSECTION FACES: {:d}".format(totalMeshCounter))
+        #pull random vPerp and gyroPhase (same randoms used by all PFC points)
+        GYRO.randomMaxwellianVelocity()
+        GYRO.randomPhaseAngle()
+        #setup frequencies, radii, etc.
+        GYRO.setupFreqs(GYRO.Bxyz[:,-1], GYRO.vPerp)
+        GYRO.setupRadius(GYRO.vPerp)
+
+        #walk up field line tracing helix and searching for intersections
+        dphi = 1.0 #number of degrees per step
+        numSteps = GYRO.gyroDeg
+        shadowMaskGyro = np.zeros((len(self.centers)))
+        for i in range(numSteps):
+            use = np.where(shadowMaskGyro == 0)[0]
+
+            #Get B field traces for this PFC
+            CTLfile = self.controlfilePath + self.controlfileStruct
+            MHD.writeControlFile(CTLfile, self.t, self.mapDirectionStruct, mode='struct')
+            #Perform first integration step
+            MHD.writeMAFOTpointfile(self.centers,self.gridfileStruct)
+            MHD.getMultipleFieldPaths(dphi, PFC.gridfileStruct, PFC.controlfilePath, PFC.controlfileStruct)
+            structData = tools.readStructOutput(PFC.structOutfile)
+            os.remove(PFC.structOutfile) #clean up
+
+            #find psi for all points we launch traces from
+            R,Z,Phi = tools.xyz2cyl(self.centers[:,0], self.centers[:,1], self.centers[:,2])
+            psiSource = self.ep.psiFunc.ev(R,Z)
+
+            #find psi for all points we potentially intersect with
+            targetCtrs = self.getTargetCenters(targetPoints)
+            R,Z,Phi = tools.xyz2cyl(targetCtrs[:,0], targetCtrs[:,1], targetCtrs[:,2])
+            psiIntersect = self.ep.psiFunc.ev(R,Z)
+
+            #Get helical path
+            GYRO.getHelicalTraceParallel() ###CODE THIS NEXT!!!
+
+            #intersection test
+            intersect_mask2[use2] = self.intersectTest2(structData,
+                                                        targetPoints,
+                                                        self.powerDirection,
+                                                        psiSource[use][use],
+                                                        psiIntersect)
+
+
+        return
+
+
     def intersectTestBasic(self,sources,sourceNorms,
                         targets,targetNorms,MHD,ep,powerDir,
                         psiSource, psiTarget, ptIdx=None):
