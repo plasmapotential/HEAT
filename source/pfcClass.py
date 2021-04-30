@@ -262,6 +262,11 @@ class PFC:
             log.info('Tracing with forward Map Direction')
             startIdx = 1
 
+        #set switch for intersection face recording
+        tools.recordIntersectSwitch = False
+        #set switch for psi filtering
+        tools.psiFilterSwitch = True
+
         #===INTERSECTION TEST 1 (tricky frontface culling / first step up field line)
         dphi = 1.0
         MHD.ittStruct = 1.0
@@ -281,7 +286,7 @@ class PFC:
             #this is for printing information about a specific mesh element
             #you can get the element # from paraview Point ID
             #paraviewIndex = None
-            paraviewIndex = 6814
+            paraviewIndex = 1
             if paraviewIndex is not None:
                 ptIdx = np.where(use==paraviewIndex)[0]
                 print("Finding intersection face for point at:")
@@ -375,69 +380,106 @@ class PFC:
         print("Completed Intersection Check")
         return
 
-    def findGyroShadows(self, MHD, CAD, GYRO):
-        """
-        finds shadows via gyro orbit tracing
-        """
-        print('\n===')
-        print('Gyro Orbit Intersection Calculation begins')
-        log.info('Gyro Orbit Intersection Calculation begins')
 
+
+    def findGuidingCenterPaths(self, MHD, GYRO):
+        """
+        traces B field in both directions (mapDirection=0) from PFCs
+        saves trace into PFC object variable, self.guidingCenterPaths
+        """
+        #walk up field line to determine where we should start helix tracing from
+        CTLfile = self.controlfilePath + self.controlfileStruct
+        MHD.ittGyro = GYRO.gyroDeg
+        print("Tracing guiding centers for {:f} degrees".format(GYRO.gyroDeg))
+        MHD.writeControlFile(CTLfile, self.t, 0, mode='gyro') #0 for both directions
+        MHD.writeMAFOTpointfile(self.centers,self.gridfileStruct)
+        MHD.getMultipleFieldPaths(GYRO.gyroDeg, self.gridfileStruct, self.controlfilePath,
+                                    self.controlfileStruct)
+        self.guidingCenterPaths = tools.readStructOutput(self.structOutfile)
+        os.remove(self.structOutfile) #clean up
+        return
+
+    def findHelicalPaths(self, MHD, GYRO, CAD):
+        """
+        walks downstream along the guidingCenterPaths and calculates the helical
+        trajectories of particles' gyro orbit paths.
+        Also calculates intersections along the way
+
+        Builds out the matrix, self.intersectRecord, which is a 3D matrix
+        containing the indices of the face where each helical path intersects
+        on its way into the divertor.  self.intersectRecord is 3D to allow traces
+        for randomly sampled gyroPhase angles (1D) and randomly sampled vPerp (2D),
+        on all the points on the PFC mesh (3D).  To sample another variable,
+        such as vParallel, you would need to add a 4th dimension.
+        """
+        #get all Region Of Interest (ROI) faces from CAD for intersection checking
         totalMeshCounter = 0
-        for i,target in enumerate(CAD.intersectMeshes):
+        targetPoints = []
+        targetNorms = []
+        for i,target in enumerate(CAD.ROImeshes):
             totalMeshCounter+=target.CountFacets
-            #check if this target is a potential intersection
-            if CAD.intersectList[i] in self.intersects:
-                numTargetFaces += target.CountFacets
-                #append target data
-                for face in target.Facets:
-                    targetPoints.append(face.Points)
-                    targetNorms.append(face.Normal)
+            #append target data
+            for face in target.Facets:
+                targetPoints.append(face.Points)
+                targetNorms.append(face.Normal)
         targetPoints = np.asarray(targetPoints)/1000.0 #scale to m
         targetNorms = np.asarray(targetNorms)
-        print("TOTAL INTERSECTION FACES: {:d}".format(totalMeshCounter))
+        GYRO.t1 = targetPoints[:,0,:] #point 1 of mesh triangle
+        GYRO.t2 = targetPoints[:,1,:] #point 2 of mesh triangle
+        GYRO.t3 = targetPoints[:,2,:] #point 3 of mesh triangle
+        GYRO.Nt = len(GYRO.t1)
+        print("TOTAL GYRO ROI FACES: {:d}".format(totalMeshCounter))
+
         #pull random vPerp and gyroPhase (same randoms used by all PFC points)
         GYRO.randomMaxwellianVelocity()
         GYRO.randomPhaseAngle()
         #setup frequencies, radii, etc.
-        GYRO.setupFreqs(GYRO.Bxyz[:,-1], GYRO.vPerp)
+        GYRO.setupFreqs(self.Bmag[:,-1])
         GYRO.setupRadius(GYRO.vPerp)
 
-        #walk up field line tracing helix and searching for intersections
-        dphi = 1.0 #number of degrees per step
-        numSteps = GYRO.gyroDeg
-        shadowMaskGyro = np.zeros((len(self.centers)))
-        for i in range(numSteps):
-            use = np.where(shadowMaskGyro == 0)[0]
+        #set up intersectRecord, which records index of intersection face
+        #this 3D array has one dimension for gyroPhase angles,
+        #one dimension for vPerps
+        #and one dimesion for the PFC.centers points we are tracing
+        #each element is the face that was intersected for that MC run (phase, vel, ctr)
+        N_centers = len(self.centers)
+        self.intersectRecord = np.ones((GYRO.N_phase,GYRO.N_vPerp,N_centers))*np.NaN
 
-            #Get B field traces for this PFC
-            CTLfile = self.controlfilePath + self.controlfileStruct
-            MHD.writeControlFile(CTLfile, self.t, self.mapDirectionStruct, mode='struct')
-            #Perform first integration step
-            MHD.writeMAFOTpointfile(self.centers,self.gridfileStruct)
-            MHD.getMultipleFieldPaths(dphi, PFC.gridfileStruct, PFC.controlfilePath, PFC.controlfileStruct)
-            structData = tools.readStructOutput(PFC.structOutfile)
-            os.remove(PFC.structOutfile) #clean up
+        #Walk downstream along GC path tracing helices and looking for intersections
+        N_GCdeg = GYRO.gyroDeg*2 + 1
+        for phase in range(GYRO.N_phase):
+            #initialize phase angle for this MC run
+            GYRO.lastPhase = np.ones((N_centers))*GYRO.gyroPhase[phase]
+            for vPerp in range(GYRO.N_vPerp):
+                #initialize velocity and radius for this MC run
+                GYRO.vPerpMC = GYRO.vPerp[vPerp]
+                GYRO.vParallelMC = GYRO.vParallel[vPerp]
+                GYRO.rGyroMC = GYRO.rGyro[:,vPerp]
+                for i in range(N_GCdeg):
+                    print("Guiding Center Step {:d}".format(i))
+                    log.info("Guiding Center Step {:d}".format(i))
+                    use = np.where(np.isnan(self.intersectRecord[phase,vPerp,:]) == True)[0]
+                    #run a trace if there are still points that haven't intersected
+                    if len(use) > 0:
+                        #start and end points for step i down guiding center path
+                        #we flip once so that we are walking downstream (MAFOT walks upstream)
+                        #then again so we are indexed according to CAD.centers
+                        GYRO.p0 = np.flip(np.flip(self.guidingCenterPaths)[i::N_GCdeg,:])[use]
+                        GYRO.p1 = np.flip(np.flip(self.guidingCenterPaths)[i+1::N_GCdeg,:])[use]
+                        #calculate helix path for this step down guiding center path
+                        print(use)
+                        self.intersectRecord[phase,vPerp,use] = GYRO.multipleGyroTrace()
+                    else:
+                        print("All helices intersected a face.  Breaking early.")
+                        break
 
-            #find psi for all points we launch traces from
-            R,Z,Phi = tools.xyz2cyl(self.centers[:,0], self.centers[:,1], self.centers[:,2])
-            psiSource = self.ep.psiFunc.ev(R,Z)
-
-            #find psi for all points we potentially intersect with
-            targetCtrs = self.getTargetCenters(targetPoints)
-            R,Z,Phi = tools.xyz2cyl(targetCtrs[:,0], targetCtrs[:,1], targetCtrs[:,2])
-            psiIntersect = self.ep.psiFunc.ev(R,Z)
-
-            #Get helical path
-            GYRO.getHelicalTraceParallel() ###CODE THIS NEXT!!!
-
-            #intersection test
-            intersect_mask2[use2] = self.intersectTest2(structData,
-                                                        targetPoints,
-                                                        self.powerDirection,
-                                                        psiSource[use][use],
-                                                        psiIntersect)
-
+        print("Gyro Trace Completed")
+        log.info("Gyro Trace Completed")
+        #uncomment for testing.  Print list of indices and
+        #associated intersection faces
+        #print("Intersect Record:")
+        #for i in range(len(self.intersectRecord[0,0,:])):
+        #    print("Launch Face: {:d}, Intersect Face: {:d}".format(int(i), int(self.intersectRecord[0,0,i])))
 
         return
 
@@ -545,7 +587,8 @@ class PFC:
 
 
 
-    def intersectTest2(self,sources,targets,mapDirection,psiSource,psiTarget,ptIdx=None):
+    def intersectTest2(self,sources,targets,mapDirection,
+                        psiSource=None,psiTarget=None,ptIdx=None):
         """
         Run an intersection test against all possible source faces
         sources is endpoints of line
@@ -576,13 +619,17 @@ class PFC:
         #on any face that is not on the same flux surface as the source face
         #this is a form of dimensionality reduction
         print("Calculating psiMask")
-        tools.psiMask = tools.buildMask(psiSource, psiTarget)
-        print(tools.psiMask.shape)
-        print("psiMask reduction ratio: {:f}".format(np.sum(tools.psiMask) / (Nt*N)))
-        print("Example # points within psi bounds: {:f}".format(np.sum(tools.psiMask[:,0])))
-        print("Compared to # of potential points: {:f}".format(Nt))
-        if ptIdx is not None:
-            print("psiMask for ptIDX: {:f}".format(np.sum(tools.psiMask[:,ptIdx])))
+        if psiSource is not None:
+            tools.psiFilterSwitch = True
+            tools.psiMask = tools.buildMask(psiSource, psiTarget)
+            print("psiMask reduction ratio: {:f}".format(np.sum(tools.psiMask) / (Nt*N)))
+            print("Example # points within psi bounds: {:f}".format(np.sum(tools.psiMask[:,0])))
+            print("Compared to # of potential points: {:f}".format(Nt))
+            if ptIdx is not None:
+                print("psiMask for ptIDX: {:f}".format(np.sum(tools.psiMask[:,ptIdx])))
+        else:
+            tools.psiFilterSwitch = False
+
 
         print('Entering intersection Test #1 for {:d} potential intersection faces'.format(Nt))
         log.info('Entering intersection Test #1 for {:d} potential intersection faces'.format(Nt))

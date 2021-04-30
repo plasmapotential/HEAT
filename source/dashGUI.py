@@ -1634,11 +1634,19 @@ def gyroInputBoxes():
             ),
             html.Div(
                 children=[
-                    html.Label("# Traces Per Mesh Element"),
-                    dcc.Input(id="N_MC", className="textInput"),
+                    html.Label("# Random Phase Angles"),
+                    dcc.Input(id="N_phase", className="textInput"),
                 ],
                 className="OFInput"
             ),
+            html.Div(
+                children=[
+                    html.Label("# Random Velocities"),
+                    dcc.Input(id="N_vPerp", className="textInput"),
+                ],
+                className="OFInput"
+            ),
+
             html.Div(
                 children=[
                     html.Label("Gyro Trace Length [deg]"),
@@ -1672,16 +1680,17 @@ def gyroInputBoxes():
               [State('N_gyroSteps', 'value'),
                State('gyroDeg', 'value'),
                State('gyroT_eV', 'value'),
-               State('N_MC', 'value'),
+               State('N_vPerp', 'value'),
+               State('N_phase', 'value'),
                State('species', 'value')
               ])
-def loadGYRO(n_clicks,N_gyroSteps,gyroDeg,gyroT_eV,N_MC,species):
+def loadGYRO(n_clicks,N_gyroSteps,gyroDeg,gyroT_eV,N_vPerp,N_phase,species):
     """
     sets up GYRO module
     """
     if n_clicks == 0:
         raise PreventUpdate
-    gui.getGyroInputs(N_gyroSteps,gyroDeg,gyroT_eV,N_MC,species)
+    gui.getGyroInputs(N_gyroSteps,gyroDeg,gyroT_eV,N_vPerp,N_phase,species)
     return [html.Label("Loaded Gyro Orbit Data into HEAT", style={'color':'#f5d142'})]
 
 

@@ -330,6 +330,8 @@ class MHD:
             #or running full MAFOT laminar
             if mode=='laminar':
                 f.write('itt=\t{:f}\n'.format(self.ittLaminar))
+            elif mode=='gyro':
+                f.write('itt=\t{:f}\n'.format(self.ittGyro))
             else:
                 f.write('itt=\t{:f}\n'.format(self.ittStruct))
             #f.write('Smin=\t{:2f}\n'.format(self.Smin))
@@ -397,6 +399,7 @@ class MHD:
 
             f.write('pi=\t3.141592653589793\n')
             f.write('2*pi=\t6.283185307179586\n')
+            return
 
     def psi2DfromEQ(self, PFC):
         """

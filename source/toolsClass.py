@@ -304,8 +304,11 @@ class tools:
         using line + triangle intersection rule
         """
         #Filter by psi
-        use = np.where(self.psiMask[:,i] == 1)[0]
-        Nt = len(use)
+        if self.psiFilterSwitch == True:
+            use = np.where(self.psiMask[:,i] == 1)[0]
+            Nt = len(use)
+        else:
+            use = np.arange(len(p1))
 
         #Perform Intersection Test
         q13D = np.repeat(self.q1[i,np.newaxis], Nt, axis=0)
@@ -330,11 +333,16 @@ class tools:
                     print(self.p3[self.targetIdx])
 
 
-        #if we found an intersection return 1
-        if np.sum(np.logical_and(test1,test2)) > 0:
-            result = 1
+        #return intersection face index if switch is on, else return binary
+        if self.recordIntersectSwitch == True:
+            #return index of face we intersected with
+            result = np.where(np.logical_and(test1,test2))[0]
         else:
-            result = 0
+            #return 1 if we intersected
+            if np.sum(np.logical_and(test1,test2)) > 0:
+                result = 1
+            else:
+                result = 0
 
         return result
 

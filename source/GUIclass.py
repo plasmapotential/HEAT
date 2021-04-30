@@ -743,22 +743,24 @@ class GUIobj():
             self.HF.getHFtableData(self.MHD.ep[0])
         return
 
-    def getGyroInputs(self,N_gyroSteps,gyroDeg,gyroT_eV,N_MC,species):
+    def getGyroInputs(self,N_gyroSteps,gyroDeg,gyroT_eV,N_vPerp,N_phase,species):
         """
         Sets up the gyro module
         """
-        self.GYRO.N_gyroSteps = N_gyroSteps
-        self.GYRO.gyroDeg = gyroDeg
-        self.GYRO.gyroT_eV = gyroT_eV
-        self.GYRO.N_MC = N_MC
+        self.GYRO.N_gyroSteps = int(N_gyroSteps)
+        self.GYRO.gyroDeg = int(gyroDeg)
+        self.GYRO.gyroT_eV = float(gyroT_eV)
+        self.GYRO.N_vPerp = int(N_vPerp)
+        self.GYRO.N_phase = int(N_phase)
+        self.GYRO.N_MC = self.GYRO.N_phase*self.GYRO.N_vPerp
         self.GYRO.species = species
         #set up GYRO object
         self.GYRO.setupConstants(species=species)
         print('Loaded Gyro Orbit Settings')
-        print('# Steps per helix period = {:f}'.format(N_gyroSteps))
-        print('Gyro tracing distance [degrees] = {:f}'.format(gyroDeg))
-        print('Plasma Temperature = {:f}'.format(gyroT_eV))
-        print('Number of Monte Carlo runs per point = {:f}'.format(N_MC))
+        print('# Steps per helix period = {:f}'.format(float(N_gyroSteps)))
+        print('Gyro tracing distance [degrees] = {:f}'.format(float(gyroDeg)))
+        print('Plasma Temperature = {:f}'.format(float(gyroT_eV)))
+        print('Number of Monte Carlo runs per point = {:f}'.format(float(self.GYRO.N_MC)))
         return
 
     def bfieldAtSurface(self, PFC):
@@ -769,6 +771,18 @@ class GUIobj():
         R,Z,phi = tools.xyz2cyl(ctrs[:,0],ctrs[:,1],ctrs[:,2])
         PFC.Bxyz = self.MHD.Bfield_pointcloud(PFC.ep, R, Z, phi, PFC.powerDirection)
         self.MHD.write_B_pointcloud(ctrs,PFC.Bxyz,PFC.controlfilePath)
+        return
+
+    def bfieldMagnitude(self, PFC):
+        """
+        Calculate B field magnitude point cloud for Bfield Vectors at tile surface
+        """
+        print(PFC.Bxyz[0,:])
+        PFC.Bmag = np.zeros((len(PFC.Bxyz), 4))
+        PFC.Bmag[:,0] = PFC.centers[:,0] # X
+        PFC.Bmag[:,1] = PFC.centers[:,1] # Y
+        PFC.Bmag[:,2] = PFC.centers[:,2] # Z
+        PFC.Bmag[:,3] = np.sqrt(PFC.Bxyz[:,0]**2+PFC.Bxyz[:,1]**2+PFC.Bxyz[:,2]**2)
         return
 
     def Btrace(self,x,y,z,t,mapDirection, traceDeg):
@@ -824,12 +838,13 @@ class GUIobj():
         vPerp = self.GYRO.temp2thermalVelocity(gyroT_eV)
         vParallel = self.GYRO.temp2thermalVelocity(gyroT_eV)
         # Evaluate B
-        R,Z,phi = tools.xyz2cyl(float(x),float(y),float(z))
+        R,Z,phi = tools.xyz2cyl(float(x)/1000.0,float(y)/1000.0,float(z)/1000.0)#mm => m
         tIdx = np.where(float(t)==self.MHD.timesteps)[0][0]
         ep = self.MHD.ep[tIdx]
-        Bp = ep.BpFunc.ev(R,Z)
         Bt = ep.BtFunc.ev(R,Z)
-        B = np.sqrt(Bp**2 + Bt**2)
+        BR = ep.BRFunc.ev(R,Z)
+        BZ = ep.BZFunc.ev(R,Z)
+        B = np.sqrt(BR**2 + Bt**2 + BZ**2)
         #Calculate frequencies and gyro radius
         self.GYRO.setupFreqs(B)
         self.GYRO.setupRadius(vPerp)
@@ -1067,13 +1082,20 @@ class GUIobj():
         """
         Calculates the gyro orbit heat load on a PFC object
         """
-        ###YOU ARE HERE=========================================================================================================================
-        #Get B field on PFC surface
+        t0 = time.time()
+        #Get B field vector on PFC surface
         self.bfieldAtSurface(PFC)
-        #Check for intersections
-        PFC.findGyroShadows(self.MHD, self.CAD, self.GYRO)
-
-
+        #Get B field magnitude on surface
+        self.bfieldMagnitude(PFC)
+        #Trace B field upstream from PFC surface
+        PFC.findGuidingCenterPaths(self.MHD, self.GYRO)
+        #Trace helical path downstream, checking for intersections
+        PFC.findHelicalPaths(self.MHD, self.GYRO, self.CAD)
+        #Redistribute Power
+        ###===YOU ARE HERE.
+        #ALSO NEED TO MAKE OUTPUT AND POINTCLOUDS SOMEHOW?
+        print("Gyro orbit calculation took: {:f} [s]".format(time.time() - t0))
+        log.info("Gyro orbit calculation took: {:f} [s]".format(time.time() - t0))
         return
 
 
@@ -1206,17 +1228,6 @@ class GUIobj():
             shutil.copy(src,dest)
 
         return
-
-
-    def runGyro(self):
-        """
-        runs a monte carlo gyro orbit heat flux calculation
-        you need to have loaded the gyro orbit variables, and initialized the
-        PFC, MHD, and HF modules before running this function
-        """
-
-
-
 
     def psiPC(self, PFC):
         """

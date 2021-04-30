@@ -7,7 +7,7 @@
 #STPfile, /home/workhorse/source/HEAT/squashfs-root/test/IBDH_2tiles.step
 #FreeCADPath, /opt/freecad/squashfs-root/usr/lib
 #PVPath, /opt/paraview/ParaView-5.8.1-MPI-Linux-Python3.7-64bit/lib/python3.7/site-packages
-ROIGridRes, 5.0
+ROIGridRes, 20.0
 gridRes, standard
 permute_mask, True
 unitConvert, 1.0
