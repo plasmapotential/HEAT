@@ -63,7 +63,9 @@ class heatFlux:
                             'fracUO',
                             'fracLI',
                             'fracLO',
-                            'hfMode']
+                            'hfMode',
+                            'elecFrac',
+                            'ionFrac']
         return
 
     def setTypes(self):
@@ -86,6 +88,8 @@ class heatFlux:
         self.fracUO = float(self.fracUO)
         self.fracLI = float(self.fracLI)
         self.fracLO = float(self.fracLO)
+        self.ionFrac = float(self.ionFrac)
+        self.elecFrac = float(self.elecFrac)
         return
 
     def getHFtableData(self, ep):
@@ -312,7 +316,7 @@ class heatFlux:
 
 
 
-    def getHFprofile(self, PFC, MachFlag):
+    def getHFprofile(self, PFC):
         """
         Calculates heat flux profile from psi.  Default is an Eich profile.
 
@@ -352,9 +356,6 @@ class heatFlux:
         if self.lqCFmode == 'horaceck' or self.lqCFmode == None:
             self.getHoraceckFromEQ(PFC.ep)
 
-
-
-
         #Multiple exponential profile (Brunner Profile)
         if self.mode=='multiExp' or self.mode=='limiter':
             q[use] = self.multiExp_profile_fluxspace(PFC, R_omp, Bp_omp, psi, self.mode)
@@ -365,7 +366,6 @@ class heatFlux:
             q[use] = self.eich_profile_fluxspace(PFC, self.lqEich, self.S, R_omp, Bp_omp, psi)
             q *= q0
             q += self.qBG
-
 
         #Scale by fraction of power going to this PFC's divertor
         PFC.powerFrac = self.getDivertorPowerFraction(PFC.DivCode)
@@ -778,13 +778,18 @@ class heatFlux:
         #plt.show()
         return np.abs(q_div)
 
-    def write_heatflux_pointcloud(self,centers,hf,dataPath,tag=None):
+    def write_heatflux_pointcloud(self,centers,hf,dataPath,tag=None,mode='optical'):
         print("Creating Heat Flux Point Cloud")
         log.info("Creating Heat Flux Point Cloud")
-        if tag is None:
-            pcfile = dataPath + 'HeatfluxPointCloud.csv'
+        if mode is 'gyro':
+            prefix = 'HF_gyro'
         else:
-            pcfile = dataPath + 'HeatfluxPointCloud_'+tag+'.csv'
+            prefix = 'HF_optical'
+
+        if tag is None:
+            pcfile = dataPath + prefix + '.csv'
+        else:
+            pcfile = dataPath + prefix + '_'+tag+'.csv'
         pc = np.zeros((len(centers), 4))
         pc[:,0] = centers[:,0]*1000.0
         pc[:,1] = centers[:,1]*1000.0
@@ -795,9 +800,9 @@ class heatFlux:
 
         #Now save a vtk file for paraviewweb
         if tag is None:
-            tools.createVTKOutput(pcfile, 'points', 'HeatFlux')
+            tools.createVTKOutput(pcfile, 'points', prefix)
         else:
-            name = 'HeatFlux_'+tag
+            name = prefix+'_'+tag
             tools.createVTKOutput(pcfile, 'points', name)
         return
 
@@ -913,10 +918,13 @@ class heatFlux:
         np.savetxt(file, pc, delimiter=',',fmt='%.10f', header=head)
 
 
-    def power_sum_mesh(self, PFC, scale2circ = True, verbose=True):
+    def power_sum_mesh(self, PFC, mode='optical', scale2circ = True, verbose=True):
         """
         Calculate power by summing over each mesh element.
         Scale to fraction of machine we are analyzing: deltaPhi/2pi
+
+        if mode is optical, then uses optical approximation (qDiv)
+        if mode is gyro, then uses gyro orbit calculation (qGyro)
 
         scale2circ is a boolean.  If true, scales power by the toroidal
         slice width.  If false, returns without scaling
@@ -929,7 +937,53 @@ class heatFlux:
             print('phiMax = {:f}'.format(phi.max()))
             log.info('phiMin = {:f}'.format(phi.min()))
             log.info('phiMax = {:f}'.format(phi.max()))
-        if scale2circ == True:
-            return np.sum(PFC.qDiv * PFC.areas ) * 2 * np.pi / deltaPhi
+
+        if mode=='gyro':
+            sum = np.sum(PFC.qGyro * PFC.areas )
         else:
-            return np.sum(PFC.qDiv * PFC.areas )
+            sum = np.sum(PFC.qDiv * PFC.areas )
+
+        if scale2circ == True:
+            sum = sum * 2 * np.pi / deltaPhi
+
+        return sum
+
+    def gyroHF(self, GYRO, PFC):
+        """
+        redistributes power calculated using the optical approximation according
+        to gyro orbits
+
+        input is an a gyroClass object.  by the time this function is called
+        you should have already calculated the intersectRecord using the
+        GYROclass
+        """
+        print("Calculating gyro orbit heat loads")
+        log.info("Calculating gyro orbit heat loads")
+        use = np.where(np.array(GYRO.targetNames) == PFC.name)[0]
+        ctrs = GYRO.centers[use]
+        #get q|| for this PFC surface
+        q = self.getHFprofile(PFC)
+        #Get fractional multipliers for each helical trace
+        gyroFrac = 1.0/GYRO.N_gyroPhase
+        vPhaseFrac = 1.0/GYRO.N_vPhase
+        energies = 0.5 * GYRO.mass_eV * GYRO.vSlices**2
+        energyTotal = energies.sum(axis=1)
+        vSliceFrac = np.zeros((len(q),GYRO.N_vSlice))
+        flux = np.zeros((len(q),GYRO.N_vSlice))
+        for vSlice in range(GYRO.N_vSlice):
+            vSliceFrac[:,vSlice] = energies[:,vSlice] / energyTotal
+#            flux[:,vSlice] = q*ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[:,vSlice]
+
+        qMatrix = np.zeros((GYRO.N_gyroPhase,GYRO.N_vPhase,GYRO.N_vSlice,len(q)))
+        qGyro = np.zeros((len(q)))
+        #loop through intersect record and redistribute power using multipliers
+        for gyroPhase in range(GYRO.N_gyroPhase):
+            for vPhase in range(GYRO.N_vPhase):
+                for vSlice in range(GYRO.N_vSlice):
+                    #qGyroMatrix[gyroPhase,vPhase,vSlice,:] = q*ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[:,vSlice]
+                    idx = GYRO.intersectRecord[gyroPhase,vPhase,vSlice,:]
+                    idx = idx[~np.isnan(idx)] #dont include NaNs (NaNs = no intersection)
+                    idx = idx.astype(int) #cast as integer
+                    qGyro[idx] += q*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[:,vSlice]
+
+        return qGyro

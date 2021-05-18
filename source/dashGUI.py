@@ -229,8 +229,8 @@ def build_tabs():
                                 buildCADbox(),
                                 buildPFCbox(),
                                 buildHFbox(),
-                                buildOFbox(),
                                 buildGYRObox(),
+                                buildOFbox(),
                                 ]
                                 )
                         ]
@@ -903,7 +903,7 @@ def buildHFbox():
                 html.Label(id="hfModeLabel", children="Select a Heat Flux Profile"),
                 dcc.Dropdown(
                 id='hfMode',
-                className="hfSelect",
+                className="wideSelect",
                 style={'backgroundColor': 'transparent', 'color':'transparent'},
                 #style=dropdown_style,
                 options=[
@@ -1473,8 +1473,6 @@ def loadHF(n_clicks,hfMode,lqEich,S,qBG,lqCN,lqCF,lqPN,lqPF,
 
 
 
-
-
 #==========PFC==========
 def buildPFCbox():
     return html.Div(
@@ -1608,6 +1606,7 @@ def downloadPFCfile(n_clicks):
 
 
 
+
 #==========gyro orbits==========
 def buildGYRObox():
     return html.Div(
@@ -1615,6 +1614,22 @@ def buildGYRObox():
         children=[
             html.H6("Gyro Orbit Settings"),
             gyroInputBoxes(),
+            html.Label("Velocity Method"),
+            dcc.Dropdown(
+                id='vMode',
+                className="wideSelect",
+                style={'backgroundColor': 'transparent', 'color':'transparent'},
+                options=[
+                    {'label': 'Single Value', 'value': 'single'},
+                    {'label': 'From 3D File', 'value': 'file'}, # to be added at future date
+                    ],
+                value=None,
+                ),
+            html.Div(id='gyroVparams',
+                     children=[
+                                loadGyroSettings(mode=None,hidden=True),
+                               ],
+                    ),
             html.Br(),
             html.Button("Load Gyro Settings", id="loadGYRO", n_clicks=0, style={'margin':'0 10px 10px 0'}),
             html.Div(id="hiddenDivGyro")
@@ -1634,15 +1649,8 @@ def gyroInputBoxes():
             ),
             html.Div(
                 children=[
-                    html.Label("# Random Phase Angles"),
-                    dcc.Input(id="N_phase", className="textInput"),
-                ],
-                className="OFInput"
-            ),
-            html.Div(
-                children=[
-                    html.Label("# Random Velocities"),
-                    dcc.Input(id="N_vPerp", className="textInput"),
+                    html.Label("# gyroPhase Angles"),
+                    dcc.Input(id="N_gyroPhase", className="textInput"),
                 ],
                 className="OFInput"
             ),
@@ -1656,41 +1664,137 @@ def gyroInputBoxes():
             ),
             html.Div(
                 children=[
-                    html.Label("Average Temperature [eV]"),
-                    dcc.Input(id="gyroT_eV", className="textInput"),
+                    html.Label("Ion Power Fraction [0-1]"),
+                    dcc.Input(id="ionFrac", className="textInput"),
                 ],
                 className="OFInput"
             ),
-
             html.Div(
                 children=[
-                    html.Label("Species [H,D,T]"),
-                    dcc.Input(id="species", className="textInput"),
+                    html.Label("Ion Species"),
+                    dcc.Dropdown(
+                        id='species',
+                        className="wideSelect",
+                        style={'backgroundColor': 'transparent', 'color':'transparent'},
+                        options=[
+                            {'label': 'Hydrogen', 'value': 'H'},
+                            {'label': 'Deuterium', 'value': 'D'},
+                            {'label': 'Tritium', 'value': 'T'},
+                            ],
+                        value=None,
+                        ),
                 ],
-                className="OFInput"
+                className="OFInput",
             ),
-
             ],
             className="wideBoxNoColor",
             )
+
+@app.callback([Output('gyroVparams', 'children')],
+              [Input('vMode', 'value')])
+def hfParameters(mode):
+    div = [loadGyroSettings(mode=mode, hidden=False)]
+    return [div]
+
+def loadGyroSettings(mode=None, hidden=False):
+    #do this hidden business so that we can always load defaults into these id's
+    #hideMask corresponds to the following parameters:
+    #[eichProfile, commonRegion, privateRegion]
+    hideMask = ['hiddenBox','hiddenBox']
+    if mode=='single':
+        hideMask = ['hfInput','hiddenBox']
+    elif mode=='file':
+        hideMask = ['hiddenBox','hfInput'] #common flux region
+    if hidden==True or mode==None:
+        hideMask=['hiddenBox','hiddenBox']
+
+    return html.Div(
+            children=[
+                #use single temperature to define entire divertor
+                html.Div(
+                    #className=hideMask[0],
+                    children=[
+                        singleVelocity(hideMask[0]),
+                        ]
+                ),
+                #read temperature pointcloud from file and interpolate to PFC surface
+                html.Div(
+                    #className=hideMask[1],
+                    children=[
+                        velocityFromFile(hideMask[1]),
+                        ]
+                ),
+                    ],
+                    )
+
+
+def singleVelocity(className):
+    return html.Div(
+            children = [
+                html.Div(
+                    children=[
+                    html.Div(
+                        children=[
+                            html.Label("Average Temperature [eV]"),
+                            dcc.Input(id="gyroT_eV", className="textInput"),
+                            ],
+                        className="OFInput"
+                        ),
+
+                    html.Div(
+                        children=[
+                            html.Label("# Velocity Slices"),
+                            dcc.Input(id="N_vSlice", className="textInput"),
+                            ],
+                        className="OFInput"
+                        ),
+
+                    html.Div(
+                        children=[
+                            html.Label("# Velocity Phases"),
+                            dcc.Input(id="N_vPhase", className="textInput"),
+                            ],
+                        className="OFInput"
+                        ),
+
+
+                        ],
+                    className="wideBoxNoColor"
+                    )
+                ],
+            className=className,
+            )
+
+def velocityFromFile(className):
+    return html.Div(
+        children=[
+            html.Label("3D plasma temperature interpolation not yet available", style={'color':'#f5d142'})
+        ],
+        className = className
+    )
 
 #Load GYRO button connect
 @app.callback([Output('hiddenDivGyro', 'children')],
               [Input('loadGYRO', 'n_clicks')],
               [State('N_gyroSteps', 'value'),
+               State('N_gyroPhase', 'value'),
                State('gyroDeg', 'value'),
+               State('species', 'value'),
+               State('vMode','value'),
                State('gyroT_eV', 'value'),
-               State('N_vPerp', 'value'),
-               State('N_phase', 'value'),
-               State('species', 'value')
+               State('N_vPhase', 'value'),
+               State('N_vSlice', 'value'),
+               State('ionFrac', 'value'),
               ])
-def loadGYRO(n_clicks,N_gyroSteps,gyroDeg,gyroT_eV,N_vPerp,N_phase,species):
+def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroDeg,species,vMode,gyroT_eV,
+             N_vPhase, N_vSlice, ionFrac):
     """
     sets up GYRO module
     """
     if n_clicks == 0:
         raise PreventUpdate
-    gui.getGyroInputs(N_gyroSteps,gyroDeg,gyroT_eV,N_vPerp,N_phase,species)
+    gui.getGyroInputs(N_gyroSteps,N_gyroPhase,gyroDeg,species,vMode,gyroT_eV,
+                      N_vPhase, N_vSlice, ionFrac)
     return [html.Label("Loaded Gyro Orbit Data into HEAT", style={'color':'#f5d142'})]
 
 

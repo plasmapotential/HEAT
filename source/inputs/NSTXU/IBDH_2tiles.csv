@@ -23,4 +23,4 @@
 #
 timesteps, PFCname, powerDirection, DivCode, intersectName
 #=====IBDH TEST Case (doesnt include all intersection PFCs)
-0:5000, SOLID843, 1, LO, SOLID843:SOLID842
+0:5000, SOLID843, -1, LO, SOLID843:SOLID842

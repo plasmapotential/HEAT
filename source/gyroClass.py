@@ -2,6 +2,8 @@ import numpy as np
 import plotly.graph_objects as go
 import toolsClass
 import multiprocessing
+from scipy.interpolate import interp1d
+from tqdm.contrib.concurrent import process_map
 tools = toolsClass.tools()
 
 import logging
@@ -58,8 +60,10 @@ class GYRO:
         Calculates thermal velocity from a temperature
 
         T_eV is temperature in eV
+
+        can also be found with: d/dv( v*f(v) ) = 0
         """
-        return np.sqrt(2*float(T_eV)/(self.mass_eV/self.c**2))
+        return np.sqrt(T_eV/(self.mass_eV/self.c**2))
 
 
     def setupFreqs(self, B):
@@ -101,29 +105,94 @@ class GYRO:
 
         return
 
-
-    def randomMaxwellianVelocity(self):
+    def setupVelocities(self):
         """
-        Monte Carlo sampling of Maxwellian velocity distribution
+        sets up velocities based upon vMode input from GUI
 
-        Returns N_MC velocities distributed about gyroT_eV per the Maxwellian distribution
+        len(self.t1) is number of points in divertor we are calculating HF on
         """
-        ###NEED TO CODE THIS MC PULLER TO SAMPLE MAXWELLIAN
-        #for now it just returns vThermal
-        v = self.temp2thermalVelocity(self.gyroT_eV)
-        self.vPerp = np.ones((self.N_vPerp))*v
-        self.vParallel = np.ones((self.N_vPerp))*v
+        #get velocity space phase angles
+        self.uniformVelPhaseAngle()
+
+        if self.vMode == 'single':
+            print("Gyro orbit calculation from single plasma temperature")
+            log.info("Gyro orbit calculation from single plasma temperature")
+            self.T0 = np.ones((len(self.t1)))*self.gyroT_eV
+            #get average velocity for each temperature point
+            self.vThermal = self.temp2thermalVelocity(self.T0)
+            #set upper bound of v*f(v) (note that this cuts off high energy particles)
+            self.vMax = 4 * self.vThermal
+            #get 100 points to initialize functional form of f(v) (note this is a 2D matrix cause vMax is 2D)
+            self.vScan = np.linspace(0,self.vMax,100).T
+            #get velocity slices for each T0
+            self.pullEqualProbabilityVelocities()
+
+        else:
+            #TO ADD THIS YOU WILL NEED TO PASS IN XYZ COORDINATES OF CTRS AND INTERPOLATE
+            print("3D plasma temperature interpolation from file not yet supported.  Run gyro orbits in single mode")
+            log.info("3D plasma temperature interpolation from file not yet supported.  Run gyro orbits in single mode")
 
         return
 
-    def randomPhaseAngle(self):
+    def pullEqualProbabilityVelocities(self):
         """
-        Monte Carlo sampling of a uniform distribution between 0 and 2pi
+        creates vSlices: array of velocities indexed to match T0 array (or PFC.centers)
 
-        returns an array of N_MC random values in radians
+        each vSlice is positioned at a place in the PDF so it has an equal probability
+        of occuring.  ie the area under the PDF curve between each vSlice is equal.
         """
-        self.gyroPhase = np.random.uniform(0, 2*np.pi, self.N_phase)
+        self.vSlices = np.ones((len(self.T0),self.N_vSlice))*np.nan
+        for i in range(len(self.T0)):
+            #get velocity range for this T0
+            v = self.vScan[i,:]
+            #generate the (here maxwellian) speed PDF
+            v_pdf = v * (self.mass_eV/self.c**2) / (self.T0[i]) * np.exp(-(self.mass_eV/self.c**2 * v**2) / (2*self.T0[i]) )
+            #generate the CDF
+            v_cdf = np.cumsum(v_pdf[1:])*np.diff(v)
+            v_cdf = np.insert(v_cdf, 0, 0)
+            #create bspline interpolators for the cdf and cdf inverse
+            inverseCDF = interp1d(v_cdf, v, kind='cubic')
+            forwardCDF = interp1d(v, v_cdf, kind='cubic')
+            #calculate N_vSlice velocities for each pdf each with equal area (probability)
+            cdfMax = v_cdf[-1]
+            cdfMin = v_cdf[0]
+            sliceWidth = cdfMax / (self.N_vSlice+1)
+            cdfSlices = np.linspace(0,1,self.N_vSlice+2)[1:-1]
+            self.vSlices[i,:] = inverseCDF(cdfSlices)
+        print("Found N_vPhase velocities of equal probability")
+        log.info("Found N_vPhase velocities of equal probability")
         return
+
+    def maxwellian(self, x):
+        """
+        returns a maxwellian distribution with x as independent variable.  x
+        must either be scalar or len(T0)
+
+        Uses mass, T0, c, from class
+        """
+        pdf = (self.mass_eV/self.c**2) / (self.T0) * np.exp(-(self.mass_eV/self.c**2 * x**2) / (2*self.T0) )
+        return pdf
+
+    def uniformGyroPhaseAngle(self):
+        """
+        Uniform sampling of a uniform distribution between 0 and 2pi
+
+        returns angles in radians
+        """
+        self.gyroPhases = np.linspace(0,2*np.pi,self.N_gyroPhase+1)[:-1]
+        return
+
+    def uniformVelPhaseAngle(self):
+        """
+        Sampling of a uniform distribution between 0 and pi/2 (only forward velocities)
+        vPerp is x-axis of velocity space
+        vParallel is y-axis of velocity space
+
+        returns angles in radians
+        """
+        self.vPhases = np.linspace(0.0,np.pi/2,self.N_vPhase+2)[1:-1]
+        return
+
 
     def singleGyroTrace(self,vPerp,vParallel,gyroPhase,N_gyroSteps,
                         BtraceXYZ,controlfilePath,TGyro,rGyro,omegaGyro,
@@ -210,43 +279,6 @@ class GYRO:
             print("Each line segment length ~ {:f} [m]".format(magP))
         return
 
-    def multipleGyroTrace(self):
-        """
-        Calculates the helical path for multiple points,
-        each with different gyroRadii, using multiprocessing
-
-        Btrace is one step of a field line trace for each point (MAFOT structure output)
-        phase is phase angle (updated from last trace step)
-
-        updates lastPhase variable and helixTrace
-        """
-        #magnetic field trace
-        self.helixTrace = [None] * len(self.p0)
-        N = len(self.p1)
-        #Prepare helical trace across multiple cores
-        Ncores = multiprocessing.cpu_count() -2 #reserve 2 cores for overhead
-        print('Initializing parallel helix trace across {:d} cores'.format(Ncores))
-        log.info('Initializing parallel helix trace across {:d} cores'.format(Ncores))
-        #each worker receives a single start and end point (p0 and p1),
-        #corresponding to one trace from the MAFOT structure output.
-        print('Spawning tasks to workers')
-        log.info('Spawning tasks to workers')
-        #Do this try clause to kill any zombie threads that don't terminate
-        try:
-            pool = multiprocessing.Pool(Ncores)
-            #mask = np.asarray(pool.map(self.gyroTraceParallel, np.arange(N)))
-            output = np.asarray(pool.map(self.gyroTraceParallel, np.arange(N)))
-            self.lastPhase = output[:,0]
-            intersectRecord = output[:,1]
-        finally:
-            pool.close()
-            pool.join()
-            del pool
-        print('Parallel helix trace complete')
-        log.info('Parallel helix trace complete')
-        print(np.shape(intersectRecord))
-        return intersectRecord
-
     def gyroTraceParallel(self, i):
         """
         parallelized gyro trace.  called by multiprocessing.pool.map()
@@ -266,10 +298,11 @@ class GYRO:
         #magnitude
         magP = np.sqrt(delP[0]**2 + delP[1]**2 + delP[2]**2)
         #time it takes to transit line segment
-        delta_t = magP / (self.vParallelMC)
+        delta_t = magP / (self.vParallelMC[i])
         #Number of steps in line segment
         Tsample = self.TGyro[i] / self.N_gyroSteps
         Nsteps = int(delta_t / Tsample)
+
         #length (in time) along guiding center
         t = np.linspace(0,delta_t,Nsteps+1)
         #guiding center location
@@ -301,8 +334,26 @@ class GYRO:
         helix_rot[:,0] += xGC
         helix_rot[:,1] += yGC
         helix_rot[:,2] += zGC
+
+        #shift entire helix to ensure we capture intersections in p0 plane
+        helix_rot[:,0] += w[0]*0.0005
+        helix_rot[:,1] += w[1]*0.0005
+        helix_rot[:,2] += w[2]*0.0005
+
         #update gyroPhase variable so next iteration starts here
         lastPhase = self.omegaGyro[i]*t[-1] + self.lastPhase[i]
+
+        #print the trace for a specific index
+        if self.traceIndex is not None:
+            if self.traceIndex == i:
+                #print("Saving Index data to CSV and VTK formats")
+                #save data to csv format
+                head = 'X[mm],Y[mm],Z[mm]'
+                np.savetxt(self.controlfilePath+'helix{:d}.csv'.format(self.N_GCdeg), helix_rot*1000.0, delimiter=',', header=head)
+                #save data to vtk format
+                tools.createVTKOutput(self.controlfilePath+'helix{:d}.csv'.format(self.N_GCdeg),
+                                        'trace', 'traceHelix{:d}'.format(self.N_GCdeg),verbose=False)
+
 
         #=== intersection checking ===
         q1 = helix_rot[:-1,:]
@@ -329,5 +380,47 @@ class GYRO:
                 break
             else:
                 index = np.NaN
-
         return lastPhase, index
+
+    def multipleGyroTrace(self):
+        """
+        Calculates the helical path for multiple points,
+        each with different gyroRadii, using multiprocessing
+
+        Btrace is one step of a field line trace for each point (MAFOT structure output)
+        phase is phase angle (updated from last trace step)
+
+        updates lastPhase variable and helixTrace
+        """
+        #magnetic field trace
+        self.helixTrace = [None] * len(self.p0)
+        N = len(self.p1)
+        #Prepare helical trace across multiple cores
+        Ncores = multiprocessing.cpu_count() -2 #reserve 2 cores for overhead
+        print('Initializing parallel helix trace across {:d} cores'.format(Ncores))
+        log.info('Initializing parallel helix trace across {:d} cores'.format(Ncores))
+        #each worker receives a single start and end point (p0 and p1),
+        #corresponding to one trace from the MAFOT structure output.
+        print('Spawning tasks to workers')
+        log.info('Spawning tasks to workers')
+#OLD METHOD
+#        #Do this try clause to kill any zombie threads that don't terminate
+#        try:
+#            pool = multiprocessing.Pool(Ncores)
+#            output = np.asarray(pool.map(self.gyroTraceParallel, np.arange(N)))
+#            self.lastPhase = output[:,0]
+#            intersectRecord = output[:,1]
+#        finally:
+#            pool.close()
+#            pool.join()
+#            del pool
+
+        #multiprocessing with status bar (equiv to multiprocessing.Pool.map())
+        print("Multiprocessing gyro trace:")
+        output = process_map(self.gyroTraceParallel, range(N), max_workers=Ncores, chunksize=1)
+        output = np.asarray(output)
+        self.lastPhase = output[:,0]
+        intersectRecord = output[:,1]
+        print('Parallel helix trace complete')
+        log.info('Parallel helix trace complete')
+        return intersectRecord

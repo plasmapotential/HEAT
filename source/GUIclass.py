@@ -743,23 +743,27 @@ class GUIobj():
             self.HF.getHFtableData(self.MHD.ep[0])
         return
 
-    def getGyroInputs(self,N_gyroSteps,gyroDeg,gyroT_eV,N_vPerp,N_phase,species):
+    def getGyroInputs(self,N_gyroSteps,N_gyroPhase,gyroDeg,species,vMode,gyroT_eV,
+                      N_vPhase, N_vSlice, ionFrac):
         """
         Sets up the gyro module
         """
         self.GYRO.N_gyroSteps = int(N_gyroSteps)
         self.GYRO.gyroDeg = int(gyroDeg)
         self.GYRO.gyroT_eV = float(gyroT_eV)
-        self.GYRO.N_vPerp = int(N_vPerp)
-        self.GYRO.N_phase = int(N_phase)
-        self.GYRO.N_MC = self.GYRO.N_phase*self.GYRO.N_vPerp
+        self.GYRO.N_vSlice = int(N_vSlice)
+        self.GYRO.N_vPhase = int(N_vPhase)
+        self.GYRO.N_gyroPhase = int(N_gyroPhase)
+        self.GYRO.N_MC = self.GYRO.N_gyroPhase*self.GYRO.N_vSlice*self.GYRO.N_vPhase
         self.GYRO.species = species
+        self.GYRO.vMode = vMode
+        self.GYRO.ionFrac = float(ionFrac)
         #set up GYRO object
         self.GYRO.setupConstants(species=species)
         print('Loaded Gyro Orbit Settings')
         print('# Steps per helix period = {:f}'.format(float(N_gyroSteps)))
         print('Gyro tracing distance [degrees] = {:f}'.format(float(gyroDeg)))
-        print('Plasma Temperature = {:f}'.format(float(gyroT_eV)))
+        print('Plasma Temperature Mode = ' + vMode)
         print('Number of Monte Carlo runs per point = {:f}'.format(float(self.GYRO.N_MC)))
         return
 
@@ -835,8 +839,9 @@ class GUIobj():
         BtraceXYZ = tools.readStructOutput(structOutfile) #[m]
         #Setup gyro orbit trace constants and velocities
         self.GYRO.setupConstants(species='D')
-        vPerp = self.GYRO.temp2thermalVelocity(gyroT_eV)
-        vParallel = self.GYRO.temp2thermalVelocity(gyroT_eV)
+        v = self.GYRO.temp2thermalVelocity(float(gyroT_eV))
+        vPerp = v*np.cos(np.pi/4)
+        vParallel = v*np.sin(np.pi/4)
         # Evaluate B
         R,Z,phi = tools.xyz2cyl(float(x)/1000.0,float(y)/1000.0,float(z)/1000.0)#mm => m
         tIdx = np.where(float(t)==self.MHD.timesteps)[0][0]
@@ -964,17 +969,17 @@ class GUIobj():
                     print('PFC Name: '+ PFC.name)
                     if 'HFpc' in runList:
                         self.HF_PFC(PFC, PFC.tag)
-                        PFC.powerSum[tIdx] = self.HF.power_sum_mesh(PFC)
-                        print('Maximum heat load on tile: {:f}'.format(max(PFC.qDiv)))
-                        print('Power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
-                        print('Tessellated Total Power = {:f}'.format(PFC.powerSum[tIdx]))
+                        PFC.powerSumOptical[tIdx] = self.HF.power_sum_mesh(PFC, mode='optical')
+                        print('Maximum optical heat load on tile: {:f}'.format(max(PFC.qDiv)))
+                        print('Optical power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac*self.HF.elecFrac))
+                        print('Tessellated Total Power = {:f}'.format(PFC.powerSumOptical[tIdx]))
                         log.info('PFC Name: '+ PFC.name)
                         log.info('Maximum heat load on tile: {:f}'.format(max(PFC.qDiv)))
                         log.info('Power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
-                        log.info('Tessellated Total Power = {:f}'.format(PFC.powerSum[tIdx]))
+                        log.info('Tessellated Total Power = {:f}'.format(PFC.powerSumOptical[tIdx]))
                         print("\nTime Elapsed: {:f}".format(time.time() - t0))
                         log.info("\nTime Elapsed: {:f}".format(time.time() - t0))
-                        powerTesselate[tIdx] += PFC.powerSum[tIdx]
+                        powerTesselate[tIdx] += PFC.powerSumOptical[tIdx]
                         #Add ground truth power for all the PFCs, but not if we
                         #already counted this divertor
                         if PFC.DivCode not in divCodes:
@@ -982,6 +987,11 @@ class GUIobj():
                         divCodes.append(PFC.DivCode)
                     if 'GyroPC' in runList:
                         self.gyroOrbitHF(PFC)
+                        PFC.powerSumGyro[tIdx] = self.HF.power_sum_mesh(PFC, mode='gyro')
+                        print('Maximum gyro heat load on tile: {:f}'.format(max(PFC.qGyro)))
+                        print('Gyro power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac*0.5))
+                        print('Tessellated Gyro Power = {:f}'.format(PFC.powerSumGyro[tIdx]))
+                        powerTesselate[tIdx] += PFC.powerSumGyro[tIdx]
                     if 'Bpc' in runList:
                         self.bfieldAtSurface(PFC)
                     if 'psiPC' in runList:
@@ -1003,15 +1013,30 @@ class GUIobj():
         if 'HFpc' in runList:
             print('Total Input Power = {:f}'.format(np.sum(powerTrue)))
             print('Power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
+            print('Optical Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumOptical)))
+            print('Gyro Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumGyro)))
             print('Total Tessellated Total Power = {:f}'.format(np.sum(powerTesselate)))
             log.info('Total Input Power = {:f}'.format(np.sum(powerTrue)))
             log.info('Power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
+            log.info('Optical Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumOptical)))
+            log.info('Gyro Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumGyro)))
             log.info('Total Tessellated Total Power = {:f}'.format(np.sum(powerTesselate)))
 
-            print("=== Last timestep's PFC array ===")
             totalPowPow = 0
             for PFC in self.PFCs:
+                print("=== Last timestep's PFC arrays: Optical ===")
                 tmpPow = self.HF.power_sum_mesh(PFC, scale2circ=False, verbose=False)
+                totalPowPow += tmpPow
+                print(PFC.name + ":\t{:.6f}".format(tmpPow))
+                log.info(PFC.name + ":\t{:.6f}".format(tmpPow))
+                print("PFC array sum: {:.6f}".format(totalPowPow))
+                log.info("PFC array sum: {:.6f}".format(totalPowPow))
+
+        if 'GyroPC' in runList:
+            print("=== Last timestep's PFC arrays: Gyro ===")
+            totalPowPow = 0
+            for PFC in self.PFCs:
+                tmpPow = self.HF.power_sum_mesh(PFC, mode='gyro', scale2circ=False, verbose=True)
                 totalPowPow += tmpPow
                 print(PFC.name + ":\t{:.6f}".format(tmpPow))
                 log.info(PFC.name + ":\t{:.6f}".format(tmpPow))
@@ -1053,7 +1078,7 @@ class GUIobj():
             self.MHD.psi2DfromEQ(PFC)
 
         #Create Heat Flux Profile
-        q = self.HF.getHFprofile(PFC, self.MachFlag)
+        q = self.HF.getHFprofile(PFC)
         qDiv = self.HF.q_div(PFC, self.MHD, q)
 
         #Points over threshold power are likely errors, so check them
@@ -1081,6 +1106,8 @@ class GUIobj():
     def gyroOrbitHF(self, PFC):
         """
         Calculates the gyro orbit heat load on a PFC object
+
+        overwrites shadowMask and psimin
         """
         t0 = time.time()
         #Get B field vector on PFC surface
@@ -1091,9 +1118,26 @@ class GUIobj():
         PFC.findGuidingCenterPaths(self.MHD, self.GYRO)
         #Trace helical path downstream, checking for intersections
         PFC.findHelicalPaths(self.MHD, self.GYRO, self.CAD)
-        #Redistribute Power
-        ###===YOU ARE HERE.
-        #ALSO NEED TO MAKE OUTPUT AND POINTCLOUDS SOMEHOW?
+        #setup for HF calculation
+        PFC.shadowed_mask = np.zeros((len(PFC.shadowed_mask)))
+        #get psi all over the PFC
+        if self.MHD.plasma3Dmask==True:
+            print("3D Plasmas not set up for gyro orbits yet!")
+            log.info("3D Plasmas not set up for gyro orbits yet!")
+        else:
+            self.MHD.psi2DfromEQ(PFC)
+        #redistribute power
+        qGyro = self.HF.gyroHF(self.GYRO, PFC)
+        PFC.qGyro = qGyro
+        print("TEST")
+        print(PFC.qGyro)
+
+        #Create pointcloud for paraview
+        R,Z,phi = tools.xyz2cyl(PFC.centers[:,0],PFC.centers[:,1],PFC.centers[:,2])
+        self.HF.write_heatflux_pointcloud(PFC.centers,qGyro,PFC.controlfilePath,tag=PFC.tag,mode='gyro')
+
+
+
         print("Gyro orbit calculation took: {:f} [s]".format(time.time() - t0))
         log.info("Gyro orbit calculation took: {:f} [s]".format(time.time() - t0))
         return
@@ -1105,7 +1149,8 @@ class GUIobj():
         pcName is the name of the point cloud we are dealing with.  Run this
         function once for each timestep
         """
-        hf = []
+        hfOptical = []
+        hfGyro = []
         shadow =[]
         bdotn = []
         psi = []
@@ -1121,10 +1166,12 @@ class GUIobj():
             if PFC.name in names:
                 idx = names.index(PFC.name)
                 if 'HFpc' in runList:
-                    hf[idx]+=PFC.qDiv
+                    hfOptical[idx]+=PFC.qDiv
                     #HFPC always runs shadowMask too
                     shadow[idx]+=PFC.shadowed_mask
                     shadow[idx].astype(bool)
+                elif 'GyroPC' in runList:
+                    hfGyro[idx]+=PFC.qGyro
                 elif 'shadowPC' in runList:
                     shadow[idx]+=PFC.shadowed_mask
                     shadow[idx].astype(bool)
@@ -1134,8 +1181,10 @@ class GUIobj():
                     pass
             else:
                 if 'HFpc' in runList:
-                    hf.append(PFC.qDiv)
+                    hfOptical.append(PFC.qDiv)
                     shadow.append(PFC.shadowed_mask)
+                if 'GyroPC' in runList:
+                    hfGyro.append(PFC.qGyro)
                 if 'shadowPC' in runList:
                     shadow.append(PFC.shadowed_mask)
                 if 'bdotnPC' in runList:
@@ -1153,13 +1202,16 @@ class GUIobj():
                 names.append(PFC.name)
 
         #now build something we can write to csv (ie numpy)
-        hfNumpy = np.array([])
+        hfOpticalNumpy = np.array([])
+        hfGyroNumpy = np.array([])
         shadowNumpy = np.array([])
         bdotnNumpy = np.array([])
         psiNumpy = np.array([])
         normNumpy = np.array([])
-        for arr in hf:
-            hfNumpy = np.append(hfNumpy, arr)
+        for arr in hfOptical:
+            hfOpticalNumpy = np.append(hfOpticalNumpy, arr)
+        for arr in hfGyro:
+            hfGyroNumpy = np.append(hfGyroNumpy, arr)
         for arr in shadow:
             shadowNumpy = np.append(shadowNumpy, arr)
         for arr in bdotn:
@@ -1170,8 +1222,10 @@ class GUIobj():
         tag='all'
         centers = centers.reshape(Npoints,3)
         if 'HFpc' in runList:
-            self.HF.write_heatflux_pointcloud(centers,hfNumpy,tPath,tag)
+            self.HF.write_heatflux_pointcloud(centers,hfOpticalNumpy,tPath,tag)
             PFC.write_shadow_pointcloud(centers,shadowNumpy,tPath,tag)
+        if 'GyroPC' in runList:
+            self.HF.write_heatflux_pointcloud(centers,hfGyroNumpy,tPath,tag,'gyro')
         if 'shadowPC' in runList:
             PFC.write_shadow_pointcloud(centers,shadowNumpy,tPath,tag)
         if 'bdotnPC' in runList:
@@ -1203,8 +1257,8 @@ class GUIobj():
         except FileExistsError:
             pass
         if 'HFpc' in runList:
-            src = tPath + 'HeatfluxPointCloud_all.csv'
-            dest = movieDir + 'heatFlux_{:06d}.csv'.format(t)
+            src = tPath + 'HF_optical_all.csv'
+            dest = movieDir + 'hfOptical_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
         if 'shadowPC' in runList:
             src = tPath + 'ShadowPointCloud_all.csv'
@@ -1226,6 +1280,10 @@ class GUIobj():
             src = tPath + 'B_pointcloud_all.csv'
             dest = movieDir + 'Bfield_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
+        if 'GyroPC' in runList:
+            src = tPath + 'HF_gyro_all.csv'
+            dest = movieDir + 'hfGyro_{:06d}.csv'.format(t)
+            shutil.copy(src,dest)
 
         return
 
@@ -1243,7 +1301,7 @@ class GUIobj():
 
         return
 
-    def getPsiEverywhere(self, PFC, tag=None):
+    def getPsiEverywhere(self, PFC, save2File=True, tag=None):
         """
         get psi all over the PFC (including shadowed regions).
         """

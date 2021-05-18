@@ -251,7 +251,7 @@ class tools:
         centers[:,2] = np.sum(z,axis=1)/3.0
         return centers
 
-    def createVTKOutput(self, pcfile, outType, prefix):
+    def createVTKOutput(self, pcfile, outType, prefix, verbose=True):
         """
         Creates a vtk file from csv output
         The vtk file will have some paraview operation performed, such as
@@ -283,13 +283,15 @@ class tools:
 #        #(it is expected that you have set up env externally, perhaps in dashGUI.py)
 #        except:
 #            pvpythonCMD = 'pvpython'
-        print("Spawning PVpython subprocess")
-        log.info("Spawning PVpython subprocess")
+        if verbose==True:
+            print("Spawning PVpython subprocess")
+            log.info("Spawning PVpython subprocess")
         args = [pvpythonCMD, self.rootDir + '/GUIscripts/csv2vtk.py', pcfile, outType, prefix]
         from subprocess import run
         run(args, env=current_env)
-        print("PVpython subprocess complete")
-        log.info("PVpython subprocess complete")
+        if verbose==True:
+            print("PVpython subprocess complete")
+            log.info("PVpython subprocess complete")
         return
 
     def intersectTestParallel(self, i):
@@ -306,9 +308,9 @@ class tools:
         #Filter by psi
         if self.psiFilterSwitch == True:
             use = np.where(self.psiMask[:,i] == 1)[0]
-            Nt = len(use)
         else:
-            use = np.arange(len(p1))
+            use = np.arange(len(self.p1))
+        Nt = len(use)
 
         #Perform Intersection Test
         q13D = np.repeat(self.q1[i,np.newaxis], Nt, axis=0)
@@ -333,16 +335,11 @@ class tools:
                     print(self.p3[self.targetIdx])
 
 
-        #return intersection face index if switch is on, else return binary
-        if self.recordIntersectSwitch == True:
-            #return index of face we intersected with
-            result = np.where(np.logical_and(test1,test2))[0]
+        #return 1 if we intersected
+        if np.sum(np.logical_and(test1,test2)) > 0:
+            result = 1
         else:
-            #return 1 if we intersected
-            if np.sum(np.logical_and(test1,test2)) > 0:
-                result = 1
-            else:
-                result = 0
+            result = 0
 
         return result
 

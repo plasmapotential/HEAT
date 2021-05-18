@@ -112,6 +112,8 @@ class PFC:
         self.EPs = [] #containers for multiple ep
         self.shadowMasks = [] #container for multiple shadowed_mask
         self.powerSum = [] #container for multiple power summations
+        self.powerSumOptical = [] #container for multiple optical power summations
+        self.powerSumGyro = [] #container for multiple gyro orbit power summations
         self.tIndexes = [] #container for mapping between PC timesteps and MHD timesteps
         for t in self.timesteps:
             idx = np.where(t==MHD.timesteps)[0]
@@ -119,6 +121,8 @@ class PFC:
                 self.EPs.append(MHD.ep[idx[0]])
                 self.shadowMasks.append(self.backfaceCulling(self.centers,self.norms,MHD,MHD.ep[idx[0]],mapDirection))
                 self.powerSum.append(0.0)
+                self.powerSumOptical.append(0.0)
+                self.powerSumGyro.append(0.0)
                 self.tIndexes.append(idx[0])
 
         #set up file directory structure using first timestep as dummy
@@ -262,10 +266,8 @@ class PFC:
             log.info('Tracing with forward Map Direction')
             startIdx = 1
 
-        #set switch for intersection face recording
-        tools.recordIntersectSwitch = False
         #set switch for psi filtering
-        tools.psiFilterSwitch = True
+        tools.psiFilterSwitch = False
 
         #===INTERSECTION TEST 1 (tricky frontface culling / first step up field line)
         dphi = 1.0
@@ -405,21 +407,24 @@ class PFC:
         trajectories of particles' gyro orbit paths.
         Also calculates intersections along the way
 
-        Builds out the matrix, self.intersectRecord, which is a 3D matrix
+        Builds out the matrix, GYRO.intersectRecord, which is a 4D matrix
         containing the indices of the face where each helical path intersects
-        on its way into the divertor.  self.intersectRecord is 3D to allow traces
-        for randomly sampled gyroPhase angles (1D) and randomly sampled vPerp (2D),
-        on all the points on the PFC mesh (3D).  To sample another variable,
-        such as vParallel, you would need to add a 4th dimension.
+        on its way into the divertor.  intersectRecord is 4D to allow traces
+        for uniformly sampled gyroPhase angles (1stD), uniformly selected velocity
+        space angles (2ndD), uniformly (in terms of probability) sampled vPerp (3rdD),
+        and all the points on the PFC mesh (4thD).  To sample another variable,
+        such as vParallel, you would need to add a 5th dimension.
         """
         #get all Region Of Interest (ROI) faces from CAD for intersection checking
         totalMeshCounter = 0
         targetPoints = []
         targetNorms = []
+        GYRO.targetNames = []
         for i,target in enumerate(CAD.ROImeshes):
             totalMeshCounter+=target.CountFacets
             #append target data
             for face in target.Facets:
+                GYRO.targetNames.append(CAD.ROIList[i]) #do this for future HF reassignment
                 targetPoints.append(face.Points)
                 targetNorms.append(face.Normal)
         targetPoints = np.asarray(targetPoints)/1000.0 #scale to m
@@ -427,61 +432,90 @@ class PFC:
         GYRO.t1 = targetPoints[:,0,:] #point 1 of mesh triangle
         GYRO.t2 = targetPoints[:,1,:] #point 2 of mesh triangle
         GYRO.t3 = targetPoints[:,2,:] #point 3 of mesh triangle
+        GYRO.centers = self.getTargetCenters(targetPoints)
         GYRO.Nt = len(GYRO.t1)
         print("TOTAL GYRO ROI FACES: {:d}".format(totalMeshCounter))
 
-        #pull random vPerp and gyroPhase (same randoms used by all PFC points)
-        GYRO.randomMaxwellianVelocity()
-        GYRO.randomPhaseAngle()
-        #setup frequencies, radii, etc.
+        #setup velocities and velocity phase angles
+        GYRO.setupVelocities()
+        #setup gyroPhase angle
+        GYRO.uniformGyroPhaseAngle()
+        #setup frequencies
         GYRO.setupFreqs(self.Bmag[:,-1])
-        GYRO.setupRadius(GYRO.vPerp)
 
         #set up intersectRecord, which records index of intersection face
-        #this 3D array has one dimension for gyroPhase angles,
-        #one dimension for vPerps
+        #this 4D array has:
+        #one dimension for gyroPhase angles,
+        #one dimension for vPhases,
+        #one dimension for vSlices,
         #and one dimesion for the PFC.centers points we are tracing
-        #each element is the face that was intersected for that MC run (phase, vel, ctr)
+        #each element is the face that was intersected for that MC run
         N_centers = len(self.centers)
-        self.intersectRecord = np.ones((GYRO.N_phase,GYRO.N_vPerp,N_centers))*np.NaN
+        GYRO.intersectRecord = np.ones((GYRO.N_gyroPhase,GYRO.N_vPhase,GYRO.N_vSlice,N_centers), dtype=int)*np.NaN
+
+        #for debugging, print a specific trace index into file
+        GYRO.traceIndex = None
+        if GYRO.traceIndex is not None:
+            GYRO.controlfilePath = self.controlfilePath
 
         #Walk downstream along GC path tracing helices and looking for intersections
         N_GCdeg = GYRO.gyroDeg*2 + 1
-        for phase in range(GYRO.N_phase):
+        #gyroPhase loop
+        for gyroPhase in range(GYRO.N_gyroPhase):
+            print("\n============GyroPhase: {:f} rad".format(GYRO.gyroPhases[gyroPhase]))
             #initialize phase angle for this MC run
-            GYRO.lastPhase = np.ones((N_centers))*GYRO.gyroPhase[phase]
-            for vPerp in range(GYRO.N_vPerp):
-                #initialize velocity and radius for this MC run
-                GYRO.vPerpMC = GYRO.vPerp[vPerp]
-                GYRO.vParallelMC = GYRO.vParallel[vPerp]
-                GYRO.rGyroMC = GYRO.rGyro[:,vPerp]
-                for i in range(N_GCdeg):
-                    print("Guiding Center Step {:d}".format(i))
-                    log.info("Guiding Center Step {:d}".format(i))
-                    use = np.where(np.isnan(self.intersectRecord[phase,vPerp,:]) == True)[0]
-                    #run a trace if there are still points that haven't intersected
-                    if len(use) > 0:
-                        #start and end points for step i down guiding center path
-                        #we flip once so that we are walking downstream (MAFOT walks upstream)
-                        #then again so we are indexed according to CAD.centers
-                        GYRO.p0 = np.flip(np.flip(self.guidingCenterPaths)[i::N_GCdeg,:])[use]
-                        GYRO.p1 = np.flip(np.flip(self.guidingCenterPaths)[i+1::N_GCdeg,:])[use]
-                        #calculate helix path for this step down guiding center path
-                        print(use)
-                        self.intersectRecord[phase,vPerp,use] = GYRO.multipleGyroTrace()
-                    else:
-                        print("All helices intersected a face.  Breaking early.")
-                        break
+            GYRO.lastPhase = np.ones((N_centers))*GYRO.gyroPhases[gyroPhase]
+            #velocity phase loop
+            for vPhase in range(GYRO.N_vPhase):
+                print("============vPhase: {:f} rad".format(GYRO.vPhases[vPhase]))
+                GYRO.vPhaseMC = GYRO.vPhases[vPhase]
+                #velocity slice loop
+                for vSlice in range(GYRO.N_vSlice):
+                    print("============vSLice #: {:f}".format(vSlice))
+                    v = GYRO.vSlices[:,vSlice]
+                    #calculate velocities and radii for this MC run
+                    GYRO.vPerpMC = v * np.cos(GYRO.vPhaseMC)
+                    GYRO.vParallelMC = v * np.sin(GYRO.vPhaseMC)
+                    GYRO.rGyroMC = GYRO.vPerpMC / GYRO.omegaGyro
+                    print("Index [0] parameters:")
+                    print("vPerp = {:f} m/s".format(GYRO.vPerpMC[0]))
+                    print("vParallel = {:f} m/s".format(GYRO.vParallelMC[0]))
+                    print("rGyro = {:f} m".format(GYRO.rGyroMC[0]))
+
+                    #walk along GC
+                    for i in range(N_GCdeg):
+                        print("Guiding Center Step {:d}".format(i))
+                        log.info("Guiding Center Step {:d}".format(i))
+                        use = np.where(np.isnan(GYRO.intersectRecord[gyroPhase,vPhase,vSlice,:]) == True)[0]
+                        #run a trace if there are still points that haven't intersected
+                        if len(use) > 0:
+                            #for printing helices
+                            try:
+                                GYRO.N_GCdeg = i
+                                GYRO.traceIndex = np.where(use==GYRO.traceIndex)[0][0]
+                            except:
+                                GYRO.traceIndex = None
+                            #start and end points for step i down guiding center path
+                            #we flip once so that we are walking downstream (MAFOT walks upstream)
+                            #then again so we are indexed according to CAD.centers
+                            GYRO.p0 = np.flip(np.flip(self.guidingCenterPaths)[i::N_GCdeg,:])[use]
+                            GYRO.p1 = np.flip(np.flip(self.guidingCenterPaths)[i+1::N_GCdeg,:])[use]
+                            #calculate helix path for this step down guiding center path
+                            GYRO.intersectRecord[gyroPhase,vPhase,vSlice,use] = GYRO.multipleGyroTrace()
+                        else:
+                            print("All helices intersected a face.  Breaking early.")
+                            break
 
         print("Gyro Trace Completed")
         log.info("Gyro Trace Completed")
         #uncomment for testing.  Print list of indices and
         #associated intersection faces
         #print("Intersect Record:")
-        #for i in range(len(self.intersectRecord[0,0,:])):
-        #    print("Launch Face: {:d}, Intersect Face: {:d}".format(int(i), int(self.intersectRecord[0,0,i])))
+        for i in range(len(GYRO.intersectRecord[0,0,0,:])):
+            print("Launch Face: {:d}, Intersect Face: {:d}".format(int(i), int(GYRO.intersectRecord[0,0,0,i])))
 
         return
+
 
 
     def intersectTestBasic(self,sources,sourceNorms,

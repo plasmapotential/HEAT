@@ -149,14 +149,14 @@ if __name__=='__main__':
     import os
     from subprocess import check_output
     import signal
-    print('Converting CSV to VTK format')
+    #print('Converting CSV to VTK format')
     if sys.argv[2] == 'glyph':
         convert2Glyph(sys.argv[1], sys.argv[3])
     elif sys.argv[2] == 'trace':
         convert2Trace(sys.argv[1], sys.argv[3])
     else:
         convert2PointCloud(sys.argv[1], sys.argv[3])
-    print("Finished")
+    #print("Finished")
 
     #sometimes pvpython hangs, so we kill by pid after our work is done
     #pid = int(check_output(["pidof","pvpython"]))
