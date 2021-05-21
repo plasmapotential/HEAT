@@ -781,8 +781,10 @@ class heatFlux:
     def write_heatflux_pointcloud(self,centers,hf,dataPath,tag=None,mode='optical'):
         print("Creating Heat Flux Point Cloud")
         log.info("Creating Heat Flux Point Cloud")
-        if mode is 'gyro':
+        if mode == 'gyro':
             prefix = 'HF_gyro'
+        elif mode == 'all':
+            prefix = 'HF_allSources'
         else:
             prefix = 'HF_optical'
 
@@ -959,31 +961,55 @@ class heatFlux:
         """
         print("Calculating gyro orbit heat loads")
         log.info("Calculating gyro orbit heat loads")
+
         use = np.where(np.array(GYRO.targetNames) == PFC.name)[0]
-        ctrs = GYRO.centers[use]
+
         #get q|| for this PFC surface
         q = self.getHFprofile(PFC)
         #Get fractional multipliers for each helical trace
         gyroFrac = 1.0/GYRO.N_gyroPhase
         vPhaseFrac = 1.0/GYRO.N_vPhase
-        energies = 0.5 * GYRO.mass_eV * GYRO.vSlices**2
-        energyTotal = energies.sum(axis=1)
+        #energy: note these units are bad, but get divided out
+        #old method (only converges for high resolution cases)
+        #energies = 1.0/2.0 * GYRO.mass_eV * GYRO.vSlices**2
+        energyTotal = GYRO.energySlices.sum(axis=1)
         vSliceFrac = np.zeros((len(q),GYRO.N_vSlice))
-        flux = np.zeros((len(q),GYRO.N_vSlice))
         for vSlice in range(GYRO.N_vSlice):
-            vSliceFrac[:,vSlice] = energies[:,vSlice] / energyTotal
-#            flux[:,vSlice] = q*ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[:,vSlice]
+            vSliceFrac[:,vSlice] = GYRO.energySlices[:,vSlice] / energyTotal
 
         qMatrix = np.zeros((GYRO.N_gyroPhase,GYRO.N_vPhase,GYRO.N_vSlice,len(q)))
-        qGyro = np.zeros((len(q)))
+        qGyro = np.zeros((len(GYRO.intersectCenters)))
+        qNaN = np.zeros((len(GYRO.intersectCenters)))
         #loop through intersect record and redistribute power using multipliers
         for gyroPhase in range(GYRO.N_gyroPhase):
             for vPhase in range(GYRO.N_vPhase):
                 for vSlice in range(GYRO.N_vSlice):
-                    #qGyroMatrix[gyroPhase,vPhase,vSlice,:] = q*ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[:,vSlice]
-                    idx = GYRO.intersectRecord[gyroPhase,vPhase,vSlice,:]
-                    idx = idx[~np.isnan(idx)] #dont include NaNs (NaNs = no intersection)
-                    idx = idx.astype(int) #cast as integer
-                    qGyro[idx] += q*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[:,vSlice]
 
-        return qGyro
+                    #qGyroMatrix[gyroPhase,vPhase,vSlice,:] = q*ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[:,vSlice]
+                    idx = GYRO.intersectRecord[gyroPhase,vPhase,vSlice,use]
+                    isNan = np.where(np.isnan(idx)==True)[0] #include NaNs (NaNs = no intersection)
+                    notNan = np.where(np.isnan(idx)==False)[0] #dont include NaNs (NaNs = no intersection)
+                    idx1 = idx[~np.isnan(idx)] #indices we map power to
+                    idx1 = idx1.astype(int) #cast as integer
+                    idx2 = idx[np.isnan(idx)] #indices we map power to
+                    idx2 = idx2.astype(int) #cast as integer
+                    #qGyro[idx1] += q[notNan]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[:,vSlice][notNan]
+                    if len(notNan)>0:
+                        qGyro[idx1] += q[notNan]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[notNan,vSlice]
+                        #multiply by hdotn: incident angle of helix * face normal
+                        #qGyro[idx1] *= np.abs(GYRO.hdotn[gyroPhase,vPhase,vSlice,idx1])
+                    if len(isNan)>0:
+                        qNaN[idx2] += q[isNan]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[isNan,vSlice]
+
+
+
+        print("\nTEST2")
+        print(qGyro[1623])
+        print(q[1623])
+        print(vSliceFrac[1623,:])
+
+
+
+        GYRO.gyroHFmatrix += qGyro
+        GYRO.gyroNanPower += qNaN
+        return

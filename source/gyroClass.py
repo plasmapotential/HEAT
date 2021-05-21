@@ -1,8 +1,10 @@
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 import toolsClass
 import multiprocessing
 from scipy.interpolate import interp1d
+import scipy.integrate as integrate
 from tqdm.contrib.concurrent import process_map
 tools = toolsClass.tools()
 
@@ -117,7 +119,7 @@ class GYRO:
         if self.vMode == 'single':
             print("Gyro orbit calculation from single plasma temperature")
             log.info("Gyro orbit calculation from single plasma temperature")
-            self.T0 = np.ones((len(self.t1)))*self.gyroT_eV
+            self.T0 = np.ones((len(self.sourceCenters)))*self.gyroT_eV
             #get average velocity for each temperature point
             self.vThermal = self.temp2thermalVelocity(self.T0)
             #set upper bound of v*f(v) (note that this cuts off high energy particles)
@@ -142,11 +144,14 @@ class GYRO:
         of occuring.  ie the area under the PDF curve between each vSlice is equal.
         """
         self.vSlices = np.ones((len(self.T0),self.N_vSlice))*np.nan
+        self.energySlices = np.zeros((len(self.T0),self.N_vSlice))
         for i in range(len(self.T0)):
             #get velocity range for this T0
             v = self.vScan[i,:]
-            #generate the (here maxwellian) speed PDF
-            v_pdf = v * (self.mass_eV/self.c**2) / (self.T0[i]) * np.exp(-(self.mass_eV/self.c**2 * v**2) / (2*self.T0[i]) )
+            #generate the (here maxwellian) PDF
+            pdf = lambda x: (self.mass_eV/self.c**2) / (self.T0[i]) * np.exp(-(self.mass_eV/self.c**2 * x**2) / (2*self.T0[i]) )
+            #speed pdf
+            v_pdf = v * pdf(v)
             #generate the CDF
             v_cdf = np.cumsum(v_pdf[1:])*np.diff(v)
             v_cdf = np.insert(v_cdf, 0, 0)
@@ -159,6 +164,31 @@ class GYRO:
             sliceWidth = cdfMax / (self.N_vSlice+1)
             cdfSlices = np.linspace(0,1,self.N_vSlice+2)[1:-1]
             self.vSlices[i,:] = inverseCDF(cdfSlices)
+
+            #Now find energies that correspond to these vSlices
+            #we integrate: v**2 * f(v)
+            #energy pdf (missing 1/2*mass but that gets divided out later anyways )
+            energy = lambda x: x**2 * pdf(x)
+            #if there is only 1 vSlice integrate entire pdf
+            if len(self.vSlices[i]==1):
+                vLo = 0.0
+                vHi = self.vMax[i]
+                self.energySlices[i] = integrate.quad(energy, vLo, vHi)[0]
+            #if there are multiple vSlices use them as integral bounds
+            else:
+                for j in range(len(self.vSlices[i])-1):
+                    if j==0:
+                        vLo = 0.0
+                        vHi = self.vMax[i,0]
+                    elif j==len(self.vSlices[i])-2:
+                        vLo = self.vSlices[i,-1]
+                        vHi = self.vMax[i]
+                    else:
+                        vLo = self.vSlices[i,j-1]
+                        vHi = self.vSlices[i,j]
+
+                    self.energySlices[i,j] = integrate.quad(energy, vLo, vHi)[0]
+
         print("Found N_vPhase velocities of equal probability")
         log.info("Found N_vPhase velocities of equal probability")
         return
@@ -309,6 +339,7 @@ class GYRO:
         xGC = np.linspace(self.p0[i,0],self.p1[i,0],Nsteps+1)
         yGC = np.linspace(self.p0[i,1],self.p1[i,1],Nsteps+1)
         zGC = np.linspace(self.p0[i,2],self.p1[i,2],Nsteps+1)
+        arrGC = np.vstack([xGC,yGC,zGC]).T
         # construct orthogonal system for coordinate transformation
         w = delP
         if np.all(w==[0,0,1]):
@@ -336,16 +367,16 @@ class GYRO:
         helix_rot[:,2] += zGC
 
         #shift entire helix to ensure we capture intersections in p0 plane
-        helix_rot[:,0] += w[0]*0.0005
-        helix_rot[:,1] += w[1]*0.0005
-        helix_rot[:,2] += w[2]*0.0005
+        helix_rot[:,0] += w[0]*0.0003
+        helix_rot[:,1] += w[1]*0.0003
+        helix_rot[:,2] += w[2]*0.0003
 
         #update gyroPhase variable so next iteration starts here
         lastPhase = self.omegaGyro[i]*t[-1] + self.lastPhase[i]
 
         #print the trace for a specific index
-        if self.traceIndex is not None:
-            if self.traceIndex == i:
+        if self.traceIndex2 is not None:
+            if self.traceIndex2 == i:
                 #print("Saving Index data to CSV and VTK formats")
                 #save data to csv format
                 head = 'X[mm],Y[mm],Z[mm]'
@@ -353,6 +384,11 @@ class GYRO:
                 #save data to vtk format
                 tools.createVTKOutput(self.controlfilePath+'helix{:d}.csv'.format(self.N_GCdeg),
                                         'trace', 'traceHelix{:d}'.format(self.N_GCdeg),verbose=False)
+                #guiding center
+                #np.savetxt(self.controlfilePath+'GC{:d}.csv'.format(self.N_GCdeg), arrGC*1000.0, delimiter=',', header=head)
+                #save data to vtk format
+                #tools.createVTKOutput(self.controlfilePath+'GC{:d}.csv'.format(self.N_GCdeg),
+                #                        'trace', 'traceGC{:d}'.format(self.N_GCdeg),verbose=False)
 
 
         #=== intersection checking ===
@@ -362,13 +398,13 @@ class GYRO:
         #loop thru each step of helical path looking for intersections
         for j in range(len(helix_rot)-1):
             #Perform Intersection Test
-            q13D = np.repeat(q1[j,np.newaxis], self.Nt, axis=0)
-            q23D = np.repeat(q2[j,np.newaxis], self.Nt, axis=0)
-            sign1 = np.sign(tools.signedVolume2(q13D,self.t1,self.t2,self.t3))
-            sign2 = np.sign(tools.signedVolume2(q23D,self.t1,self.t2,self.t3))
-            sign3 = np.sign(tools.signedVolume2(q13D,q23D,self.t1,self.t2))
-            sign4 = np.sign(tools.signedVolume2(q13D,q23D,self.t2,self.t3))
-            sign5 = np.sign(tools.signedVolume2(q13D,q23D,self.t3,self.t1))
+            q13D = np.repeat(q1[j,np.newaxis], self.PFC_Nt, axis=0)
+            q23D = np.repeat(q2[j,np.newaxis], self.PFC_Nt, axis=0)
+            sign1 = np.sign(tools.signedVolume2(q13D,self.PFC_t1,self.PFC_t2,self.PFC_t3))
+            sign2 = np.sign(tools.signedVolume2(q23D,self.PFC_t1,self.PFC_t2,self.PFC_t3))
+            sign3 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t1,self.PFC_t2))
+            sign4 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t2,self.PFC_t3))
+            sign5 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t3,self.PFC_t1))
             test1 = (sign1 != sign2)
             test2 = np.logical_and(sign3==sign4,sign3==sign5)
 
@@ -377,10 +413,16 @@ class GYRO:
                 #only take first index (ie first intersection location)
                 #YOU SHOULD CHECK THIS TO MAKE SURE [0][0] is the first face along field line
                 index = np.where(np.logical_and(test1,test2))[0][0]
+                vec = (q2[j] - q1[j]) / np.linalg.norm(q2[j]-q1[j])
+                hdotn = np.dot(self.intersectNorms[index],vec)
                 break
             else:
                 index = np.NaN
-        return lastPhase, index
+                hdotn = np.NaN
+
+
+
+        return lastPhase, index, hdotn
 
     def multipleGyroTrace(self):
         """
@@ -419,8 +461,37 @@ class GYRO:
         print("Multiprocessing gyro trace:")
         output = process_map(self.gyroTraceParallel, range(N), max_workers=Ncores, chunksize=1)
         output = np.asarray(output)
-        self.lastPhase = output[:,0]
+
         intersectRecord = output[:,1]
+        use = np.where(np.isnan(intersectRecord)==True)[0]
+        self.lastPhase = output[:,0][use]
+        hdotn = output[:,2]
         print('Parallel helix trace complete')
         log.info('Parallel helix trace complete')
-        return intersectRecord
+        return intersectRecord, hdotn
+
+
+    def writeIntersectRecord(self, gyroPhase, vPhase, vSlice, file, idx):
+        """
+        writes intersectRecord to CSV file
+
+        1 file for each gyroPhase, vPhase, vSlice
+        """
+        print("Writing out intersectRecords")
+        log.info("Writing out intersectRecords")
+        #write the velocities for this run to a comment in file
+        f = open(file, 'w')
+        f.write('# gyroPhase: {:f} [radians]\n'.format(self.gyroPhases[gyroPhase]))
+        f.write('# vPhase: {:f} [radians]\n'.format(self.vPhases[vPhase]))
+        rec = self.intersectRecord[gyroPhase,vPhase,vSlice,:][idx]
+        data = {
+                'face': pd.Series(np.arange(len(rec))),
+                'intersectFace': pd.Series(rec),
+                'vPerp[m/s]': pd.Series(self.vPerpMC),
+                'vParallel[m/s]': pd.Series(self.vParallelMC),
+                'rGyro[m]': pd.Series(self.rGyroMC),
+                }
+        df = pd.DataFrame(data)
+        df.to_csv(f,index=False)
+        f.close()
+        return

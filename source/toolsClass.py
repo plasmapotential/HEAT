@@ -539,3 +539,30 @@ class tools:
         print('Read structure output for {:d} points'.format(len(xyz)))
         log.info('Read structure output for {:d} points'.format(len(xyz)))
         return xyz
+
+    def getTargetCenters(self, targets):
+        """
+        returns target centers
+
+        targets is 3 points [[p1],[p2],[p3]] that comprise a mesh triangle
+        where [pN] = [xN,yN,zN]
+        """
+        p1 = targets[:,0,:]  #point 1 of mesh triangle
+        p2 = targets[:,1,:]  #point 2 of mesh triangle
+        p3 = targets[:,2,:]  #point 3 of mesh triangle
+        Nt = len(p1)
+
+        x = np.zeros((Nt,3))
+        y = np.zeros((Nt,3))
+        z = np.zeros((Nt,3))
+
+        x[:,0] = p1[:,0]
+        x[:,1] = p2[:,0]
+        x[:,2] = p3[:,0]
+        y[:,0] = p1[:,1]
+        y[:,1] = p2[:,1]
+        y[:,2] = p3[:,1]
+        z[:,0] = p1[:,2]
+        z[:,1] = p2[:,2]
+        z[:,2] = p3[:,2]
+        return self.faceCenters(x,y,z)

@@ -412,6 +412,14 @@ class MHD:
         PFC.psimin = PFC.ep.psiFunc.ev(R,Z)
         return
 
+    def psi2DfromEQandCtrs(self, xyz, ep):
+        """
+        Returns psi from EFIT equilibrium rather than from 3D trace.  Does not
+        use MAFOT
+        """
+        R,Z,phi = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
+        psi = ep.psiFunc.ev(R,Z)
+        return psi
 
     def writeMAFOTpointfile(self,xyz,gridfile):
         """
