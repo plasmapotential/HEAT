@@ -997,7 +997,7 @@ class heatFlux:
                     if len(notNan)>0:
                         qGyro[idx1] += q[notNan]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[notNan,vSlice]
                         #multiply by hdotn: incident angle of helix * face normal
-                        #qGyro[idx1] *= np.abs(GYRO.hdotn[gyroPhase,vPhase,vSlice,idx1])
+                        qGyro[idx1] *= np.abs(GYRO.hdotn[gyroPhase,vPhase,vSlice,idx1])
                     if len(isNan)>0:
                         qNaN[idx2] += q[isNan]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[isNan,vSlice]
 

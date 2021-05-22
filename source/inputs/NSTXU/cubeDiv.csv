@@ -25,5 +25,5 @@ timesteps, PFCname, powerDirection, DivCode, intersectName
 #0:5000, smallCube, -1, LO, smallCube
 #0:5000, slab, -1, LO, slab
 #0:5000, bigCube, -1, LO, bigCube
-0:5000, bigCube, -1, LO, bigCube:bigCube001
-#0:5000, longSlab, -1, LO, longSlab:longSlab001
+#0:5000, bigCube, -1, LO, bigCube:bigCube001
+0:5000, longSlab, -1, LO, longSlab:longSlab001
