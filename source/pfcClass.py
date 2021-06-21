@@ -173,12 +173,12 @@ class PFC:
     def write_shadow_pointcloud(self,centers,scalar,dataPath,tag=None,mode='optical'):
         print("Creating Shadow Point Cloud")
         log.info("Creating Shadow Point Cloud")
-        if mode is 'gyro':
+        if mode == 'gyro':
             prefix = 'shadowMask_gyro'
         else:
             prefix = 'shadowMask_optical'
 
-        if tag is None:
+        if tag == None:
             pcfile = dataPath + prefix + '.csv'
         else:
             pcfile = dataPath + prefix + '_'+tag+'.csv'
@@ -401,7 +401,7 @@ class PFC:
         MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
                                     self.controlfileStruct)
         self.guidingCenterPaths = tools.readStructOutput(self.structOutfile)
-        os.remove(self.structOutfile) #clean up
+        #os.remove(self.structOutfile) #clean up
         return
 
     def findHelicalPaths(self, MHD, GYRO, CAD):
@@ -430,15 +430,56 @@ class PFC:
             if pfc in GYRO.targetNames:
                 idx1 = np.where(np.array(GYRO.targetNames) == pfc)[0]
                 idx0 = np.hstack([idx0,idx1]).astype(int)
+
         GYRO.PFC_t1 = GYRO.t1[idx0]
         GYRO.PFC_t2 = GYRO.t2[idx0]
         GYRO.PFC_t3 = GYRO.t3[idx0]
         GYRO.PFC_Nt = len(GYRO.t1)
+
         #portion of intersectRecord that is on this PFC
         PFCidx = np.where(np.array(GYRO.targetNames) == self.name)[0]
+
         #centers for this PFC
         GYRO.sourceCenters = self.centers
         N_centers = len(self.centers)
+
+        #find psi for all points we launch traces from
+        R,Z,Phi = tools.xyz2cyl(self.centers[:,0], self.centers[:,1], self.centers[:,2])
+        psiSource = self.ep.psiFunc.ev(R,Z)
+        #find psi for all points we potentially intersect with
+        targetPoints = np.hstack([GYRO.PFC_t1, GYRO.PFC_t2, GYRO.PFC_t3]).reshape(GYRO.PFC_Nt,3,3)
+        targetCtrs = self.getTargetCenters(targetPoints)
+        R,Z,Phi = tools.xyz2cyl(targetCtrs[:,0],targetCtrs[:,1],targetCtrs[:,2])
+        psiIntersect = self.ep.psiFunc.ev(R,Z)
+
+        #create psiMask, which will be used to eliminate intersection checking
+        #on any face that is not on the same flux surface as the source face
+        #this is a form of dimensionality reduction
+        print("Calculating psiMask")
+        if psiSource is not None:
+            GYRO.psiFilterSwitch = True
+            GYRO.psiMask = tools.buildMask(psiSource, psiIntersect, thresh=1)
+            print("psiMask reduction ratio: {:f}".format(np.sum(GYRO.psiMask) / (GYRO.PFC_Nt*N_centers)))
+            print("Example # points within psi bounds: {:f}".format(np.sum(GYRO.psiMask[:,0])))
+            print("Compared to # of potential points: {:f}".format(GYRO.PFC_Nt))
+            #for testing
+#            print("TEST1")
+#            print(psiSource[437])
+#            print(psiIntersect[437])
+#            print(GYRO.PFC_t1[437])
+#            print(GYRO.PFC_t2[437])
+#            print(GYRO.PFC_t3[437])
+#            print("TEST2")
+#            print(psiSource[108])
+#            print(psiIntersect[108])
+#            testUse = np.where(GYRO.psiMask[:,437]==1)[0]
+#            print(psiIntersect[testUse])
+#            print(testUse)
+
+
+        else:
+            GYRO.psiFilterSwitch = False
+
         #setup velocities and velocity phase angles
         GYRO.setupVelocities()
         #setup gyroPhase angle
@@ -447,7 +488,7 @@ class PFC:
         GYRO.setupFreqs(self.Bmag[:,-1])
 
         #for debugging, print a specific trace index into file
-        GYRO.traceIndex = 1316
+        GYRO.traceIndex = 437
         if GYRO.traceIndex is not None:
             GYRO.controlfilePath = self.controlfilePath
         else:
@@ -475,12 +516,13 @@ class PFC:
                     print("vPerp = {:f} m/s".format(GYRO.vPerpMC[0]))
                     print("vParallel = {:f} m/s".format(GYRO.vParallelMC[0]))
                     print("rGyro = {:f} m".format(GYRO.rGyroMC[0]))
-
                     #walk along GC
-                    for i in range(N_GCdeg):
+                    for i in range(N_GCdeg-1):
                         print("Guiding Center Step {:d}".format(i))
                         log.info("Guiding Center Step {:d}".format(i))
+                        #map between the multiprocessing index and the PFC index
                         use = np.where(np.isnan(GYRO.intersectRecord[gyroPhase,vPhase,vSlice,PFCidx]) == True)[0]
+                        GYRO.indexMap = use
                         #run a trace if there are still points that haven't intersected
                         if len(use) > 0:
                             #for printing helices
@@ -497,10 +539,11 @@ class PFC:
                             #start and end points for step i down guiding center path
                             #we flip once so that we are walking downstream (MAFOT walks upstream)
                             #then again so we are indexed according to CAD.centers
-                            GYRO.p0 = np.flip(np.flip(self.guidingCenterPaths)[i::N_GCdeg,:])[use]
-                            GYRO.p1 = np.flip(np.flip(self.guidingCenterPaths)[i+1::N_GCdeg,:])[use]
+                            GYRO.p0 = np.flip(np.flip(self.guidingCenterPaths, axis=0)[i::N_GCdeg,:], axis=0)[use]
+                            GYRO.p1 = np.flip(np.flip(self.guidingCenterPaths, axis=0)[i+1::N_GCdeg,:], axis=0)[use]
                             #calculate helix path for this step down guiding center path
                             GYRO.intersectRecord[gyroPhase,vPhase,vSlice,use], hdotn = GYRO.multipleGyroTrace()
+
                             #calculate helix dot n
                             idx = GYRO.intersectRecord[gyroPhase,vPhase,vSlice,use]
                             notNan = np.where(np.isnan(idx)==False)[0] #dont include NaNs (NaNs = no intersection)
@@ -510,8 +553,6 @@ class PFC:
                         else:
                             print("All helices intersected a face.  Breaking early.")
                             break
-                    #create hdotn here:
-
 
                     #save intersectRecord to file
                     file = self.controlfilePath+'intersectRecord_self.name_{:d}_{:d}_{:d}.dat'.format(gyroPhase,vPhase,vSlice)

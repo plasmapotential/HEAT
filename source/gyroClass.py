@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import toolsClass
 import multiprocessing
+import time
 from scipy.interpolate import interp1d
 import scipy.integrate as integrate
 from tqdm.contrib.concurrent import process_map
@@ -23,13 +24,53 @@ class GYRO:
         tools.rootDir = self.rootDir
         self.dataPath = dataPath
         tools.dataPath = self.dataPath
+
         return
 
-    def setupConstants(self, species='D'):
+    def allowed_class_vars(self):
+        """
+        Writes a list of recognized class variables to HEAT object
+        Used for error checking input files and for initialization
+
+        Here is a list of variables with description:
+        testvar         dummy for testing
+
+        """
+
+
+        self.allowed_vars = [
+                    'N_gyroSteps',
+                    'gyroDeg',
+                    'gyroT_eV',
+                    'N_vSlice',
+                    'N_vPhase',
+                    'N_gyroPhase',
+                    'ionMassAMU',
+                    'vMode',
+                    'ionFrac'
+                            ]
+        return
+
+    def setTypes(self):
+        """
+        Set variable types for the stuff that isnt a string from the input file
+        """
+        self.N_gyroSteps = int(self.N_gyroSteps)
+        self.gyroDeg = int(self.gyroDeg)
+        self.gyroT_eV = float(self.gyroT_eV)
+        self.N_vSlice = int(self.N_vSlice)
+        self.N_vPhase = int(self.N_vPhase)
+        self.N_gyroPhase = int(self.N_gyroPhase)
+        self.ionMassAMU = float(self.ionMassAMU)
+        self.vMode = self.vMode
+        self.ionFrac = float(self.ionFrac)
+        return
+
+    def setupConstants(self, ionMassAMU=2.014):
         """
         Sets up constants
 
-        if species is 'D', then it is set up as deuterium
+        default mass is deuterium 2.014 MeV/c^2
         """
         #unit conversions
         self.kg2eV = 5.609e35 #1kg = 5.609e35 eV/c^2
@@ -40,21 +81,9 @@ class GYRO:
         self.e = 1.602e-19 # C
         self.c = 299792458 #m/s
 
-        #deuterium
-        if species == 'D':
-            print("Using Deuterium Properties")
-            self.mass_eV = 2.014*self.AMU  #eV/c^2
-            self.Z = 1 #1 for deuterium
-        #tritium
-        elif species == 'T':
-            print("Using Tritium Properties")
-            self.mass_eV = 3.016*self.AMU  #eV/c^2
-            self.Z = 1 #1 for deuterium
-        #hydrogen
-        else:
-            print("Using Hydrogen Properties")
-            self.mass_eV = 1.007*self.AMU #eV/c^2
-            self.Z = 1 #1 for deuterium
+        self.mass_eV = ionMassAMU * self.AMU
+        self.Z=1 #assuming isotopes of hydrogen here
+
         return
 
     def temp2thermalVelocity(self, T_eV):
@@ -323,6 +352,7 @@ class GYRO:
 
         also updates self.lastPhase for use in next iteration step
         """
+        t1 = time.time()
         #vector
         delP = self.p1[i] - self.p0[i]
         #magnitude
@@ -395,33 +425,75 @@ class GYRO:
         q1 = helix_rot[:-1,:]
         q2 = helix_rot[1:,:]
 
-        #loop thru each step of helical path looking for intersections
-        for j in range(len(helix_rot)-1):
-            #Perform Intersection Test
-            q13D = np.repeat(q1[j,np.newaxis], self.PFC_Nt, axis=0)
-            q23D = np.repeat(q2[j,np.newaxis], self.PFC_Nt, axis=0)
-            sign1 = np.sign(tools.signedVolume2(q13D,self.PFC_t1,self.PFC_t2,self.PFC_t3))
-            sign2 = np.sign(tools.signedVolume2(q23D,self.PFC_t1,self.PFC_t2,self.PFC_t3))
-            sign3 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t1,self.PFC_t2))
-            sign4 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t2,self.PFC_t3))
-            sign5 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t3,self.PFC_t1))
+        #Filter by psi
+        if self.psiFilterSwitch == True:
+            use = np.where(self.psiMask[:,self.indexMap[i]] == 1)[0]
+        else:
+            use = np.arange(len(self.PFC_t1))
+        Nt = len(use)
+
+        #using full array (no for loop)
+        RAMlimit = False
+        if RAMlimit == False:
+            q13D = np.repeat(q1[:,np.newaxis], Nt, axis=1)
+            q23D = np.repeat(q2[:,np.newaxis], Nt, axis=1)
+            sign1 = np.sign(tools.signedVolume2(q13D,self.PFC_t1,self.PFC_t2,self.PFC_t3,ax=2))
+            sign2 = np.sign(tools.signedVolume2(q23D,self.PFC_t1,self.PFC_t2,self.PFC_t3,ax=2))
+            sign3 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t1,self.PFC_t2,ax=2))
+            sign4 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t2,self.PFC_t3,ax=2))
+            sign5 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t3,self.PFC_t1,ax=2))
             test1 = (sign1 != sign2)
             test2 = np.logical_and(sign3==sign4,sign3==sign5)
+            test3 = np.logical_and(test1,test2)
+            loc = np.where(np.logical_and(test1,test2))
 
             #result=1 if we intersected, otherwise NaN
             if np.sum(np.logical_and(test1,test2)) > 0:
                 #only take first index (ie first intersection location)
-                #YOU SHOULD CHECK THIS TO MAKE SURE [0][0] is the first face along field line
-                index = np.where(np.logical_and(test1,test2))[0][0]
-                vec = (q2[j] - q1[j]) / np.linalg.norm(q2[j]-q1[j])
+                loc = np.where(np.logical_and(test1,test2))
+                loc = loc[0][0],loc[1][0]
+                index = use[loc[1]]
+                #if self.traceIndex2 == i:
+                #    print("TEST!!!")
+                #    print(np.where(np.logical_and(test1,test2))[0])
+                #    print(index)
+                vec = (q2[loc[0]] - q1[loc[0]]) / np.linalg.norm(q2[loc[0]]-q1[loc[0]])
                 hdotn = np.dot(self.intersectNorms[index],vec)
-                break
             else:
                 index = np.NaN
                 hdotn = np.NaN
+        #using loop
+        else:
+            #loop thru each step of helical path looking for intersections
+            for j in range(len(helix_rot)-1):
+                #Perform Intersection Test
+                q13D = np.repeat(q1[j,np.newaxis], Nt, axis=0)
+                q23D = np.repeat(q2[j,np.newaxis], Nt, axis=0)
+                sign1 = np.sign(tools.signedVolume2(q13D,self.PFC_t1[use],self.PFC_t2[use],self.PFC_t3[use]))
+                sign2 = np.sign(tools.signedVolume2(q23D,self.PFC_t1[use],self.PFC_t2[use],self.PFC_t3[use]))
+                sign3 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t1[use],self.PFC_t2[use]))
+                sign4 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t2[use],self.PFC_t3[use]))
+                sign5 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t3[use],self.PFC_t1[use]))
+                test1 = (sign1 != sign2)
+                test2 = np.logical_and(sign3==sign4,sign3==sign5)
 
+                #result=1 if we intersected, otherwise NaN
+                if np.sum(np.logical_and(test1,test2)) > 0:
+                    #only take first index (ie first intersection location)
+                    #YOU SHOULD CHECK THIS TO MAKE SURE [0][0] is the first face along field line
+                    index = use[ np.where(np.logical_and(test1,test2))[0][0] ]
+                    #if self.traceIndex2 == i:
+                    #    print("TEST!!!")
+                    #    print(np.where(np.logical_and(test1,test2))[0])
+                    #    print(index)
+                    vec = (q2[j] - q1[j]) / np.linalg.norm(q2[j]-q1[j])
+                    hdotn = np.dot(self.intersectNorms[index],vec)
+                    break
+                else:
+                    index = np.NaN
+                    hdotn = np.NaN
 
-
+        print("TIME: {:f}".format(time.time() - t1))
         return lastPhase, index, hdotn
 
     def multipleGyroTrace(self):

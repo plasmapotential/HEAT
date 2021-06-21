@@ -492,7 +492,16 @@ def inputDragDrop(file, contents, MachFlag):
                State('PVPath', 'value'),
                State('FreeCADPath', 'value'),
                State('dataPath', 'value'),
-               State('OFbashrc', 'value')
+               State('OFbashrc', 'value'),
+               State('N_gyroSteps','value'),
+               State('gyroDeg','value'),
+               State('gyroT_eV','value'),
+               State('N_vSlice','value'),
+               State('N_vPhase','value'),
+               State('N_gyroPhase','value'),
+               State('ionMassAMU','value'),
+               State('vMode','value'),
+               State('ionFrac','value')
                ]
                )
 def saveGUIinputs(  n_clicks,
@@ -528,7 +537,16 @@ def saveGUIinputs(  n_clicks,
                     PVLoc,
                     FreeCADLoc,
                     dataLoc,
-                    OFbashrcLoc
+                    OFbashrcLoc,
+                    N_gyroSteps,
+                    gyroDeg,
+                    gyroT_eV,
+                    N_vSlice,
+                    N_vPhase,
+                    N_gyroPhase,
+                    ionMassAMU,
+                    vMode,
+                    ionFrac
                 ):
     """
     Saves GUI text boxes into an input file in the HEAT format
@@ -571,7 +589,15 @@ def saveGUIinputs(  n_clicks,
     data['PVPath'] = PVLoc
     data['dataPath'] = dataLoc
     data['OFbashrc'] = OFbashrcLoc
-
+    data['N_gyroSteps'] = N_gyroSteps
+    data['gyroDeg'] = gyroDeg
+    data['gyroT_eV'] = gyroT_eV
+    data['N_vSlice'] = N_vSlice
+    data['N_vPhase'] = N_vPhase
+    data['N_gyroPhase'] = N_gyroPhase
+    data['ionMassAMU'] = ionMassAMU
+    data['vMode'] = vMode
+    data['ionFrac'] = ionFrac
     tools.saveInputFile(data, gui.tmpDir, gui.rootDir, gui.dataPath)
 
     outputDiv = html.Label("Saved File", style={'color':'#f5d142'})
@@ -911,6 +937,7 @@ def buildHFbox():
                     {'label': 'Multi-Exponential', 'value': 'multiExp'},
                     {'label': 'Limiter', 'value': 'limiter'}
                     ],
+                value='eich',
                 ),
                 html.Div(id='hfParameters',
                          children=[
@@ -1623,7 +1650,7 @@ def buildGYRObox():
                     {'label': 'Single Value', 'value': 'single'},
                     {'label': 'From 3D File', 'value': 'file'}, # to be added at future date
                     ],
-                value=None,
+                value='single',
                 ),
             html.Div(id='gyroVparams',
                      children=[
@@ -1671,20 +1698,10 @@ def gyroInputBoxes():
             ),
             html.Div(
                 children=[
-                    html.Label("Ion Species"),
-                    dcc.Dropdown(
-                        id='species',
-                        className="wideSelect",
-                        style={'backgroundColor': 'transparent', 'color':'transparent'},
-                        options=[
-                            {'label': 'Hydrogen', 'value': 'H'},
-                            {'label': 'Deuterium', 'value': 'D'},
-                            {'label': 'Tritium', 'value': 'T'},
-                            ],
-                        value=None,
-                        ),
+                    html.Label("Ion Mass [AMU]"),
+                    dcc.Input(id="ionMassAMU", className="textInput"),
                 ],
-                className="OFInput",
+                className="OFInput"
             ),
             ],
             className="wideBoxNoColor",
@@ -1779,21 +1796,21 @@ def velocityFromFile(className):
               [State('N_gyroSteps', 'value'),
                State('N_gyroPhase', 'value'),
                State('gyroDeg', 'value'),
-               State('species', 'value'),
+               State('ionMassAMU', 'value'),
                State('vMode','value'),
                State('gyroT_eV', 'value'),
                State('N_vPhase', 'value'),
                State('N_vSlice', 'value'),
-               State('ionFrac', 'value'),
+               State('ionFrac', 'value')
               ])
-def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroDeg,species,vMode,gyroT_eV,
+def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
              N_vPhase, N_vSlice, ionFrac):
     """
     sets up GYRO module
     """
     if n_clicks == 0:
         raise PreventUpdate
-    gui.getGyroInputs(N_gyroSteps,N_gyroPhase,gyroDeg,species,vMode,gyroT_eV,
+    gui.getGyroInputs(N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
                       N_vPhase, N_vSlice, ionFrac)
     return [html.Label("Loaded Gyro Orbit Data into HEAT", style={'color':'#f5d142'})]
 
@@ -2832,6 +2849,15 @@ Session storage callbacks and functions
                Output('OFmaxMeshLev', 'value'),
                Output('OFSTLscale', 'value'),
                Output('OFdeltaT', 'value'),
+               Output('N_gyroSteps','value'),
+               Output('gyroDeg','value'),
+               Output('gyroT_eV','value'),
+               Output('N_vSlice','value'),
+               Output('N_vPhase','value'),
+               Output('N_gyroPhase','value'),
+               Output('ionMassAMU','value'),
+               #Output('vMode','value'),
+               Output('ionFrac','value'),
                Output('session', 'data'),
 #               Output('hiddenDivMachFlag', 'children')
                ],
@@ -2903,6 +2929,15 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('meshMaxLevel', ''),
             data.get('STLscale', ''),
             data.get('deltaT', ''),
+            data.get('N_gyroSteps',''),
+            data.get('gyroDeg',''),
+            data.get('gyroT_eV',''),
+            data.get('N_vSlice',''),
+            data.get('N_vPhase',''),
+            data.get('N_gyroPhase',''),
+            data.get('ionMassAMU',''),
+            #data.get('vMode',''),
+            data.get('ionFrac',''),
             data,
 #            outputDiv
             ]

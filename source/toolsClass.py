@@ -18,7 +18,9 @@ class tools:
     """
 
     def __init__(self):
-        pass
+        #speed benchmarking tools
+        self.testN = 0
+        self.testTime = 0
         return
 
     def initializeInput(self, obj, infile=None):
@@ -251,7 +253,7 @@ class tools:
         centers[:,2] = np.sum(z,axis=1)/3.0
         return centers
 
-    def createVTKOutput(self, pcfile, outType, prefix, verbose=True):
+    def createVTKOutput(self, pcfile, outType, prefix, verbose=False):
         """
         Creates a vtk file from csv output
         The vtk file will have some paraview operation performed, such as
@@ -420,6 +422,8 @@ class tools:
         sourceMat = np.repeat(source[np.newaxis,:], len(target), axis=0)
         targetMat = np.repeat(target[:,np.newaxis], len(source), axis=1)
         mask = np.abs(sourceMat-targetMat)<thresh
+        print("PSIMASK SHAPE: ")
+        print(mask.shape)
         return mask
 
     def readLaminarParallel(self,i):

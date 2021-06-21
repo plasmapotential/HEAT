@@ -743,7 +743,7 @@ class GUIobj():
             self.HF.getHFtableData(self.MHD.ep[0])
         return
 
-    def getGyroInputs(self,N_gyroSteps,N_gyroPhase,gyroDeg,species,vMode,gyroT_eV,
+    def getGyroInputs(self,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
                       N_vPhase, N_vSlice, ionFrac):
         """
         Sets up the gyro module
@@ -755,11 +755,11 @@ class GUIobj():
         self.GYRO.N_vPhase = int(N_vPhase)
         self.GYRO.N_gyroPhase = int(N_gyroPhase)
         self.GYRO.N_MC = self.GYRO.N_gyroPhase*self.GYRO.N_vSlice*self.GYRO.N_vPhase
-        self.GYRO.species = species
+        self.GYRO.ionMassAMU = float(ionMassAMU)
         self.GYRO.vMode = vMode
         self.GYRO.ionFrac = float(ionFrac)
         #set up GYRO object
-        self.GYRO.setupConstants(species=species)
+        self.GYRO.setupConstants(self.GYRO.ionMassAMU)
         print('Loaded Gyro Orbit Settings')
         print('# Steps per helix period = {:f}'.format(float(N_gyroSteps)))
         print('Gyro tracing distance [degrees] = {:f}'.format(float(gyroDeg)))
@@ -838,7 +838,7 @@ class GUIobj():
             controlfilePath =  self.MHD.shotPath + '/' + '{:06d}/'.format(t)
         BtraceXYZ = tools.readStructOutput(structOutfile) #[m]
         #Setup gyro orbit trace constants and velocities
-        self.GYRO.setupConstants(species='D')
+        self.GYRO.setupConstants()
         v = self.GYRO.temp2thermalVelocity(float(gyroT_eV))
         vPerp = v*np.cos(np.pi/4)
         vParallel = v*np.sin(np.pi/4)
@@ -934,7 +934,10 @@ class GUIobj():
         powerByTile = np.zeros((len(self.PFCs)))
         divCodes = []
         #set up for gyro orbit heat loads
-        self.prepareGyroHF()
+        if 'GyroPC' in runList:
+            self.prepareGyroHF()
+        else:
+            self.HF.elecFrac = 1.0
         #run HEAT for all tiles for all timesteps
         for tIdx,t in enumerate(self.MHD.timesteps):
             print('\n')
@@ -990,8 +993,8 @@ class GUIobj():
                     if 'GyroPC' in runList:
                         tGyro = time.time()
                         self.gyroOrbitIntersects(PFC)
-                        print("Gyro orbit calculation took: {:f} [s]".format(time.time() - tGyro))
-                        log.info("Gyro orbit calculation took: {:f} [s]".format(time.time() - tGyro))
+                        print("Gyro orbit calculation took: {:f} [s]\n".format(time.time() - tGyro))
+                        log.info("Gyro orbit calculation took: {:f} [s]\n".format(time.time() - tGyro))
                     if 'Bpc' in runList:
                         self.bfieldAtSurface(PFC)
                     if 'psiPC' in runList:
@@ -1004,13 +1007,14 @@ class GUIobj():
                         self.bdotnPC(PFC)
 
             #redistribute ion gyro power
-            self.gyroOrbitHF(self.MHD.ep[tIdx])
-            PFC.powerSumGyro[tIdx] = self.HF.power_sum_mesh(PFC, mode='gyro')
-            print('Maximum gyro heat load on any tile: {:f}'.format(max(self.GYRO.gyroHFmatrix)))
-            print('Gyro power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac*0.5))
-            print('Tessellated Gyro Power = {:f}'.format(PFC.powerSumGyro[tIdx]))
-            print('Escaped Gyro Power = {:f}'.format(sum(self.GYRO.gyroNanPower)))
-            powerTesselate[tIdx] += PFC.powerSumGyro[tIdx]
+            if 'GyroPC' in runList:
+                print('Gyro power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac*self.GYRO.ionFrac))
+                self.gyroOrbitHF(self.MHD.ep[tIdx])
+                for PFC in self.PFCs:
+                    PFC.powerSumGyro[tIdx] += self.HF.power_sum_mesh(PFC, mode='gyro')
+                    #powerTesselate[tIdx] += PFC.powerSumGyro[tIdx]
+                    powerTesselate[tIdx] += self.HF.power_sum_mesh(PFC, mode='gyro')
+                    print(PFC.name + ' tessellated Gyro Power = {:f}'.format(PFC.powerSumGyro[tIdx]))
 
             #merge multiple pointclouds into one single pointcloud for visualization
             tPath = self.MHD.shotPath + '/' + '{:06d}/'.format(t)
@@ -1024,11 +1028,13 @@ class GUIobj():
             print('Power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
             print('Optical Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumOptical)))
             print('Gyro Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumGyro)))
+            #print('Escaped Gyro Power = {:f}'.format(self.GYRO.gyroNanPower))
             print('Total Tessellated Total Power = {:f}'.format(np.sum(powerTesselate)))
             log.info('Total Input Power = {:f}'.format(np.sum(powerTrue)))
             log.info('Power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
             log.info('Optical Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumOptical)))
             log.info('Gyro Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumGyro)))
+            #log.info('Escaped Gyro Power = {:f}'.format(self.GYRO.gyroNanPower))
             log.info('Total Tessellated Total Power = {:f}'.format(np.sum(powerTesselate)))
 
             totalPowPow = 0
@@ -1051,11 +1057,13 @@ class GUIobj():
                 log.info(PFC.name + ":\t{:.6f}".format(tmpPow))
                 print("PFC array sum: {:.6f}".format(totalPowPow))
                 log.info("PFC array sum: {:.6f}".format(totalPowPow))
+                print("PFC Max HF: {:.6f}".format(max(PFC.qGyro)))
+                log.info("PFC Max HF: {:.6f}".format(max(PFC.qGyro)))
 
         print("Total Time Elapsed: {:f}".format(time.time() - t0))
         log.info("Total Time Elapsed: {:f}".format(time.time() - t0))
-        print("\nCompleted HEAT run")
-        log.info("\nCompleted HEAT run")
+        print("\nCompleted HEAT run\n")
+        log.info("\nCompleted HEAT run\n")
         #make a sound when complete
 #        os.system('spd-say -t female2 "HEAT run complete"')
 
@@ -1088,7 +1096,7 @@ class GUIobj():
 
         #Create Heat Flux Profile
         q = self.HF.getHFprofile(PFC)
-        qDiv = self.HF.q_div(PFC, self.MHD, q)
+        qDiv = self.HF.q_div(PFC, self.MHD, q) * self.HF.elecFrac
 
         #Points over threshold power are likely errors, so check them
         if self.HF.LRmask == True:
@@ -1144,7 +1152,7 @@ class GUIobj():
             else:
                 self.MHD.psi2DfromEQ(PFC)
             #redistribute power
-            self.HF.gyroHF(self.GYRO, PFC)
+            self.HF.gyroHF(self.GYRO, PFC, self.MHD)
 
         #find gyro shadowMask
         self.GYRO.shadowMask = np.ones((len(self.GYRO.targetNames)))
@@ -1154,10 +1162,11 @@ class GUIobj():
         self.GYRO.shadowMask[shadows] = 0.0
 
         for PFC in self.PFCs:
-            #portion of gyroHFmatrix we are using for this PFC
+            #portion of gyroPowMatrix we are using for this PFC
             use = np.where(np.array(self.GYRO.targetNames) == PFC.name)[0]
             #assign gyro power to PFC
-            PFC.qGyro = self.GYRO.gyroHFmatrix[use]
+            PFC.Pgyro = self.GYRO.gyroPowMatrix[use]
+            PFC.qGyro = PFC.Pgyro / PFC.areas
             #gyro shadowMask = 1 if a face is shadowed
             PFC.gyroShadowMask = self.GYRO.shadowMask[use]
             #Create pointcloud for paraview
@@ -1204,8 +1213,8 @@ class GUIobj():
                     targetPoints.append(face.Points)
                     targetNorms.append(face.Normal)
 
-        self.GYRO.gyroHFmatrix = np.zeros((len(targetPoints)))
-        self.GYRO.gyroNanPower = np.zeros((len(targetPoints)))
+        self.GYRO.gyroPowMatrix = np.zeros((len(targetPoints)))
+        self.GYRO.gyroNanPower = 0.0
         targetPoints = np.asarray(targetPoints)/1000.0 #scale to m
         targetNorms = np.asarray(targetNorms)
         self.GYRO.t1 = targetPoints[:,0,:] #point 1 of mesh triangle
@@ -1488,7 +1497,16 @@ class GUIobj():
                     'yMid': None,
                     'zMid': None,
                     'STLfileName': None,
-                    'STLlayerName': None
+                    'STLlayerName': None,
+                    'N_gyroSteps': None,
+                    'gyroDeg': None,
+                    'gyroT_eV': None,
+                    'N_vSlice': None,
+                    'N_vPhase': None,
+                    'N_gyroPhase': None,
+                    'ionMassAMU': None,
+                    #'vMode': None,
+                    'ionFrac': None
                     }
         return emptyDict
 
@@ -1504,6 +1522,7 @@ class GUIobj():
         tools.initializeInput(self.MHD, self.infile)
         tools.initializeInput(self.CAD, self.infile)
         tools.initializeInput(self.HF, self.infile)
+        tools.initializeInput(self.GYRO, self.infile)
         tools.initializeInput(self.OF, self.infile)
 
         inputDict = {
@@ -1553,7 +1572,16 @@ class GUIobj():
                     'zMid': self.OF.zMid,
                     'STLfileName': self.OF.STLfileName,
                     'STLlayerName': self.OF.STLlayerName,
-                    #'OFbashrc': self.OF.OFbashrc
+                    #'OFbashrc': self.OF.OFbashrc,
+                    'N_gyroSteps': self.GYRO.N_gyroSteps,
+                    'gyroDeg': self.GYRO.gyroDeg,
+                    'gyroT_eV': self.GYRO.gyroT_eV,
+                    'N_vSlice': self.GYRO.N_vSlice,
+                    'N_vPhase': self.GYRO.N_vPhase,
+                    'N_gyroPhase': self.GYRO.N_gyroPhase,
+                    'ionMassAMU': self.GYRO.ionMassAMU,
+                    #'vMode': self.GYRO.vMode,
+                    'ionFrac': self.GYRO.ionFrac
                     }
         print("Loaded defaults")
 
