@@ -106,7 +106,7 @@ class CAD:
         """
         Nothing to do for this class
         """
-        pass
+        return
 
 
     def getROI(self, timestepMap):
@@ -115,7 +115,8 @@ class CAD:
         which is read by function in PFCClass.
         """
         self.ROI = timestepMap['PFCname'].values
-        self.ROIList = list(set(self.ROI))
+        #self.ROIList = list(set(self.ROI)) #does not preserve order
+        self.ROIList = list(self.ROI)
         self.ROIparts = ['None' for i in range(len(self.ROI))]
         self.ROImeshes = ['None' for i in range(len(self.ROI))]
         self.ROIctrs = ['None' for i in range(len(self.ROI))]
@@ -171,8 +172,6 @@ class CAD:
         If they don't, create them.
         """
         if resolution == None:  resolution=self.gridRes
-        print("TEST")
-        print(resolution)
         for partnum in self.intersectList:
             name = self.STLpath + partnum + "___" + resolution +"mm.stl"
             if os.path.exists(name):

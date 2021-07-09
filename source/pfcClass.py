@@ -8,6 +8,7 @@ import heatfluxClass
 import os
 import sys
 import time
+import cProfile, pstats
 import pandas as pd
 import multiprocessing
 tools = toolsClass.tools()
@@ -107,6 +108,9 @@ class PFC:
         self.mesh = CAD.ROImeshes[ROIidx]
         self.Nfaces = self.mesh.CountFacets
         self.qDiv = np.zeros((len(self.centers)))
+        R,Z,phi = tools.xyz2cyl(self.centers[:,0],self.centers[:,1],self.centers[:,2])
+        PFC.phiMin = phi.min()
+        PFC.phiMax = phi.max()
 
         #get MHD objects corresponding to those timesteps
         self.EPs = [] #containers for multiple ep
@@ -397,14 +401,15 @@ class PFC:
         MHD.ittGyro = GYRO.gyroDeg
         print("Tracing guiding centers for {:f} degrees".format(GYRO.gyroDeg))
         MHD.writeControlFile(CTLfile, self.t, 0, mode='gyro') #0 for both directions
-        MHD.writeMAFOTpointfile(self.centers,self.gridfileStruct)
+        MHD.writeMAFOTpointfile(self.gyroCenters,self.gridfileStruct)
         MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
                                     self.controlfileStruct)
         self.guidingCenterPaths = tools.readStructOutput(self.structOutfile)
         #os.remove(self.structOutfile) #clean up
+        #os.remove(self.gridfileStruct) #clean up
         return
 
-    def findHelicalPaths(self, MHD, GYRO, CAD):
+    def findHelicalPaths(self, GYRO):
         """
         walks downstream along the guidingCenterPaths and calculates the helical
         trajectories of particles' gyro orbit paths.
@@ -420,79 +425,74 @@ class PFC:
 
         MC always stands for monte carlo, and is attached to variables to
         signify that they are rewritten often (ie every MC simulation)
+
+        PFCintersectMap maps from all intersects to the intersects for this PFC
+        HOTGYRO maps from all ROI faces to the ones that have this PFCs name
+        use / indexMap maps from HOTGYRO to the faces that still havent intersected
         """
         #get only the PFCs in this PFC's intersectList
         PFCList = self.intersects
-        PFCList.append(self.name)
+        #PFCList.append(self.name)
         PFCList = np.unique(PFCList)
-        idx0 = []
+        GYRO.PFCintersectMap = []
         for pfc in PFCList:
-            if pfc in GYRO.targetNames:
-                idx1 = np.where(np.array(GYRO.targetNames) == pfc)[0]
-                idx0 = np.hstack([idx0,idx1]).astype(int)
+            if pfc in GYRO.CADtargetNames:
+                idx1 = np.where(np.array(GYRO.CADtargetNames) == pfc)[0]
+                #mapping from all targets to this PFCs intersects
+                GYRO.PFCintersectMap = np.hstack([GYRO.PFCintersectMap,idx1]).astype(int)
 
-        GYRO.PFC_t1 = GYRO.t1[idx0]
-        GYRO.PFC_t2 = GYRO.t2[idx0]
-        GYRO.PFC_t3 = GYRO.t3[idx0]
-        GYRO.PFC_Nt = len(GYRO.t1)
+        GYRO.PFC_t1 = GYRO.t1[GYRO.PFCintersectMap]
+        GYRO.PFC_t2 = GYRO.t2[GYRO.PFCintersectMap]
+        GYRO.PFC_t3 = GYRO.t3[GYRO.PFCintersectMap]
+        GYRO.PFC_Nt = len(GYRO.PFC_t1)
 
-        #portion of intersectRecord that is on this PFC
-        PFCidx = np.where(np.array(GYRO.targetNames) == self.name)[0]
+        print("PFC "+self.name+" has {:f} / {:f} intersects and {:f} / {:f} ROIs".format(GYRO.PFC_Nt, GYRO.Nt, self.N_gyroCenters, GYRO.N_CADROI))
 
-        #centers for this PFC
-        GYRO.sourceCenters = self.centers
-        N_centers = len(self.centers)
-
-        #find psi for all points we launch traces from
-        R,Z,Phi = tools.xyz2cyl(self.centers[:,0], self.centers[:,1], self.centers[:,2])
-        psiSource = self.ep.psiFunc.ev(R,Z)
-        #find psi for all points we potentially intersect with
-        targetPoints = np.hstack([GYRO.PFC_t1, GYRO.PFC_t2, GYRO.PFC_t3]).reshape(GYRO.PFC_Nt,3,3)
-        targetCtrs = self.getTargetCenters(targetPoints)
-        R,Z,Phi = tools.xyz2cyl(targetCtrs[:,0],targetCtrs[:,1],targetCtrs[:,2])
-        psiIntersect = self.ep.psiFunc.ev(R,Z)
-
-        #create psiMask, which will be used to eliminate intersection checking
-        #on any face that is not on the same flux surface as the source face
-        #this is a form of dimensionality reduction
-        print("Calculating psiMask")
-        if psiSource is not None:
-            GYRO.psiFilterSwitch = True
+        #Filter intersects by psi
+        GYRO.psiFilterSwitch = False
+        if GYRO.psiFilterSwitch == True:
+            #find psi for all points we launch traces from
+            R,Z,Phi = tools.xyz2cyl(self.gyroCenters[:,0], self.gyroCenters[:,1], self.gyroCenters[:,2])
+            psiSource = self.ep.psiFunc.ev(R,Z)
+            #find psi for all points we potentially intersect with
+            targetPoints = np.hstack([GYRO.PFC_t1, GYRO.PFC_t2, GYRO.PFC_t3]).reshape(GYRO.PFC_Nt,3,3)
+            targetCtrs = self.getTargetCenters(targSetPoints)
+            R,Z,Phi = tools.xyz2cyl(targetCtrs[:,0],targetCtrs[:,1],targetCtrs[:,2])
+            psiIntersect = self.ep.psiFunc.ev(R,Z)
+            print("Calculating psiMask")
+            #create psiMask, which will be used to eliminate intersection checking
+            #on any face that is not on the same flux surface as the source face
+            #this is a form of dimensionality reduction
             GYRO.psiMask = tools.buildMask(psiSource, psiIntersect, thresh=1)
-            print("psiMask reduction ratio: {:f}".format(np.sum(GYRO.psiMask) / (GYRO.PFC_Nt*N_centers)))
+            print("psiMask reduction ratio: {:f}".format(np.sum(GYRO.psiMask) / (GYRO.PFC_Nt*self.N_gyroCenters)))
             print("Example # points within psi bounds: {:f}".format(np.sum(GYRO.psiMask[:,0])))
             print("Compared to # of potential points: {:f}".format(GYRO.PFC_Nt))
-            #for testing
-#            print("TEST1")
-#            print(psiSource[437])
-#            print(psiIntersect[437])
-#            print(GYRO.PFC_t1[437])
-#            print(GYRO.PFC_t2[437])
-#            print(GYRO.PFC_t3[437])
-#            print("TEST2")
-#            print(psiSource[108])
-#            print(psiIntersect[108])
-#            testUse = np.where(GYRO.psiMask[:,437]==1)[0]
-#            print(psiIntersect[testUse])
-#            print(testUse)
 
+        #limit RAM consumption (if True, runs helix intersection check in loop instead of matrix)
+        #in future should adapt this so that it dynamically allocates RAM using resource package
+        GYRO.RAMlimit = False
 
-        else:
-            GYRO.psiFilterSwitch = False
+        #for debugging, print a specific trace index into file
+        ROIidx = None
+        GYRO.traceIndex = None
+        GYRO.traceIndex2 = None
+        if ROIidx is not None:
+            if ROIidx in GYRO.CADROI_PFCROImap:
+                loc = np.where(GYRO.CADROI_PFCROImap==ROIidx)[0][0]
+                if np.array(GYRO.PFCROINames)[GYRO.CADROI_PFCROImap[loc]] == self.name:
+                    if ROIidx in GYRO.CADROI_HOTmap:
+                        loc2 = np.where(GYRO.CADROI_HOTmap==loc)[0][0]
+                        GYRO.traceIndex = loc2
+                        GYRO.controlfilePath = self.controlfilePath
+                        print("Tracing helix for idx: {:f}".format(GYRO.traceIndex)+' on '+self.name)
 
         #setup velocities and velocity phase angles
-        GYRO.setupVelocities()
+        GYRO.setupVelocities(self.N_gyroCenters)
         #setup gyroPhase angle
         GYRO.uniformGyroPhaseAngle()
         #setup frequencies
-        GYRO.setupFreqs(self.Bmag[:,-1])
+        GYRO.setupFreqs(self.Bmag[self.PFC_GYROmap,-1])
 
-        #for debugging, print a specific trace index into file
-        GYRO.traceIndex = 437
-        if GYRO.traceIndex is not None:
-            GYRO.controlfilePath = self.controlfilePath
-        else:
-            GYRO.traceIndex2 = None
         #Walk downstream along GC path tracing helices and looking for intersections
         N_GCdeg = GYRO.gyroDeg*2 + 1
         #gyroPhase loop
@@ -506,7 +506,7 @@ class PFC:
                 for vSlice in range(GYRO.N_vSlice):
                     print("============vSLice #: {:f}".format(vSlice))
                     #initialize phase angle for this MC run
-                    GYRO.lastPhase = np.ones((N_centers))*GYRO.gyroPhases[gyroPhase]
+                    GYRO.lastPhase = np.ones((self.N_gyroCenters))*GYRO.gyroPhases[gyroPhase]
                     #calculate velocities and radii for this MC run
                     v = GYRO.vSlices[:,vSlice]
                     GYRO.vPerpMC = v * np.cos(GYRO.vPhaseMC)
@@ -516,20 +516,24 @@ class PFC:
                     print("vPerp = {:f} m/s".format(GYRO.vPerpMC[0]))
                     print("vParallel = {:f} m/s".format(GYRO.vParallelMC[0]))
                     print("rGyro = {:f} m".format(GYRO.rGyroMC[0]))
+                    #use cProfile to profile this loop speed
+                    #profiler = cProfile.Profile()
+                    #profiler.enable()
                     #walk along GC
                     for i in range(N_GCdeg-1):
                         print("Guiding Center Step {:d}".format(i))
                         log.info("Guiding Center Step {:d}".format(i))
-                        #map between the multiprocessing index and the PFC index
-                        use = np.where(np.isnan(GYRO.intersectRecord[gyroPhase,vPhase,vSlice,PFCidx]) == True)[0]
-                        GYRO.indexMap = use
+
+                        #map between the HOTGYROmap and the multiprocessing idx (still nans)
+                        #GYRO.GYRO_HLXmap = np.where(np.isnan(GYRO.intersectRecord[gyroPhase,vPhase,vSlice,self.PFCHOT_GYROmap]) == True)[0]
+                        GYRO.GYRO_HLXmap = np.where(np.isnan(GYRO.intersectRecord[gyroPhase,vPhase,vSlice,self.PFCHOT_GYROmap]) == True)[0]
                         #run a trace if there are still points that haven't intersected
-                        if len(use) > 0:
+                        if len(GYRO.GYRO_HLXmap) > 0:
                             #for printing helices
                             if GYRO.traceIndex is not None:
                                 try:
                                     GYRO.N_GCdeg = i
-                                    GYRO.traceIndex2 = np.where(use==GYRO.traceIndex)[0][0]
+                                    GYRO.traceIndex2 = np.where(self.CADHOT_GYROmap[GYRO.GYRO_HLXmap]==GYRO.traceIndex)[0][0]
                                     print("Tracing index: {:d}".format(GYRO.traceIndex2))
 
                                 except:
@@ -539,27 +543,32 @@ class PFC:
                             #start and end points for step i down guiding center path
                             #we flip once so that we are walking downstream (MAFOT walks upstream)
                             #then again so we are indexed according to CAD.centers
-                            GYRO.p0 = np.flip(np.flip(self.guidingCenterPaths, axis=0)[i::N_GCdeg,:], axis=0)[use]
-                            GYRO.p1 = np.flip(np.flip(self.guidingCenterPaths, axis=0)[i+1::N_GCdeg,:], axis=0)[use]
-                            #calculate helix path for this step down guiding center path
-                            GYRO.intersectRecord[gyroPhase,vPhase,vSlice,use], hdotn = GYRO.multipleGyroTrace()
+                            GYRO.p0 = np.flip(np.flip(self.guidingCenterPaths, axis=0)[i::N_GCdeg,:], axis=0)[GYRO.GYRO_HLXmap]
+                            GYRO.p1 = np.flip(np.flip(self.guidingCenterPaths, axis=0)[i+1::N_GCdeg,:], axis=0)[GYRO.GYRO_HLXmap]
 
-                            #calculate helix dot n
-                            idx = GYRO.intersectRecord[gyroPhase,vPhase,vSlice,use]
-                            notNan = np.where(np.isnan(idx)==False)[0] #dont include NaNs (NaNs = no intersection)
-                            idx = idx[~np.isnan(idx)] #indices we map power to
-                            idx = idx.astype(int) #cast as integer
-                            GYRO.hdotn[gyroPhase,vPhase,vSlice,idx] = hdotn[notNan]
+                            #calculate helix path for this step down guiding center path
+                            #GYRO.intersectRecord[gyroPhase,vPhase,vSlice,use], hdotn = GYRO.multipleGyroTrace()
+                            GYRO.intersectRecord[gyroPhase,vPhase,vSlice,self.PFCHOT_GYROmap[GYRO.GYRO_HLXmap]], hdotn = GYRO.multipleGyroTrace()
+
+                            #gyro trace incident angle - calculate helix dot n
+                            #idx = GYRO.intersectRecord[gyroPhase,vPhase,vSlice,use]
+                            #idx = GYRO.intersectRecord[gyroPhase,vPhase,vSlice,self.HOTGYROmap][use]
+                            #notNan = np.where(np.isnan(idx)==False)[0] #dont include NaNs (NaNs = no intersection)
+                            #idx = idx[~np.isnan(idx)] #indices we map power to
+                            #idx = idx.astype(int) #cast as integer
+                            #GYRO.hdotn[gyroPhase,vPhase,vSlice,idx] = hdotn[notNan]
                         else:
                             print("All helices intersected a face.  Breaking early.")
                             break
 
-                    #save intersectRecord to file
-                    file = self.controlfilePath+'intersectRecord_self.name_{:d}_{:d}_{:d}.dat'.format(gyroPhase,vPhase,vSlice)
-                    GYRO.writeIntersectRecord(gyroPhase,vPhase,vSlice,file,PFCidx)
 
         print("Gyro Trace Completed")
         log.info("Gyro Trace Completed")
+
+        #profiler.disable()
+        #save intersectRecord to file
+        #stats = pstats.Stats(profiler).sort_stats('ncalls')
+        #stats.print_stats()
         #uncomment for testing.  Print list of indices and
         #associated intersection faces
         #print("Intersect Record:")
@@ -572,7 +581,7 @@ class PFC:
 
     def intersectTestBasic(self,sources,sourceNorms,
                         targets,targetNorms,MHD,ep,powerDir,
-                        psiSource, psiTarget, ptIdx=None):
+                        psiSource, psiTarget, ptIdx=None, mode='SV'):
         """
         checks if any of the lines (field line traces) generated by MAFOT
         struct program intersect any of the target mesh faces.
@@ -595,6 +604,9 @@ class PFC:
         all of the target faces.  It eliminates self intersections during this
         step by making sure that if an intersection occurs, it is with a face
         that is far away in any direction
+
+        mode 'MT' is Moller-Trumbore algorithm,
+        mode 'SV' is Signed Volume algorithm
         """
         q1 = sources[::2,:]  #even indexes are first trace point
         q2 = sources[1::2,:]  #odd indexes are second trace point
@@ -624,24 +636,22 @@ class PFC:
         tools.Nt = Nt_use
         tools.ptIdx = ptIdx #for finding which face a specific point intersects with
 
-        #create psiMask, which will be used to eliminate intersection checking
-        #on any face that is not on the same flux surface as the source face
-        #this is a form of dimensionality reduction
-        print("Calculating psiMask")
-        tools.psiMask = tools.buildMask(psiSource, psiTarget[use])
-        print(tools.psiMask.shape)
-        print("psiMask reduction ratio: {:f}".format(np.sum(tools.psiMask) / (Nt_use*N)))
-        print("Example # points within psi bounds: {:f}".format(np.sum(tools.psiMask[:,0])))
-        print("Compared to # of potential points: {:f}".format(Nt_use))
-        if ptIdx is not None:
-            print("psiMask for ptIDX: {:f}".format(np.sum(tools.psiMask[:,ptIdx])))
+        #Set up for Moller-Trumbore intersection check
+        if mode == 'MT':
+            tools.E1 = (tools.p2 - tools.p1)
+            tools.E2 = (tools.p3 - tools.p1)
+            tools.D = (tools.q2-tools.q1)
+            tools.Dmag = np.linalg.norm(tools.D, axis=1)
+
+        #Do not do psi filtering for the Basic intersection test
+        tools.psiFilterSwitch = False
 
         print('Entering basic intersection test for {:d} potential intersection faces'.format(Nt_use))
         log.info('Entering basic intersection test for {:d} potential intersection faces'.format(Nt_use))
         t0 = time.time()
 
         #Prepare intersectionTest across multiple cores
-        Ncores = multiprocessing.cpu_count() -2 #reserve 2 cores for overhead
+        Ncores = multiprocessing.cpu_count() - 2 #reserve 2 cores for overhead
         print('Initializing parallel intersection check across {:d} cores'.format(Ncores))
         log.info('Initializing parallel intersection check across {:d} cores'.format(Ncores))
         #each worker receives a single start and end point (q1 and q2),
@@ -652,12 +662,24 @@ class PFC:
         #each worker, which yields about an order of magnitude speedup.
         print('Spawning tasks to workers')
         log.info('Spawning tasks to workers')
-        pool = multiprocessing.Pool(Ncores)
-        mask = np.asarray(pool.map(tools.intersectTestParallel, np.arange(N)))
-        pool.close()
-        pool.join()
-        pool.terminate()
-        del pool
+        #Do this try clause to kill any zombie threads that don't terminate
+        try:
+            pool = multiprocessing.Pool(Ncores)
+            #Moller-Trumbore algorithm
+            if mode == 'MT':
+                print("Using Moller-Trumbore intersection algorithm")
+                log.info("Using Moller-Trumbore intersection algorithm")
+                mask = np.asarray(pool.map(tools.intersectTestParallelMT, np.arange(N)))
+            #Signed Volume algorithm
+            else:
+                print("Using signed volume intersection algorithm")
+                log.info("Using signed volume intersection algorithm")
+                mask = np.asarray(pool.map(tools.intersectTestParallel, np.arange(N)))
+        finally:
+            pool.close()
+            pool.join()
+            del pool
+
 
 #        This is a legacy method that is not parallel
 #        maskTotal = tools.intersectTestNoLoop()
@@ -674,7 +696,7 @@ class PFC:
 
 
     def intersectTest2(self,sources,targets,mapDirection,
-                        psiSource=None,psiTarget=None,ptIdx=None):
+                        psiSource=None,psiTarget=None,ptIdx=None,mode='SV'):
         """
         Run an intersection test against all possible source faces
         sources is endpoints of line
@@ -684,6 +706,10 @@ class PFC:
         This test is called repeatedly from findShadows_structure, as we integrate
         up a field line.  Each time it is called, it checks if the sources line
         intersects a targets face
+
+        mode 'MT' is Moller-Trumbore algorithm,
+        mode 'SV' is Signed Volume algorithm
+
         """
         q1 = sources[::2,:] #even indexes are first trace point
         q2 = sources[1::2,:] #odd indexes are second trace point
@@ -700,6 +726,13 @@ class PFC:
         Nt = len(p1)
         tools.Nt = Nt
         tools.ptIdx = ptIdx
+
+        #Set up for Moller-Trumbore intersection check
+        if mode == 'MT':
+            tools.E1 = (tools.p2 - tools.p1)
+            tools.E2 = (tools.p3 - tools.p1)
+            tools.D = (tools.q2-tools.q1)
+            tools.Dmag = np.linalg.norm(tools.D, axis=1)
 
         #create psiMask, which will be used to eliminate intersection checking
         #on any face that is not on the same flux surface as the source face
@@ -736,7 +769,16 @@ class PFC:
         #Do this try clause to kill any zombie threads that don't terminate
         try:
             pool = multiprocessing.Pool(Ncores)
-            mask = np.asarray(pool.map(tools.intersectTestParallel, np.arange(N)))
+            #Moller-Trumbore algorithm
+            if mode == 'MT':
+                print("Using Moller-Trumbore intersection algorithm")
+                log.info("Using Moller-Trumbore intersection algorithm")
+                mask = np.asarray(pool.map(tools.intersectTestParallelMT, np.arange(N)))
+            #Signed Volume algorithm
+            else:
+                print("Using signed volume intersection algorithm")
+                log.info("Using signed volume intersection algorithm")
+                mask = np.asarray(pool.map(tools.intersectTestParallel, np.arange(N)))
         finally:
             pool.close()
             pool.join()

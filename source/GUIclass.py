@@ -770,6 +770,7 @@ class GUIobj():
     def bfieldAtSurface(self, PFC):
         """
         Calculate the B field at tile surface
+
         """
         ctrs = PFC.centers
         R,Z,phi = tools.xyz2cyl(ctrs[:,0],ctrs[:,1],ctrs[:,2])
@@ -781,7 +782,6 @@ class GUIobj():
         """
         Calculate B field magnitude point cloud for Bfield Vectors at tile surface
         """
-        print(PFC.Bxyz[0,:])
         PFC.Bmag = np.zeros((len(PFC.Bxyz), 4))
         PFC.Bmag[:,0] = PFC.centers[:,0] # X
         PFC.Bmag[:,1] = PFC.centers[:,1] # Y
@@ -933,12 +933,13 @@ class GUIobj():
         powerTrue = np.zeros((len(self.MHD.timesteps)))
         powerByTile = np.zeros((len(self.PFCs)))
         divCodes = []
-        #set up for gyro orbit heat loads
-        if 'GyroPC' in runList:
-            self.prepareGyroHF()
-        else:
+        #set up electron frac if not in gyro mode
+        if 'GyroPC' not in runList:
             self.HF.elecFrac = 1.0
-        #run HEAT for all tiles for all timesteps
+        else:
+            self.HF.elecFrac = 1.0 - self.GYRO.ionFrac
+
+        # Time Loop 1: HF, bdotn, B, psi, Norms
         for tIdx,t in enumerate(self.MHD.timesteps):
             print('\n')
             print("-"*80)
@@ -947,7 +948,6 @@ class GUIobj():
             log.info("Timestep: {:d}\n".format(t))
             print("-"*80)
             log.info("-"*80)
-
             for PFC in self.PFCs:
                 if t not in PFC.timesteps:
                     pass
@@ -972,13 +972,14 @@ class GUIobj():
                     print('\n')
                     print("*"*20)
                     print('PFC Name: '+ PFC.name)
+                    log.info('PFC Name: '+ PFC.name)
                     if 'HFpc' in runList:
                         self.HF_PFC(PFC, PFC.tag)
+                        PFC.shadowMasks[tIdx] = PFC.shadowed_mask
                         PFC.powerSumOptical[tIdx] = self.HF.power_sum_mesh(PFC, mode='optical')
                         print('Maximum optical heat load on tile: {:f}'.format(max(PFC.qDiv)))
-                        print('Optical power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac*self.HF.elecFrac))
-                        print('Tessellated Total Power = {:f}'.format(PFC.powerSumOptical[tIdx]))
-                        log.info('PFC Name: '+ PFC.name)
+                        print('Theoretical optical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac*self.HF.elecFrac))
+                        print('Tessellated divertor power to this PFC = {:f}'.format(PFC.powerSumOptical[tIdx]))
                         log.info('Maximum heat load on tile: {:f}'.format(max(PFC.qDiv)))
                         log.info('Power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
                         log.info('Tessellated Total Power = {:f}'.format(PFC.powerSumOptical[tIdx]))
@@ -990,11 +991,6 @@ class GUIobj():
                         if PFC.DivCode not in divCodes:
                             powerTrue[tIdx] += self.HF.Psol*PFC.powerFrac
                         divCodes.append(PFC.DivCode)
-                    if 'GyroPC' in runList:
-                        tGyro = time.time()
-                        self.gyroOrbitIntersects(PFC)
-                        print("Gyro orbit calculation took: {:f} [s]\n".format(time.time() - tGyro))
-                        log.info("Gyro orbit calculation took: {:f} [s]\n".format(time.time() - tGyro))
                     if 'Bpc' in runList:
                         self.bfieldAtSurface(PFC)
                     if 'psiPC' in runList:
@@ -1006,36 +1002,13 @@ class GUIobj():
                     if 'bdotnPC' in runList:
                         self.bdotnPC(PFC)
 
-            #redistribute ion gyro power
-            if 'GyroPC' in runList:
-                print('Gyro power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac*self.GYRO.ionFrac))
-                self.gyroOrbitHF(self.MHD.ep[tIdx])
-                for PFC in self.PFCs:
-                    PFC.powerSumGyro[tIdx] += self.HF.power_sum_mesh(PFC, mode='gyro')
-                    #powerTesselate[tIdx] += PFC.powerSumGyro[tIdx]
-                    powerTesselate[tIdx] += self.HF.power_sum_mesh(PFC, mode='gyro')
-                    print(PFC.name + ' tessellated Gyro Power = {:f}'.format(PFC.powerSumGyro[tIdx]))
-
-            #merge multiple pointclouds into one single pointcloud for visualization
-            tPath = self.MHD.shotPath + '/' + '{:06d}/'.format(t)
-            self.combinePFCpointcloud(runList, tPath)
-            #copy each timestep's composite point clouds to central location for
-            #paraview postprocessing (movies)
-            self.combineTimeSteps(runList, t)
-
         if 'HFpc' in runList:
             print('Total Input Power = {:f}'.format(np.sum(powerTrue)))
-            print('Power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
+            print('Theoretical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
             print('Optical Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumOptical)))
-            print('Gyro Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumGyro)))
-            #print('Escaped Gyro Power = {:f}'.format(self.GYRO.gyroNanPower))
-            print('Total Tessellated Total Power = {:f}'.format(np.sum(powerTesselate)))
             log.info('Total Input Power = {:f}'.format(np.sum(powerTrue)))
-            log.info('Power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
+            log.info('Theoretical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
             log.info('Optical Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumOptical)))
-            log.info('Gyro Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumGyro)))
-            #log.info('Escaped Gyro Power = {:f}'.format(self.GYRO.gyroNanPower))
-            log.info('Total Tessellated Total Power = {:f}'.format(np.sum(powerTesselate)))
 
             totalPowPow = 0
             for PFC in self.PFCs:
@@ -1048,17 +1021,61 @@ class GUIobj():
                 log.info("PFC array sum: {:.6f}".format(totalPowPow))
 
         if 'GyroPC' in runList:
-            print("=== Last timestep's PFC arrays: Gyro ===")
-            totalPowPow = 0
-            for PFC in self.PFCs:
-                tmpPow = self.HF.power_sum_mesh(PFC, mode='gyro', scale2circ=True, verbose=True)
-                totalPowPow += tmpPow
-                print(PFC.name + ":\t{:.6f}".format(tmpPow))
-                log.info(PFC.name + ":\t{:.6f}".format(tmpPow))
-                print("PFC array sum: {:.6f}".format(totalPowPow))
-                log.info("PFC array sum: {:.6f}".format(totalPowPow))
-                print("PFC Max HF: {:.6f}".format(max(PFC.qGyro)))
-                log.info("PFC Max HF: {:.6f}".format(max(PFC.qGyro)))
+            print("\n===+++ GYRO ORBIT CALCULATION +++===")
+            log.info("\n===+++ GYRO ORBIT CALCULATION +++===")
+            PFC.powerSumGyro = np.zeros((len(self.MHD.timesteps)))
+            tGyro = time.time()
+            self.getGyroMeshes()
+
+            # Time Loop: gyro orbits runs after optical HF calculated
+            for tIdx,t in enumerate(self.MHD.timesteps):
+                self.prepareGyroMaps(tIdx)
+                for PFC in self.PFCs:
+                    if t not in PFC.timesteps:
+                        pass
+                    else:
+                        print("\n------PFC: "+PFC.name+"------")
+                        self.gyroOrbitIntersects(PFC)
+                self.gyroOrbitHF()
+                Psum = self.HF.power_sum_mesh(PFC, mode='gyro', scale2circ=True)
+                PFC.powerSumGyro[tIdx] += Psum
+                powerTesselate[tIdx] += Psum
+                print(PFC.name + ' tessellated Gyro Power = {:f}'.format(Psum))
+
+                #path for this timestep
+                tPath = self.MHD.shotPath + '/' + '{:06d}/'.format(t)
+                #write intersectRecord to CSV file
+                self.intersectRecordCSV(tPath)
+
+                print('Theoretical gyro power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac*self.GYRO.ionFrac))
+                print('Gyro Tessellated Power = {:f}'.format(np.sum(PFC.powerSumGyro)))
+                print('Escaped Gyro Power = {:f}'.format(self.GYRO.gyroNanPower))
+                print("Gyro orbit calculation took: {:f} [s]\n".format(time.time() - tGyro))
+
+                print("=== Last timestep's PFC arrays: Gyro ===")
+                totalPowPow = 0
+                for PFC in self.PFCs:
+                    tmpPow = self.HF.power_sum_mesh(PFC, mode='gyro', scale2circ=True, verbose=True)
+                    totalPowPow += tmpPow
+                    print(PFC.name + ":\t{:.6f}".format(tmpPow))
+                    log.info(PFC.name + ":\t{:.6f}".format(tmpPow))
+                    print("PFC array sum: {:.6f}".format(totalPowPow))
+                    log.info("PFC array sum: {:.6f}".format(totalPowPow))
+                    print("PFC Max HF: {:.6f}".format(max(PFC.qGyro)))
+                    log.info("PFC Max HF: {:.6f}".format(max(PFC.qGyro)))
+
+
+
+        # Time Loop: postprocessing
+        for tIdx,t in enumerate(self.MHD.timesteps):
+            #path for this timestep
+            tPath = self.MHD.shotPath + '/' + '{:06d}/'.format(t)
+            #merge multiple pointclouds into one single pointcloud for visualization
+            self.combinePFCpointcloud(runList, tPath)
+            #copy each timestep's composite point clouds to central location for
+            #paraview postprocessing (movies)
+            self.combineTimeSteps(runList, t)
+
 
         print("Total Time Elapsed: {:f}".format(time.time() - t0))
         log.info("Total Time Elapsed: {:f}".format(time.time() - t0))
@@ -1075,7 +1092,9 @@ class GUIobj():
         processes for each PFC object
         """
         #Check for intersections with MAFOT struct
+        t0 = time.time()
         PFC.findShadows_structure(self.MHD, self.CAD)
+        print("Intersection calculation took {:f} s".format(time.time() - t0))
 
         #Run MAFOT laminar for 3D plasmas
         if self.MHD.plasma3Dmask==True:
@@ -1118,6 +1137,7 @@ class GUIobj():
         PFC.write_bdotn_pointcloud(PFC.centers, PFC.bdotn, PFC.controlfilePath,PFC.tag)
         #structOutfile = MHD.shotPath + '/' + '{:06d}/struct.csv'.format(PFC.t)
         #HF.PointCloudfromStructOutput(structOutfile)
+
         return
 
     def gyroOrbitIntersects(self, PFC):
@@ -1134,68 +1154,75 @@ class GUIobj():
         #Trace B field upstream from PFC surface
         PFC.findGuidingCenterPaths(self.MHD, self.GYRO)
         #Trace helical path downstream, checking for intersections
-        PFC.findHelicalPaths(self.MHD, self.GYRO, self.CAD)
+        PFC.findHelicalPaths(self.GYRO)
         return
 
-    def gyroOrbitHF(self, ep):
+    def gyroOrbitHF(self):
         """
         loop thru PFCs reassigning power based upon intersectRecord
         """
-        for PFC in self.PFCs:
-            #save original shadowMask before overwriting
-            oldShadows = PFC.shadowed_mask
-            PFC.shadowed_mask = np.zeros((len(PFC.centers)))
-            #get psi all over the ROI
-            if self.MHD.plasma3Dmask==True:
-                print("3D Plasmas not set up for gyro orbits yet!")
-                log.info("3D Plasmas not set up for gyro orbits yet!")
-            else:
-                self.MHD.psi2DfromEQ(PFC)
-            #redistribute power
-            self.HF.gyroHF(self.GYRO, PFC, self.MHD)
-
         #find gyro shadowMask
-        self.GYRO.shadowMask = np.ones((len(self.GYRO.targetNames)))
+        self.GYRO.shadowMask = np.ones((self.GYRO.N_CADROI))
         shadows = np.unique(self.GYRO.intersectRecord.flatten())
         shadows = shadows[~np.isnan(shadows)]
         shadows = shadows.astype(int)
+        shadows = np.where(shadows <= self.GYRO.N_CADROI)[0]
         self.GYRO.shadowMask[shadows] = 0.0
 
+        #redistribute power
         for PFC in self.PFCs:
-            #portion of gyroPowMatrix we are using for this PFC
-            use = np.where(np.array(self.GYRO.targetNames) == PFC.name)[0]
+            #setup velocities and velocity phase angles
+            self.GYRO.setupVelocities(PFC.N_gyroCenters)
+            #setup gyroPhase angle
+            self.GYRO.uniformGyroPhaseAngle()
+            #setup frequencies
+            self.GYRO.setupFreqs(PFC.Bmag[PFC.PFC_GYROmap,-1])
+            self.HF.gyroHF(self.GYRO, PFC)
+
+        for PFC in self.PFCs:
+            #print("PFC NAME: "+PFC.name)
+            #print(PFC.CADTGT_PFCmap)
             #assign gyro power to PFC
-            PFC.Pgyro = self.GYRO.gyroPowMatrix[use]
+            PFC.Pgyro = self.GYRO.gyroPowMatrix[PFC.CADTGT_PFCmap]
             PFC.qGyro = PFC.Pgyro / PFC.areas
             #gyro shadowMask = 1 if a face is shadowed
-            PFC.gyroShadowMask = self.GYRO.shadowMask[use]
+            PFC.gyroShadowMask = self.GYRO.shadowMask[PFC.CADROI_PFCmap]
             #Create pointcloud for paraview
             R,Z,phi = tools.xyz2cyl(PFC.centers[:,0],PFC.centers[:,1],PFC.centers[:,2])
             self.HF.write_heatflux_pointcloud(PFC.centers,PFC.qGyro,PFC.controlfilePath,tag=PFC.tag,mode='gyro')
             self.HF.write_heatflux_pointcloud(PFC.centers,PFC.qGyro+PFC.qDiv,PFC.controlfilePath,tag=PFC.tag,mode='all')
             PFC.write_shadow_pointcloud(PFC.centers,PFC.gyroShadowMask,PFC.controlfilePath,PFC.tag,mode='gyro')
 
-            PFC.shadowed_mask = oldShadows #restore
-
         return
 
-    def prepareGyroHF(self):
+    def getGyroMeshes(self):
         """
-        sets up an array for power redistribution between PFCs
+        set up gyro meshes, independent of timestep
         """
         totalMeshCounter = 0
         numTargetFaces = 0
+        numROIFaces = 0
         targetPoints = []
         targetNorms = []
-        self.GYRO.targetNames = []
+        self.GYRO.CADtargetNames = []
+        self.GYRO.CADROINames = []
+        self.GYRO.CADROIindexes = []
+        self.GYRO.CADROICenters = []
 
+
+        #build arrays for intersections
         #first include the PFCs in the ROI
+        print("CAD ROI List:")
+        print(self.CAD.ROIList)
         for i,target in enumerate(self.CAD.ROImeshes):
             totalMeshCounter+=target.CountFacets
             numTargetFaces += target.CountFacets
+            numROIFaces += target.CountFacets
             #append target data
             for face in target.Facets:
-                self.GYRO.targetNames.append(self.CAD.ROIList[i]) #do this for future HF reassignment
+                self.GYRO.CADtargetNames.append(self.CAD.ROIList[i]) #do this for future HF reassignment
+                self.GYRO.CADROIindexes.append(i)
+                self.GYRO.CADROINames.append(self.CAD.ROIList[i])
                 targetPoints.append(face.Points)
                 targetNorms.append(face.Normal)
 
@@ -1209,12 +1236,10 @@ class GUIobj():
                 numTargetFaces += target.CountFacets
                 #append target data
                 for face in target.Facets:
-                    self.GYRO.targetNames.append(self.CAD.intersectList[i]) #do this for future HF reassignment
+                    self.GYRO.CADtargetNames.append(self.CAD.intersectList[i]) #do this for future HF reassignment
                     targetPoints.append(face.Points)
                     targetNorms.append(face.Normal)
 
-        self.GYRO.gyroPowMatrix = np.zeros((len(targetPoints)))
-        self.GYRO.gyroNanPower = 0.0
         targetPoints = np.asarray(targetPoints)/1000.0 #scale to m
         targetNorms = np.asarray(targetNorms)
         self.GYRO.t1 = targetPoints[:,0,:] #point 1 of mesh triangle
@@ -1226,8 +1251,132 @@ class GUIobj():
         mag = np.linalg.norm(targetNorms,axis=1)
         for i in range(len(targetNorms)):
             self.GYRO.intersectNorms[i,:] = targetNorms[i,:] / mag[i]
-        print("Total Gyro Intersect Faces: {:d}".format(numTargetFaces))
+        print("Total Gyro Intersect Faces: {:d}".format(self.GYRO.Nt))
 
+        self.GYRO.N_CADROI = len(self.GYRO.CADROINames)
+        #maps from Targets to ROI
+        self.GYRO.CADTGT_CADROImap = np.arange(self.GYRO.N_CADROI)
+
+        return
+
+
+    def prepareGyroMaps(self, tIdx):
+        """
+        timestep dependent gyro calculation preparations
+
+        there are mappings between various abstract containers, that are defined below.
+        The mapping between containers is assigned variables with a <FROM|TO>map
+        format.  Each container has centers, names, etc. associated with it.  Nested
+        maps are represented in comments elsewhere in the code with (flawed) Dirac notation:
+        ie: <ROI|PFC><PFC|GYRO> = <ROI|GYRO> = ROIPFCmap[PFCGYROmap]
+
+        CADTGT:  all target faces, at various resolutions, from CAD
+        CADROI:  all ROI faces, at single HF resolution, in order of CAD
+        PFCROI:  all ROI faces, at single HF resolution, in order of PFCs
+        HOT:  CADROI faces that are not optically shadowed ie hot
+        PFC:  PFCROI faces on a specific PFC
+        GYRO: PFC faces that are not shadowed
+        HLX:  Faces that we are calculating helical trajectories on
+
+        In the crappy picture below, non-parentheses variables are containers
+        and parentheses variables are maps.  The lines signify the nesting
+
+                          CADTGT
+                             |
+                             |
+                    (CADTGT_CADROImap)
+                             |
+                             |
+            ---------------CADROI-----(ROI_HOTmap)-------
+            |                |                          |
+            |                |                          |
+            |         (CADROI_CADPFCmap)                |
+            |                |                          |
+     (CADROI_PFCmap)         |                          |
+            |              PFCROI                       |
+            |                |                          |
+            |                |                          |
+            |         (PFCROI_PFCmap)                  HOT-----IntersectRecord
+            |                |                          |
+            |                |                          |
+            ----------------PFC                         |
+                             |                          |
+                             |                          |
+                       (PFC_GYROmap)                    |
+                             |                          |
+                             |                          |
+                            GYRO------(HOT_GYROmap)------
+                             |
+                             |
+                       (GYRO_HLXmap)
+                             |
+                             |
+                            HLX
+
+        """
+
+        Npoints = 0
+        self.GYRO.N_HOT = 0
+        #make arrays for the faces we care about (not optically shadowed)
+        for i,PFC in enumerate(self.PFCs):
+            if self.MHD.timesteps[tIdx] not in PFC.timesteps:
+                pass
+            else:
+                #maps from CADROI to this PFC: <CADROI|PFC>
+                #PFC.CADROI_PFCmap = np.where(np.array(self.GYRO.CADROINames)==PFC.name)[0]
+                test = np.logical_and(np.array(self.GYRO.CADROINames)==PFC.name, np.array(self.GYRO.CADROIindexes)==i)
+                PFC.CADROI_PFCmap = np.where(test==True)[0]
+                #maps from PFC to GYRO (not optically shadowed) faces: <PFC|GYRO>
+                PFC.PFC_GYROmap = np.where(PFC.shadowMasks[tIdx] == 0)[0]
+                #maps from the CADROI to this PFCs gyro: <CADROI|PFC><PFC|GYRO>
+                PFC.CADROI_GYROmap = PFC.CADROI_PFCmap[PFC.PFC_GYROmap]
+                PFC.gyroCenters = PFC.centers[PFC.PFC_GYROmap]
+                PFC.N_gyroCenters = len(PFC.gyroCenters)
+
+                if i==0:
+                    #maps from CADROI to HOT (all PFCs not shadowed) faces: <CADROI|HOT>
+                    self.GYRO.CADROI_HOTmap = PFC.CADROI_GYROmap
+                    self.GYRO.PFCROI_HOTmap = PFC.PFC_GYROmap
+                    self.GYRO.PFCROINames = [PFC.name]*len(PFC.centers)
+                    self.GYRO.PFCROIindexes = np.ones((len(PFC.centers)))*i
+                    #maps from CAD indexes (not always the same) to PFC indexes (always from PFC file)
+                    #<CADROI|PFCROI>
+                    self.GYRO.CADROI_PFCROImap = PFC.CADROI_PFCmap
+                else:
+                    self.GYRO.CADROI_HOTmap = np.append(self.GYRO.CADROI_HOTmap, PFC.CADROI_GYROmap)
+                    self.GYRO.PFCROI_HOTmap = np.append(self.GYRO.PFCROI_HOTmap, PFC.PFC_GYROmap+Npoints)
+                    self.GYRO.PFCROINames += [PFC.name]*len(PFC.centers)
+                    self.GYRO.PFCROIindexes = np.append(self.GYRO.PFCROIindexes, np.ones((len(PFC.centers)))*i)
+                    self.GYRO.CADROI_PFCROImap = np.append(self.GYRO.CADROI_PFCROImap, PFC.CADROI_PFCmap)
+
+                self.GYRO.N_HOT += int(PFC.N_gyroCenters)
+                Npoints += len(PFC.centers)
+                #maps from HOT to GYRO: <CAD|HOT|GYRO> or <PFC|HOT|GYRO>
+                #PFC.CADHOT_GYROmap = np.where(np.array(self.GYRO.CADROINames)[self.GYRO.CADROI_HOTmap]==PFC.name)[0]
+                #PFC.PFCHOT_GYROmap = np.where(np.array(self.GYRO.PFCROINames)[self.GYRO.PFCROI_HOTmap]==PFC.name)[0]
+                test = np.logical_and(np.array(self.GYRO.CADROINames)[self.GYRO.CADROI_HOTmap]==PFC.name, np.array(self.GYRO.CADROIindexes)[self.GYRO.CADROI_HOTmap]==i)
+                PFC.CADHOT_GYROmap = np.where(test==True)[0]
+                test = np.logical_and(np.array(self.GYRO.PFCROINames)[self.GYRO.PFCROI_HOTmap]==PFC.name, np.array(self.GYRO.PFCROIindexes)[self.GYRO.CADROI_HOTmap]==i)
+                PFC.PFCHOT_GYROmap = np.where(test==True)[0]
+
+        #create mapping between ALLPFCs and ROI (because CAD list order can be diff
+        #from PFC list order)
+        for i,PFC in enumerate(self.PFCs):
+            if self.MHD.timesteps[tIdx] not in PFC.timesteps:
+                pass
+            else:
+                #maps from PFCROI to this PFC: <PFCROI|PFC>
+                #PFC.PFCROI_PFCmap = np.where(np.array(self.GYRO.PFCROINames)==PFC.name)[0]
+                test = np.logical_and(np.array(self.GYRO.PFCROINames)==PFC.name, np.array(self.GYRO.PFCROIindexes)==i)
+                PFC.PFCROI_PFCmap = np.where(test==True)[0]
+                #maps from targets to this PFC: <CADTGT|CADROI><CADROI|PFCROI><PFCROI|PFC>
+                PFC.CADTGT_PFCmap = self.GYRO.CADTGT_CADROImap[PFC.CADROI_PFCmap]
+
+
+        print("Total Gyro ROI Faces: {:d}".format(self.GYRO.N_CADROI))
+        print("Gyro faces not optically shadowed: {:d}".format(self.GYRO.N_HOT))
+        self.GYRO.gyroPowMatrix = np.zeros((self.GYRO.Nt))
+        self.GYRO.gyroNanPower = 0.0
         #set up intersectRecord, which records index of intersection face
         #this 4D array has:
         #one dimension for gyroPhase angles,
@@ -1235,16 +1384,29 @@ class GUIobj():
         #one dimension for vSlices,
         #and one dimesion for the PFC.centers points we are tracing
         #each element is the face that was intersected for that MC run
-        N_centers = len(self.GYRO.intersectCenters)
         self.GYRO.intersectRecord = np.ones((self.GYRO.N_gyroPhase,
                                             self.GYRO.N_vPhase,
                                             self.GYRO.N_vSlice,
-                                            N_centers), dtype=int)*np.NaN
+                                            self.GYRO.N_HOT), dtype=int)*np.NaN
 
         self.GYRO.hdotn = np.ones((self.GYRO.N_gyroPhase,
                                             self.GYRO.N_vPhase,
                                             self.GYRO.N_vSlice,
-                                            N_centers), dtype=int)*np.NaN
+                                            self.GYRO.N_HOT), dtype=int)*np.NaN
+        return
+
+
+    def intersectRecordCSV(self, tPath):
+        """
+        writes intersectRecord to CSV file
+        """
+        for gyroPhase in range(self.GYRO.N_gyroPhase):
+            for vPhase in range(self.GYRO.N_vPhase):
+                for vSlice in range(self.GYRO.N_vSlice):
+                    file = tPath+'intersectRecord_All_{:d}_{:d}_{:d}.dat'.format(gyroPhase,vPhase,vSlice)
+                    #self.GYRO.writeIntersectRecord(gyroPhase,vPhase,vSlice,self.GYRO.CADROI_HOTmap,file)
+                    self.GYRO.writeIntersectRecord(gyroPhase,vPhase,vSlice,self.GYRO.PFCROI_HOTmap,file)
+
         return
 
     def combinePFCpointcloud(self, runList, tPath):
@@ -2033,4 +2195,36 @@ class GUIobj():
 
         plotPath = plotlyDir + '/Tprobes.html'
         fig.write_html(plotPath)
+        return fig
+
+    def gyroPhasePlot(self):
+        """
+        return a gyrophase figure with gyro orbit phase angles
+        """
+        #setup gyroPhase angle
+        self.GYRO.uniformGyroPhaseAngle()
+
+        fig = pgp.plotlyGyroPhasePlot(np.degrees(self.GYRO.gyroPhases))
+        return fig
+
+    def vPhasePlot(self):
+        """
+        return a vPhase figure with velocity phase angles
+        """
+        #setup velocity phase angles
+        self.GYRO.uniformVelPhaseAngle()
+        fig = pgp.plotlyVPhasePlot(np.degrees(self.GYRO.vPhases))
+        return fig
+
+    def vSlicePlot(self):
+        """
+        return a vSlice figure with vSlices
+        """
+        #setup velocities and velocity phase angles
+        self.GYRO.setupVelocities(1)
+        fig = pgp.plotlyVSlicePlot(self.GYRO.mass_eV,
+                                   self.GYRO.c,
+                                   self.GYRO.T0[0],
+                                   self.GYRO.vSlices[0,:],
+                                   self.GYRO.vScan[0])
         return fig

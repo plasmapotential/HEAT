@@ -179,3 +179,114 @@ def plotlyTprobes(t,T,names):
 
 
     return fig
+
+
+def plotlyGyroPhasePlot(gyroPhases):
+    """
+    returns a DASH object for use directly in dash app
+
+    gyroPhase is an array of gyroPhases
+
+    """
+    gyroTicks = [0, 45, 90, 135, 180, 225, 270, 315]
+    fig = go.Figure()
+    for i in range(len(gyroPhases)):
+        fig.add_trace(go.Scatterpolar(
+                r = np.array([0.0,1.0]),
+                theta = np.array([gyroPhases[i],gyroPhases[i]]),
+                mode = 'lines+markers',
+                marker={'symbol':"circle", 'size':16},
+                name = '{:0.1f}'.format(gyroPhases[i]),
+                text=['{:0.1f}'.format(gyroPhases[i])],
+                textposition="bottom center",
+                #line_color= px.colors.qualitative.Dark2[0],
+                line={'width':7},
+                ))
+
+    fig.update_layout(
+        title={'text': "Gyro Phase Angles",'y':0.94,'x':0.5,'xanchor': 'center','yanchor': 'top'},
+        showlegend = False,
+        polar = dict(radialaxis=dict(visible=False), angularaxis=dict(tickvals=gyroTicks)),
+        )
+
+    return fig
+
+def plotlyVPhasePlot(vPhases):
+    """
+    returns a DASH object for use directly in dash app
+    vPhase is an array of velocity phases
+    """
+
+    fig = go.Figure()
+    for i in range(len(vPhases)):
+        fig.add_trace(go.Scatterpolar(
+                r = np.array([0.0,1.0]),
+                theta = np.array([vPhases[i],vPhases[i]]),
+                mode = 'lines+markers',
+                marker={'symbol':"square", 'size':16},
+                name = '{:0.1f}'.format(vPhases[i]),
+                text=['{:0.1f}'.format(vPhases[i])],
+                textposition="bottom center",
+                #line_color= px.colors.qualitative.Dark2[0],
+                line={'width':7},
+                ))
+
+
+
+    fig.add_annotation(x=0.2, y=0.5,
+                text="V||",
+                font=dict(size=16),
+                showarrow=False,
+                )
+
+    fig.update_annotations(font_size=16)
+
+    fig.update_layout(
+        title={'text': "Velocity Phase Angles",'y':0.94,'x':0.5,'xanchor': 'center','yanchor': 'top'},
+        showlegend = False,
+        polar = dict(
+            sector = [0,90],
+            radialaxis=dict(title=dict(text="V\u22A5",font=dict(size=16))),
+            #angularaxis=dict(title=dict(text='$V_{||}$',font=dict(size=24)))
+            ),
+            )
+    return fig
+
+
+def plotlyVSlicePlot(m,c,T0,vSlices,v):
+    """
+    returns a DASH object for use directly in dash app
+    m is mass [eV]
+    c is speed of light [m/s]
+    T0 is temperature [eV]
+    vSlices is slice velocities [m/s]
+    v is all velocities in distribution scan (ie vScan) [m/s]
+    """
+
+    #generate the (here maxwellian) PDF
+    pdf = lambda x: (m/c**2) / (T0) * np.exp(-(m/c**2 * x**2) / (2*T0) )
+    v_pdf = v * pdf(v)
+    vSlice_pdf = vSlices * pdf(vSlices)
+
+
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=v, y=v_pdf,
+                        mode='lines',
+                        line={'width':6},
+                        name='Maxwellian PDF'))
+
+    fig.add_trace(go.Scatter(x=vSlices, y=vSlice_pdf,
+                        mode='markers',
+                        marker={'symbol':"square", 'size':16},
+                        name='Slices'))
+
+
+    fig.update_layout(
+        title="Velocity Distribution (vSlices)",
+        yaxis= dict(showticklabels=False),
+        xaxis_title="Velocity",
+        font=dict(size=18),
+        )
+
+    return fig

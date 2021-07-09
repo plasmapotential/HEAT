@@ -223,7 +223,6 @@ class tools:
         y = r*np.sin(phi)
         return x,y,z
 
-
     def signedVolume(self,a,b,c,d):
         """
         Calculates signed volume
@@ -296,6 +295,61 @@ class tools:
             log.info("PVpython subprocess complete")
         return
 
+
+    def intersectTestParallelMT(self, i):
+        """
+        Intersection uses adapted version of Moller-Trumbore Algorithm:
+        Möller, Tomas; Trumbore, Ben (1997). "Fast, Minimum Storage Ray-Triangle Intersection".
+           Journal of Graphics Tools. 2: 21–28. doi:10.1080/10867651.1997.10487468.
+
+        i is index of parallel run from multiprocessing
+
+        q1 and q2 are start/end points of trace
+        p1,p2,p3 are points of potential intersection faces
+
+        """
+        #Filter by psi
+        if self.psiFilterSwitch == True:
+            use = np.where(self.psiMask[:,i] == 1)[0]
+        else:
+            use = np.arange(len(self.p1))
+        Nt = len(use)
+
+        #Perform Intersection Test
+        D = self.D[i] / np.linalg.norm(self.D, axis=1)[i]
+        eps = 0.0000001
+        h = np.cross(D, self.E2[use])
+        a = np.sum(self.E1[use]*h, axis=1)
+        test1 = np.logical_and( a>-eps, a<eps) #ray parallel to triangle
+        f=1.0/a
+        s = self.q1[i] - self.p1[use]
+        u = f * np.sum(s*h, axis=1)
+        test2 = np.logical_or(u<0.0, u>1.0) #ray inside triangle
+        q = np.cross(s,self.E1[use])
+        v = f*np.sum(D*q, axis=1)
+        test3 =  np.logical_or(v<0.0, (u+v)>1.0) #ray inside triangle
+        l = f*np.sum(self.E2[use]*q, axis=1)
+        test4 = np.logical_or(l<0.0, l>self.Dmag[i]) #ray long enough to intersect triangle
+        if np.sum(~np.any([test1,test2,test3,test4], axis=0))>0:
+            result = 1
+        else:
+            result = 0
+
+        #print which face we intersect with if ptIdx is this i
+        if self.ptIdx is not None:
+            if self.ptIdx == i:
+                #we assume first intersection in this array is the intersection
+                targetIdx = np.where(np.any([test1,test2,test3,test4], axis=0)==False)[0]
+                if len(targetIdx)>0:
+                    self.targetIdx = targetIdx
+                    print("Found ptIdx's intersection target vertices:")
+                    print(self.p1[self.targetIdx])
+                    print(self.p2[self.targetIdx])
+                    print(self.p3[self.targetIdx])
+
+        return result
+
+
     def intersectTestParallel(self, i):
         """
         Intersection test that does not check for self intersections
@@ -305,7 +359,7 @@ class tools:
         q1 and q2 are start/end points of trace
         p1,p2,p3 are points of potential intersection faces
 
-        using line + triangle intersection rule
+        using Signed Volume line + triangle intersection rule
         """
         #Filter by psi
         if self.psiFilterSwitch == True:

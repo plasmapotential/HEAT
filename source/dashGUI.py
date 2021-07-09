@@ -1791,7 +1791,11 @@ def velocityFromFile(className):
     )
 
 #Load GYRO button connect
-@app.callback([Output('hiddenDivGyro', 'children')],
+@app.callback([Output('hiddenDivGyro', 'children'),
+               Output('gyroPhasePlot', 'children'),
+               Output('vPhasePlot', 'children'),
+               Output('vSlicePlot', 'children'),
+               ],
               [Input('loadGYRO', 'n_clicks')],
               [State('N_gyroSteps', 'value'),
                State('N_gyroPhase', 'value'),
@@ -1812,7 +1816,13 @@ def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
         raise PreventUpdate
     gui.getGyroInputs(N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
                       N_vPhase, N_vSlice, ionFrac)
-    return [html.Label("Loaded Gyro Orbit Data into HEAT", style={'color':'#f5d142'})]
+    gyroPhaseFig = gyroPhasePlots(update=True)
+    vPhaseFig = vPhasePlots(update=True)
+    vSliceFig = vSlicePlots(update=True)
+    return [html.Label("Loaded Gyro Orbit Data into HEAT", style={'color':'#f5d142'}),
+            gyroPhaseFig,
+            vPhaseFig,
+            vSliceFig]
 
 
 
@@ -2528,7 +2538,31 @@ def outputChildren():
                     html.Div(children=OFTprobePlots(update=False), id="OFTprobePlot"),
                     ],
                 className="wideBoxDarkColumn",
-            )
+            ),
+            #gyroPhase plot
+            html.Div(
+                children=[
+                    html.H6("HEAT gyroPhase angles (load gyro settings for plot):"),
+                    html.Div(children=gyroPhasePlots(update=False), id="gyroPhasePlot"),
+                    ],
+                className="wideBoxDarkColumn",
+            ),
+            #vPhase plot
+            html.Div(
+                children=[
+                    html.H6("HEAT vPhase angles (run HEAT for plot):"),
+                    html.Div(children=vPhasePlots(update=False), id="vPhasePlot"),
+                    ],
+                className="wideBoxDarkColumn",
+            ),
+            #vSlice plot
+            html.Div(
+                children=[
+                    html.H6("HEAT vSlices (run HEAT for plot):"),
+                    html.Div(children=vSlicePlots(update=False), id="vSlicePlot"),
+                    ],
+                className="wideBoxDarkColumn",
+            ),
             ],
         className="wideBoxDark",
         )
@@ -2668,7 +2702,86 @@ def OFTprobePlots(update=False,x=None,y=None,z=None):
             )
 
 
+def gyroPhasePlots(update=False):
+    """
+    div for gyro orbit phase angle plot
 
+    if update is False, just return an empty div, so that nothing happens on
+    page load.  If update=True, get qDivs and update the plot.
+
+    This is called at the end of a HEAT run (runHEAT callback) button click
+    """
+    if update==True:
+        fig = gui.gyroPhasePlot()
+
+        return html.Div(
+            className="plotBox",
+            children=[
+                dcc.Graph(id="", figure=fig),
+                ],
+                )
+    else:
+
+        return html.Div(
+            children=[
+                html.Label("Run gyro orbit calculation to get plot", style={'color':'#52caeb'})
+                ],
+            className="gfileBox"
+            )
+
+def vPhasePlots(update=False):
+    """
+    div for gyro orbit velocity phase angle plot
+
+    if update is False, just return an empty div, so that nothing happens on
+    page load.  If update=True, get qDivs and update the plot.
+
+    This is called at the end of a HEAT run (runHEAT callback) button click
+    """
+    if update==True:
+        fig = gui.vPhasePlot()
+
+        return html.Div(
+            className="plotBox",
+            children=[
+                dcc.Graph(id="", figure=fig),
+                ],
+                )
+    else:
+
+        return html.Div(
+            children=[
+                html.Label("Run gyro orbit calculation to get plot", style={'color':'#52caeb'})
+                ],
+            className="gfileBox"
+            )
+
+def vSlicePlots(update=False):
+    """
+    div for gyro orbit velocity slice / distribution plot
+
+    if update is False, just return an empty div, so that nothing happens on
+    page load.  If update=True, get qDivs and update the plot.
+
+    This is called at the end of a HEAT run (runHEAT callback) button click
+    """
+    if update==True:
+        fig = gui.vSlicePlot()
+
+        return html.Div(
+            className="plotBox",
+            children=[
+                dcc.Graph(id="", figure=fig),
+                ],
+                )
+    else:
+
+        return html.Div(
+            children=[
+                html.Label("Run gyro orbit calculation to get plot", style={'color':'#52caeb'})
+                ],
+            className="gfileBox"
+            )
 
 
 

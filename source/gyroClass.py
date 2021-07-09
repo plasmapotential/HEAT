@@ -136,9 +136,11 @@ class GYRO:
 
         return
 
-    def setupVelocities(self):
+    def setupVelocities(self, N):
         """
         sets up velocities based upon vMode input from GUI
+
+        N is the number of source mesh elements (ie len(PFC.centers) )
 
         len(self.t1) is number of points in divertor we are calculating HF on
         """
@@ -148,11 +150,11 @@ class GYRO:
         if self.vMode == 'single':
             print("Gyro orbit calculation from single plasma temperature")
             log.info("Gyro orbit calculation from single plasma temperature")
-            self.T0 = np.ones((len(self.sourceCenters)))*self.gyroT_eV
+            self.T0 = np.ones((N))*self.gyroT_eV
             #get average velocity for each temperature point
             self.vThermal = self.temp2thermalVelocity(self.T0)
             #set upper bound of v*f(v) (note that this cuts off high energy particles)
-            self.vMax = 4 * self.vThermal
+            self.vMax = 5 * self.vThermal
             #get 100 points to initialize functional form of f(v) (note this is a 2D matrix cause vMax is 2D)
             self.vScan = np.linspace(0,self.vMax,100).T
             #get velocity slices for each T0
@@ -338,31 +340,32 @@ class GYRO:
             print("Each line segment length ~ {:f} [m]".format(magP))
         return
 
-    def gyroTraceParallel(self, i):
+    def gyroTraceParallel(self, i, mode='MT'):
         """
         parallelized gyro trace.  called by multiprocessing.pool.map()
 
         i is index of parallel run from multiprocessing
-
-        p0 and p1 are start/end points of field line trace
 
         writes helical trace to self.helixTrace[i] in 2D matrix format:
             columns = X,Y,Z
             rows = steps up helical trace
 
         also updates self.lastPhase for use in next iteration step
+
+        mode options are:
+        -Signed Volume Loop: 'SigVolLoop'
+        -Signed Volume Matrix:  'SigVolMat'
+        -Moller-Trumbore Algorithm: 'MT'
         """
-        t1 = time.time()
         #vector
         delP = self.p1[i] - self.p0[i]
         #magnitude
         magP = np.sqrt(delP[0]**2 + delP[1]**2 + delP[2]**2)
         #time it takes to transit line segment
-        delta_t = magP / (self.vParallelMC[i])
+        delta_t = magP / (self.vParallelMC[self.GYRO_HLXmap][i])
         #Number of steps in line segment
-        Tsample = self.TGyro[i] / self.N_gyroSteps
+        Tsample = self.TGyro[self.GYRO_HLXmap][i] / self.N_gyroSteps
         Nsteps = int(delta_t / Tsample)
-
         #length (in time) along guiding center
         t = np.linspace(0,delta_t,Nsteps+1)
         #guiding center location
@@ -383,8 +386,11 @@ class GYRO:
         w = w / np.sqrt(w.dot(w))
         xfm = np.vstack([u,v,w]).T
         #get helix path along (proxy) z axis reference frame
-        x_helix = self.rGyroMC[i]*np.cos(self.omegaGyro[i]*t + self.lastPhase[i])
-        y_helix = self.rGyroMC[i]*np.sin(self.omegaGyro[i]*t + self.lastPhase[i])
+        rGyro = self.rGyroMC[self.GYRO_HLXmap][i]
+        omega = self.omegaGyro[self.GYRO_HLXmap][i]
+        theta = self.lastPhase[self.GYRO_HLXmap][i]
+        x_helix = rGyro*np.cos(omega*t + theta)
+        y_helix = rGyro*np.sin(omega*t + theta)
         z_helix = np.zeros((len(t)))
         #perform rotation to field line reference frame
         helix = np.vstack([x_helix,y_helix,z_helix]).T
@@ -402,24 +408,7 @@ class GYRO:
         helix_rot[:,2] += w[2]*0.0003
 
         #update gyroPhase variable so next iteration starts here
-        lastPhase = self.omegaGyro[i]*t[-1] + self.lastPhase[i]
-
-        #print the trace for a specific index
-        if self.traceIndex2 is not None:
-            if self.traceIndex2 == i:
-                #print("Saving Index data to CSV and VTK formats")
-                #save data to csv format
-                head = 'X[mm],Y[mm],Z[mm]'
-                np.savetxt(self.controlfilePath+'helix{:d}.csv'.format(self.N_GCdeg), helix_rot*1000.0, delimiter=',', header=head)
-                #save data to vtk format
-                tools.createVTKOutput(self.controlfilePath+'helix{:d}.csv'.format(self.N_GCdeg),
-                                        'trace', 'traceHelix{:d}'.format(self.N_GCdeg),verbose=False)
-                #guiding center
-                #np.savetxt(self.controlfilePath+'GC{:d}.csv'.format(self.N_GCdeg), arrGC*1000.0, delimiter=',', header=head)
-                #save data to vtk format
-                #tools.createVTKOutput(self.controlfilePath+'GC{:d}.csv'.format(self.N_GCdeg),
-                #                        'trace', 'traceGC{:d}'.format(self.N_GCdeg),verbose=False)
-
+        lastPhase = omega*t[-1] + theta
 
         #=== intersection checking ===
         q1 = helix_rot[:-1,:]
@@ -427,30 +416,30 @@ class GYRO:
 
         #Filter by psi
         if self.psiFilterSwitch == True:
-            use = np.where(self.psiMask[:,self.indexMap[i]] == 1)[0]
+            use = np.where(self.psiMask[:,self.GYRO_HLXmap[i]] == 1)[0]
         else:
             use = np.arange(len(self.PFC_t1))
         Nt = len(use)
 
+        t0 = time.time()
         #using full array (no for loop)
-        RAMlimit = False
-        if RAMlimit == False:
+        if mode == 'SigVolMat':
             q13D = np.repeat(q1[:,np.newaxis], Nt, axis=1)
             q23D = np.repeat(q2[:,np.newaxis], Nt, axis=1)
+
             sign1 = np.sign(tools.signedVolume2(q13D,self.PFC_t1,self.PFC_t2,self.PFC_t3,ax=2))
             sign2 = np.sign(tools.signedVolume2(q23D,self.PFC_t1,self.PFC_t2,self.PFC_t3,ax=2))
             sign3 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t1,self.PFC_t2,ax=2))
             sign4 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t2,self.PFC_t3,ax=2))
             sign5 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t3,self.PFC_t1,ax=2))
+
             test1 = (sign1 != sign2)
             test2 = np.logical_and(sign3==sign4,sign3==sign5)
-            test3 = np.logical_and(test1,test2)
             loc = np.where(np.logical_and(test1,test2))
 
             #result=1 if we intersected, otherwise NaN
-            if np.sum(np.logical_and(test1,test2)) > 0:
+            if np.sum(loc) > 0:
                 #only take first index (ie first intersection location)
-                loc = np.where(np.logical_and(test1,test2))
                 loc = loc[0][0],loc[1][0]
                 index = use[loc[1]]
                 #if self.traceIndex2 == i:
@@ -463,7 +452,7 @@ class GYRO:
                 index = np.NaN
                 hdotn = np.NaN
         #using loop
-        else:
+        elif mode=='SigVolLoop':
             #loop thru each step of helical path looking for intersections
             for j in range(len(helix_rot)-1):
                 #Perform Intersection Test
@@ -493,8 +482,68 @@ class GYRO:
                     index = np.NaN
                     hdotn = np.NaN
 
-        print("TIME: {:f}".format(time.time() - t1))
-        return lastPhase, index, hdotn
+        # Intersection check using adapted version of Moller-Trumbore Algorithm:
+        # Möller, Tomas; Trumbore, Ben (1997). "Fast, Minimum Storage Ray-Triangle Intersection".
+        #      Journal of Graphics Tools. 2: 21–28. doi:10.1080/10867651.1997.10487468.
+        else:
+            E1 = (self.PFC_t2 - self.PFC_t1)
+            E2 = (self.PFC_t3 - self.PFC_t1)
+            D = (q2-q1)
+            Dmag = np.linalg.norm(D, axis=1)
+            eps = 0.0000001
+            for j in range(len(helix_rot)-1):
+                D[j] = D[j] / np.linalg.norm(D, axis=1)[j]
+                h = np.cross(D[j], E2)
+                a = np.sum(E1*h, axis=1)
+                test1 = np.logical_and( a>-eps, a<eps) #ray parallel to triangle
+                #test1 = a<eps #ray parallel to triangle
+                f=1.0/a
+                s = q1[j] - self.PFC_t1
+                u = f * np.sum(s*h, axis=1)
+                test2 = np.logical_or(u<0.0, u>1.0) #ray inside triangle
+                q = np.cross(s,E1)
+                v = f*np.sum(D[j]*q, axis=1)
+                test3 =  np.logical_or(v<0.0, (u+v)>1.0) #ray inside triangle
+                l = f*np.sum(E2*q, axis=1)
+                test4 = np.logical_or(l<0.0, l>Dmag[j]) #ray long enough to intersect triangle
+                if np.sum(~np.any([test1,test2,test3,test4], axis=0))>0:
+                    #we assume first intersection in this array is the intersection
+                    PFC_index = np.where(np.any([test1,test2,test3,test4], axis=0)==False)[0][0]
+                    #map this index (of self.PFC_tX) back to global index (of self.tX)
+                    index = self.PFCintersectMap[PFC_index]
+                    #gyro trace incident angle:
+                    vec = (q2[j] - q1[j]) / np.linalg.norm(q2[j]-q1[j])
+                    hdotn = np.dot(self.intersectNorms[index],vec)
+                    break
+                else:
+                    PFC_index = np.NaN
+                    index = np.NaN
+                    hdotn = np.NaN
+
+
+        #print the trace for a specific index
+        if self.traceIndex2 is not None:
+            if self.traceIndex2 == i:
+                #print("Saving Index data to CSV and VTK formats")
+                #save data to csv format
+                head = 'X[mm],Y[mm],Z[mm]'
+                np.savetxt(self.controlfilePath+'helix{:d}.csv'.format(self.N_GCdeg), helix_rot*1000.0, delimiter=',', header=head)
+                #save data to vtk format
+                tools.createVTKOutput(self.controlfilePath+'helix{:d}.csv'.format(self.N_GCdeg),
+                                        'trace', 'traceHelix{:d}'.format(self.N_GCdeg),verbose=False)
+                #guiding center
+                #np.savetxt(self.controlfilePath+'GC{:d}.csv'.format(self.N_GCdeg), arrGC*1000.0, delimiter=',', header=head)
+                #save data to vtk format
+                #tools.createVTKOutput(self.controlfilePath+'GC{:d}.csv'.format(self.N_GCdeg),
+                #                        'trace', 'traceGC{:d}'.format(self.N_GCdeg),verbose=False)
+
+                print("Intersection Index: {:f}".format(index))
+                print("PFC Index: {:f}".format(PFC_index))
+
+
+
+        t1 = time.time() - t0
+        return lastPhase, index, hdotn, t1
 
     def multipleGyroTrace(self):
         """
@@ -510,54 +559,59 @@ class GYRO:
         self.helixTrace = [None] * len(self.p0)
         N = len(self.p1)
         #Prepare helical trace across multiple cores
-        Ncores = multiprocessing.cpu_count() -2 #reserve 2 cores for overhead
+        Ncores = multiprocessing.cpu_count() - 2 #reserve 1 core for overhead
         print('Initializing parallel helix trace across {:d} cores'.format(Ncores))
         log.info('Initializing parallel helix trace across {:d} cores'.format(Ncores))
         #each worker receives a single start and end point (p0 and p1),
         #corresponding to one trace from the MAFOT structure output.
         print('Spawning tasks to workers')
         log.info('Spawning tasks to workers')
-#OLD METHOD
-#        #Do this try clause to kill any zombie threads that don't terminate
-#        try:
-#            pool = multiprocessing.Pool(Ncores)
-#            output = np.asarray(pool.map(self.gyroTraceParallel, np.arange(N)))
-#            self.lastPhase = output[:,0]
-#            intersectRecord = output[:,1]
-#        finally:
-#            pool.close()
-#            pool.join()
-#            del pool
+        #multiprocessing with normal methods
+        #Do this try clause to kill any zombie threads that don't terminate
+        try:
+            pool = multiprocessing.Pool(Ncores)
+            output = np.asarray(pool.map(self.gyroTraceParallel, np.arange(N)))
+        finally:
+            pool.close()
+            pool.join()
+            del pool
 
         #multiprocessing with status bar (equiv to multiprocessing.Pool.map())
-        print("Multiprocessing gyro trace:")
-        output = process_map(self.gyroTraceParallel, range(N), max_workers=Ncores, chunksize=1)
-        output = np.asarray(output)
+#        print("Multiprocessing gyro trace:")
+#        output = process_map(self.gyroTraceParallel, range(N), max_workers=Ncores, chunksize=1)
+#        output = np.asarray(output)
 
         intersectRecord = output[:,1]
-        use = np.where(np.isnan(intersectRecord)==True)[0]
-        self.lastPhase = output[:,0][use]
+#        use = np.where(np.isnan(intersectRecord)==True)[0]
+#        self.lastPhase = output[:,0][use]
+        self.lastPhase[self.GYRO_HLXmap] = output[:,0]
+        #uncomment for gyro trace incident angle:
         hdotn = output[:,2]
+
+        #uncomment for avg time / calc
+        print("Intersection Calc. Avg. time = {:f} [s]".format(np.sum(output[:,3]) / N))
+        log.info("Intersection Calc. Avg. time = {:f} [s]".format(np.sum(output[:,3]) / N))
         print('Parallel helix trace complete')
         log.info('Parallel helix trace complete')
         return intersectRecord, hdotn
 
 
-    def writeIntersectRecord(self, gyroPhase, vPhase, vSlice, file, idx):
+    def writeIntersectRecord(self, gyroPhase, vPhase, vSlice, faces, file):
         """
         writes intersectRecord to CSV file
 
         1 file for each gyroPhase, vPhase, vSlice
         """
+
         print("Writing out intersectRecords")
         log.info("Writing out intersectRecords")
         #write the velocities for this run to a comment in file
         f = open(file, 'w')
         f.write('# gyroPhase: {:f} [radians]\n'.format(self.gyroPhases[gyroPhase]))
         f.write('# vPhase: {:f} [radians]\n'.format(self.vPhases[vPhase]))
-        rec = self.intersectRecord[gyroPhase,vPhase,vSlice,:][idx]
+        rec = self.intersectRecord[gyroPhase,vPhase,vSlice,:]
         data = {
-                'face': pd.Series(np.arange(len(rec))),
+                'face': pd.Series(faces),
                 'intersectFace': pd.Series(rec),
                 'vPerp[m/s]': pd.Series(self.vPerpMC),
                 'vParallel[m/s]': pd.Series(self.vParallelMC),

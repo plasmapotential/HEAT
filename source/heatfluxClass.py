@@ -932,14 +932,15 @@ class heatFlux:
         scale2circ is a boolean.  If true, scales power by the toroidal
         slice width.  If false, returns without scaling
         """
-        xyz = PFC.centers
-        R,Z,phi = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
-        deltaPhi = phi.max() - phi.min()
+#        xyz = PFC.centers
+#        R,Z,phi = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
+#        deltaPhi = phi.max() - phi.min()
+        deltaPhi = PFC.phiMax - PFC.phiMin
         if verbose==True:
-            print('phiMin = {:f}'.format(phi.min()))
-            print('phiMax = {:f}'.format(phi.max()))
-            log.info('phiMin = {:f}'.format(phi.min()))
-            log.info('phiMax = {:f}'.format(phi.max()))
+            print('phiMin = {:f}'.format(PFC.phiMin))
+            print('phiMax = {:f}'.format(PFC.phiMax))
+            log.info('phiMin = {:f}'.format(PFC.phiMin))
+            log.info('phiMax = {:f}'.format(PFC.phiMax))
 
         if mode=='gyro':
             #sum = np.sum(PFC.qGyro * PFC.areas )
@@ -952,7 +953,7 @@ class heatFlux:
 
         return sum
 
-    def gyroHF(self, GYRO, PFC, MHD):
+    def gyroHF(self, GYRO, PFC):
         """
         redistributes power calculated using the optical approximation according
         to gyro orbits
@@ -963,14 +964,11 @@ class heatFlux:
         """
         print("Calculating gyro orbit heat loads")
         log.info("Calculating gyro orbit heat loads")
-
-        use = np.where(np.array(GYRO.targetNames) == PFC.name)[0]
-
         #get q|| for this PFC surface
-        q = self.getHFprofile(PFC)
+        q = PFC.q[PFC.PFC_GYROmap]
         #get divertor HF
-        qDiv = self.q_div(PFC, MHD, q)
-        Pdiv = qDiv * PFC.areas
+        qDiv = PFC.qDiv[PFC.PFC_GYROmap] / self.elecFrac
+        Pdiv = qDiv * PFC.areas[PFC.PFC_GYROmap]
         #Get fractional multipliers for each helical trace
         gyroFrac = 1.0/GYRO.N_gyroPhase
         vPhaseFrac = 1.0/GYRO.N_vPhase
@@ -979,19 +977,18 @@ class heatFlux:
         #energies = 1.0/2.0 * GYRO.mass_eV * GYRO.vSlices**2
         energyTotal = GYRO.energySlices.sum(axis=1)
         vSliceFrac = np.zeros((len(q),GYRO.N_vSlice))
+
         for vSlice in range(GYRO.N_vSlice):
             vSliceFrac[:,vSlice] = GYRO.energySlices[:,vSlice] / energyTotal
 
         #qMatrix = np.zeros((GYRO.N_gyroPhase,GYRO.N_vPhase,GYRO.N_vSlice,len(q)))
-        Pgyro = np.zeros((len(GYRO.intersectCenters)))
-        PNaN = np.zeros((len(GYRO.intersectCenters)))
+        Pgyro = np.zeros((GYRO.Nt))
+        PNaN = 0.0
         #loop through intersect record and redistribute power using multipliers
         for gyroPhase in range(GYRO.N_gyroPhase):
             for vPhase in range(GYRO.N_vPhase):
                 for vSlice in range(GYRO.N_vSlice):
-
-                    #qGyroMatrix[gyroPhase,vPhase,vSlice,:] = q*ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[:,vSlice]
-                    idx = GYRO.intersectRecord[gyroPhase,vPhase,vSlice,use]
+                    idx = GYRO.intersectRecord[gyroPhase,vPhase,vSlice,PFC.CADHOT_GYROmap]
                     isNan = np.where(np.isnan(idx)==True)[0] #include NaNs (NaNs = no intersection)
                     notNan = np.where(np.isnan(idx)==False)[0] #dont include NaNs (NaNs = no intersection)
                     idx1 = idx[~np.isnan(idx)] #indices we map power to
@@ -1001,17 +998,18 @@ class heatFlux:
                     #qGyro[idx1] += q[notNan]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[:,vSlice][notNan]
                     if len(notNan)>0:
                         Pgyro[idx1] += Pdiv[notNan]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[notNan,vSlice]
+                        #Pgyro[idx1] += Pdiv[notNan]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[notNan,vSlice]
                         #qGyro[idx1] += q[notNan]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[notNan,vSlice]
                         #multiply by hdotn: incident angle of helix * face normal
                         #qGyro[idx1] *= np.abs(GYRO.hdotn[gyroPhase,vPhase,vSlice,idx1])
                     if len(isNan)>0:
-                        pass
-                        PNaN += Pdiv[isNan]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[isNan,vSlice]
+                        PNaN += np.sum(Pdiv[isNan]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[isNan,vSlice])
 
         #print("\nTEST2")
-        #print(Pgyro[437])
-        #print(Pdiv[437])
-        #print(vSliceFrac[437,:])
+        #print(GYRO.intersectRecord[0,0,0,1711])
+        #print(Pgyro[1711])
+
+
 
         GYRO.gyroPowMatrix += Pgyro
         GYRO.gyroNanPower += PNaN
