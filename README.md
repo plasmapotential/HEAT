@@ -55,6 +55,9 @@ Example output of PFC tile temperature for various strike points sweep frequenci
 Example output for limited discharges:
 ![Alt text](limiter.gif "Example output of EQ, HF, T, video")
 
+Example output for ion gyro orbit tracing:
+![Alt text](gyroTrace.png "Example ion gyro orbit trajectory")
+
 HEAT Dash / plotly GUI:
 ![Alt text](gui1.png "HEAT DASH GUI")
 ![Alt text](gui2.png "HEAT DASH GUI")
