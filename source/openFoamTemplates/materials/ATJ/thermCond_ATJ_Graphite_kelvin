@@ -1,0 +1,11 @@
+//Thermal conductivity in units of [W m^-1 K^-1]
+//ATJ graphite as used in D3D
+(
+273 96
+373 94
+473 82
+823 57
+1473 40
+1973 32
+2473 28
+)

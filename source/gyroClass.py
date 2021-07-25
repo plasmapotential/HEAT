@@ -55,15 +55,37 @@ class GYRO:
         """
         Set variable types for the stuff that isnt a string from the input file
         """
-        self.N_gyroSteps = int(self.N_gyroSteps)
-        self.gyroDeg = int(self.gyroDeg)
-        self.gyroT_eV = float(self.gyroT_eV)
-        self.N_vSlice = int(self.N_vSlice)
-        self.N_vPhase = int(self.N_vPhase)
-        self.N_gyroPhase = int(self.N_gyroPhase)
-        self.ionMassAMU = float(self.ionMassAMU)
-        self.vMode = self.vMode
-        self.ionFrac = float(self.ionFrac)
+        integers = [
+                    'N_gyroSteps',
+                    'gyroDeg',
+                    'N_vSlice',
+                    'N_vPhase',
+                    'N_gyroPhase',
+                    ]
+        floats = [
+                  'ionFrac',
+                  'gyroT_eV',
+                  'ionMassAMU',
+                ]
+
+        for var in integers:
+            if (getattr(self, var) is not None) and (~np.isnan(float(getattr(self, var)))):
+                try:
+                    setattr(self, var, int(getattr(self, var)))
+                except:
+                    print("Error with input file var "+var+".  Perhaps you have invalid input values?")
+                    log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
+        for var in floats:
+            if var is not None:
+                if (getattr(self, var) is not None) and (~np.isnan(float(getattr(self, var)))):
+                    try:
+                        setattr(self, var, float(getattr(self, var)))
+                    except:
+                        print("Error with input file var "+var+".  Perhaps you have invalid input values?")
+                        log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
+
+
+
         return
 
     def setupConstants(self, ionMassAMU=2.014):
@@ -94,7 +116,7 @@ class GYRO:
 
         can also be found with: d/dv( v*f(v) ) = 0
         """
-        return np.sqrt(T_eV/(self.mass_eV/self.c**2))
+        return np.sqrt(2.0*T_eV/(self.mass_eV/self.c**2))
 
 
     def setupFreqs(self, B):

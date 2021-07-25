@@ -9,6 +9,7 @@ import os
 import shutil
 import logging
 import subprocess
+import psutil
 log = logging.getLogger(__name__)
 
 class tools:
@@ -73,7 +74,12 @@ class tools:
         #Dynamically initialize class variables
         for i in range(len(data)):
             if data['Var'][i] in obj.allowed_vars:
-                setattr(obj, data['Var'][i], data['Val'][i])
+                #if there was nothing for this var in input, skip
+                #this works on all nan values
+                if (data['Val'][i] != data['Val'][i]):
+                    pass
+                else:
+                    setattr(obj, data['Var'][i], data['Val'][i])
             else:
                 pass
                 #print("Caution! Unrecognized variable in input file: "+data['Var'][i])
@@ -89,14 +95,17 @@ class tools:
         import MHDClass
         import heatfluxClass
         import openFOAMclass
+        import gyroClass
         MHD = MHDClass.MHD(rootDir, dataPath)
         CAD = CADClass.CAD(rootDir, dataPath)
         HF = heatfluxClass.heatFlux(rootDir, dataPath)
         OF = openFOAMclass.OpenFOAM(rootDir, dataPath)
+        GYRO = gyroClass.GYRO(rootDir, dataPath)
         MHD.allowed_class_vars()
         CAD.allowed_class_vars()
         HF.allowed_class_vars()
         OF.allowed_class_vars()
+        GYRO.allowed_class_vars()
 
         if path[-1] == '/':
             file = path + 'HEATinput.csv'
@@ -110,7 +119,10 @@ class tools:
             f.write("#=============================================================\n")
             for var in CAD.allowed_vars:
                 if var in data:
-                    f.write(var + ', ' + str(data[var]) + '\n')
+                    if (data[var] == None) or (data[var] == 'None'):
+                        f.write(var + ', \n')
+                    else:
+                        f.write(var + ', ' + str(data[var]) + '\n')
                 else:
                     f.write(var + ', \n')
             f.write("#=============================================================\n")
@@ -118,23 +130,45 @@ class tools:
             f.write("#=============================================================\n")
             for var in MHD.allowed_vars:
                 if var in data:
-                    f.write(var + ', ' + str(data[var]) + '\n')
+                    if (data[var] == None) or (data[var] == 'None'):
+                        f.write(var + ', \n')
+                    else:
+                        f.write(var + ', ' + str(data[var]) + '\n')
                 else:
                     f.write(var + ', \n')
             f.write("#=============================================================\n")
-            f.write("#                HF Variables\n")
+            f.write("#                Optical HF Variables\n")
             f.write("#=============================================================\n")
             for var in HF.allowed_vars:
                 if var in data:
-                    f.write(var + ', ' + str(data[var]) + '\n')
+                    if (data[var] == None) or (data[var] == 'None'):
+                        f.write(var + ', \n')
+                    else:
+                        f.write(var + ', ' + str(data[var]) + '\n')
+                else:
+                    f.write(var + ', \n')
+            f.write("#=============================================================\n")
+            f.write("#                Ion Gyro Orbit HF Variables\n")
+            f.write("#=============================================================\n")
+            for var in GYRO.allowed_vars:
+                if var in data:
+                    if (data[var] == None) or (data[var] == 'None'):
+                        f.write(var + ', \n')
+                    else:
+                        f.write(var + ', ' + str(data[var]) + '\n')
                 else:
                     f.write(var + ', \n')
             f.write("#=============================================================\n")
             f.write("#                OpenFOAM Variables\n")
             f.write("#=============================================================\n")
+            print(data)
             for var in OF.allowed_vars:
+                print(var)
                 if var in data:
-                    f.write(var + ', ' + str(data[var]) + '\n')
+                    if (data[var] == None) or (data[var] == 'None'):
+                        f.write(var + ', \n')
+                    else:
+                        f.write(var + ', ' + str(data[var]) + '\n')
                 else:
                     f.write(var + ', \n')
 
@@ -414,7 +448,6 @@ class tools:
 
         using line + triangle intersection rule
         """
-
         q13D = np.repeat(self.q1[:,np.newaxis], self.Nt, axis=1)
         q23D = np.repeat(self.q2[:,np.newaxis], self.Nt, axis=1)
 

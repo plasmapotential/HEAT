@@ -92,8 +92,29 @@ class GUIobj():
         Select a machine and set the necessary paths
         """
         self.MachFlag = MachFlag
+        self.MHD.MachFlag = MachFlag
         self.setInitialFiles()
+        self.setHiddenInputs()
         return
+
+    def initializeEveryone(self):
+        """
+        Create objects that we can reference later on
+        """
+        self.MHD = MHDClass.MHD(self.rootDir, self.dataPath)
+        self.CAD = CADClass.CAD(self.rootDir, self.dataPath)
+        self.HF = heatfluxClass.heatFlux(self.rootDir, self.dataPath)
+        self.OF = openFOAMclass.OpenFOAM(self.rootDir, self.dataPath)
+        self.GYRO = gyroClass.GYRO(self.rootDir, self.dataPath)
+
+        #set up class variables for each object
+        self.MHD.allowed_class_vars()
+        self.CAD.allowed_class_vars()
+        self.HF.allowed_class_vars()
+        self.OF.allowed_class_vars()
+        self.GYRO.allowed_class_vars()
+        return
+
 
     def setInitialFiles(self):
         """
@@ -158,31 +179,88 @@ class GUIobj():
 
         self.OF.templateCase = self.rootDir + '/openFoamTemplates/heatFoamTemplate'
         self.OF.templateDir = self.rootDir + '/openFoamTemplates/templateDicts'
+        self.OF.materialDir = self.rootDir + '/openFoamTemplates/materials'
 
         return
 
-
-
-    def initializeEveryone(self):
+    def setHiddenInputs(self, file = None):
         """
-        Create objects that we can reference later on
+        sets up inputs based upon MachFlag that are needed for HEAT runs but
+        are not in GUI
         """
-        self.MHD = MHDClass.MHD(self.rootDir, self.dataPath)
-        self.CAD = CADClass.CAD(self.rootDir, self.dataPath)
-        self.HF = heatfluxClass.heatFlux(self.rootDir, self.dataPath)
-        self.OF = openFOAMclass.OpenFOAM(self.rootDir, self.dataPath)
-        self.GYRO = gyroClass.GYRO(self.rootDir, self.dataPath)
+        #MAFOT variables
+        self.MHD.Nphi = 1
+        self.MHD.ittLaminar = 10.0
+        self.MHD.Nswall = 1
+        self.MHD.phistart = 1 #(deg)
+        self.MHD.PlasmaResponse = 0 #(0=no,>1=yes)
+        self.MHD.Field = -1 #(-3=VMEC,-2=SIESTA,-1=gfile,M3DC1:0=Eq,1=I-coil,2=both)
+        self.MHD.target = 0 #(0=useSwall)
+        self.MHD.createPoints = 2 #(2=target)
+        self.MHD.useFilament = 0 #(0=no)
+        self.MHD.useTe_profile = 0 #(0=no)
+        self.MHD.ParticleDirection = 0 #(1=co-pass,-1=ctr-pass,0=field-lines)
+        self.MHD.ParticleCharge = 1 #(-1=electrons,>=1=ions)
+        self.MHD.Ekin = 100.0 #[keV]
+        self.MHD.Lambda = 0.1
+        self.MHD.Mass = 2
+        self.MHD.useM3DC1 = 0.0
+        self.MHD.Smin = 0.0
+        self.MHD.Smax = 5.0
+        self.MHD.phimin = 0.0
+        self.MHD.phimax = 6.28
+        self.MHD.Zmin = -5.0
+        self.MHD.Zmax = 5.0
+        self.MHD.Rmin = 0.01
+        self.MHD.Rmax = 5.0
+        self.MHD.useECcoil = 0
+        self.MHD.useIcoil = 0
+        self.MHD.useCcoil = 0
+        self.MHD.useFcoil = 0
+        self.MHD.useBcoil = 0
+        self.MHD.useBus = 0
+
+        if self.MachFlag == 'nstx':
+            self.CAD.permute_mask = True
+            self.CAD.unitConvert = 1.0
+            self.CAD.assembly_mask = True
+
+        elif self.MachFlag == 'st40':
+            self.CAD.permute_mask = False
+            self.CAD.unitConvert = 1.0
+            self.CAD.assembly_mask = False
+
+        elif self.MachFlag == 'd3d':
+            self.CAD.permute_mask = False
+            self.CAD.unitConvert = 1.0
+            self.CAD.assembly_mask = False
+
+        elif self.MachFlag == 'step':
+            self.CAD.permute_mask = False
+            self.CAD.unitConvert = 1.0
+            self.CAD.assembly_mask = False
+
+        elif self.MachFlag == 'sparc':
+            self.CAD.permute_mask = False
+            self.CAD.unitConvert = 1.0
+            self.CAD.assembly_mask = False
+
+        else:
+            print("INVALID MACHINE SELECTION!  Defaulting to NSTX-U!")
+            log.info("INVALID MACHINE SELECTION!  Defaulting to NSTX-U!")
+
         return
+
 
     def getMHDInputs(self,shot=None,tmin=None,tmax=None,nTrace=None,
-                     gFileList=None,gFileData=None,plasma3Dmask=None):
+                     gFileList=None,gFileData=None,plasma3Dmask=None,
+                     ):
         """
         Get the mhd inputs from the gui or input file
         """
-        self.MHD.allowed_class_vars()
         tools.vars2None(self.MHD)
-        self.MHD.MachFlag=self.MachFlag
         tools.read_input_file(self.MHD, infile=self.infile)
+        self.MHD.MachFlag=self.MachFlag #override input file with machine user selected
         self.MHD.setTypes()
 
         if shot is not None:
@@ -201,6 +279,7 @@ class GUIobj():
             self.MHD.plasma3Dmask = plasma3Dmask
 
         self.MHD.tree = 'EFIT02'
+
         if self.dataPath[-1]!='/':
             self.MHD.shotPath = self.dataPath + '/' + self.MHD.MachFlag +"_{:06d}".format(self.MHD.shot)
         else:
@@ -525,7 +604,7 @@ class GUIobj():
                 self.CAD.gridRes = "standard"
         return
 
-    def getCAD(self,STPfile=None,STPdata=None):
+    def getCAD(self,STPfile=None,STPdata=None, ts=None):
         """
         Loads CAD file
         """
@@ -541,12 +620,28 @@ class GUIobj():
             try:
                 os.makedirs(self.CAD.STPpath)
             except:
-                print("Did not create STPpath.  It probably exists already.")
+                print("Did not create STPpath.  It probably exists already (HEAT already ran on this machine).")
             newSTPpath = self.CAD.STPpath + STPfile
             #check to see if this STP file exists and write data to the file
             if os.path.isfile(newSTPpath) == False:
+                print("New STP file.  Writing")
                 with open(newSTPpath, 'wb') as f:
                     f.write(STPdata)
+                atime = os.stat(newSTPpath).st_atime
+                os.utime(newSTPpath, (atime, ts))
+                self.CAD.overWriteMask = True #we need to also overwrite meshes
+            else:
+                #if file was modified, overwrite
+                if ts != os.path.getmtime(newSTPpath):
+                    print("File was modified since last HEAT upload.  Overwriting...")
+                    with open(newSTPpath, 'wb') as f:
+                        f.write(STPdata)
+                    atime = os.stat(newSTPpath).st_atime
+                    os.utime(newSTPpath, (atime, ts))
+                    self.CAD.overWriteMask = True #we need to also overwrite meshes
+                else:
+                    self.CAD.overWriteMask = False #meshes are already up to date
+                    print("STP file is already in the HEAT database.  Not overwriting...")
             self.CAD.STPfile = newSTPpath
             #load STP file using FreeCAD
             self.CAD.loadSTEP()
@@ -789,6 +884,40 @@ class GUIobj():
         PFC.Bmag[:,3] = np.sqrt(PFC.Bxyz[:,0]**2+PFC.Bxyz[:,1]**2+PFC.Bxyz[:,2]**2)
         return
 
+    def BtraceMultiple(self,data,t):
+        """
+        Run a MAFOT structure trace from multiple points defined in the gui
+        """
+        data = pd.DataFrame.from_dict(data)[list (data[0].keys())]
+        data = data.rename(columns=lambda x: x.strip())
+        data = data.astype({"x[mm]": float, "y[mm]": float, "z[mm]": float, "traceDirection": int, "Length[deg]":float})
+
+        t = int(t)
+        traceDirection=data['traceDirection']
+        x = data['x[mm]'] / 1000.0
+        y = data['y[mm]'] / 1000.0
+        z = data['z[mm]'] / 1000.0
+
+        xyz = np.array([x,y,z]).T
+        controlfile = '_structCTL.dat'
+        dphi = 1.0
+
+        if self.MHD.shotPath[-1]=='/':
+            gridfile = self.MHD.shotPath + '{:06d}/struct_grid.dat'.format(t)
+            controlfilePath =  self.MHD.shotPath + '{:06d}/'.format(t)
+        else:
+            gridfile = self.MHD.shotPath + '/' + '{:06d}/struct_grid.dat'.format(t)
+            controlfilePath =  self.MHD.shotPath + '/' + '{:06d}/'.format(t)
+        structOutfile = controlfilePath + 'struct.dat'
+        for i in range(len(xyz)):
+            self.MHD.ittStruct = data['Length[deg]'][i]
+            self.MHD.writeControlFile(controlfile, t, data['traceDirection'][i], mode='struct')
+            self.MHD.writeMAFOTpointfile(xyz[i,:],gridfile)
+            self.MHD.getFieldpath(dphi, gridfile, controlfilePath, controlfile, paraview_mask=True, tag='pt{:03d}'.format(i))
+            os.remove(structOutfile)
+        return
+
+
     def Btrace(self,x,y,z,t,mapDirection, traceDeg):
         """
         Run a MAFOT structure trace from a point defined in the gui
@@ -874,11 +1003,19 @@ class GUIobj():
         """
         create a pointcloud for mesh center locations where 1=shadowed, 0=not shadowed
         """
-        #Check for intersections with MAFOT struct if it hasnt been done by HFPC already
-        #print("INTERSECTION CHECK INITIALIZED")
-        #log.info("INTERSECTION CHECK INITIALIZED")
-        #self.PFC.findShadows_structure(self.MHD,PFC,self.targetMeshes)
         PFC.write_shadow_pointcloud(PFC.centers,PFC.shadowed_mask,PFC.controlfilePath)
+        return
+
+
+    def backfacePC(self, PFC):
+        """
+        create a pointcloud for mesh center locations where 1=shadowed, 0=not shadowed
+        using the backface culling algorithm
+        """
+
+        PFC.backfaceMask = PFC.backfaceCulling(PFC.centers,PFC.norms,self.MHD,PFC.ep,PFC.powerDirection)
+        PFC.write_backface_pointcloud(PFC.centers,PFC.backfaceMask,PFC.controlfilePath)
+        return
 
     def bdotnPC(self, PFC):
         """
@@ -910,20 +1047,20 @@ class GUIobj():
         timestep
 
         runList options are:
-        Bpc         Bfield point cloud
-        psiPC       Normalized psi point cloud
-        shadowPC    shadowMask point cloud
-        NormPC      Normal Field point cloud
-        bdotnPC     bdotn poitn cloud
-        HFpc        heat flux point cloud
-        GyroPC      gyro orbit heat flux point cloud
+        Bpc             Bfield point cloud
+        psiPC           Normalized psi point cloud
+        backfacePC      backface culling point cloud
+        NormPC          Normal Field point cloud
+        bdotnPC         bdotn poitn cloud
+        HFpc            heat flux point cloud
+        GyroPC          gyro orbit heat flux point cloud
         """
         print('\n')
         print("-"*70)
         print("HEAT RUN INITIALIZED")
         log.info("HEAT RUN INITIALIZED")
         t0 = time.time()
-        allowedOptions = ['HFpc', 'shadowPC', 'bdotnPC', 'Bpc', 'psiPC', 'NormPC', 'GyroPC']
+        allowedOptions = ['HFpc', 'backfacePC', 'bdotnPC', 'Bpc', 'psiPC', 'NormPC', 'GyroPC']
         #make sure that something in runList can be run in this function, else return
         if len([i for i in runList if i in allowedOptions]) < 1:
             print("No HEAT point cloud option to run")
@@ -997,8 +1134,8 @@ class GUIobj():
                         self.psiPC(PFC)
                     if 'NormPC' in runList:
                         self.NormPC(PFC)
-                    if 'shadowPC' in runList:
-                        self.shadowPC(PFC)
+                    if 'backfacePC' in runList:
+                        self.backfacePC(PFC)
                     if 'bdotnPC' in runList:
                         self.bdotnPC(PFC)
 
@@ -1029,6 +1166,12 @@ class GUIobj():
 
             # Time Loop: gyro orbits runs after optical HF calculated
             for tIdx,t in enumerate(self.MHD.timesteps):
+                #path for this timestep
+                if self.MHD.shotPath[-1]=='/':
+                    PFC.controlfilePath = self.MHD.shotPath + '{:06d}/'.format(t) + PFC.name + '/'
+                else:
+                    PFC.controlfilePath = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/'
+                #generate index maps
                 self.prepareGyroMaps(tIdx)
                 for PFC in self.PFCs:
                     if t not in PFC.timesteps:
@@ -1055,7 +1198,7 @@ class GUIobj():
                 print("=== Last timestep's PFC arrays: Gyro ===")
                 totalPowPow = 0
                 for PFC in self.PFCs:
-                    tmpPow = self.HF.power_sum_mesh(PFC, mode='gyro', scale2circ=True, verbose=True)
+                    tmpPow = self.HF.power_sum_mesh(PFC, mode='gyro', scale2circ=False, verbose=False)
                     totalPowPow += tmpPow
                     print(PFC.name + ":\t{:.6f}".format(tmpPow))
                     log.info(PFC.name + ":\t{:.6f}".format(tmpPow))
@@ -1064,7 +1207,37 @@ class GUIobj():
                     print("PFC Max HF: {:.6f}".format(max(PFC.qGyro)))
                     log.info("PFC Max HF: {:.6f}".format(max(PFC.qGyro)))
 
+                totalPowPow = 0
+                for PFC in self.PFCs:
+                    print("=== Last timestep's PFC arrays: Optical ===")
+                    tmpPow = self.HF.power_sum_mesh(PFC, scale2circ=False, verbose=False)
+                    totalPowPow += tmpPow
+                    print(PFC.name + ":\t{:.6f}".format(tmpPow))
+                    log.info(PFC.name + ":\t{:.6f}".format(tmpPow))
+                    print("PFC array sum: {:.6f}".format(totalPowPow))
+                    log.info("PFC array sum: {:.6f}".format(totalPowPow))
 
+
+        #time/PFC loop for generating allSources heat fluxes
+        if 'GyroPC' in runList or 'HFpc' in runList:
+            for tIdx,t in enumerate(self.MHD.timesteps):
+                #path for this timestep
+                if self.MHD.shotPath[-1]=='/':
+                    PFC.controlfilePath = self.MHD.shotPath + '{:06d}/'.format(t) + PFC.name + '/'
+                else:
+                    PFC.controlfilePath = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/'
+                #set up time and equilibrium
+                PFC.t = t
+                for PFC in self.PFCs:
+                    if t not in PFC.timesteps:
+                        pass
+                    else:
+                        print("Creating allSources CSV files")
+                        R,Z,phi = tools.xyz2cyl(PFC.centers[:,0],PFC.centers[:,1],PFC.centers[:,2])
+                        if 'GyroPC' in runList:
+                            self.HF.write_heatflux_pointcloud(PFC.centers,PFC.qGyro+PFC.qDiv,PFC.controlfilePath,tag=PFC.tag,mode='all')
+                        else:
+                            self.HF.write_heatflux_pointcloud(PFC.centers,PFC.qDiv,PFC.controlfilePath,tag=PFC.tag,mode='all')
 
         # Time Loop: postprocessing
         for tIdx,t in enumerate(self.MHD.timesteps):
@@ -1089,7 +1262,7 @@ class GUIobj():
     def HF_PFC(self, PFC, tag=None):
         """
         meat and potatoes of the HF calculation.  Called in loop or by parallel
-        processes for each PFC object
+        processes for each PFC object.  Only calculates optical heat flux
         """
         #Check for intersections with MAFOT struct
         t0 = time.time()
@@ -1419,6 +1592,7 @@ class GUIobj():
         hfGyro = []
         hfAll = []
         shadow =[]
+        backface =[]
         shadowGyro = []
         bdotn = []
         psi = []
@@ -1435,17 +1609,18 @@ class GUIobj():
                 idx = names.index(PFC.name)
                 if 'HFpc' in runList:
                     hfOptical[idx]+=PFC.qDiv
+                    hfAll[idx]+=PFC.qDiv
                     #HFPC always runs shadowMask too
                     shadow[idx]+=PFC.shadowed_mask
                     shadow[idx].astype(bool)
                 elif 'GyroPC' in runList:
                     hfGyro[idx]+=PFC.qGyro
-                    hfAll[idx]+=PFC.qGyro+PFC.qDiv
+                    hfAll[idx]+=PFC.qGyro
                     shadowGyro[idx]+=PFC.gyroShadowMask
                     shadowGyro[idx].astype(bool)
-                elif 'shadowPC' in runList:
-                    shadow[idx]+=PFC.shadowed_mask
-                    shadow[idx].astype(bool)
+                elif 'backfacePC' in runList:
+                    backface[idx]+=PFC.backfaceMask
+                    backface[idx].astype(bool)
                 #some quantities cant be added (like psi)
                 #just use one mapDirection for these cases
                 else:
@@ -1454,12 +1629,13 @@ class GUIobj():
                 if 'HFpc' in runList:
                     hfOptical.append(PFC.qDiv)
                     shadow.append(PFC.shadowed_mask)
+                    hfAll.append(PFC.qDiv)
                 if 'GyroPC' in runList:
                     hfGyro.append(PFC.qGyro)
-                    hfAll.append(PFC.qGyro+PFC.qDiv)
                     shadowGyro.append(PFC.gyroShadowMask)
-                if 'shadowPC' in runList:
-                    shadow.append(PFC.shadowed_mask)
+                    hfAll[-1]+=PFC.qGyro
+                if 'backfacePC' in runList:
+                    backface.append(PFC.backfaceMask)
                 if 'bdotnPC' in runList:
                     bdotn.append(PFC.bdotn)
                 if 'psiPC' in runList:
@@ -1480,6 +1656,7 @@ class GUIobj():
         hfAllNumpy = np.array([])
         shadowNumpy = np.array([])
         shadowGyroNumpy = np.array([])
+        backfaceNumpy = np.array([])
         bdotnNumpy = np.array([])
         psiNumpy = np.array([])
         normNumpy = np.array([])
@@ -1493,6 +1670,8 @@ class GUIobj():
             shadowNumpy = np.append(shadowNumpy, arr)
         for arr in shadowGyro:
             shadowGyroNumpy = np.append(shadowGyroNumpy, arr)
+        for arr in backface:
+            backfaceNumpy = np.append(backfaceNumpy, arr)
         for arr in bdotn:
             bdotnNumpy = np.append(bdotnNumpy, arr)
         for arr in psi:
@@ -1503,12 +1682,14 @@ class GUIobj():
         if 'HFpc' in runList:
             self.HF.write_heatflux_pointcloud(centers,hfOpticalNumpy,tPath,tag)
             PFC.write_shadow_pointcloud(centers,shadowNumpy,tPath,tag)
+            self.HF.write_heatflux_pointcloud(centers,hfAllNumpy,tPath,tag,'all')
         if 'GyroPC' in runList:
             self.HF.write_heatflux_pointcloud(centers,hfGyroNumpy,tPath,tag,'gyro')
-            self.HF.write_heatflux_pointcloud(centers,hfAllNumpy,tPath,tag,'all')
             PFC.write_shadow_pointcloud(centers,shadowGyroNumpy,tPath,tag,'gyro')
         if 'shadowPC' in runList:
             PFC.write_shadow_pointcloud(centers,shadowNumpy,tPath,tag)
+        if 'backfacePC' in runList:
+            PFC.write_backface_pointcloud(centers,backfaceNumpy,tPath,tag)
         if 'bdotnPC' in runList:
             PFC.write_bdotn_pointcloud(centers,bdotnNumpy, tPath,tag)
         if 'psiPC' in runList:
@@ -1544,6 +1725,10 @@ class GUIobj():
         if 'shadowPC' in runList:
             src = tPath + 'shadowMask_optical_all.csv'
             dest = movieDir + 'shadowMask_optical_{:06d}.csv'.format(t)
+            shutil.copy(src,dest)
+        if 'backfacePC' in runList:
+            src = tPath + 'backfaceMask_all.csv'
+            dest = movieDir + 'backfaceMask_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
         if 'bdotnPC' in runList:
             src = tPath + 'bdotnPointCloud_all.csv'
@@ -1618,7 +1803,6 @@ class GUIobj():
                     'tmin':None,
                     'tmax':None,
                     'nTrace': None,
-                    'powerDirection': None,
                     'ROIGridRes': None,
                     'gridRes': None,
                     'STPfile': None,
@@ -1639,27 +1823,13 @@ class GUIobj():
                     'fracLI': None,
                     'fracLO': None,
                     'qBG' : None,
-                    'xMin': None,
-                    'xMax': None,
-                    'yMin': None,
-                    'yMax': None,
-                    'zMin': None,
-                    'zMax': None,
-                    'tMin': None,
-                    'tMax': None,
+                    'OFtMin': None,
+                    'OFtMax': None,
                     'deltaT': None,
                     'writeDeltaT': None,
-                    'xProbe': None,
-                    'yProbe': None,
-                    'zProbe': None,
                     'STLscale': None,
-                    'meshMinLevel': None,
-                    'meshMaxLevel': None,
-                    'xMid': None,
-                    'yMid': None,
-                    'zMid': None,
-                    'STLfileName': None,
-                    'STLlayerName': None,
+                    'meshMinLev': None,
+                    'meshMaxLev': None,
                     'N_gyroSteps': None,
                     'gyroDeg': None,
                     'gyroT_eV': None,
@@ -1692,11 +1862,8 @@ class GUIobj():
                     'tmin': self.MHD.tmin,
                     'tmax': self.MHD.tmax,
                     'nTrace': self.MHD.nTrace,
-                    'powerDirection': self.MHD.powerDirection,
                     'ROIGridRes': self.CAD.ROIGridRes,
                     'gridRes': self.CAD.gridRes,
-                    'STPfile': self.CAD.STPfile,
-                    'hfMode': self.HF.hfMode,
                     'lqEich': self.HF.lqEich,
                     'S': self.HF.S,
                     'lqCN': self.HF.lqCN,
@@ -1713,28 +1880,13 @@ class GUIobj():
                     'fracLI':self.HF.fracLI,
                     'fracLO':self.HF.fracLO,
                     'qBG' : self.HF.qBG,
-                    'xMin': self.OF.xMin,
-                    'xMax': self.OF.xMax,
-                    'yMin': self.OF.yMin,
-                    'yMax': self.OF.yMax,
-                    'zMin': self.OF.zMin,
-                    'zMax': self.OF.zMax,
-                    'tMin': self.OF.tMin,
-                    'tMax': self.OF.tMax,
+                    'OFtMin': self.OF.OFtMin,
+                    'OFtMax': self.OF.OFtMax,
                     'deltaT': self.OF.deltaT,
                     'writeDeltaT': self.OF.writeDeltaT,
-                    'xProbe': self.OF.xProbe,
-                    'yProbe': self.OF.yProbe,
-                    'zProbe': self.OF.zProbe,
                     'STLscale': self.OF.STLscale,
-                    'meshMinLevel': self.OF.meshMinLevel,
-                    'meshMaxLevel': self.OF.meshMaxLevel,
-                    'xMid': self.OF.xMid,
-                    'yMid': self.OF.yMid,
-                    'zMid': self.OF.zMid,
-                    'STLfileName': self.OF.STLfileName,
-                    'STLlayerName': self.OF.STLlayerName,
-                    #'OFbashrc': self.OF.OFbashrc,
+                    'meshMinLev': self.OF.meshMinLev,
+                    'meshMaxLev': self.OF.meshMaxLev,
                     'N_gyroSteps': self.GYRO.N_gyroSteps,
                     'gyroDeg': self.GYRO.gyroDeg,
                     'gyroT_eV': self.GYRO.gyroT_eV,
@@ -1742,6 +1894,7 @@ class GUIobj():
                     'N_vPhase': self.GYRO.N_vPhase,
                     'N_gyroPhase': self.GYRO.N_gyroPhase,
                     'ionMassAMU': self.GYRO.ionMassAMU,
+                    #'hfMode': self.HF.hfMode,
                     #'vMode': self.GYRO.vMode,
                     'ionFrac': self.GYRO.ionFrac
                     }
@@ -1797,8 +1950,8 @@ class GUIobj():
 
         return
 
-    def loadOF(self, OFstartTime,OFstopTime,OFminMeshLev,OFmaxMeshLev,
-                      OFSTLscale, OFbashrc, OFdeltaT):
+    def loadOF(self,OFtMin,OFtMax,OFminMeshLev,OFmaxMeshLev,
+                      OFSTLscale, OFbashrc, OFdeltaT, OFwriteDeltaT, materialSelect):
         """
         loads user OF GUI settings
 
@@ -1810,8 +1963,8 @@ class GUIobj():
         OFbashrc is file location on system to source OF binaries / libs
         OFdeltaT is timestep size for FVM simulation.  Defaults to 1ms (0.001s)
         """
-        self.OF.tMin = float(OFstartTime)/1000.0 #to [s] for openfoam
-        self.OF.tMax = float(OFstopTime)/1000.0 #to [s] for openfoam
+        self.OF.OFtMin = float(OFtMin)/1000.0 #to [s] for openfoam
+        self.OF.OFtMax = float(OFtMax)/1000.0 #to [s] for openfoam
         self.OF.meshMinLevel = OFminMeshLev
         self.OF.meshMaxLevel = OFmaxMeshLev
         self.OF.STLscale = OFSTLscale
@@ -1822,7 +1975,10 @@ class GUIobj():
         self.OF.cmdThermal = 'runThermal'
         self.OF.cmdTprobe = 'runTprobe'
         self.OF.deltaT = float(OFdeltaT) #this comes in [sec]
-        self.OF.writeDeltaT = self.OF.deltaT
+        self.OF.writeDeltaT = float(OFwriteDeltaT) #this comes in [sec]
+        self.OF.materialSelect = materialSelect
+
+        print("Material Selection: "+self.OF.materialSelect)
 
         print("Loaded OF data")
         log.info("Loaded OF data")
@@ -1888,17 +2044,34 @@ class GUIobj():
             #copy heatFoam template directory to this location
             try:
                 shutil.copytree(self.OF.templateCase, partDir)
-                if self.OF.tMin != 0:
+                if self.OF.OFtMin != 0:
                     t0 = partDir+'/0'
-                    t0new = partDir+'/{:f}'.format(self.OF.tMin).rstrip('0').rstrip('.')
+                    t0new = partDir+'/{:f}'.format(self.OF.OFtMin).rstrip('0').rstrip('.')
                     os.rename(t0, t0new)
             except OSError as e:
                 print('COULD NOT COPY TEMPLATE DIRECTORY!  Aborting!')
                 print(e)
                 return
+
+            #Set up partDir with user selected material properties
+            print("Material Selection: "+self.OF.materialSelect)
+            matDst = partDir + '/constant/'
+            if self.OF.materialSelect == "ATJ":
+                matSrc = self.OF.materialDir + '/ATJ/'
+            elif self.OF.materialSelect == "MOLY":
+                matSrc = self.OF.materialDir + '/MOLY/'
+            else: #SGL6510
+                matSrc = self.OF.materialDir + '/SGLR6510/'
+            try:
+                shutil.copyfile(matSrc+'DT', matDst+'DT')
+                shutil.copyfile(matSrc+'thermCond', matDst+'thermCond')
+            except OSError as e:
+                print('COULD NOT COPY MATERIAL PROPERTIES!  Aborting!')
+                print(e)
+
             #set up timesteps
-            tMin = self.OF.tMin*1000.0 #in [ms] for HEAT
-            tMax = self.OF.tMax*1000.0 #in [ms] for HEAT
+            tMin = self.OF.OFtMin*1000.0 #in [ms] for HEAT
+            tMax = self.OF.OFtMax*1000.0 #in [ms] for HEAT
             arr = np.linspace(int(tMin), int(tMax), int((tMax-tMin)+1), dtype=int)
             OFtimesteps = arr[0::int(self.OF.deltaT*1000.0)]
 
@@ -2014,7 +2187,7 @@ class GUIobj():
                 #copy variable files into each timestep for solver
                 timeDir = partDir + '/{:f}'.format(OFt).rstrip('0').rstrip('.')
                 #timestep field prescriptions
-                HFt0 = partDir+'/{:f}'.format(self.OF.tMin).rstrip('0').rstrip('.')+'/HF'
+                HFt0 = partDir+'/{:f}'.format(self.OF.OFtMin).rstrip('0').rstrip('.')+'/HF'
                 HFtStep = partDir+'/{:f}'.format(OFt).rstrip('0').rstrip('.')+'/HF'
                 try:
                     #shutil.copytree(t0new,timeDir
@@ -2029,12 +2202,16 @@ class GUIobj():
                     print("***")
                     pass
 
+
                 # determine heat flux boundary condition
                 if (t in PFC.timesteps) and (t in self.MHD.timesteps):
                     #we explicitly calculated HF for this timestep
                     print("OF.timestep: {:d} in PFC.timesteps".format(t))
                     log.info("OF.timestep: {:d} in PFC.timesteps".format(t))
-                    HFcsv = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/HeatfluxPointCloud.csv'
+                    if self.MHD.shotPath[-1]=='/':
+                        HFcsv = self.MHD.shotPath + '{:06d}/'.format(t) + PFC.name + '/HF_allSources.csv'
+                    else:
+                        HFcsv = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/HF.allSources.csv'
                     qDiv = pd.read_csv(HFcsv)['HeatFlux'].values
                     #write boundary condition
                     print("Maximum qDiv for this PFC and time: {:f}".format(qDiv.max()))
@@ -2087,7 +2264,7 @@ class GUIobj():
             else:
                 partDir = self.MHD.shotPath + '/openFoam/heatFoam/'+PFC.name
             file = (partDir +
-                    '/postProcessing/fieldMinMax1/{:f}'.format(self.OF.tMin).rstrip('0').rstrip('.')
+                    '/postProcessing/fieldMinMax1/{:f}'.format(self.OF.OFtMin).rstrip('0').rstrip('.')
                     +'/fieldMinMax.dat')
             data.append(self.OF.getMinMaxData(file))
             pfcNames.append(PFC.name)
@@ -2167,7 +2344,7 @@ class GUIobj():
                 partDir = self.OF.caseDir+'/'+PFC.name+'/'
                 self.OF.runTprobe(x,y,z,partDir)
                 file = (partDir +
-                    'postProcessing/probes/{:f}'.format(self.OF.tMin).rstrip('0').rstrip('.')
+                    'postProcessing/probes/{:f}'.format(self.OF.OFtMin).rstrip('0').rstrip('.')
                     +'/T')
                 data = np.genfromtxt(file,comments="#", autostrip=True)
                 tData.append(data[:,0])

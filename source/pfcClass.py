@@ -11,6 +11,7 @@ import time
 import cProfile, pstats
 import pandas as pd
 import multiprocessing
+import psutil
 tools = toolsClass.tools()
 
 import logging
@@ -205,6 +206,35 @@ class PFC:
             tools.createVTKOutput(pcfile, 'points', name)
         return
 
+    def write_backface_pointcloud(self,centers,scalar,dataPath,tag=None,mode=None):
+        print("Creating Backface Point Cloud")
+        log.info("Creating Backface Point Cloud")
+        prefix = 'backfaceMask'
+
+        if tag == None:
+            pcfile = dataPath + prefix + '.csv'
+        else:
+            pcfile = dataPath + prefix + '_'+tag+'.csv'
+        #print("Shadow point cloud filename: "+pcfile)
+        #log.info("Shadow point cloud filename: "+pcfile)
+
+        pc = np.zeros((len(centers), 4))
+        pc[:,0] = centers[:,0]*1000.0
+        pc[:,1] = centers[:,1]*1000.0
+        pc[:,2] = centers[:,2]*1000.0
+        pc[:,3] = scalar
+        head = "X,Y,Z,backfaceMask"
+        np.savetxt(pcfile, pc, delimiter=',',fmt='%.10f', header=head)
+
+        #Now save a vtk file for paraviewweb
+        if tag is None:
+            tools.createVTKOutput(pcfile, 'points', prefix)
+        else:
+            name = prefix+'_'+tag
+            tools.createVTKOutput(pcfile, 'points', name)
+        return
+
+
     def write_bdotn_pointcloud(self,centers,bdotn,dataPath,tag=None):
         print("Creating bdotn Point Cloud")
         log.info("Creating bdotn Point Cloud")
@@ -294,8 +324,8 @@ class PFC:
 
             #this is for printing information about a specific mesh element
             #you can get the element # from paraview Point ID
-            #paraviewIndex = None
-            paraviewIndex = 1
+            paraviewIndex = None
+            #paraviewIndex = 1
             if paraviewIndex is not None:
                 ptIdx = np.where(use==paraviewIndex)[0]
                 print("Finding intersection face for point at:")
@@ -304,19 +334,25 @@ class PFC:
                 ptIdx = None
 
             #find psi for all points we launch traces from
-            R,Z,Phi = tools.xyz2cyl(self.centers[:,0], self.centers[:,1], self.centers[:,2])
-            psiSource = self.ep.psiFunc.ev(R,Z)
+            if tools.psiFilterSwitch is True:
+                R,Z,Phi = tools.xyz2cyl(self.centers[:,0], self.centers[:,1], self.centers[:,2])
+                psiSource = self.ep.psiFunc.ev(R,Z)
+                psiUse = psiSource[use]
 
-            #find psi for all points we potentially intersect with
-            targetCtrs = self.getTargetCenters(targetPoints)
-            R,Z,Phi = tools.xyz2cyl(targetCtrs[:,0], targetCtrs[:,1], targetCtrs[:,2])
-            psiIntersect = self.ep.psiFunc.ev(R,Z)
+                #find psi for all points we potentially intersect with
+                targetCtrs = self.getTargetCenters(targetPoints)
+                R,Z,Phi = tools.xyz2cyl(targetCtrs[:,0], targetCtrs[:,1], targetCtrs[:,2])
+                psiIntersect = self.ep.psiFunc.ev(R,Z)
+            else:
+                psiSource = None
+                psiUse = None
+                psiIntersect = None
 
             #First we do basic intersection checking
             intersect_mask = self.intersectTestBasic(structData,self.norms[use],
                                                     targetPoints,targetNorms,
                                                     MHD,self.ep,self.powerDirection,
-                                                    psiSource[use], psiIntersect, ptIdx)
+                                                    psiUse, psiIntersect, ptIdx)
 
             self.shadowed_mask[use] = intersect_mask
 
@@ -376,7 +412,14 @@ class PFC:
                 MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
                 structData = tools.readStructOutput(self.structOutfile)
                 os.remove(self.structOutfile) #clean up
-                intersect_mask2[use2] = self.intersectTest2(structData,targetPoints,self.powerDirection, psiSource[use][use2], psiIntersect, ptIdx)
+                if tools.psiFilterSwitch is True:
+                    psiUse2 = psiUse[use2]
+                else:
+                    psiUse2 = None
+                intersect_mask2[use2] = self.intersectTest2(structData,targetPoints,self.powerDirection, psiUse2, psiIntersect, ptIdx)
+                #intersect_mask2[use2] = self.intersectTest2(structData,targetPoints,self.powerDirection, psiSource[use][use2], psiIntersect, ptIdx)
+
+
                 #for debugging, save a shadowmask at each step up fieldline
                 if shadowMaskClouds == True:
                     self.shadowed_mask[use] = intersect_mask2
@@ -473,7 +516,7 @@ class PFC:
         GYRO.RAMlimit = False
 
         #for debugging, print a specific trace index into file
-        ROIidx = None
+        ROIidx = 481
         GYRO.traceIndex = None
         GYRO.traceIndex2 = None
         if ROIidx is not None:
@@ -512,6 +555,7 @@ class PFC:
                     GYRO.vPerpMC = v * np.cos(GYRO.vPhaseMC)
                     GYRO.vParallelMC = v * np.sin(GYRO.vPhaseMC)
                     GYRO.rGyroMC = GYRO.vPerpMC / GYRO.omegaGyro
+                    #GYRO.rGyroMC = GYRO.vPerpMC / GYRO.fGyro
                     print("Index [0] parameters:")
                     print("vPerp = {:f} m/s".format(GYRO.vPerpMC[0]))
                     print("vParallel = {:f} m/s".format(GYRO.vParallelMC[0]))
@@ -541,10 +585,14 @@ class PFC:
                                     GYRO.traceIndex2 = None
 
                             #start and end points for step i down guiding center path
-                            #we flip once so that we are walking downstream (MAFOT walks upstream)
+                            if self.powerDirection == 1:
+                                GYRO.p0 = self.guidingCenterPaths[i::N_GCdeg,:][GYRO.GYRO_HLXmap]
+                                GYRO.p1 = self.guidingCenterPaths[i+1::N_GCdeg,:][GYRO.GYRO_HLXmap]
+                            #we flip if powerDirection is -1 so that we are walking downstream (MAFOT walks CCW)
                             #then again so we are indexed according to CAD.centers
-                            GYRO.p0 = np.flip(np.flip(self.guidingCenterPaths, axis=0)[i::N_GCdeg,:], axis=0)[GYRO.GYRO_HLXmap]
-                            GYRO.p1 = np.flip(np.flip(self.guidingCenterPaths, axis=0)[i+1::N_GCdeg,:], axis=0)[GYRO.GYRO_HLXmap]
+                            else:
+                                GYRO.p0 = np.flip(np.flip(self.guidingCenterPaths, axis=0)[i::N_GCdeg,:], axis=0)[GYRO.GYRO_HLXmap]
+                                GYRO.p1 = np.flip(np.flip(self.guidingCenterPaths, axis=0)[i+1::N_GCdeg,:], axis=0)[GYRO.GYRO_HLXmap]
 
                             #calculate helix path for this step down guiding center path
                             #GYRO.intersectRecord[gyroPhase,vPhase,vSlice,use], hdotn = GYRO.multipleGyroTrace()
@@ -581,7 +629,7 @@ class PFC:
 
     def intersectTestBasic(self,sources,sourceNorms,
                         targets,targetNorms,MHD,ep,powerDir,
-                        psiSource, psiTarget, ptIdx=None, mode='SV'):
+                        psiSource, psiTarget, ptIdx=None, mode='MT'):
         """
         checks if any of the lines (field line traces) generated by MAFOT
         struct program intersect any of the target mesh faces.
@@ -650,8 +698,12 @@ class PFC:
         log.info('Entering basic intersection test for {:d} potential intersection faces'.format(Nt_use))
         t0 = time.time()
 
+        #hybrid loop method
         #Prepare intersectionTest across multiple cores
         Ncores = multiprocessing.cpu_count() - 2 #reserve 2 cores for overhead
+        #in case we run on single core machine
+        if Ncores <= 0:
+            Ncores = 1
         print('Initializing parallel intersection check across {:d} cores'.format(Ncores))
         log.info('Initializing parallel intersection check across {:d} cores'.format(Ncores))
         #each worker receives a single start and end point (q1 and q2),
@@ -680,10 +732,30 @@ class PFC:
             pool.join()
             del pool
 
-
-#        This is a legacy method that is not parallel
-#        maskTotal = tools.intersectTestNoLoop()
-#        mask = np.sum(maskTotal,axis=1)
+#        #legacy method left here for reference
+#        #if there is enough memory to run the entire intersection calculation in
+#        #one big matrix multiplication, do it.  Otherwise, use a hybrid method w/ loop
+#        requestedSize = tools.q1.shape[0] * tools.q1.shape[1] * tools.Nt * 8
+#        requestedSizeMiB = requestedSize / 2**20 / 1024
+#        availSize = psutil.virtual_memory()[1]
+#        availSizeMiB = availSize / 2**20 / 1024
+#        print("Attempting to use signed volume matrix algorithm")
+#        print("Requested memory [bytes]: {:d}".format(requestedSize))
+#        print("Available memory [bytes]: {:d}".format(availSize))
+#        print("Requested memory [MiB]: {:f}".format(requestedSizeMiB))
+#        print("Available memory [MiB]: {:f}".format(availSizeMiB))
+#        log.info("Attempting to use signed volume matrix algorithm")
+#        log.info("Requested memory [bytes]: {:d}".format(requestedSize))
+#        log.info("Available memory [bytes]: {:d}".format(availSize))
+#        log.info("Requested memory [MiB]: {:f}".format(requestedSizeMiB))
+#        log.info("Available memory [MiB]: {:f}".format(availSizeMiB))
+#        test = False
+#        #if requestedSize < availSize * 0.95:        #leave 5% of memory for overhead
+#        if test == True:
+#            print("Sufficient memory to run matrix multiplication SV algorithm.  Running.")
+#            log.info("Sufficient memory to run matrix multiplication SV algorithm.  Running.")
+#            maskTotal = tools.intersectTestNoLoop()
+#            mask = np.sum(maskTotal,axis=1)
 
         print('Found {:f} shadowed faces'.format(np.sum(mask)))
         log.info('Found {:f} shadowed faces'.format(np.sum(mask)))
@@ -696,7 +768,7 @@ class PFC:
 
 
     def intersectTest2(self,sources,targets,mapDirection,
-                        psiSource=None,psiTarget=None,ptIdx=None,mode='SV'):
+                        psiSource=None,psiTarget=None,ptIdx=None,mode='MT'):
         """
         Run an intersection test against all possible source faces
         sources is endpoints of line
@@ -737,25 +809,23 @@ class PFC:
         #create psiMask, which will be used to eliminate intersection checking
         #on any face that is not on the same flux surface as the source face
         #this is a form of dimensionality reduction
-        print("Calculating psiMask")
-        if psiSource is not None:
-            tools.psiFilterSwitch = True
+        if tools.psiFilterSwitch is True:
+            print("Calculating psiMask")
             tools.psiMask = tools.buildMask(psiSource, psiTarget)
             print("psiMask reduction ratio: {:f}".format(np.sum(tools.psiMask) / (Nt*N)))
             print("Example # points within psi bounds: {:f}".format(np.sum(tools.psiMask[:,0])))
             print("Compared to # of potential points: {:f}".format(Nt))
             if ptIdx is not None:
                 print("psiMask for ptIDX: {:f}".format(np.sum(tools.psiMask[:,ptIdx])))
-        else:
-            tools.psiFilterSwitch = False
-
 
         print('Entering intersection Test #1 for {:d} potential intersection faces'.format(Nt))
         log.info('Entering intersection Test #1 for {:d} potential intersection faces'.format(Nt))
         t0 = time.time()
-
         #Prepare intersectionTest across multiple cores
         Ncores = multiprocessing.cpu_count() -2 #reserve 2 cores for overhead
+        #in case we run on single core machine
+        if Ncores <= 0:
+            Ncores = 1
         print('Initializing parallel intersection check across {:d} cores'.format(Ncores))
         log.info('Initializing parallel intersection check across {:d} cores'.format(Ncores))
         #each worker receives a single start and end point (q1 and q2),
@@ -784,9 +854,28 @@ class PFC:
             pool.join()
             del pool
 
-#        This is a legacy method that is not parallel
-#        maskTotal = tools.intersectTestNoLoop()
-#        mask = np.sum(maskTotal,axis=1)
+#        #legacy method left for reference
+#        #if there is enough memory to run the entire intersection calculation in
+#        #one big matrix multiplication, do it.  Otherwise, use a hybrid method w/ loop
+#        requestedSize = tools.q1.shape[0] * tools.q1.shape[1] * tools.Nt * 8
+#        requestedSizeMiB = requestedSize / 2**20 / 1024
+#        availSize = psutil.virtual_memory()[1]
+#        availSizeMiB = availSize / 2**20 / 1024
+#        print("Attempting to use signed volume matrix algorithm")
+#        print("Requested memory [bytes]: {:d}".format(requestedSize))
+#        print("Available memory [bytes]: {:d}".format(availSize))
+#        print("Requested memory [MiB]: {:f}".format(requestedSizeMiB))
+#        print("Available memory [MiB]: {:f}".format(availSizeMiB))
+#        log.info("Attempting to use signed volume matrix algorithm")
+#        log.info("Requested memory [bytes]: {:d}".format(requestedSize))
+#        log.info("Available memory [bytes]: {:d}".format(availSize))
+#        log.info("Requested memory [MiB]: {:f}".format(requestedSizeMiB))
+#        log.info("Available memory [MiB]: {:f}".format(availSizeMiB))
+#        if requestedSize < availSize * 0.95:        #leave 5% of memory for overhead
+#            print("Sufficient memory to run matrix multiplication SV algorithm.  Running.")
+#            log.info("Sufficient memory to run matrix multiplication SV algorithm.  Running.")
+#            maskTotal = tools.intersectTestNoLoop()
+#            mask = np.sum(maskTotal,axis=1)
 
         print('Found {:f} shadowed faces'.format(np.sum(mask)))
         log.info('Found {:f} shadowed faces'.format(np.sum(mask)))

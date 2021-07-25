@@ -3,26 +3,16 @@
 #=============================================================
 #                CAD Variables
 #=============================================================
-STPfile, /home/tom/D3D/CAD/negTriPFCs4.stp
-STLpath, /home/tom/D3D/CAD/STLs/
-FreeCADPath, /opt/freecad/squashfs-root/usr/lib
-PVPath, /opt/paraview/ParaView-5.8.1-MPI-Linux-Python3.7-64bit/lib/python3.7/site-packages
 ROIGridRes, 3.0
 gridRes, standard
-permute_mask, False
-unitConvert, 1.0
-assembly_mask, False
 #==============================================================
 #                MHD Variables
 #==============================================================
-#MachFlag, d3d
-shot, 000001
-tree, EFIT02
+shot, 174305
 tmin, 0
 tmax, 3200
-nTrace, 30
+nTrace, 10
 dataPath, /home/tom/data/HEAT/
-powerDirection, -1
 plasma3Dmask, 0 #1=true, 0=false
 #==============================================================
 #                HF Variables
@@ -44,8 +34,6 @@ fracUI,0.0
 fracUO,0.0
 fracLI,0.3
 fracLO,0.7
-ionFrac,0.5
-elecFrac,0.5
 #==============================================================
 #                Ion Gyro Orbit Variables
 #==============================================================
@@ -59,59 +47,12 @@ ionMassAMU, 2.014
 vMode, single
 ionFrac, 0.5
 #==============================================================
-#                MAFOT Variables
-#==============================================================
-Nphi, 1
-ittLaminar, 10.0
-ittStruct, 1.0
-Smin, 0.0
-Smax, 5.0
-phimin, 0.0
-phimax, 6.28
-Zmin, -1.5
-Zmax, 1.5
-Rmin, 0.9
-Rmax, 2.5
-Nswall, 1
-phistart, 0 #(deg)
-MapDirection, -1
-MapDirectionStruct, -1
-PlasmaResponse, 0 #(0=no,>1=yes)
-Field, -1 #(-3=VMEC,-2=SIESTA,-1=gfile,M3DC1:0=Eq,1=I-coil,2=both)
-target, 0 #(0=useSwall)
-createPoints, 2 #(2=target)
-useFcoil, 0
-useCcoil, 0
-useIcoil, 0
-useFilament, 0 #(0=no)
-useTe_profile, 0 #(0=no)
-ParticleDirection, 0 #(1=co-pass,-1=ctr-pass,0=field-lines)
-ParticleCharge, 1 #(-1=electrons,>=1=ions)
-Ekin, 100.0 #[keV]
-Lambda, 0.1
-Mass, 2
-useM3DC1, 0.0
-# pi, 3.141592653589793
-# 2*pi, 6.283185307179586
-#==============================================================
 #                OpenFOAM Variables
 #==============================================================
-xMin, 145.0
-xMax, 485.0
-yMin, 270.0
-yMax, 635.0
-zMin, -910.0
-zMax, -800.0
-tMin, 0.0
-tMax, 3200.0
+OFtMin, 0.0
+OFtMax, 500.0
 deltaT, 0.05
 writeDeltaT, 0.05
-xProbe, 295.0
-yProbe, 430.0
-zProbe, -847.0
 STLscale, 1.0
 meshMinLevel, 1
 meshMaxLevel, 3
-xMid, 295.0
-yMid, 430.0
-zMid, -847.0

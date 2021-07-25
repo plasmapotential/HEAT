@@ -46,7 +46,6 @@ class heatFlux:
 
 
         self.allowed_vars = [
-                            'profileType',
                             'lqEich',
                             'S',
                             'Psol',
@@ -63,9 +62,7 @@ class heatFlux:
                             'fracUO',
                             'fracLI',
                             'fracLO',
-                            'hfMode',
-                            'elecFrac',
-                            'ionFrac']
+                            ]
         return
 
     def setTypes(self):
@@ -88,8 +85,6 @@ class heatFlux:
         self.fracUO = float(self.fracUO)
         self.fracLI = float(self.fracLI)
         self.fracLO = float(self.fracLO)
-        self.ionFrac = float(self.ionFrac)
-        self.elecFrac = float(self.elecFrac)
         return
 
     def getHFtableData(self, ep):
@@ -611,9 +606,9 @@ class heatFlux:
         #Calculate flux at midplane using gfile
         psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
         psi = psiN*(psiedge - psiaxis) + psiaxis
-        #psi = PFC.ep.psiFunc_noN.ev(R_omp,Z_omp)
         PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
         s_hat = psiN - PFC.psiMinLCFS
+
         print('psiMinLCFS: {:f}'.format(PFC.psiMinLCFS))
 #        print('un-normalized psiMinLCFS: {:f}'.format(PFC.ep.psiFunc_noN.ev(R_omp_sol,0.0)))
         print('Minimum s_hat: {:f}'.format(s_hat.min()))
@@ -671,7 +666,7 @@ class heatFlux:
 
         #Calculate flux at midplane using gfile
         psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
-        psi = PFC.ep.psiFunc_noN.ev(R_omp,Z_omp)
+        psi = psiN*(psiedge - psiaxis) + psiaxis
         PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
         s_hat = psiN - PFC.psiMinLCFS
 

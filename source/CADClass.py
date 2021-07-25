@@ -90,16 +90,12 @@ class CAD:
 
 
         self.allowed_vars = [
-                            'rootDir',
-                            'STPfile',
-                            #'STLpath',
                             'ROIGridRes',
                             'gridRes',
-                            'FreeCADPath',
-                            'PVPath',
-                            'permute_mask',
-                            'unitConvert',
-                            'assembly_mask']
+#                            'permute_mask',
+#                            'unitConvert',
+#                            'assembly_mask'
+                            ]
         return
 
     def setTypes(self):
@@ -155,7 +151,7 @@ class CAD:
         if resolution == None:  resolution=self.ROIGridRes
         for idx,partnum in enumerate(self.ROI):
             name = self.STLpath + partnum + "___" + resolution +"mm.stl"
-            if os.path.exists(name):
+            if os.path.exists(name) and self.overWriteMask == False:
                 print("Mesh exists, loading...")
                 self.loadROIMesh(name,idx)
             else:
@@ -174,7 +170,7 @@ class CAD:
         if resolution == None:  resolution=self.gridRes
         for partnum in self.intersectList:
             name = self.STLpath + partnum + "___" + resolution +"mm.stl"
-            if os.path.exists(name):
+            if os.path.exists(name) and self.overWriteMask == False:
                 print("Mesh exists, loading...")
                 self.loadIntersectMesh(name)
             else:
@@ -248,7 +244,7 @@ class CAD:
         self.CADdoc = FreeCAD.ActiveDocument
 
         #Coordinate permutation if necessary
-        if self.permute_mask=='True':
+        if self.permute_mask=='True' or self.permute_mask == True:
             self.permuteSTEP()
             #self.permuteSTEPAssy()
             self.permute_mask = False

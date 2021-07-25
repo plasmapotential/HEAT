@@ -1,31 +1,21 @@
 # Input file for HEAT
 # Format is: Variable, Value
-
 #=============================================================
 #                CAD Variables
 #=============================================================
-#STPfile, /home/workhorse/source/HEAT/squashfs-root/test/IBDH_2tiles.step
-#FreeCADPath, /opt/freecad/squashfs-root/usr/lib
-#PVPath, /opt/paraview/ParaView-5.8.1-MPI-Linux-Python3.7-64bit/lib/python3.7/site-packages
 ROIGridRes, 20.0
 gridRes, standard
-permute_mask, True
-unitConvert, 1.0
-assembly_mask, True
 #==============================================================
 #                MHD Variables
 #==============================================================
-MachFlag, nstx
 shot, 204118
-tree, EFIT02
 tmin, 0
 tmax, 5000
 nTrace, 10
 dataPath, /home/tom/data/HEAT/
-powerDirection, -1
 plasma3Dmask, 0 #1=true, 0=false
 #==============================================================
-#                HF Variables
+#                Optical HF Variables
 #==============================================================
 hfMode, eich
 lqEich, 3.0
@@ -44,10 +34,8 @@ fracUI,0.0
 fracUO,0.0
 fracLI,0.3
 fracLO,0.7
-ionFrac,0.5
-elecFrac,0.5
 #==============================================================
-#                Ion Gyro Orbit Variables
+#                Ion Gyro Orbit HF Variables
 #==============================================================
 N_gyroSteps, 5
 gyroDeg, 3
@@ -57,60 +45,14 @@ N_vPhase, 1
 N_gyroPhase, 1
 ionMassAMU, 2.014
 vMode, single
-ionFrac, 0.5
-#==============================================================
-#                MAFOT Variables
-#==============================================================
-Nphi, 1
-ittLaminar, 10.0
-ittStruct, 1.0
-Smin, 0.0
-Smax, 5.0
-phimin, 0.0
-phimax, 6.28
-Zmin, -1.75
-Zmax, 1.75
-Rmin, 0.25
-Rmax, 1.6
-Nswall, 1
-phistart, 1 #(deg)
-MapDirection, 1
-MapDirectionStruct, 1
-PlasmaResponse, 0 #(0=no,>1=yes)
-Field, -1 #(-3=VMEC,-2=SIESTA,-1=gfile,M3DC1:0=Eq,1=I-coil,2=both)
-target, 0 #(0=useSwall)
-createPoints, 2 #(2=target)
-useECcoil, 0 #(0=no,1=yes)
-useFilament, 0 #(0=no)
-useTe_profile, 0 #(0=no)
-ParticleDirection, 0 #(1=co-pass,-1=ctr-pass,0=field-lines)
-ParticleCharge, 1 #(-1=electrons,>=1=ions)
-Ekin, 100.0 #[keV]
-Lambda, 0.1
-Mass, 2
-useM3DC1, 0.0
-# pi, 3.141592653589793
-# 2*pi, 6.283185307179586
+ionFrac,0.5
 #==============================================================
 #                OpenFOAM Variables
 #==============================================================
-xMin, 400.0
-xMax, 605.0
-yMin, 55.0
-yMax, 235.0
-zMin, -1660.0
-zMax, -1600.0
-tMin, 0
-tMax, 5050
+OFtMin, 0
+OFtMax, 2000
 deltaT, 0.01
 writeDeltaT, 0.01
-xProbe, 504.0
-yProbe, 128.0
-zProbe, -1605.21
 STLscale, 1.0
-meshMinLevel, 1
-meshMaxLevel, 2
-xMid, 500.0
-yMid, 150.0
-zMid, -1625.0
-OFbashrc, /opt/OpenFOAM/OpenFOAM-v1912/etc/bashrc
+meshMinLev, 1
+meshMaxLev, 2

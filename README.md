@@ -8,21 +8,25 @@ configurations and geometric configurations.
 
 In its current form, HEAT can predict 3D heat loads from 2D plasmas for limited and diverted discharges.  
 It can calculate time varying heat loads and temperature profiles.  HEAT can also be used to perform
-field line traces.  In the coming year, the following modules are scheduled to be added to HEAT:
--Gyro orbit effects
--3D plasmas
--Radiated power (detachment) scenarios
--ELMs
+field line traces.  The most recent HEAT module to be added to the toolkit is ion gyro orbit
+heat load predictions.
+
+The following physics modules are scheduled to be added to HEAT soon:
+1) 3D plasmas
+2) Radiated power (detachment) scenarios
+3) ELMs
 
 There were three objectives taken into consideration when designing HEAT:
 1) pre-shot estimation of heat loads
 2) post-shot confirmation of heat loads and associated physics models
 3) design optimization
 
-The first HEAT paper is currently being revised, and will be published spring 2021,
-likely in the journal Fusion Science and Technology.
+The first HEAT paper has been accepted by the journal Fusion Science and Technology.  
+It will be published under open access.  After the publisher has finished edits,
+the DOI will be: 10.1080/15361055.2021.1951532 .  A link will be provided on this
+page when available.
 
-An appImage is now available so that users can run HEAT on a linux machine with a single
+An appImage is available so that users can run HEAT on a linux machine with a single
 file.  appImage is available under 'releases' and has been tested on Ubuntu18.04, Ubuntu20.04,
 Centos7, Centos8.  The appImage release is still in beta version, so there are likely still bugs.
 Bugs can be submitted to this github repo.
@@ -31,6 +35,8 @@ The author engineer is Tom Looby, a PhD candidate for Oak Ridge National Lab.
 This project is openSource under the MIT license.
 
 Tom's email:  tlooby@vols.utk.edu
+
+## Recent Updates
 
 ## Installation and Tutorials
 HEAT installation instructions and tutorials can be found here:

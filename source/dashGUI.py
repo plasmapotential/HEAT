@@ -444,6 +444,7 @@ def inputDragDrop(file, contents, MachFlag):
     if MachFlag is None:
         print("Select a machine before uploading input file")
         log.info("Select a machine before uploading input file")
+        raise PreventUpdate
     if file is None:
         raise PreventUpdate
     else:
@@ -460,11 +461,11 @@ def inputDragDrop(file, contents, MachFlag):
 @app.callback([Output('hiddenDivSaveInput','children'),
                Output('downloadInputs', 'data')],
               [Input('saveInputs','n_clicks')],
-              [State('shot', 'value'),
+              [State('MachFlag', 'value'),
+               State('shot', 'value'),
                State('tmin', 'value'),
                State('tmax', 'value'),
                State('nTrace', 'value'),
-               State('powerDir', 'value'),
                State('ROIGridRes', 'value'),
                State('gridRes', 'value'),
                State('lqEich', 'value'),
@@ -489,6 +490,7 @@ def inputDragDrop(file, contents, MachFlag):
                State('OFmaxMeshLev', 'value'),
                State('OFSTLscale', 'value'),
                State('OFdeltaT', 'value'),
+               State('OFwriteDeltaT', 'value'),
                State('PVPath', 'value'),
                State('FreeCADPath', 'value'),
                State('dataPath', 'value'),
@@ -505,11 +507,11 @@ def inputDragDrop(file, contents, MachFlag):
                ]
                )
 def saveGUIinputs(  n_clicks,
+                    MachFlag,
                     shot,
                     tmin,
                     tmax,
                     nTrace,
-                    powerDir,
                     ROIGridRes,
                     gridRes,
                     lqEich,
@@ -534,6 +536,7 @@ def saveGUIinputs(  n_clicks,
                     OFmaxMeshLev,
                     OFSTLscale,
                     OFdeltaT,
+                    OFwriteDeltaT,
                     PVLoc,
                     FreeCADLoc,
                     dataLoc,
@@ -556,11 +559,11 @@ def saveGUIinputs(  n_clicks,
         raise PreventUpdate
 
     data = {}
+    data['MachFlag'] = MachFlag
     data['shot'] = shot
     data['tmin'] = tmin
     data['tmax'] = tmax
     data['nTrace'] = nTrace
-    data['powerDir'] = powerDir
     data['ROIGridRes'] = ROIGridRes
     data['gridRes'] = gridRes
     data['lqEich'] = lqEich
@@ -579,12 +582,13 @@ def saveGUIinputs(  n_clicks,
     data['fracLI'] = fracLI
     data['fracLO'] = fracLO
     data['qBG'] = qBG
-    data['OFstartTime'] = OFstartTime
-    data['OFstopTime'] = OFstopTime
-    data['OFminMeshLev'] = OFminMeshLev
-    data['OFmaxMeshLev'] = OFmaxMeshLev
-    data['OFSTLscale'] = OFSTLscale
-    data['OFdeltaT'] = OFdeltaT
+    data['OFtMin'] = OFstartTime
+    data['OFtMax'] = OFstopTime
+    data['meshMinLev'] = OFminMeshLev
+    data['meshMaxLev'] = OFmaxMeshLev
+    data['STLscale'] = OFSTLscale
+    data['deltaT'] = OFdeltaT
+    data['writeDeltaT'] = OFwriteDeltaT
     data['FreeCADPath'] = FreeCADLoc
     data['PVPath'] = PVLoc
     data['dataPath'] = dataLoc
@@ -619,12 +623,8 @@ def buildMHDbox():
                 dcc.Input(id="tmin", className="textInput"),
                 html.Label(id="tMaxLabel", children="Maximum Timestep [ms]"),
                 dcc.Input(id="tmax", className="textInput"),
-                html.Label(id="nTraceLabel", children="Number of Trace Steps (degrees)"),
+                html.Label(id="nTraceLabel", children="Trace Distance (degrees)"),
                 dcc.Input(id="nTrace", className="textInput"),
-#                html.Label(id="powerDirLabel", children="Ion Direction"),
-#                dcc.Input(id="powerDir", className="textInput"),
-#                html.Label(id="gfileLabel", children="Path to gFile"),
-#                dcc.Input(id="gfilePath", type='text', className="textInput"),
                 dcc.Upload(
                     className="PFCupload",
                     id='gfiletable-upload',
@@ -692,23 +692,19 @@ def buildMHDbox():
               State('tmin', 'value'),
               State('tmax', 'value'),
               State('nTrace', 'value'),
-              #State('powerDir', 'value'),
-              #State('gfilePath', 'value'),
               State('gfiletable-upload', 'filename'),
               State('gfiletable-upload', 'contents'),
               State('plasma3Dmask', 'value'),
-              State('dataPath', 'value')]
+              State('dataPath', 'value'),
+              State('MachFlag', 'value')]
               )
-def loadMHD(n_clicks,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask,dataPath):
+def loadMHD(n_clicks,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask,dataPath,MachFlag):
     """
     Load MHD
     """
-    try: MachFlag = gui.MachFlag
-    except:
-        print("You didn't select a machine")
-        log.info("You didn't select a machine")
+    if MachFlag == None:
+        print("Select a machine before loading MHD parameters")
         raise PreventUpdate
-
 
     #if data directory doesn't exist, create it
     try:
@@ -728,7 +724,6 @@ def loadMHD(n_clicks,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask,data
     if tmin is not None: tmin = int(tmin)
     if tmax is not None: tmax = int(tmax)
     if nTrace is not None: nTrace = int(nTrace)
-#    if powerDir is not None: poweDir = int(powerDir)
     if gFileList is not None:
         if type(gFileList) is not list:
             gFileList = [gFileList]
@@ -742,7 +737,7 @@ def loadMHD(n_clicks,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask,data
                      nTrace=nTrace,
                      gFileList=gFileList,
                      gFileData=gFileData,
-                     plasma3Dmask=plasma3Dmask
+                     plasma3Dmask=plasma3Dmask,
                     )
 
     ts = gui.MHD.timesteps
@@ -842,7 +837,7 @@ def saveEQplots(n_clicks, x, y):
     return [html.Label("Saved EQs to file", style={'color':'#f5d142'}),
             send_file(zipFile)]
 
-#Load CAD button connect
+#Load gfile
 @app.callback([Output('hiddenDivGfileUpload', 'children')],
               [Input('gfiletable-upload', 'filename')],
               [State('MachFlag', 'value')])
@@ -905,16 +900,17 @@ def loadRes(n_clicks, ROIGridRes, gridRes, MachFlag):
 #Load CAD button connect
 @app.callback([Output('hiddenDivCAD2', 'children')],
               [Input('CAD-upload', 'filename')],
-              [State('CAD-upload', 'contents'),
+              [State('CAD-upload', 'last_modified'),
+               State('CAD-upload', 'contents'),
                State('MachFlag', 'value')])
-def loadCAD(STPfile, STPcontents, MachFlag):
+def loadCAD(STPfile, ts, STPcontents, MachFlag):
     if MachFlag is None:
         return [html.Label("Select a machine first", style={'color':'#fc0313'})]
     else:
         contents = STPcontents[0]
         content_type, content_string = contents.split(',')
         STPdata= base64.b64decode(content_string)
-        gui.getCAD(STPfile=STPfile[0],STPdata=STPdata)
+        gui.getCAD(STPfile=STPfile[0],STPdata=STPdata, ts=ts[0])
     return [html.Label("Loaded CAD: "+STPfile[0], style={'color':'#f5d142'})]
 
 #==========HF==========
@@ -1885,6 +1881,34 @@ def OFinputBoxes():
                 ],
                 className="OFInput",
             ),
+            html.Div(
+                children=[
+                    html.Label(" Write deltaT [s]"),
+                    dcc.Input(id="OFwriteDeltaT", className="textInput"),
+                ],
+                className="OFInput",
+            ),
+            html.Div(
+                children=[
+                    html.Label("Material Selection"),
+
+                    dcc.Dropdown(
+                        id='materialSelect',
+                        className="machineSelect",
+                        style={'backgroundColor': 'transparent', 'color':'transparent',
+                                'align-items':'center'},
+                                #style=dropdown_style,
+                                options=[
+                                {'label': 'SGLR6510 Graphite', 'value': 'SGL'},
+                                {'label': 'ATJ Graphite', 'value': 'ATJ'},
+                                {'label': 'Pure Molybdenum', 'value': 'MOLY'},
+
+                                ],
+                                value='SGL'
+                                ),
+                ],
+                className="OFInput",
+            ),
             ],
             className="wideBoxNoColor",
             )
@@ -1898,10 +1922,13 @@ def OFinputBoxes():
                State('OFmaxMeshLev', 'value'),
                State('OFSTLscale', 'value'),
                State('OFdeltaT', 'value'),
-               State('OFbashrc', 'value')
+               State('OFwriteDeltaT', 'value'),
+               State('OFbashrc', 'value'),
+               State('materialSelect', 'value')
               ])
 def loadOF(n_clicks,OFstartTime,OFstopTime,
-            OFminMeshLev,OFmaxMeshLev,OFSTLscale,OFdeltaT,OFbashrcLoc):
+            OFminMeshLev,OFmaxMeshLev,OFSTLscale,OFdeltaT,OFwriteDeltaT,
+            OFbashrcLoc,materialSelect):
     """
     sets up openFOAM for an analysis
     """
@@ -1909,7 +1936,7 @@ def loadOF(n_clicks,OFstartTime,OFstopTime,
         raise PreventUpdate
     gui.loadOF(OFstartTime,OFstopTime,
                 OFminMeshLev,OFmaxMeshLev,
-                OFSTLscale,OFbashrcLoc,OFdeltaT)
+                OFSTLscale,OFbashrcLoc,OFdeltaT,OFwriteDeltaT,materialSelect)
     return [html.Label("Loaded OF Data into HEAT", style={'color':'#f5d142'})]
 
 
@@ -1949,9 +1976,9 @@ def runTabChecklist():
             children=[
                 dcc.Checklist(
                     options=[
-                        {'label': 'B-field point cloud ', 'value': 'Bpc'},
+                        {'label': 'B-field powerDir point cloud ', 'value': 'Bpc'},
                         {'label': 'Normal vector point cloud', 'value': 'NormPC'},
-                        {'label': 'ShadowMask point cloud', 'value': 'shadowPC'},
+                        {'label': 'backfaceMask point cloud', 'value': 'backfacePC'},
                         {'label': 'psiN point cloud', 'value': 'psiPC'},
                         {'label': 'bdotn point cloud', 'value': 'bdotnPC'},
                         {'label': 'Heat flux point cloud', 'value': 'HFpc'},
@@ -1973,99 +2000,181 @@ def runTabTraces():
                     value=[''],
                     id="Btrace",
                         ),
-                html.Div(id="bFieldTracePoints", children=[loadBfieldTrace(hidden=True)]),
+                html.Div(id="bFieldTracePoints", children=[loadBfieldTrace(False)]),
                 dcc.Checklist(
                     options=[{'label': 'OpenFOAM Temp Probe ', 'value': 'OFtrace'}],
                     value=[''],
                     id="OFtrace",
                         ),
-                html.Div(id="OFTracePoints", children=[loadOFTrace(hidden=True)]),
+                html.Div(id="OFTracePoints", children=[loadOFTrace(False)]),
                 dcc.Checklist(
                     options=[{'label': 'Gyro Orbit Trace ', 'value': 'gyrotrace'}],
                     value=[''],
                     id="gyrotrace",
                         ),
-                html.Div(id="gyroTracePoints", children=[loadGyroTrace(hidden=True)]),
+                html.Div(id="gyroTracePoints", children=[loadGyroTrace(False)]),
                     ],
                 className="PCbox",
                 )
 
-@app.callback(Output('bFieldTracePoints', 'children'),
-              [Input('Btrace', 'value')],)
+@app.callback([Output('bFieldTracePoints', 'children')],
+              [Input('Btrace', 'value')])
 def bfieldTracePoint(value):
-    return [loadBfieldTrace(Btrace=value)]
+    if 'Btrace' in value:
+        val = True
+    else:
+        val = False
+    return [loadBfieldTrace(val)]
+
 
 #this function enables the inputs to be rendered on page load but hidden
-def loadBfieldTrace(Btrace=None, hidden=False):
-    if (Btrace == 'Btrace') or (hidden == True):
+def loadBfieldTrace(display):
+    if (display == True):
         style={}
     else:
-        style={"display":"hidden"}
+        style={"display":"none"}
+    return html.Div(
+        children=[
+            dcc.Upload(
+                className="PFCupload",
+                id='Btrace-upload',
+                children=html.Div([
+                    'Drag and Drop or ',
+                    html.A('Select File')
+                    ]),
+                    style={
+                        'width': '100%', 'height': '60px', 'lineHeight': '60px',
+                        'borderWidth': '1px', 'borderStyle': 'dashed',
+                        'borderRadius': '5px', 'textAlign': 'center', 'margin': '10px',
+                        },
+                multiple=False,
+                ),
+            html.Div(children=loadBtraceTable(), className="PFCtable"),
+            html.Div(id="hiddenDivBtrace"),
+        ],
+        className="xyzBoxVert",
+        style=style,
+    )
+
+def loadBtraceTable():
+    params = ['x[mm]','y[mm]','z[mm]','traceDirection','Length[deg]']
+    cols = [{'id': p, 'name': p} for p in params]
+    data = [{}]
+    return dash_table.DataTable(
+        id='BtraceTable',
+        columns = cols,
+        data = data,
+        style_header={'backgroundColor': 'rgb(30, 30, 30)'},
+        style_cell={
+            'textAlign': 'left',
+            'backgroundColor': 'rgb(50, 50, 50)',
+            'color': 'white'
+        },
+        editable=True,
+        export_format='csv',
+        row_deletable=True,
+        persistence=True,
+        )
+
+#Uploading files and button presses update table and HTML storage object
+@app.callback([Output('BtraceDataStorage', 'data'),
+               Output('BtraceTable', 'data'),
+               Output('BtraceTable', 'columns'),
+               Output('hiddenDivBtrace', 'children')],
+              [Input('Btrace-upload', 'filename')],
+              [State('BtraceDataStorage', 'data'),
+               State('Btrace-upload', 'contents'),
+               State('BtraceTable', 'data'),
+               State('BtraceTable', 'columns'),
+               State('MachFlag', 'value'),
+               State('Btrace', 'value')])
+def BtraceTable(filename, dataStore, uploadContents,
+             tableData, tableColumns, MachFlag, BtraceList):
+    if 'Btrace' in BtraceList:
+        trace = True
+    else:
+        trace = False
+
+    if dataStore==None:
+        print('Initializing HTML PFC data storage object')
+        dataStore = {}
+        dataStore.update({'BtraceFileName':None})
+        dataStore.update({'BtraceContents':None})
+        dataStore.update({'Btrace':trace})
+
+    #user has to load MHD and CAD for a specific machine before PFCs
+    if MachFlag == None:
+        hiddenDiv = [html.Label("Select a Tokamak and Load MHD First", style={'color':'#db362a'})]
+    elif filename is None:
+        hiddenDiv = []
+    #file dropper
+    elif (trace == True) and (uploadContents!= dataStore['BtraceContents']):
+            df = parse_contents(uploadContents, filename)
+            tableData = df.to_dict('records')
+            #tableColumns = [{"name": i, "id": i} for i in df.columns]
+            params = ['x[mm]','y[mm]','z[mm]','traceDirection','Length[deg]']
+            tableColumns = [{'id': p, 'name': p} for p in params]
+            hiddenDiv = [html.Label("Loaded file: "+filename, style={'color':'#34b3ed'})]
+            dataStore.update({'BtraceFileName':filename})
+            dataStore.update({'BtraceContents':uploadContents})
+    else:
+        hiddenDiv = []
+
+    return dataStore, tableData, tableColumns, hiddenDiv
+
+
+
+@app.callback(Output('OFTracePoints', 'children'),
+              [Input('OFtrace', 'value')])
+def OFTracePoint(value):
+    if 'OFtrace' in value:
+        val = True
+    else:
+        val = False
+    return [loadOFTrace(val)]
+
+
+#this function enables the inputs to be rendered on page load but hidden
+def loadOFTrace(display):
+    if (display == True):
+        style={}
+    else:
+        style={"display":"none"}
     return html.Div(
                 children=[
                     html.Div(
-                        children=[
+                        children = [
                             html.Label("x [mm]"),
-                            dcc.Input(id="xBtrace", className="xyzBoxInput"),
+                            dcc.Input(id="xOFtrace", className="xyzBoxInput"),
                             html.Label("y [mm]"),
-                            dcc.Input(id="yBtrace", className="xyzBoxInput"),
+                            dcc.Input(id="yOFtrace", className="xyzBoxInput"),
                             html.Label("z [mm]"),
-                            dcc.Input(id="zBtrace", className="xyzBoxInput"),
+                            dcc.Input(id="zOFtrace", className="xyzBoxInput"),
+                            #html.Label("t [ms]"),
+                            #dcc.Input(id="tOFtrace", className="xyzBoxInput"),
                         ],
                         className="xyzBox"
-                    ),
-                    html.Div(
-                        children=[
-                            html.Label("powerDirection"),
-                            dcc.Input(id="powerDir", className="xyzBoxInput"),
-                            html.Label("Degrees"),
-                            dcc.Input(id="traceDeg", className="xyzBoxInput"),
-                        ],
-                        className="xyzBox"
-                    )
+                        )
                     ],
                 style=style,
                 className="xyzBoxVert",
                     )
 
-@app.callback(Output('OFTracePoints', 'children'),
-              [Input('OFtrace', 'value')])
-def OFTracePoint(value):
-    return [loadOFTrace(OFtrace=value)]
-
-
-#this function enables the inputs to be rendered on page load but hidden
-def loadOFTrace(OFtrace=None, hidden=False):
-    if (OFtrace == 'OFtrace') or (hidden == True):
-        style={}
-    else:
-        style={"display":"hidden"}
-    return html.Div(
-                children=[
-                    html.Label("x [mm]"),
-                    dcc.Input(id="xOFtrace", className="xyzBoxInput"),
-                    html.Label("y [mm]"),
-                    dcc.Input(id="yOFtrace", className="xyzBoxInput"),
-                    html.Label("z [mm]"),
-                    dcc.Input(id="zOFtrace", className="xyzBoxInput"),
-                    #html.Label("t [ms]"),
-                    #dcc.Input(id="tOFtrace", className="xyzBoxInput"),
-                    ],
-                style=style,
-                className="xyzBox",
-                    )
-
 @app.callback(Output('gyroTracePoints', 'children'),
               [Input('gyrotrace', 'value')])
 def gyroTracePoints(value):
-    return [loadGyroTrace(gyrotrace=value)]
+    if 'gyrotrace' in value:
+        val = True
+    else:
+        val = False
+    return [loadGyroTrace(val)]
 
 #this function enables the inputs to be rendered on page load but hidden
-def loadGyroTrace(gyrotrace=None, hidden=False):
-    if (gyrotrace == 'gyrotrace') or (hidden == True):
+def loadGyroTrace(display):
+    if (display == True):
         style={}
     else:
-        style={"display":"hidden"}
+        style={"display":"none"}
     return html.Div(
                 children=[
                     html.Div(
@@ -2110,9 +2219,7 @@ def loadGyroTrace(gyrotrace=None, hidden=False):
                State('Btrace','value'),
                State('OFtrace','value'),
                State('gyrotrace','value'),
-               State('xBtrace','value'),
-               State('yBtrace','value'),
-               State('zBtrace','value'),
+               State('BtraceTable', 'data'),
                State('xOFtrace','value'),
                State('yOFtrace','value'),
                State('zOFtrace','value'),
@@ -2120,8 +2227,6 @@ def loadGyroTrace(gyrotrace=None, hidden=False):
                State('yGyroTrace','value'),
                State('zGyroTrace','value'),
                State('timeSlider','value'),
-               State('powerDir','value'),
-               State('traceDeg','value'),
                State('gyroT_eV_trace','value'),
                State('gyroDeg_trace','value'),
                State('N_gyroSteps_trace','value'),
@@ -2129,17 +2234,17 @@ def loadGyroTrace(gyrotrace=None, hidden=False):
                State('gyroPhase_trace','value'),
                ])
 def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
-            xBtrace,yBtrace,zBtrace,
+            BtraceTableData,
             xOFtrace,yOFtrace,zOFtrace,
             xGyroTrace,yGyroTrace,zGyroTrace,
-            t,powerDir,traceDeg,
+            t,
             gyroT_eV_trace,gyroDeg_trace,N_gyroSteps_trace,
             gyroDir_trace,gyroPhase_trace):
     if n_clicks == 0:
         raise PreventUpdate
 
     if 'Btrace' in Btrace:
-        gui.Btrace(xBtrace,yBtrace,zBtrace,t,powerDir,traceDeg)
+        gui.BtraceMultiple(BtraceTableData, t)
 
     if 'gyrotrace' in gyrotrace:
         gui.gyroTrace(xGyroTrace,yGyroTrace,zGyroTrace,t,gyroPhase_trace,
@@ -2193,6 +2298,7 @@ def gfileChildren():
             html.H6("Loaded gFile Parameters:"),
             html.Div( children=buildGfileTable(), className="gfileTable" ),
             html.Div( children=buildGfilePlots(), className="gfileTable" ),
+            html.Div( children=buildBFieldPlots(), className="gfileTable" ),
             html.H6("gFile Multipliers:"),
             gFileMultipiers(),
             html.H6("Re-define LCFS:"),
@@ -2212,6 +2318,16 @@ def buildGfilePlots():
     return html.Div(
             id="gFilePlots",
             children=[dcc.Graph(id="gFilePlot1", className=""),],
+            className="gfileBox"
+            )
+
+def buildBFieldPlots():
+    """
+    gFile plot for Fpol, psi, etc
+    """
+    return html.Div(
+            id="bFieldPlots",
+            children=[dcc.Graph(id="bFieldPlot", className=""),],
             className="gfileBox"
             )
 
@@ -2852,7 +2968,8 @@ def MHDplot():
 #or when user loads mhd (which changes time slider value)
 @app.callback([Output('2DEQ', 'figure'),
                Output('gFileTable', 'data'),
-               Output('gFilePlot1', 'figure')],
+               Output('gFilePlot1', 'figure'),
+               Output('bFieldPlot', 'figure')],
               [Input('timeSlider', 'value'),
                Input('hiddenDivMult', 'children'),
                Input('hiddenDivSep', 'children'),])
@@ -2879,7 +2996,10 @@ def slideEQplot(value, dummy1, tom):
     #update plot on gfile cleaner tab with Fpol, psi. etc
     plot2 = plotly2DEQ.makePlotlyGfilePlot(ep)
 
-    return plot, data, plot2
+    #update plot on gfile cleaner tab with Bp, Bt
+    plot3= plotly2DEQ.makePlotlyBpBt(ep, MachFlag)
+
+    return plot, data, plot2, plot3
 
 
 
@@ -2910,6 +3030,7 @@ app.layout = html.Div(
             dcc.Store(id='userInputFileData', storage_type='memory'),
             dcc.Store(id='PFCdataStorage', storage_type='memory'),
             dcc.Store(id='gFileListStorage', storage_type='memory'),
+            dcc.Store(id='BtraceDataStorage', storage_type='memory'),
             #interval for updating logFile every 5 seconds
             dcc.Interval(
                 id='intervalLog',
@@ -2937,7 +3058,6 @@ Session storage callbacks and functions
                Output('tmin', 'value'),
                Output('tmax', 'value'),
                Output('nTrace', 'value'),
-               Output('powerDir', 'value'),
                Output('ROIGridRes', 'value'),
                Output('gridRes', 'value'),
                Output('lqEich', 'value'),
@@ -2962,6 +3082,7 @@ Session storage callbacks and functions
                Output('OFmaxMeshLev', 'value'),
                Output('OFSTLscale', 'value'),
                Output('OFdeltaT', 'value'),
+               Output('OFwriteDeltaT', 'value'),
                Output('N_gyroSteps','value'),
                Output('gyroDeg','value'),
                Output('gyroT_eV','value'),
@@ -3017,7 +3138,6 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('tmin', ''),
             data.get('tmax', ''),
             data.get('nTrace', ''),
-            data.get('powerDirection', ''),
             data.get('ROIGridRes', ''),
             data.get('gridRes', ''),
             data.get('lqEich', ''),
@@ -3036,12 +3156,13 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('fracLI', ''),
             data.get('fracLO', ''),
             data.get('qBG', ''),
-            data.get('tMin', ''),
-            data.get('tMax', ''),
-            data.get('meshMinLevel', ''),
-            data.get('meshMaxLevel', ''),
+            data.get('OFtMin', ''),
+            data.get('OFtMax', ''),
+            data.get('meshMinLev', ''),
+            data.get('meshMaxLev', ''),
             data.get('STLscale', ''),
             data.get('deltaT', ''),
+            data.get('writeDeltaT', ''),
             data.get('N_gyroSteps',''),
             data.get('gyroDeg',''),
             data.get('gyroT_eV',''),

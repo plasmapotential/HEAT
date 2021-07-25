@@ -46,51 +46,15 @@ class MHD:
         tmax            maximum timestep to consider
         MHDpath         location where we will save / read gfiles
         """
-
-
-        self.allowed_vars = ['shot',
-                            'tree',
+        self.allowed_vars = [
+                            #'MachFlag',
+                            'shot',
                             'tmin',
                             'tmax',
                             'nTrace',
-                            'plasma3Dmask',
                             'dataPath',
-                            'MachFlag',
-                            'Nphi',
-                            'ittLaminar',
-                            'ittStruct',
-                            'Smin',
-                            'Smax',
-                            'phimin',
-                            'phimax',
-                            'Nswall',
-                            'phistart',
-                            'MapDirection',
-                            'MapDirectionStruct',
-                            'structMapDirMultiply',
-                            'powerDirection',
-                            'PlasmaResponse',
-                            'Field',
-                            'target',
-                            'createPoints',
-                            'useECcoil',
-                            'useIcoil',
-                            'useCcoil',
-                            'useFcoil',
-                            'useBcoil',
-                            'useBus',
-                            'useFilament',
-                            'useTe_profile',
-                            'ParticleDirection',
-                            'ParticleCharge',
-                            'Ekin',
-                            'Lambda',
-                            'Mass',
-                            'Zmin',
-                            'Zmax',
-                            'Rmin',
-                            'Rmax',
-                            'shotPath']
+                            ]
+
         return
 
 
@@ -98,53 +62,24 @@ class MHD:
         """
         Set variable types for the stuff that isnt a string from the input file
         """
-        self.shot = int(self.shot)
-        self.tmin = int(self.tmin)
-        self.tmax = int(self.tmax)
-        self.Nphi = int(self.Nphi)
-        self.Smin = float(self.Smin)
-        self.Smax = float(self.Smax)
-        self.phimin = float(self.phimin)
-        self.phimax = float(self.phimax)
-        self.Nswall = int(self.Nswall)
-        self.ittLaminar = float(self.ittLaminar)
-        self.ittStruct = float(self.ittStruct)
-        self.phistart = float(self.phistart)
-        self.MapDirection =float(self.MapDirection)
-        self.MapDirectionStruct = float(self.MapDirectionStruct)
-        self.powerDirection = float(self.powerDirection)
-        self.PlasmaResponse = int(self.PlasmaResponse)
-        self.Field = int(self.Field)
-        self.target = int(self.target)
-        self.createPoints = int(self.createPoints)
-        self.Zmin = float(self.Zmin)
-        self.Zmax = float(self.Zmax)
-        self.Rmin = float(self.Rmin)
-        self.Rmax = float(self.Rmax)
-        if(self.MachFlag == 'iter'):
-            self.useIcoil = int(self.useIcoil)
-        elif(self.MachFlag == 'nstx'):
-            self.useECcoil = int(self.useECcoil)
-        elif(self.MachFlag in ['st40', 'step', 'sparc']):
-            self.useECcoil = int(self.useECcoil)
-        elif(self.MachFlag == 'mast'):
-            self.useCcoil = int(self.useCcoil)
-            self.useIcoil = int(self.useIcoil)
-        elif(self.MachFlag == 'd3d'):
-            self.useFcoil = int(self.useFcoil)
-            self.useCcoil = int(self.useCcoil)
-            self.useIcoil = int(self.useIcoil)
-        self.useFilament = int(self.useFilament)
-        self.useTe_profile = int(self.useTe_profile)
-        self.ParticleDirection = int(self.ParticleDirection)
-        self.ParticleCharge = int(self.ParticleCharge)
-        self.Ekin = float(self.Ekin)
-        self.Lambda = float(self.Lambda)
-        self.Mass = float(self.Mass)
-        if self.MachFlag in ['dt']:
-            self.useBus = int(self.useBus)
-            self.useBcoil = int(self.useBcoil)
-        self.plasma3Dmask = int(self.plasma3Dmask)
+        integers = [
+                    'shot',
+                    'tmin',
+                    'tmax',
+                    ]
+        #floats = [
+        #         'MapDirection',
+        #         'MapDirectionStruct',
+        #        ]
+
+        for var in integers:
+            if (getattr(self, var) is not None) and (~np.isnan(float(getattr(self, var)))):
+                try:
+                    setattr(self, var, int(getattr(self, var)))
+                except:
+                    print("Error with input file var "+var+".  Perhaps you have invalid input values?")
+                    log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
+
         return
 
     # Pull fresh gfile data from MDS+ tree, create directory tree in the process
@@ -446,7 +381,7 @@ class MHD:
 
 
     def getFieldpath(self, dphi, gridfile, controlfilePath,
-                    controlfile, paraview_mask=False):
+                    controlfile, paraview_mask=False, tag=None):
         """
         Uses MAFOT's structure script to get the full magnetic field line
         starting from a user defined R,Z,phi location.  Integrates back up
@@ -506,12 +441,17 @@ class MHD:
             xyz = xyz[~(np.abs(xyz[:,:2])<1e-50).any(axis=1)]
             head = 'X[mm],Y[mm],Z[mm]'
             #head = 'X[m],Y[m],Z[m],R[m],phi[rad]'
-            np.savetxt(controlfilePath+'struct.csv', xyz, delimiter=',', header=head)
+            if tag == None:
+                outfile = controlfilePath+'struct.csv'
+                vtkName = 'Field_trace'
+            else:
+                outfile = controlfilePath+'struct_'+tag+'.csv'
+                vtkName = 'Field_trace_'+tag
+            np.savetxt(outfile, xyz, delimiter=',', header=head)
+            #Now save a vtk file for paraviewweb
+            tools.createVTKOutput(outfile, 'trace', vtkName)
             print('Converted file to ParaView formatted CSV.')
             log.info('Converted file to ParaView formatted CSV.')
-
-            #Now save a vtk file for paraviewweb
-            tools.createVTKOutput(controlfilePath+'struct.csv', 'trace', 'Field_trace')
 
         return
 

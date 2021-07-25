@@ -34,27 +34,14 @@ class OpenFOAM():
         Writes a list of recognized class variables to HEAT object
         Used for error checking input files and for initialization
         """
-        self.allowed_vars = ['xMin',
-                             'xMax',
-                             'yMin',
-                             'yMax',
-                             'zMin',
-                             'zMax',
-                             'tMin',
-                             'tMax',
+        self.allowed_vars = [
+                             'OFtMin',
+                             'OFtMax',
                              'deltaT',
                              'writeDeltaT',
-                             'xProbe',
-                             'yProbe',
-                             'zProbe',
                              'STLscale',
-                             'meshMinLevel',
-                             'meshMaxLevel',
-                             'xMid',
-                             'yMid',
-                             'zMid',
-                             'STLfileName',
-                             'STLlayerName',
+                             'meshMinLev',
+                             'meshMaxLev',
                              ]
         return
 
@@ -69,45 +56,54 @@ class OpenFOAM():
         yMax            maximum Y coordinate for blockMesh box
         zMin            minimum Z coordinate for blockMesh box
         zMax            maximum Z coordinate for blockMesh box
-        tMin            minimum timestep for controlDict
-        tMax            maximum timestep for controlDict
-        deltaT          solution time resolution for controlDict
-        writeDeltaT     write time resolution for controlDict
+        OFtMin          minimum timestep for controlDict
+        OFtMax          maximum timestep for controlDict
+        deltaT        solution time resolution for controlDict
+        writeDeltaT   write time resolution for controlDict
         xProbe          x coordinate for temperature probe for postProcess
         yProbe          y coordinate for temperature probe for postProcess
         zProbe          z coordinate for temperature probe for postProcess
         STLfileName     STL file name for use with snappyHexMesh
         STLlayerName    STL layer name for snappyHexMesh
-        STLscale        scale for unit conversion (1.0 = keep STL units)
-        meshMinLevel    minimum level for snappyHexMesh refinement
-        meshMaxLevel    maximum level for snappyHexMesh refinement
+        STLscale      scale for unit conversion (1.0 = keep STL units)
+        meshMinLevel  minimum level for snappyHexMesh refinement
+        meshMaxLevel  maximum level for snappyHexMesh refinement
         xMid            x coordinate in center of tile of interest for snappyHexMesh
         yMid            x coordinate in center of tile of interest for snappyHexMesh
         zMid            x coordinate in center of tile of interest for snappyHexMesh
         OFbashrc        location of OpenFOAM installation bashrc file
         """
-        self.xMin = float(self.xMin)
-        self.xMax = float(self.xMax)
-        self.yMin = float(self.yMin)
-        self.yMax = float(self.yMax)
-        self.zMin = float(self.zMin)
-        self.zMax = float(self.zMax)
-        self.tMin = float(self.tMin)
-        self.tMax = float(self.tMax)
-        self.deltaT = float(self.deltaT)
-        self.writeDeltaT = float(self.writeDeltaT)
-        self.STLscale = float(self.STLscale)
-        self.meshMinLevel = int(self.meshMinLevel)
-        self.meshMaxLevel = int(self.meshMaxLevel)
-        self.xMid = float(self.xMid)
-        self.yMid = float(self.yMid)
-        self.zMid = float(self.zMid)
-        if self.xProbe:
-            self.xProbe = float(self.xProbe)
-        if self.yProbe:
-            self.yProbe = float(self.yProbe)
-        if self.zProbe:
-            self.zProbe = float(self.zProbe)
+        integers = [
+                    'meshMinLev',
+                    'meshMaxLev',
+                    ]
+        floats = [
+                  'OFtMin',
+                  'OFtMax',
+                  'deltaT',
+                  'writeDeltaT',
+                  'STLscale',
+        ]
+
+        for var in integers:
+            if (getattr(self, var) is not None) and (~np.isnan(float(getattr(self, var)))):
+                try:
+                    setattr(self, var, int(getattr(self, var)))
+                except:
+                    print("Error with input file var "+var+".  Perhaps you have invalid input values?")
+                    log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
+        for var in floats:
+            if var is not None:
+                if (getattr(self, var) is not None) and (~np.isnan(float(getattr(self, var)))):
+                    try:
+                        setattr(self, var, float(getattr(self, var)))
+                    except:
+                        print("Error with input file var "+var+".  Perhaps you have invalid input values?")
+                        log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
+
+
+
+
         return
 
     def buildheatFoam(self):
@@ -203,8 +199,26 @@ class OpenFOAM():
         else:
             NCPU = psutil.cpu_count(logical=True) - 1
         with open(file, 'w') as f:
-            for var in self.allowed_vars:
-                f.write(var+' '+str(getattr(self,var))+';\n')
+            f.write('xMin {:f};\n'.format(self.xMin))
+            f.write('xMax {:f};\n'.format(self.xMax))
+            f.write('yMin {:f};\n'.format(self.yMin))
+            f.write('yMax {:f};\n'.format(self.yMax))
+            f.write('zMin {:f};\n'.format(self.zMin))
+            f.write('zMax {:f};\n'.format(self.zMax))
+            f.write('tMin {:f};\n'.format(self.OFtMin))
+            f.write('tMax {:f};\n'.format(self.OFtMax))
+            f.write('deltaT {:f};\n'.format(self.deltaT))
+            f.write('writeDeltaT {:f};\n'.format(self.writeDeltaT))
+            if hasattr(self, 'xProbe'):
+                f.write('xProbe {:f};\n'.format(self.xProbe))
+                f.write('yProbe {:f};\n'.format(self.yProbe))
+                f.write('zProbe {:f};\n'.format(self.zProbe))
+            f.write('STLscale {:f};\n'.format(self.STLscale))
+            f.write('meshMinLevel {:d};\n'.format(self.meshMinLevel))
+            f.write('meshMaxLevel {:d};\n'.format(self.meshMaxLevel))
+            f.write('xMid {:f};\n'.format(self.xMid))
+            f.write('yMid {:f};\n'.format(self.yMid))
+            f.write('zMid {:f};\n'.format(self.zMid))
             f.write('STLfileName '+STLpart+';\n')
             f.write('STLlayerName '+STLpart+'_firstSolid;\n')
             f.write('NCPU '+str(NCPU)+';\n')
@@ -438,7 +452,10 @@ class OpenFOAM():
         from subprocess import run
         #Copy the current environment
         current_env = os.environ.copy()
-        appDir = os.environ["APPDIR"]
+        if os.environ.get('APPDIR') is not None:
+            appDir = os.environ["APPDIR"]
+        else:
+            appDir = ''
 
         #write probe file to partDir
         file = partDir+'system/probes'
@@ -473,16 +490,22 @@ class OpenFOAM():
         """
         path, name = os.path.split(file)
         outfile = path + '/minMaxTnoTab.dat'
-        #first clean the tabs out of csv
-        #Equivalent of: sed 's/\t/,/g' file > outfile
-        with open(file, 'r') as fin:
-            with open(outfile, 'w') as fout:
-                for line in fin:
-                    fout.write(line.replace('\t',','))
-        #read data file
-        data = pd.read_csv(outfile, header=1)
-        data.columns = data.columns.str.strip()
-        data = data.sort_values('field')
-        data['field'] = data['field'].str.strip()
+        if os.path.isfile(file):
+            #first clean the tabs out of csv
+            #Equivalent of: sed 's/\t/,/g' file > outfile
+            with open(file, 'r') as fin:
+                with open(outfile, 'w') as fout:
+                    for line in fin:
+                        fout.write(line.replace('\t',','))
+            #read data file
+            data = pd.read_csv(outfile, header=1)
+            data.columns = data.columns.str.strip()
+            data = data.sort_values('field')
+            data['field'] = data['field'].str.strip()
+
+        else:
+            print("minMaxTnoTab.dat does not exist!  This is probably because openFOAM failed silently.")
+            log.info("minMaxTnoTab.dat does not exist!  This is probably because openFOAM failed silently.")
+            raise ValueError("minMaxTnoTab.dat does not exist!  This is probably because openFOAM failed silently.")
 
         return data

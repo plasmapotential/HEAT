@@ -1,0 +1,11 @@
+//Specific Heat Capacity in units of [J kg^-1 K^-1]
+//This file for ATJ grahite as used in D3D
+(
+273 690
+373 880
+473 1210
+823 1650
+1473 2050
+1973 2090
+2473 2095
+)

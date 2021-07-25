@@ -47,7 +47,7 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, gfile=None, logFile=False):
         zlim = ep.g['wall'][:,1]
 
 
-    levels = sorted(np.append([0.0,0.05,0.1,0.25,0.5,0.75,1.0], np.linspace(1.01,psi.max(),20)))
+    levels = sorted(np.append([0.0,0.05,0.1,0.25,0.5,0.75,0.95, 1.0], np.linspace(0.99,psi.max(),15)))
 
 #    aspect = (z.max()-z.min()) / (r.max()-r.min())
 #    width = (1.0/aspect)*height
@@ -65,6 +65,7 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, gfile=None, logFile=False):
             contours_coloring='heatmap',
             name='psiN',
             showscale=False,
+            ncontours=20
         ))
 
     #Wall in green
@@ -78,6 +79,27 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, gfile=None, logFile=False):
                 color="#19fa1d"
                     )
             )
+            )
+
+    #white lines around separatrix
+    levelsAtLCFS = np.linspace(0.95,1.05,15)
+    CS = plt.contourf(R,Z,psi,levelsAtLCFS,cmap=plt.cm.cividis)
+    for i in range(len(levelsAtLCFS)):
+        levelsCS = plt.contour(R,Z,psi,levels=[levelsAtLCFS[i]])
+        for j in range(len(levelsCS.allsegs[0])):
+            r = levelsCS.allsegs[0][j][:,0]
+            z = levelsCS.allsegs[0][j][:,1]
+            fig.add_trace(
+                go.Scatter(
+                    x=r,
+                    y=z,
+                    mode="lines",
+                    line=dict(
+                        color="white",
+                        width=1,
+                        dash='dot',
+                            )
+                )
             )
 
     #Seperatrix in red.  Sometimes this fails if psi is negative
@@ -125,6 +147,7 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, gfile=None, logFile=False):
                         )
                 )
                 )
+
 
 
     fig.update_layout(
@@ -372,6 +395,131 @@ def makePlotlyGfilePlot(ep):
         x=0.01
     ))
     return fig
+
+
+
+
+
+def makePlotlyBpBt(ep, MachFlag, logFile=False):
+    """
+    returns a DASH object for use directly in dash app
+    """
+
+    if logFile is True:
+        log = logging.getLogger(__name__)
+
+    r = ep.g['R']
+    z = ep.g['Z']
+    R,Z = np.meshgrid(r, z)
+
+    #Bp = ep.BpFunc.ev(R,Z)
+    #Bt = ep.BtFunc.ev(R,Z)
+    Bp = ep.Bp_2D
+    Bt = ep.Bt_2D
+
+    if MachFlag == 'nstx':
+        rlim, zlim = nstxu_wall(oldwall=False) #FOR NSTXU
+    else:
+        rlim = ep.g['wall'][:,0]
+        zlim = ep.g['wall'][:,1]
+
+    #dont waste contour space on xfmr coil field if its way higher than Bt0
+    BtMax = 3*ep.g['Bt0']
+    if ep.g['Bt0'] < 0:
+        BtMin = np.max(Bt)
+    else:
+        BtMin = np.min(Bt)
+
+    import plotly
+    import plotly.graph_objects as go
+    import plotly.express as px
+    from plotly.subplots import make_subplots
+
+    fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.05, shared_yaxes=True,
+                    subplot_titles=("Bt [T]", "Bp [T]"))
+
+    fig.add_trace(
+        go.Contour(
+            z=Bt,
+            x=r, # horizontal axis
+            y=z, # vertical axis
+            #colorscale='cividis',
+            contours_coloring='heatmap',
+            name='Bt',
+            showscale=False,
+            ncontours=30,
+            contours=dict(
+                start=BtMin,
+                end=BtMax,
+                ),
+            ),
+        row=1,
+        col=1
+        )
+    #Wall in green
+    fig.add_trace(
+        go.Scatter(
+            x=rlim,
+            y=zlim,
+            mode="markers+lines",
+            name="Wall",
+            line=dict(
+                color="#19fa1d"
+                    ),
+            ),
+        row=1,
+        col=1
+        )
+
+    fig.add_trace(
+        go.Contour(
+            z=Bp,
+            x=r, # horizontal axis
+            y=z, # vertical axis
+            colorscale='viridis',
+            contours_coloring='heatmap',
+            name='Bp',
+            showscale=False,
+            ncontours=40,
+            ),
+        row=1,
+        col=2
+        )
+
+    #Wall in green
+    fig.add_trace(
+        go.Scatter(
+            x=rlim,
+            y=zlim,
+            mode="markers+lines",
+            name="Wall",
+            line=dict(
+                color="#19fa1d"
+                    ),
+            ),
+        row=1,
+        col=2
+        )
+
+    fig.update_layout(showlegend=False,
+        margin=dict(
+        l=5,
+        r=5,
+        b=30,
+        t=50,
+        pad=2
+        ),
+    )
+    return fig
+
+
+
+
+
+
+
+
+
 
 
 
