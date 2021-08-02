@@ -518,16 +518,17 @@ class GYRO:
                 h = np.cross(D[j], E2)
                 a = np.sum(E1*h, axis=1)
                 test1 = np.logical_and( a>-eps, a<eps) #ray parallel to triangle
-                #test1 = a<eps #ray parallel to triangle
-                f=1.0/a
-                s = q1[j] - self.PFC_t1
-                u = f * np.sum(s*h, axis=1)
-                test2 = np.logical_or(u<0.0, u>1.0) #ray inside triangle
-                q = np.cross(s,E1)
-                v = f*np.sum(D[j]*q, axis=1)
-                test3 =  np.logical_or(v<0.0, (u+v)>1.0) #ray inside triangle
-                l = f*np.sum(E2*q, axis=1)
-                test4 = np.logical_or(l<0.0, l>Dmag[j]) #ray long enough to intersect triangle
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    #test1 = a<eps #ray parallel to triangle
+                    f=1.0/a
+                    s = q1[j] - self.PFC_t1
+                    u = f * np.sum(s*h, axis=1)
+                    test2 = np.logical_or(u<0.0, u>1.0) #ray inside triangle
+                    q = np.cross(s,E1)
+                    v = f*np.sum(D[j]*q, axis=1)
+                    test3 =  np.logical_or(v<0.0, (u+v)>1.0) #ray inside triangle
+                    l = f*np.sum(E2*q, axis=1)
+                    test4 = np.logical_or(l<0.0, l>Dmag[j]) #ray long enough to intersect triangle
                 if np.sum(~np.any([test1,test2,test3,test4], axis=0))>0:
                     #we assume first intersection in this array is the intersection
                     PFC_index = np.where(np.any([test1,test2,test3,test4], axis=0)==False)[0][0]
