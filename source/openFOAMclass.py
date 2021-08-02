@@ -40,8 +40,8 @@ class OpenFOAM():
                              'deltaT',
                              'writeDeltaT',
                              'STLscale',
-                             'meshMinLev',
-                             'meshMaxLev',
+                             'meshMinLevel',
+                             'meshMaxLevel',
                              ]
         return
 
@@ -74,8 +74,8 @@ class OpenFOAM():
         OFbashrc        location of OpenFOAM installation bashrc file
         """
         integers = [
-                    'meshMinLev',
-                    'meshMaxLev',
+                    'meshMinLevel',
+                    'meshMaxLevel',
                     ]
         floats = [
                   'OFtMin',
@@ -333,7 +333,7 @@ class OpenFOAM():
         return
 
 
-    def generate3Dmesh(self, part):
+    def generate3Dmesh(self, part, overWriteMask=False):
         """
         Run OpenFOAM blockmesh and snappyhexmesh to generate a 3D mesh.  Then
         run topoSet and createPatch to create patches
@@ -360,42 +360,56 @@ class OpenFOAM():
         #if 3D mesh doesn't exist, create it.  Otherwise copy it to OF.partDir/constant/polyMesh
         newFile = self.partDir+'constant/polyMesh'
         if os.path.isdir(file) == True: #polyMesh already exists
-            try:
-                shutil.copytree(file, newFile)
-                print('Copied existing 3D mesh')
-            except:
-                print('\nProblem copying 3D mesh...possibly doesnt exist...creating')
-                print('tried copying: '+file)
-                print('to this location: '+newFile+'\n')
-        else:
-            from subprocess import run
-            #Copy the current environment
-            current_env = os.environ.copy()
-            try:
-                appDir = os.environ["APPDIR"]
-                inAppImage = True
-            except:
-                appDir = ''
-                inAppImage = False
-            #run blockMesh, snappyHexMesh
-            meshCMD = self.partDir+self.cmd3Dmesh
-            try:
-                p = run([meshCMD], env=current_env, cwd=self.partDir, shell=True, executable=appDir+'/bin/bash')
-                retcode = p.returncode
-                if retcode < 0:
-                    print("OF mesh child was terminated by signal", -retcode, file=sys.stderr)
-                else:
-                    print("OF mesh child returned", retcode, file=sys.stderr)
-            except OSError as e:
-                print("Execution failed:", e, file=sys.stderr)
+            #overWriteMask is True if STP file was modified since last use
+            if overWriteMask == False:
+                try:
+                    shutil.copytree(file, newFile)
+                    print('Copied existing 3D mesh')
+                except:
+                    print('\nProblem copying 3D mesh...possibly doesnt exist...creating')
+                    print('tried copying: '+file)
+                    print('to this location: '+newFile+'\n')
+            else:
+                shutil.rmtree(file)
+                self.createNewMesh(newFile,file)
 
-            #Now copy this mesh to the 3D meshes folder for future use
-            try:
-                os.mkdir(newFile)
-            except:
-                print("Could not create polyMesh directory in OF folder")
-                log.info("Could not create polyMesh directory in OF folder")
-            shutil.copytree(newFile, file)
+
+        else:
+            self.createNewMesh(newFile,file)
+        return
+
+    def createNewMesh(self, newFile, file):
+        """
+        creates new FVM mesh and copies into a HEAT tree
+        """
+        from subprocess import run
+        #Copy the current environment
+        current_env = os.environ.copy()
+        try:
+            appDir = os.environ["APPDIR"]
+            inAppImage = True
+        except:
+            appDir = ''
+            inAppImage = False
+        #run blockMesh, snappyHexMesh
+        meshCMD = self.partDir+self.cmd3Dmesh
+        try:
+            p = run([meshCMD], env=current_env, cwd=self.partDir, shell=True, executable=appDir+'/bin/bash')
+            retcode = p.returncode
+            if retcode < 0:
+                print("OF mesh child was terminated by signal", -retcode, file=sys.stderr)
+            else:
+                print("OF mesh child returned", retcode, file=sys.stderr)
+        except OSError as e:
+            print("Execution failed:", e, file=sys.stderr)
+
+        #Now copy this mesh to the 3D meshes folder for future use
+        try:
+            os.mkdir(newFile)
+        except:
+            print("Could not create polyMesh directory in OF folder")
+            log.info("Could not create polyMesh directory in OF folder")
+        shutil.copytree(newFile, file)
 # This method left here for reference:
 #            from PyFoam.Execution.BasicRunner import BasicRunner
 #            solvers = ['blockMesh','snappyHexMesh','topoSet','createPatch']
@@ -405,6 +419,7 @@ class OpenFOAM():
 #                run = BasicRunner(argv=[solver,dir,case])
 #                run.start()
         return
+
 
     def runThermalAnalysis(self):
         """

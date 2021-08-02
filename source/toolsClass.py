@@ -355,15 +355,16 @@ class tools:
         h = np.cross(D, self.E2[use])
         a = np.sum(self.E1[use]*h, axis=1)
         test1 = np.logical_and( a>-eps, a<eps) #ray parallel to triangle
-        f=1.0/a
-        s = self.q1[i] - self.p1[use]
-        u = f * np.sum(s*h, axis=1)
-        test2 = np.logical_or(u<0.0, u>1.0) #ray inside triangle
-        q = np.cross(s,self.E1[use])
-        v = f*np.sum(D*q, axis=1)
-        test3 =  np.logical_or(v<0.0, (u+v)>1.0) #ray inside triangle
-        l = f*np.sum(self.E2[use]*q, axis=1)
-        test4 = np.logical_or(l<0.0, l>self.Dmag[i]) #ray long enough to intersect triangle
+        with np.errstate(divide='ignore', invalid='ignore'):
+            f=1.0/a #sometimes results in div by 0 (python warning)
+            s = self.q1[i] - self.p1[use]
+            u = f * np.sum(s*h, axis=1)
+            test2 = np.logical_or(u<0.0, u>1.0) #ray inside triangle
+            q = np.cross(s,self.E1[use])
+            v = f*np.sum(D*q, axis=1)
+            test3 =  np.logical_or(v<0.0, (u+v)>1.0) #ray inside triangle
+            l = f*np.sum(self.E2[use]*q, axis=1) #sometimes results in invalid mult (python warning)
+            test4 = np.logical_or(l<0.0, l>self.Dmag[i]) #ray long enough to intersect triangle
         if np.sum(~np.any([test1,test2,test3,test4], axis=0))>0:
             result = 1
         else:
@@ -436,17 +437,15 @@ class tools:
 
     def intersectTestNoLoop(self):
         """
-        LEGACY FUNCTION: left here for reference
-
         Intersection test that does not check for self intersections
 
         creates matrices instead of parallel processing, but this can
-        easily saturate RAM.
+        easily saturate RAM.  only use for small checks.  otherwise use MT algorithm
 
         q1 and q2 are start/end points of trace
         p1,p2,p3 are points of potential intersection faces
 
-        using line + triangle intersection rule
+        using sigvol line + triangle intersection rule
         """
         q13D = np.repeat(self.q1[:,np.newaxis], self.Nt, axis=1)
         q23D = np.repeat(self.q2[:,np.newaxis], self.Nt, axis=1)
@@ -456,6 +455,31 @@ class tools:
         sign3 = np.sign(self.signedVolume2(q13D,q23D,self.p1,self.p2,ax=2))
         sign4 = np.sign(self.signedVolume2(q13D,q23D,self.p2,self.p3,ax=2))
         sign5 = np.sign(self.signedVolume2(q13D,q23D,self.p3,self.p1,ax=2))
+        test1 = (sign1 != sign2)
+        test2 = np.logical_and(sign3==sign4,sign3==sign5)
+        return np.logical_and(test1,test2)
+
+
+    def intersectTestSingleRay(self):
+        """
+        Intersection for single ray (q1 and q2 each are a single point)
+
+        creates matrices instead of parallel processing, but this can
+        easily saturate RAM.  only use for small checks.  otherwise use MT algorithm
+
+        q1 and q2 are start/end points of trace
+        p1,p2,p3 are points of potential intersection faces
+
+        using sigvol line + triangle intersection rule
+        """
+        q13D = np.repeat(self.q1[np.newaxis,:], self.Nt, axis=0)
+        q23D = np.repeat(self.q2[np.newaxis,:], self.Nt, axis=0)
+
+        sign1 = np.sign(self.signedVolume2(q13D,self.p1,self.p2,self.p3))
+        sign2 = np.sign(self.signedVolume2(q23D,self.p1,self.p2,self.p3))
+        sign3 = np.sign(self.signedVolume2(q13D,q23D,self.p1,self.p2))
+        sign4 = np.sign(self.signedVolume2(q13D,q23D,self.p2,self.p3))
+        sign5 = np.sign(self.signedVolume2(q13D,q23D,self.p3,self.p1))
         test1 = (sign1 != sign2)
         test2 = np.logical_and(sign3==sign4,sign3==sign5)
         return np.logical_and(test1,test2)

@@ -232,7 +232,7 @@ class MHD:
         #np.savetxt('points.asc', pc[:,:-1], delimiter=' ',fmt='%.10f')
         #print("Wrote point cloud file: " + pcfile)
         if tag is None:
-            tools.createVTKOutput(pcfile, 'glyph', 'B_pointcloud')
+            tools.createVTKOutput(pcfile, 'glyph', 'Bdotpower_pointcloud')
         else:
             name = 'B_pointcloud_'+tag
             tools.createVTKOutput(pcfile, 'glyph', name)

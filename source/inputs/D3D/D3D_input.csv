@@ -50,9 +50,9 @@ ionFrac, 0.5
 #                OpenFOAM Variables
 #==============================================================
 OFtMin, 0.0
-OFtMax, 500.0
+OFtMax, 200.0
 deltaT, 0.05
 writeDeltaT, 0.05
 STLscale, 1.0
 meshMinLevel, 1
-meshMaxLevel, 3
+meshMaxLevel, 2

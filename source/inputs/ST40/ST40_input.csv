@@ -30,10 +30,10 @@ fracCN, 0.6
 fracCF, 0.4
 fracPN, 0.1
 fracPF, 0.0
-fracUI,0.5
+fracUI,0.0
 fracUO,0.0
-fracLI,0.5
-fracLO,0.0
+fracLI,0.3
+fracLO,0.7
 #==============================================================
 #                Ion Gyro Orbit Variables
 #==============================================================

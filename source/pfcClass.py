@@ -416,8 +416,8 @@ class PFC:
                     psiUse2 = psiUse[use2]
                 else:
                     psiUse2 = None
-                intersect_mask2[use2] = self.intersectTest2(structData,targetPoints,self.powerDirection, psiUse2, psiIntersect, ptIdx)
-                #intersect_mask2[use2] = self.intersectTest2(structData,targetPoints,self.powerDirection, psiSource[use][use2], psiIntersect, ptIdx)
+                intersect_mask2[use2] = self.intersectTest2(structData,targetPoints, psiUse2, psiIntersect, ptIdx)
+                #intersect_mask2[use2] = self.intersectTest2(structData,targetPoints,psiSource[use][use2], psiIntersect, ptIdx)
 
 
                 #for debugging, save a shadowmask at each step up fieldline
@@ -516,7 +516,7 @@ class PFC:
         GYRO.RAMlimit = False
 
         #for debugging, print a specific trace index into file
-        ROIidx = 481
+        ROIidx = None
         GYRO.traceIndex = None
         GYRO.traceIndex2 = None
         if ROIidx is not None:
@@ -767,7 +767,7 @@ class PFC:
 
 
 
-    def intersectTest2(self,sources,targets,mapDirection,
+    def intersectTest2(self,sources,targets,
                         psiSource=None,psiTarget=None,ptIdx=None,mode='MT'):
         """
         Run an intersection test against all possible source faces
@@ -930,7 +930,7 @@ class PFC:
             y = np.insert(structData[:,1], np.arange(len(structData[:,1])), structData[:,1])
             z = np.insert(structData[:,2], np.arange(len(structData[:,2])), structData[:,2])
             sources = np.array([x,y,z]).T[1:-1]
-            intersects = self.intersectTest2(sources,targetPoints,self.mapDirectionStruct)
+            intersects = self.intersectTest2(sources,targetPoints)
             if np.sum(intersects) > 0:
 #                print("Found long range intersection")
 #                log.info("Found long range intersection")

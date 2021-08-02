@@ -835,7 +835,22 @@ class GUIobj():
             log.info("fracPN = {:f}".format(self.HF.fracPN))
             log.info("fracPF = {:f}".format(self.HF.fracPF))
         if hasattr(self.MHD, 'ep'):
-            self.HF.getHFtableData(self.MHD.ep[0])
+            self.HF.HFdataDict = self.HF.getHFtableData(self.MHD.ep[0])
+        else:
+            if self.HF.lqCNmode == 'eich':
+                print("You need to load MHD to load Eich profiles")
+                log.info("You need to load MHD to load Eich profiles")
+                self.HF.HFdataDict = {}
+                raise ValueError("MHD EQ must be loaded before HF Settings to calculate Eich lq")
+            elif self.HF.SMode == 'makowski':
+                print("You need to load MHD to load Makowski profiles")
+                log.info("You need to load MHD to load Makowski profiles")
+                self.HF.HFdataDict = {}
+                raise ValueError("MHD EQ must be loaded before HF Settings to calculate Makowski S")
+            else:
+                self.HF.HFdataDict = self.HF.getHFtableData(ep=None)
+
+
         return
 
     def getGyroInputs(self,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
@@ -1139,73 +1154,13 @@ class GUIobj():
                     if 'bdotnPC' in runList:
                         self.bdotnPC(PFC)
 
-        if 'HFpc' in runList:
-            print('Total Input Power = {:f}'.format(np.sum(powerTrue)))
-            print('Theoretical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
-            print('Optical Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumOptical)))
-            log.info('Total Input Power = {:f}'.format(np.sum(powerTrue)))
-            log.info('Theoretical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
-            log.info('Optical Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumOptical)))
-
-            totalPowPow = 0
-            for PFC in self.PFCs:
-                print("=== Last timestep's PFC arrays: Optical ===")
-                tmpPow = self.HF.power_sum_mesh(PFC, scale2circ=False, verbose=False)
-                totalPowPow += tmpPow
-                print(PFC.name + ":\t{:.6f}".format(tmpPow))
-                log.info(PFC.name + ":\t{:.6f}".format(tmpPow))
-                print("PFC array sum: {:.6f}".format(totalPowPow))
-                log.info("PFC array sum: {:.6f}".format(totalPowPow))
-
-        if 'GyroPC' in runList:
-            print("\n===+++ GYRO ORBIT CALCULATION +++===")
-            log.info("\n===+++ GYRO ORBIT CALCULATION +++===")
-            PFC.powerSumGyro = np.zeros((len(self.MHD.timesteps)))
-            tGyro = time.time()
-            self.getGyroMeshes()
-
-            # Time Loop: gyro orbits runs after optical HF calculated
-            for tIdx,t in enumerate(self.MHD.timesteps):
-                #path for this timestep
-                if self.MHD.shotPath[-1]=='/':
-                    PFC.controlfilePath = self.MHD.shotPath + '{:06d}/'.format(t) + PFC.name + '/'
-                else:
-                    PFC.controlfilePath = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/'
-                #generate index maps
-                self.prepareGyroMaps(tIdx)
-                for PFC in self.PFCs:
-                    if t not in PFC.timesteps:
-                        pass
-                    else:
-                        print("\n------PFC: "+PFC.name+"------")
-                        self.gyroOrbitIntersects(PFC)
-                self.gyroOrbitHF()
-                Psum = self.HF.power_sum_mesh(PFC, mode='gyro', scale2circ=True)
-                PFC.powerSumGyro[tIdx] += Psum
-                powerTesselate[tIdx] += Psum
-                print(PFC.name + ' tessellated Gyro Power = {:f}'.format(Psum))
-
-                #path for this timestep
-                tPath = self.MHD.shotPath + '/' + '{:06d}/'.format(t)
-                #write intersectRecord to CSV file
-                self.intersectRecordCSV(tPath)
-
-                print('Theoretical gyro power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac*self.GYRO.ionFrac))
-                print('Gyro Tessellated Power = {:f}'.format(np.sum(PFC.powerSumGyro)))
-                print('Escaped Gyro Power = {:f}'.format(self.GYRO.gyroNanPower))
-                print("Gyro orbit calculation took: {:f} [s]\n".format(time.time() - tGyro))
-
-                print("=== Last timestep's PFC arrays: Gyro ===")
-                totalPowPow = 0
-                for PFC in self.PFCs:
-                    tmpPow = self.HF.power_sum_mesh(PFC, mode='gyro', scale2circ=False, verbose=False)
-                    totalPowPow += tmpPow
-                    print(PFC.name + ":\t{:.6f}".format(tmpPow))
-                    log.info(PFC.name + ":\t{:.6f}".format(tmpPow))
-                    print("PFC array sum: {:.6f}".format(totalPowPow))
-                    log.info("PFC array sum: {:.6f}".format(totalPowPow))
-                    print("PFC Max HF: {:.6f}".format(max(PFC.qGyro)))
-                    log.info("PFC Max HF: {:.6f}".format(max(PFC.qGyro)))
+            if 'HFpc' in runList:
+                print('Total Input Power = {:f}'.format(np.sum(powerTrue)))
+                print('Theoretical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
+                print('Optical Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumOptical)))
+                log.info('Total Input Power = {:f}'.format(np.sum(powerTrue)))
+                log.info('Theoretical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
+                log.info('Optical Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumOptical)))
 
                 totalPowPow = 0
                 for PFC in self.PFCs:
@@ -1217,15 +1172,74 @@ class GUIobj():
                     print("PFC array sum: {:.6f}".format(totalPowPow))
                     log.info("PFC array sum: {:.6f}".format(totalPowPow))
 
+            if 'GyroPC' in runList:
+                print("\n===+++ GYRO ORBIT CALCULATION +++===")
+                log.info("\n===+++ GYRO ORBIT CALCULATION +++===")
+                PFC.powerSumGyro = np.zeros((len(self.MHD.timesteps)))
+                tGyro = time.time()
+                self.getGyroMeshes()
 
-        #time/PFC loop for generating allSources heat fluxes
-        if 'GyroPC' in runList or 'HFpc' in runList:
-            for tIdx,t in enumerate(self.MHD.timesteps):
+                #generate index maps
+                self.prepareGyroMaps(tIdx)
+                for PFC in self.PFCs:
+                    if t not in PFC.timesteps:
+                        pass
+                    else:
+                        print("\n------PFC: "+PFC.name+"------")
+                        self.gyroOrbitIntersects(PFC)
+
+                #redistribute ion optical power and build intersectRecord
+                self.gyroOrbitHF()
                 #path for this timestep
-                if self.MHD.shotPath[-1]=='/':
-                    PFC.controlfilePath = self.MHD.shotPath + '{:06d}/'.format(t) + PFC.name + '/'
-                else:
-                    PFC.controlfilePath = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/'
+                tPath = self.MHD.shotPath + '/' + '{:06d}/'.format(t)
+                #write intersectRecord to CSV file
+                self.intersectRecordCSV(tPath)
+
+                #constribite to the tallies
+                for PFC in self.PFCs:
+                    if t not in PFC.timesteps:
+                        pass
+                    else:
+                        Psum = self.HF.power_sum_mesh(PFC, mode='gyro', scale2circ=True)
+                        PFC.powerSumGyro[tIdx] += Psum
+                        powerTesselate[tIdx] += Psum
+                        print(PFC.name + ' tessellated Gyro Power = {:f}'.format(Psum))
+                        print('Theoretical gyro power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac*self.GYRO.ionFrac))
+                        print('Gyro Tessellated Power = {:f}'.format(np.sum(PFC.powerSumGyro)))
+                        print('Escaped Gyro Power = {:f}'.format(self.GYRO.gyroNanPower))
+                        print("Gyro orbit calculation took: {:f} [s]\n".format(time.time() - tGyro))
+
+                print("=== Last timestep's PFC arrays: Gyro ===")
+                totalPowPow = 0
+                for PFC in self.PFCs:
+                    if t not in PFC.timesteps:
+                        pass
+                    else:
+                        tmpPow = self.HF.power_sum_mesh(PFC, mode='gyro', scale2circ=False, verbose=False)
+                        totalPowPow += tmpPow
+                        print(PFC.name + ":\t{:.6f}".format(tmpPow))
+                        log.info(PFC.name + ":\t{:.6f}".format(tmpPow))
+                        print("PFC array sum: {:.6f}".format(totalPowPow))
+                        log.info("PFC array sum: {:.6f}".format(totalPowPow))
+                        print("PFC Max HF: {:.6f}".format(max(PFC.qGyro)))
+                        log.info("PFC Max HF: {:.6f}".format(max(PFC.qGyro)))
+
+                print("=== Last timestep's PFC arrays: Optical ===")
+                totalPowPow = 0
+                for PFC in self.PFCs:
+                    if t not in PFC.timesteps:
+                        pass
+                    else:
+                        tmpPow = self.HF.power_sum_mesh(PFC, scale2circ=False, verbose=False)
+                        totalPowPow += tmpPow
+                        print(PFC.name + ":\t{:.6f}".format(tmpPow))
+                        log.info(PFC.name + ":\t{:.6f}".format(tmpPow))
+                        print("PFC array sum: {:.6f}".format(totalPowPow))
+                        log.info("PFC array sum: {:.6f}".format(totalPowPow))
+
+
+            #generating allSources heat fluxes
+            if 'GyroPC' in runList or 'HFpc' in runList:
                 #set up time and equilibrium
                 PFC.t = t
                 for PFC in self.PFCs:
@@ -1254,6 +1268,7 @@ class GUIobj():
         log.info("Total Time Elapsed: {:f}".format(time.time() - t0))
         print("\nCompleted HEAT run\n")
         log.info("\nCompleted HEAT run\n")
+        
         #make a sound when complete
 #        os.system('spd-say -t female2 "HEAT run complete"')
 
@@ -1872,6 +1887,10 @@ class GUIobj():
                     'lqPF': self.HF.lqPF,
                     'fracCN': self.HF.fracCN,
                     'fracCF': self.HF.fracCF,
+                    'limlqCN': self.HF.lqCN,
+                    'limlqCF': self.HF.lqCF,
+                    'limfracCN': self.HF.fracCN,
+                    'limfracCF': self.HF.fracCF,
                     'fracPN': self.HF.fracPN,
                     'fracPF': self.HF.fracPF,
                     'Psol': self.HF.Psol,
@@ -1885,8 +1904,8 @@ class GUIobj():
                     'deltaT': self.OF.deltaT,
                     'writeDeltaT': self.OF.writeDeltaT,
                     'STLscale': self.OF.STLscale,
-                    'meshMinLev': self.OF.meshMinLev,
-                    'meshMaxLev': self.OF.meshMaxLev,
+                    'meshMinLev': self.OF.meshMinLevel,
+                    'meshMaxLev': self.OF.meshMaxLevel,
                     'N_gyroSteps': self.GYRO.N_gyroSteps,
                     'gyroDeg': self.GYRO.gyroDeg,
                     'gyroT_eV': self.GYRO.gyroT_eV,
@@ -1950,7 +1969,7 @@ class GUIobj():
 
         return
 
-    def loadOF(self,OFtMin,OFtMax,OFminMeshLev,OFmaxMeshLev,
+    def loadOF(self,OFtMin,OFtMax,OFminMeshLevel,OFmaxMeshLevel,
                       OFSTLscale, OFbashrc, OFdeltaT, OFwriteDeltaT, materialSelect):
         """
         loads user OF GUI settings
@@ -1965,8 +1984,8 @@ class GUIobj():
         """
         self.OF.OFtMin = float(OFtMin)/1000.0 #to [s] for openfoam
         self.OF.OFtMax = float(OFtMax)/1000.0 #to [s] for openfoam
-        self.OF.meshMinLevel = OFminMeshLev
-        self.OF.meshMaxLevel = OFmaxMeshLev
+        self.OF.meshMinLevel = int(OFminMeshLevel)
+        self.OF.meshMaxLevel = int(OFmaxMeshLevel)
         self.OF.STLscale = OFSTLscale
         self.OF.cmd3Dmesh = 'meshAndPatch'
         #the OF bashrc must be sourced before running OF
@@ -2060,6 +2079,8 @@ class GUIobj():
                 matSrc = self.OF.materialDir + '/ATJ/'
             elif self.OF.materialSelect == "MOLY":
                 matSrc = self.OF.materialDir + '/MOLY/'
+            elif self.OF.materialSelect == "TUNG":
+                matSrc = self.OF.materialDir + '/TUNG/'
             else: #SGL6510
                 matSrc = self.OF.materialDir + '/SGLR6510/'
             try:
@@ -2118,7 +2139,7 @@ class GUIobj():
                 log.info("OpenFOAM thermal analysis will probably fail")
                 print("=====================================================\n")
 
-            #update middle points and blockmesh bounds for each PFC and
+            #update blockmesh bounds for each PFC and
             # give 10mm of clearance on each side
             self.OF.xMin = (PFC.centers[:,0].min() - 0.01)*1000.0
             self.OF.xMax = (PFC.centers[:,0].max() + 0.01)*1000.0
@@ -2126,9 +2147,53 @@ class GUIobj():
             self.OF.yMax = (PFC.centers[:,1].max() + 0.01)*1000.0
             self.OF.zMin = (PFC.centers[:,2].min() - 0.01)*1000.0
             self.OF.zMax = (PFC.centers[:,2].max() + 0.01)*1000.0
-            self.OF.xMid = (self.OF.xMax-self.OF.xMin)/2.0 + self.OF.xMin
-            self.OF.yMid = (self.OF.yMax-self.OF.yMin)/2.0 + self.OF.yMin
-            self.OF.zMid = (self.OF.zMax-self.OF.zMin)/2.0 + self.OF.zMin
+
+            #find a point inside the mesh
+            #old method:  only works for solid objects (if COM is hollow, fails)
+            #self.OF.xMid = (self.OF.xMax-self.OF.xMin)/2.0 + self.OF.xMin
+            #self.OF.yMid = (self.OF.yMax-self.OF.yMin)/2.0 + self.OF.yMin
+            #self.OF.zMid = (self.OF.zMax-self.OF.zMin)/2.0 + self.OF.zMin
+
+            #another old method. steps just inside a mesh face
+            #find point 2mm inside of face 0 (this will fail if part width is < 2mm)
+            #smallStep = 0.002 #2mm
+            #self.OF.xMid = (PFC.centers[0,0] - smallStep*PFC.norms[0,0])*1000.0
+            #self.OF.yMid = (PFC.centers[0,1] - smallStep*PFC.norms[0,1])*1000.0
+            #self.OF.zMid = (PFC.centers[0,2] - smallStep*PFC.norms[0,2])*1000.0
+
+            #find a point inside the mesh via ray tracing to other mesh faces
+            #in the PFC.
+            #set up other faces in PFC (targets)
+            print("Calculating volume mesh internal coordinate")
+            log.info("Calculating volume mesh internal coordinate")
+            targetPoints = []
+            partIdx = np.where(self.CAD.ROI == PFC.name)[0][0]
+            part = self.CAD.ROImeshes[partIdx]
+            for face in part.Facets:
+                targetPoints.append(face.Points)
+            targetPoints = np.asarray(targetPoints) / 1000.0 #scale to m
+            targetPoints = targetPoints[1:,:] #omit launch point face
+            #find all intersections with self along inverse normal
+            tools.q1 = PFC.centers[0,:]
+            tools.q2 = PFC.centers[0,:] -10.0 * PFC.norms[0,:]
+            tools.p1 = targetPoints[:,0,:] #point 1 of mesh triangle
+            tools.p2 = targetPoints[:,1,:] #point 2 of mesh triangle
+            tools.p3 = targetPoints[:,2,:] #point 3 of mesh triangle
+            tools.Nt = len(tools.p1)
+            mask = tools.intersectTestSingleRay()
+            use = np.where(mask == True)[0] + 1 #account for face we deleted above (index 0)
+            #find which one of these intersection faces is closest
+            dist = np.linalg.norm(PFC.centers[0,:] - PFC.centers[use,:], axis=1)
+            #smallStep = dist[closest] / 2.0
+            closest = use[np.argmin(dist)]
+            #find the distance that face is along the inverse normal
+            distAlongNorm = np.dot((PFC.centers[0,:] - PFC.centers[closest,:]), PFC.norms[0,:])
+            #put a point between those two planes
+            smallStep = distAlongNorm / 2.0
+            #place midpoint between index 0 and the closest intersection face along inverse normal
+            self.OF.xMid = (PFC.centers[0,0] - smallStep*PFC.norms[0,0])*1000.0
+            self.OF.yMid = (PFC.centers[0,1] - smallStep*PFC.norms[0,1])*1000.0
+            self.OF.zMid = (PFC.centers[0,2] - smallStep*PFC.norms[0,2])*1000.0
 
 #            #setup openfoam environment
 #            try:
@@ -2173,7 +2238,7 @@ class GUIobj():
             #generate 3D volume mesh or coy from file
             print("Generating volume mesh")
             log.info("Generating volume mesh")
-            self.OF.generate3Dmesh(PFC.OFpart)
+            self.OF.generate3Dmesh(PFC.OFpart, self.CAD.overWriteMask)
 
             qDiv = np.zeros((len(PFC.centers)))
             ctrs = copy.copy(PFC.centers)*1000.0

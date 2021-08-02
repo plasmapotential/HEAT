@@ -87,47 +87,64 @@ class heatFlux:
         self.fracLO = float(self.fracLO)
         return
 
-    def getHFtableData(self, ep):
+    def getHFtableData(self, ep=None):
         """
         create a dictionary of HF parameters that are displayed in the DASH gui
         and saves them into class variable self.HFdataDict
 
         ep is equilibrium object
         """
-        #handle various heat flux regressions if user selected that in GUI
-        if self.lqCNmode == 'eich' or self.lqCNmode == None:
-            self.getEichFromEQ(ep)
-            self.lqCN = self.lqEich
+        HFdict = {}
 
-        if self.SMode == 'makowski' or self.SMode == None:
-            self.getSpreadingFromEQ(ep, self.fG)
+        if self.hfMode == 'limiter':
+            HFdict['Heat Flux Mode'] = 'Limiter'
+            if self.lqCNmode == 'eich':
+                self.getEichFromEQ(ep)
+                HFdict["\u03BB Near Mode"] = 'Eich Regression #15'
+            else:
+                HFdict["\u03BB Near Mode"] = 'User Defined'
+            HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqEich
+            HFdict["Common Region Far Heat Flux Width (\u03BBq CF) [mm]"] = self.lqCF
+            HFdict["Common Region Near Power Fraction"] = self.fracCN
+            HFdict["Common Region Near Power Fraction"] = self.fracCF
 
-        if self.lqCFmode == 'horaceck': #or self.lqCFmode == None:
-            self.getHoraceckFromEQ(ep)
-        self.HFdataDict = {
-                            'hfMode':self.hfMode,
-                            'lqCNmode':self.lqCNmode,
-                            'lqCFmode':self.lqCFmode,
-                            'Smode':self.SMode,
-                            'lqEich':self.lqEich,
-                            'S':self.S,
-                            'qBG':self.qBG,
-                            'fG':self.fG,
-                            'lqCN':self.lqCN,
-                            'lqCF':self.lqCF,
-                            'lqPN':self.lqPN,
-                            'lqPF':self.lqPF,
-                            'fracCN':self.fracCN,
-                            'fracCF':self.fracCF,
-                            'fracPN':self.fracPN,
-                            'fracPF':self.fracPF,
-                            'fracUI':self.fracUI,
-                            'fracUO':self.fracUO,
-                            'fracLI':self.fracLI,
-                            'fracLO':self.fracLO,
-                            'Psol':self.Psol,
-                            }
-        return
+
+        elif self.hfMode == 'multiExp':
+            HFdict['Heat Flux Mode'] = 'Multiple (4) Exponentials'
+            HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqCN
+            HFdict["Common Region Far Heat Flux Width (\u03BBq CF) [mm]"] = self.lqCF
+            HFdict["Private Region Near Heat Flux Width (\u03BBq PN) [mm]"] = self.lqPN
+            HFdict["Private Region Far Heat Flux Width (\u03BBq PF) [mm]"] = self.lqPF
+            HFdict["Common Region Near Power Fraction"] = self.fracCN
+            HFdict["Common Region Far Power Fraction"] = self.fracCF
+            HFdict["Private Region Near Power Fraction"] = self.fracPN
+            HFdict["Private Region Far Power Fraction"] = self.fracPF
+
+        elif self.hfMode == 'eich':
+            HFdict['Heat Flux Mode'] = 'Gaussian Spreading'
+            if self.lqCNmode == 'eich':
+                self.getEichFromEQ(ep)
+                HFdict["\u03BB Mode"] = 'Eich Regression #15'
+            else:
+                HFdict["\u03BB Mode"] = 'User Defined'
+            HFdict["Heat Flux Width (\u03BBq) [mm]"] = self.lqEich
+
+            if self.SMode == 'makowski':
+                self.getSpreadingFromEQ(ep, self.fG)
+                HFdict['Greenwald Density Fraction'] = self.fG
+                HFdict['Spreading (S) Mode'] = 'Makowski Figure 6'
+            else:
+                HFdict['Spreading (S) Mode'] = 'User Defined'
+                HFdict['Greenwald Density Fraction'] = 'Only used for Makowski S Mode'
+            HFdict['S [mm]'] = self.S
+            HFdict['Background Heat Flux'] = self.qBG
+
+        HFdict["Power Crossing Separatrix (Psol) [MW]"] = self.Psol
+        HFdict["Upper Inner Divertor Power Fraction"] = self.fracUI
+        HFdict["Upper Outer Divertor Power Fraction"] = self.fracUO
+        HFdict["Lower Inner Divertor Power Fraction"] = self.fracLI
+        HFdict["Lower Outer Divertor Power Fraction"] = self.fracLO
+        return HFdict
 
 
 

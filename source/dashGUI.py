@@ -49,9 +49,12 @@ if inAppImage == True:
     pvpythonCMD = os.environ["pvpythonCMD"]
     #Root HEAT source code directory
     rootDir = AppDir + '/usr/src'
-    #openFOAM bashrc location
-    OFbashrc = AppDir + '/usr/opt/openfoam/openfoam1912/etc/bashrc'
-    OFdir = AppDir+'/usr/opt/openfoam/openfoam1912'
+    #openFOAM bashrc location v1912
+    #OFbashrc = AppDir + '/usr/opt/openfoam/openfoam1912/etc/bashrc'
+    #OFdir = AppDir+'/usr/opt/openfoam/openfoam1912'
+    #openFOAM bashrc location v2106
+    OFbashrc = AppDir + '/usr/opt/openfoam/etc/bashrc'
+    OFdir = AppDir+'/usr/opt/openfoam'
     #default freecad path
     #FreeCADPath = AppDir + '/opt/freecad/squashfs-root/usr/lib'
     FreeCADPath = AppDir + '/usr/lib/freecad-python3/lib'
@@ -75,9 +78,10 @@ else:
     FreeCADPath = '/usr/lib/freecad-python3/lib'
     #default source code location (EFIT class should be here)
     EFITPath = '/home/tom/source'
-    #default openFOAM source path
-    OFbashrc = '/opt/openfoam/openfoam-OpenFOAM-v1912/etc/bashrc'
-#    OFbashrc = '/opt/OpenFOAM/OpenFOAM-v1912/etc/bashrc'
+    #default openFOAM source path v1912
+    #OFbashrc = '/opt/openfoam/openfoam-OpenFOAM-v1912/etc/bashrc'
+    #default openFOAM source path v2106
+    OFbashrc = '/opt/openfoam/OpenFOAM-v2106/etc/bashrc'
     #python site packages where PyFoam resides
     pyFoamPath = '/home/tom/.local/lib/python3.8/site-packages'
     #pyFoam python scripts
@@ -686,7 +690,8 @@ def buildMHDbox():
                Output('timeSlider', 'max'),
                Output('timeSlider', 'marks'),
                Output('timeSlider', 'value'),
-               Output('gFileTable2', 'data')],
+               Output('gFileTable2', 'data'),
+               Output('MHDDataStorage', 'data')],
               [Input('loadMHD', 'n_clicks')],
               [State('shot', 'value'),
               State('tmin', 'value'),
@@ -759,7 +764,17 @@ def loadMHD(n_clicks,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask,data
             marks.update({int(t):'{}'.format(t)})
 
     value = ts[0]
-    return tminMHD, tmaxMHD, marks, value, data
+
+
+    MHDdata = {
+        'Shot Number':shot,
+        'Minimum Timestep [ms]':tmin,
+        'Maximum Timesteo [ms]':tmax,
+        'Trace Distance [degrees]':nTrace,
+        '3D Plasma? [0=False]':plasma3Dmask,
+        }
+
+    return tminMHD, tmaxMHD, marks, value, data, MHDdata
 
 
 @app.callback([Output('hiddenDivSaveEQ', 'children'),
@@ -884,7 +899,8 @@ def buildCADbox():
         )
 
 #Load res button connect
-@app.callback([Output('hiddenDivCAD1', 'children')],
+@app.callback([Output('hiddenDivCAD1', 'children'),
+               Output('CADDataStorage', 'data')],
               [Input('loadRes', 'n_clicks')],
               [State('ROIGridRes', 'value'),
                State('gridRes', 'value'),
@@ -895,7 +911,13 @@ def loadRes(n_clicks, ROIGridRes, gridRes, MachFlag):
     if MachFlag is None:
         return [html.Label("Select a machine", style={'color':'#fc0313'})]
     gui.getCADResInputs(ROIGridRes,gridRes)
-    return [html.Label("Loaded Resolution Settings", style={'color':'#f5d142'})]
+
+    CADdata = {
+        'Heat Flux Max Edge Length [mm]':ROIGridRes,
+        'Intersect Max Edge Length [mm]':gridRes
+        }
+
+    return [html.Label("Loaded Resolution Settings", style={'color':'#f5d142'}), CADdata]
 
 #Load CAD button connect
 @app.callback([Output('hiddenDivCAD2', 'children')],
@@ -1105,7 +1127,7 @@ def eichParameters(className):
                     {'label': 'From Eich Scaling', 'value': 'eich'},
                     {'label': 'User Defined', 'value': 'user'}
                     ],
-                value=None,
+                value='eich',
                 ),
                 ],
             ),
@@ -1122,7 +1144,7 @@ def eichParameters(className):
                     {'label': 'From Makowski Scaling', 'value': 'makowski'},
                     {'label': 'User Defined', 'value': 'user'}
                     ],
-                value=None,
+                value='makowski',
                 ),
                 ],
             ),
@@ -1303,7 +1325,7 @@ def limiterParameters(className):
                         {'label': 'From Eich Scaling', 'value': 'eich'},
                         {'label': 'User Defined', 'value': 'user'}
                         ],
-                    value=None,
+                    value='eich',
                     )
                 ]),
             html.Div(
@@ -1318,7 +1340,7 @@ def limiterParameters(className):
                         #{'label': 'From Horaceck Scaling', 'value': 'horaceck'},
                         {'label': 'User Defined', 'value': 'user'}
                         ],
-                    value=None,
+                    value='user',
                     )
                 ]),
 
@@ -1418,7 +1440,7 @@ def commonRegionParameters():
 
 #Load HF button connect
 @app.callback([Output('hiddenDivHF', 'children'),
-               Output('hfTable', 'data')],
+               Output('HFDataStorage', 'data')],
               [Input('loadHF', 'n_clicks')],
               [State('hfMode', 'value'),
                State('lqEich', 'value'),
@@ -1462,12 +1484,20 @@ def loadHF(n_clicks,hfMode,lqEich,S,qBG,lqCN,lqCF,lqPN,lqPF,
     else:
         #set up the heat flux configuration (which scalings to use)
         if hfMode == 'limiter':
-            lqCNmode = limiterlqCNMode
+            if limiterlqCFMode == 'user':
+                lqCNmode = limiterlqCNMode
+            else:
+                lqCNmode = 'eich'
+            SMode = 'user'
             lqCFmode = limiterlqCFMode
             lqCN = limlqCN
             lqCF = limlqCF
+            lqPN = 0.0
+            lqPF = 0.0
             fracCN = limfracCN
             fracCF = limfracCF
+            fracPN = 0.0
+            fracPF = 0.0
         elif hfMode == 'multiExp':
             #add this back in after brunner scaling is in HEAT:
             # lqCNmode = multiExplqCNMode
@@ -1475,10 +1505,26 @@ def loadHF(n_clicks,hfMode,lqEich,S,qBG,lqCN,lqCF,lqPN,lqPF,
             lqCFmode = 'user'
             lqPNmode = 'user'
             lqPFmode = 'user'
+            lqEich = 0.0
+            S = 0.0
+            SMode = 'user'
+            lqCNmode = 'user'
+
         else: #eich mode is default
-            lqCNmode = eichlqCNMode
+            if eichlqCNMode == None:
+                lqCNmode = 'eich'
+            else:
+                lqCNmode = eichlqCNMode
             lqCFmode = None
-            SMode = SMode
+            if SMode == None:
+                SMode = 'makowski'
+            else:
+                SMode = SMode
+            lqCN = lqEich
+            lqCF = 0.0
+            lqPN = 0.0
+            lqPF = 0.0
+
         #could add private flux scalings here if they ever exist
 
         #set up HF object in HEAT
@@ -1489,10 +1535,11 @@ def loadHF(n_clicks,hfMode,lqEich,S,qBG,lqCN,lqCF,lqPN,lqPF,
                         lqCNmode,lqCFmode,SMode,fG)
 
         #Update output tab table
-        dataDict = gui.HF.HFdataDict
-        hfDict = [{'Parameter':i, 'Value':dataDict[i]} for i in dataDict]
+        HFdata = gui.HF.HFdataDict
+        #hfDict = [{'Parameter':i, 'Value':dataDict[i]} for i in inputTableData]
 
-    return [html.Label("Loaded HF Settings", style={'color':'#f5d142'}), hfDict]
+
+    return [html.Label("Loaded HF Settings", style={'color':'#f5d142'}), HFdata]
 
 
 
@@ -1791,6 +1838,7 @@ def velocityFromFile(className):
                Output('gyroPhasePlot', 'children'),
                Output('vPhasePlot', 'children'),
                Output('vSlicePlot', 'children'),
+               Output('GYRODataStorage', 'data')
                ],
               [Input('loadGYRO', 'n_clicks')],
               [State('N_gyroSteps', 'value'),
@@ -1815,10 +1863,24 @@ def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
     gyroPhaseFig = gyroPhasePlots(update=True)
     vPhaseFig = vPhasePlots(update=True)
     vSliceFig = vSlicePlots(update=True)
+
+    GYROdata = {
+            'Number of steps per helix period':N_gyroSteps,
+            'Number of samples in gyro phase space':N_gyroPhase,
+            'Gyro trace length [degrees] (goes both directions)': gyroDeg,
+            'Ion effective mass [AMU]': ionMassAMU,
+            'Velocity / Temperature Mode':vMode,
+            'Ion temperature at PFC surface [eV]':gyroT_eV,
+            'Number of samples in velocity phase space':N_vPhase,
+            'Number of samples from Maxwellian velocity distribution':N_vSlice,
+            'Fraction of power carried by ions':ionFrac,
+            }
+
     return [html.Label("Loaded Gyro Orbit Data into HEAT", style={'color':'#f5d142'}),
             gyroPhaseFig,
             vPhaseFig,
-            vSliceFig]
+            vSliceFig,
+            GYROdata]
 
 
 
@@ -1901,7 +1963,8 @@ def OFinputBoxes():
                                 options=[
                                 {'label': 'SGLR6510 Graphite', 'value': 'SGL'},
                                 {'label': 'ATJ Graphite', 'value': 'ATJ'},
-                                {'label': 'Pure Molybdenum', 'value': 'MOLY'},
+                                {'label': 'Molybdenum', 'value': 'MOLY'},
+                                {'label': 'Tungsten', 'value': 'TUNG'},
 
                                 ],
                                 value='SGL'
@@ -1914,7 +1977,8 @@ def OFinputBoxes():
             )
 
 #Load OF button connect
-@app.callback([Output('hiddenDivOF', 'children')],
+@app.callback([Output('hiddenDivOF', 'children'),
+               Output('OFDataStorage', 'data')],
               [Input('loadOF', 'n_clicks')],
               [State('OFstartTime', 'value'),
                State('OFstopTime', 'value'),
@@ -1937,7 +2001,17 @@ def loadOF(n_clicks,OFstartTime,OFstopTime,
     gui.loadOF(OFstartTime,OFstopTime,
                 OFminMeshLev,OFmaxMeshLev,
                 OFSTLscale,OFbashrcLoc,OFdeltaT,OFwriteDeltaT,materialSelect)
-    return [html.Label("Loaded OF Data into HEAT", style={'color':'#f5d142'})]
+    OFdata = {
+        'OpenFOAM start time [ms]':OFstartTime,
+        'OpenFOAM stop time [ms]':OFstopTime,
+        'Minimum FVM mesh refinement level':OFminMeshLev,
+        'Maximum FVM mesh refinement level':OFmaxMeshLev,
+        'Scale multiplier for FVM meshes':OFSTLscale,
+        'OpenFOAM simulation timestep size [s]': OFdeltaT,
+        'OpenFOAM write output timestep size [s]':OFwriteDeltaT,
+        'OpenFOAM material selection': materialSelect
+        }
+    return [html.Label("Loaded OF Data into HEAT", style={'color':'#f5d142'}), OFdata]
 
 
 
@@ -2629,8 +2703,8 @@ def outputChildren():
             html.Br(),
             html.Div(id="hiddenDivDownloadResults", style={"width":"100%"}),
             Download(id="downloadResultsDir"),
-            html.H6("Heat Flux Parameters:"),
-            html.Div( children=buildHFtable(), className="gfileTable" ),
+            html.H6("Input Parameters:"),
+            html.Div( children=buildInputsTable(), className="gfileTable" ),
             #qDiv plot
             html.Div(
                 children=[
@@ -2705,12 +2779,12 @@ def saveResults(n_clicks, MachFlag, shot):
 
 
 
-def buildHFtable(data=None):
+def buildInputsTable(data=None):
     cols = getOutputColumns()
     if data==None:
         data = [{}]
     return dash_table.DataTable(
-        id='hfTable',
+        id='inputsTable',
         columns = cols,
         data = data,
         style_header={'backgroundColor': 'rgb(30, 30, 30)'},
@@ -2721,6 +2795,7 @@ def buildHFtable(data=None):
         },
         editable=False,
         row_deletable=False,
+        export_format="csv",
         )
 
 
@@ -2728,6 +2803,32 @@ def buildHFtable(data=None):
 def getOutputColumns():
     params = ['Parameter','Value']
     return [{'id': p, 'name': p} for p in params]
+
+@app.callback([Output('inputsTable', 'data')],
+              [Input('MHDDataStorage', 'data'),
+               Input('CADDataStorage', 'data'),
+               Input('HFDataStorage', 'data'),
+               Input('GYRODataStorage', 'data'),
+               Input('OFDataStorage', 'data')])
+def inputsTable(MHDdata,CADdata,HFdata,GYROdata,OFdata):
+    newData = {}
+    if MHDdata != None:
+        for key,val in MHDdata.items():
+            newData[key] = val
+    if CADdata != None:
+        for key,val in CADdata.items():
+            newData[key] = val
+    if HFdata != None:
+        for key,val in HFdata.items():
+            newData[key] = val
+    if GYROdata != None:
+        for key,val in GYROdata.items():
+            newData[key] = val
+    if OFdata != None:
+        for key,val in OFdata.items():
+            newData[key] = val
+    newData = [{'Parameter': p, 'Value': newData[p]} for p in newData]
+    return [newData]
 
 
 
@@ -3031,6 +3132,12 @@ app.layout = html.Div(
             dcc.Store(id='PFCdataStorage', storage_type='memory'),
             dcc.Store(id='gFileListStorage', storage_type='memory'),
             dcc.Store(id='BtraceDataStorage', storage_type='memory'),
+            dcc.Store(id='MHDDataStorage', storage_type='memory'),
+            dcc.Store(id='CADDataStorage', storage_type='memory'),
+            dcc.Store(id='HFDataStorage', storage_type='memory'),
+            dcc.Store(id='GYRODataStorage', storage_type='memory'),
+            dcc.Store(id='OFDataStorage', storage_type='memory'),
+
             #interval for updating logFile every 5 seconds
             dcc.Interval(
                 id='intervalLog',
@@ -3066,6 +3173,10 @@ Session storage callbacks and functions
                Output('lqCF', 'value'),
                Output('lqPN', 'value'),
                Output('lqPF', 'value'),
+               Output('limlqCN', 'value'),
+               Output('limlqCF', 'value'),
+               Output('limfracCN', 'value'),
+               Output('limfracCF', 'value'),
                Output('fracCN', 'value'),
                Output('fracCF', 'value'),
                Output('fracPN', 'value'),
@@ -3146,6 +3257,10 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('lqCF', ''),
             data.get('lqPN', ''),
             data.get('lqPF', ''),
+            data.get('limlqCN', ''),
+            data.get('limlqCF', ''),
+            data.get('limfracCN', ''),
+            data.get('limfracCF', ''),
             data.get('fracCN', ''),
             data.get('fracCF', ''),
             data.get('fracPN', ''),

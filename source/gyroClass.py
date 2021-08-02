@@ -6,7 +6,7 @@ import multiprocessing
 import time
 from scipy.interpolate import interp1d
 import scipy.integrate as integrate
-from tqdm.contrib.concurrent import process_map
+#from tqdm.contrib.concurrent import process_map #for process bar.  very slow...
 tools = toolsClass.tools()
 
 import logging
