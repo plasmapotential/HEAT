@@ -37,6 +37,23 @@ This project is openSource under the MIT license.
 Tom's email:  tlooby@vols.utk.edu
 
 ## Recent Updates
+The latest HEAT appImage is available under the "Releases" page.  This new version (v1.3.2)
+contains the following updates, bug fixes, and user feature request:
+ - Ion gyro orbit heat loads
+ - Ion gyro orbit trajectory tracing
+ - Ion gyro orbit plots on Outputs tab
+ - Multiple material selections for OpenFOAM
+ - Updated OpenFOAM to v2106 from v1912
+ - Timestamp checking for STP files (no more deleting STP and STL folders)
+ - Multiple field line traces from user uploaded file
+ - Fixed / cleaned input file system
+ - Added table to Outputs tab with all user inputs
+ - Bp and Bt plots on gFile Tools tab for users to check gFile scaling / directions
+ - Added OpenFOAM write timestep controls
+ - STL check for watertight meshes
+ - Added backfaceMask, a shadowMask corresponding to backface culling
+ - More that I am probably forgetting...
+
 
 ## Installation and Tutorials
 HEAT installation instructions and tutorials can be found here:
