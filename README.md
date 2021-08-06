@@ -21,15 +21,10 @@ There were three objectives taken into consideration when designing HEAT:
 2) post-shot confirmation of heat loads and associated physics models
 3) design optimization
 
-<<<<<<< HEAD
 The first HEAT paper has been accepted by the journal Fusion Science and Technology.  
 It will be published under open access.  After the publisher has finished edits,
 the DOI will be: 10.1080/15361055.2021.1951532 .  A link will be provided on this
 page when available.
-=======
-The first HEAT paper is currently under review in the journal Fusion Science and Technology, and will be published under open access.  
-A link will be provided when the paper is published.
->>>>>>> cf22542725c62785b2097f6f4cea97560ca608b0
 
 An appImage is available so that users can run HEAT on a linux machine with a single
 file.  appImage is available under 'releases' and has been tested on Ubuntu18.04, Ubuntu20.04,
