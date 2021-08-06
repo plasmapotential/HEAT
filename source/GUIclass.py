@@ -1154,34 +1154,34 @@ class GUIobj():
                     if 'bdotnPC' in runList:
                         self.bdotnPC(PFC)
 
-            if 'HFpc' in runList:
-                print('Total Input Power = {:f}'.format(np.sum(powerTrue)))
-                print('Theoretical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
-                print('Optical Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumOptical)))
-                log.info('Total Input Power = {:f}'.format(np.sum(powerTrue)))
-                log.info('Theoretical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
-                log.info('Optical Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumOptical)))
+                    if 'HFpc' in runList:
+                        print('Total Input Power = {:f}'.format(np.sum(powerTrue)))
+                        print('Theoretical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
+                        print('Optical Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumOptical)))
+                        log.info('Total Input Power = {:f}'.format(np.sum(powerTrue)))
+                        log.info('Theoretical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
+                        log.info('Optical Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumOptical)))
 
-                totalPowPow = 0
-                for PFC in self.PFCs:
-                    print("=== Last timestep's PFC arrays: Optical ===")
-                    tmpPow = self.HF.power_sum_mesh(PFC, scale2circ=False, verbose=False)
-                    totalPowPow += tmpPow
-                    print(PFC.name + ":\t{:.6f}".format(tmpPow))
-                    log.info(PFC.name + ":\t{:.6f}".format(tmpPow))
-                    print("PFC array sum: {:.6f}".format(totalPowPow))
-                    log.info("PFC array sum: {:.6f}".format(totalPowPow))
+            totalPowPow = 0
+            for PFC in self.PFCs:
+                print("=== Last timestep's PFC arrays: Optical ===")
+                tmpPow = self.HF.power_sum_mesh(PFC, scale2circ=False, verbose=False)
+                totalPowPow += tmpPow
+                print(PFC.name + ":\t{:.6f}".format(tmpPow))
+                log.info(PFC.name + ":\t{:.6f}".format(tmpPow))
+                print("PFC array sum: {:.6f}".format(totalPowPow))
+                log.info("PFC array sum: {:.6f}".format(totalPowPow))
 
             if 'GyroPC' in runList:
                 print("\n===+++ GYRO ORBIT CALCULATION +++===")
                 log.info("\n===+++ GYRO ORBIT CALCULATION +++===")
-                PFC.powerSumGyro = np.zeros((len(self.MHD.timesteps)))
                 tGyro = time.time()
                 self.getGyroMeshes()
 
                 #generate index maps
                 self.prepareGyroMaps(tIdx)
                 for PFC in self.PFCs:
+                    PFC.powerSumGyro = np.zeros((len(self.MHD.timesteps)))
                     if t not in PFC.timesteps:
                         pass
                     else:
@@ -1239,7 +1239,7 @@ class GUIobj():
 
 
             #generating allSources heat fluxes
-            if 'GyroPC' in runList or 'HFpc' in runList:
+            if ('GyroPC' in runList) or ('HFpc' in runList):
                 #set up time and equilibrium
                 PFC.t = t
                 for PFC in self.PFCs:
@@ -1268,7 +1268,7 @@ class GUIobj():
         log.info("Total Time Elapsed: {:f}".format(time.time() - t0))
         print("\nCompleted HEAT run\n")
         log.info("\nCompleted HEAT run\n")
-        
+
         #make a sound when complete
 #        os.system('spd-say -t female2 "HEAT run complete"')
 
@@ -1321,7 +1321,7 @@ class GUIobj():
         #Create pointclouds for paraview
         R,Z,phi = tools.xyz2cyl(PFC.centers[:,0],PFC.centers[:,1],PFC.centers[:,2])
         PFC.write_shadow_pointcloud(PFC.centers,PFC.shadowed_mask,PFC.controlfilePath,PFC.tag)
-        self.HF.write_heatflux_pointcloud(PFC.centers,qDiv,PFC.controlfilePath,PFC.tag)
+        self.HF.write_heatflux_pointcloud(PFC.centers,qDiv,PFC.controlfilePath,PFC.tag,mode='optical')
         PFC.write_bdotn_pointcloud(PFC.centers, PFC.bdotn, PFC.controlfilePath,PFC.tag)
         #structOutfile = MHD.shotPath + '/' + '{:06d}/struct.csv'.format(PFC.t)
         #HF.PointCloudfromStructOutput(structOutfile)
@@ -1623,18 +1623,18 @@ class GUIobj():
             if PFC.name in names:
                 idx = names.index(PFC.name)
                 if 'HFpc' in runList:
-                    hfOptical[idx]+=PFC.qDiv
-                    hfAll[idx]+=PFC.qDiv
+                    hfOptical[idx]+=PFC.qDiv.copy()
+                    hfAll[idx]+=PFC.qDiv.copy()
                     #HFPC always runs shadowMask too
-                    shadow[idx]+=PFC.shadowed_mask
+                    shadow[idx]+=PFC.shadowed_mask.copy()
                     shadow[idx].astype(bool)
                 elif 'GyroPC' in runList:
-                    hfGyro[idx]+=PFC.qGyro
-                    hfAll[idx]+=PFC.qGyro
-                    shadowGyro[idx]+=PFC.gyroShadowMask
+                    hfGyro[idx]+=PFC.qGyro.copy()
+                    hfAll[idx]+=PFC.qGyro.copy()
+                    shadowGyro[idx]+=PFC.gyroShadowMask.copy()
                     shadowGyro[idx].astype(bool)
                 elif 'backfacePC' in runList:
-                    backface[idx]+=PFC.backfaceMask
+                    backface[idx]+=PFC.backfaceMask.copy()
                     backface[idx].astype(bool)
                 #some quantities cant be added (like psi)
                 #just use one mapDirection for these cases
@@ -1642,23 +1642,26 @@ class GUIobj():
                     pass
             else:
                 if 'HFpc' in runList:
-                    hfOptical.append(PFC.qDiv)
-                    shadow.append(PFC.shadowed_mask)
-                    hfAll.append(PFC.qDiv)
+                    hfOptical.append(PFC.qDiv.copy())
+                    shadow.append(PFC.shadowed_mask.copy())
+                    hfAll.append(PFC.qDiv.copy())
                 if 'GyroPC' in runList:
-                    hfGyro.append(PFC.qGyro)
-                    shadowGyro.append(PFC.gyroShadowMask)
-                    hfAll[-1]+=PFC.qGyro
+                    hfGyro.append(PFC.qGyro.copy())
+                    shadowGyro.append(PFC.gyroShadowMask.copy())
+                    if 'HFpc' not in runList: #when we run HEAT twice, 2nd time gyro only
+                        hfAll.append(PFC.qDiv.copy()+PFC.qGyro.copy())
+                    else:
+                        hfAll[-1]+=PFC.qGyro.copy()
                 if 'backfacePC' in runList:
-                    backface.append(PFC.backfaceMask)
+                    backface.append(PFC.backfaceMask.copy())
                 if 'bdotnPC' in runList:
-                    bdotn.append(PFC.bdotn)
+                    bdotn.append(PFC.bdotn.copy())
                 if 'psiPC' in runList:
-                    psi.append(PFC.psimin)
+                    psi.append(PFC.psimin.copy())
                 if 'NormPC' in runList:
-                    norm = np.append(norm, PFC.norms)
+                    norm = np.append(norm, PFC.norms.copy())
                 if 'Bpc' in runList:
-                    bField = np.append(bField, PFC.Bxyz)
+                    bField = np.append(bField, PFC.Bxyz.copy())
                 #note that I don't do the normal vector NormPC (its same every timestep)
                 #user can just get NormPCs individually for each tile
                 Npoints += len(PFC.centers)
@@ -1695,12 +1698,14 @@ class GUIobj():
         tag='all'
         centers = centers.reshape(Npoints,3)
         if 'HFpc' in runList:
-            self.HF.write_heatflux_pointcloud(centers,hfOpticalNumpy,tPath,tag)
+            self.HF.write_heatflux_pointcloud(centers,hfOpticalNumpy,tPath,tag,'optical')
             PFC.write_shadow_pointcloud(centers,shadowNumpy,tPath,tag)
             self.HF.write_heatflux_pointcloud(centers,hfAllNumpy,tPath,tag,'all')
         if 'GyroPC' in runList:
             self.HF.write_heatflux_pointcloud(centers,hfGyroNumpy,tPath,tag,'gyro')
             PFC.write_shadow_pointcloud(centers,shadowGyroNumpy,tPath,tag,'gyro')
+            if 'HFpc' not in runList:
+                self.HF.write_heatflux_pointcloud(centers,hfAllNumpy,tPath,tag,'all')
         if 'shadowPC' in runList:
             PFC.write_shadow_pointcloud(centers,shadowNumpy,tPath,tag)
         if 'backfacePC' in runList:
