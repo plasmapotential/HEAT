@@ -11,7 +11,7 @@ gridRes, standard
 shot, 204118
 tmin, 0
 tmax, 5000
-nTrace, 10
+nTrace, 2
 dataPath, /home/tom/data/HEAT/
 plasma3Dmask, 0 #1=true, 0=false
 #==============================================================
@@ -38,7 +38,7 @@ fracLO,0.7
 #                Ion Gyro Orbit HF Variables
 #==============================================================
 N_gyroSteps, 5
-gyroDeg, 3
+gyroDeg, 1
 gyroT_eV, 100
 N_vSlice, 1
 N_vPhase, 1

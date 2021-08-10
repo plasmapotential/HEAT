@@ -178,7 +178,7 @@ class GYRO:
             #set upper bound of v*f(v) (note that this cuts off high energy particles)
             self.vMax = 5 * self.vThermal
             #get 100 points to initialize functional form of f(v) (note this is a 2D matrix cause vMax is 2D)
-            self.vScan = np.linspace(0,self.vMax,100).T
+            self.vScan = np.linspace(0,self.vMax,1000).T
             #get velocity slices for each T0
             self.pullEqualProbabilityVelocities()
 
@@ -198,6 +198,8 @@ class GYRO:
         """
         self.vSlices = np.ones((len(self.T0),self.N_vSlice))*np.nan
         self.energySlices = np.zeros((len(self.T0),self.N_vSlice))
+        self.energyIntegrals = np.zeros((len(self.T0),self.N_vSlice))
+        self.energyFracs = np.zeros((len(self.T0),self.N_vSlice))
         for i in range(len(self.T0)):
             #get velocity range for this T0
             v = self.vScan[i,:]
@@ -209,38 +211,30 @@ class GYRO:
             v_cdf = np.cumsum(v_pdf[1:])*np.diff(v)
             v_cdf = np.insert(v_cdf, 0, 0)
             #create bspline interpolators for the cdf and cdf inverse
-            inverseCDF = interp1d(v_cdf, v, kind='cubic')
-            forwardCDF = interp1d(v, v_cdf, kind='cubic')
+            inverseCDF = interp1d(v_cdf, v, kind='linear')
+            forwardCDF = interp1d(v, v_cdf, kind='linear')
             #calculate N_vSlice velocities for each pdf each with equal area (probability)
             cdfMax = v_cdf[-1]
             cdfMin = v_cdf[0]
             sliceWidth = cdfMax / (self.N_vSlice+1)
             cdfSlices = np.linspace(0,1,self.N_vSlice+2)[1:-1]
+            cdfBounds = np.linspace(0,1,self.N_vSlice+1)[1:-1]
             self.vSlices[i,:] = inverseCDF(cdfSlices)
-
+            vBounds = inverseCDF(cdfBounds)
+            vBounds = np.insert(vBounds,0,0)
+            vBounds = np.append(vBounds,self.vMax[i])
             #Now find energies that correspond to these vSlices
             #we integrate: v**2 * f(v)
             #energy pdf (missing 1/2*mass but that gets divided out later anyways )
-            energy = lambda x: x**2 * pdf(x)
-            #if there is only 1 vSlice integrate entire pdf
-            if len(self.vSlices[i]==1):
-                vLo = 0.0
-                vHi = self.vMax[i]
-                self.energySlices[i] = integrate.quad(energy, vLo, vHi)[0]
-            #if there are multiple vSlices use them as integral bounds
-            else:
-                for j in range(len(self.vSlices[i])-1):
-                    if j==0:
-                        vLo = 0.0
-                        vHi = self.vMax[i,0]
-                    elif j==len(self.vSlices[i])-2:
-                        vLo = self.vSlices[i,-1]
-                        vHi = self.vMax[i]
-                    else:
-                        vLo = self.vSlices[i,j-1]
-                        vHi = self.vSlices[i,j]
-
-                    self.energySlices[i,j] = integrate.quad(energy, vLo, vHi)[0]
+            EofV = lambda x: x**2 * pdf(x)
+            #energy slices that correspond to velocity slices
+            self.energySlices[i,:] = EofV(self.vSlices[i,:])
+            #energy integrals and fractions
+            for j in range(self.N_vSlice):
+                self.energyIntegrals[i,j] = integrate.quad(EofV, vBounds[j], vBounds[j+1])[0]
+            energyTotal = self.energyIntegrals[i,:].sum()
+            for j in range(self.N_vSlice):
+                self.energyFracs[i,j] = self.energyIntegrals[i,j] / energyTotal
 
         print("Found N_vPhase velocities of equal probability")
         log.info("Found N_vPhase velocities of equal probability")

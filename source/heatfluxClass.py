@@ -976,52 +976,49 @@ class heatFlux:
         """
         print("Calculating gyro orbit heat loads")
         log.info("Calculating gyro orbit heat loads")
-        #get q|| for this PFC surface
-        q = PFC.q[PFC.PFC_GYROmap]
         #get divertor HF
         qDiv = PFC.qDiv[PFC.PFC_GYROmap] / self.elecFrac
         Pdiv = qDiv * PFC.areas[PFC.PFC_GYROmap]
         #Get fractional multipliers for each helical trace
         gyroFrac = 1.0/GYRO.N_gyroPhase
         vPhaseFrac = 1.0/GYRO.N_vPhase
-        #energy: note these units are bad, but get divided out
-        #old method (only converges for high resolution cases)
-        #energies = 1.0/2.0 * GYRO.mass_eV * GYRO.vSlices**2
-        energyTotal = GYRO.energySlices.sum(axis=1)
-        vSliceFrac = np.zeros((len(q),GYRO.N_vSlice))
-
-        for vSlice in range(GYRO.N_vSlice):
-            vSliceFrac[:,vSlice] = GYRO.energySlices[:,vSlice] / energyTotal
-
+#        #energy: note these units are bad, but get divided out
+#        #old method (only converges for high resolution cases)
+#        #energies = 1.0/2.0 * GYRO.mass_eV * GYRO.vSlices**2
+#        energyTotal = GYRO.energySlices.sum(axis=1)
+#        vSliceFrac = np.zeros((len(q),GYRO.N_vSlice))
+#
+#        for vSlice in range(GYRO.N_vSlice):
+#            vSliceFrac[:,vSlice] = GYRO.energySlices[:,vSlice] / energyTotal
+        vSliceFrac = GYRO.energyFracs
         #qMatrix = np.zeros((GYRO.N_gyroPhase,GYRO.N_vPhase,GYRO.N_vSlice,len(q)))
         Pgyro = np.zeros((GYRO.Nt))
         PNaN = 0.0
+        sum=0
+        sum1=0
         #loop through intersect record and redistribute power using multipliers
         for gyroPhase in range(GYRO.N_gyroPhase):
             for vPhase in range(GYRO.N_vPhase):
                 for vSlice in range(GYRO.N_vSlice):
                     idx = GYRO.intersectRecord[gyroPhase,vPhase,vSlice,PFC.CADHOT_GYROmap]
-                    isNan = np.where(np.isnan(idx)==True)[0] #include NaNs (NaNs = no intersection)
-                    notNan = np.where(np.isnan(idx)==False)[0] #dont include NaNs (NaNs = no intersection)
-                    idx1 = idx[~np.isnan(idx)] #indices we map power to
-                    idx1 = idx1.astype(int) #cast as integer
-                    idx2 = idx[np.isnan(idx)] #indices we map power to
-                    idx2 = idx2.astype(int) #cast as integer
-                    #qGyro[idx1] += q[notNan]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[:,vSlice][notNan]
+                    isNanFrom = np.where(np.isnan(idx)==True)[0] #include NaNs (NaNs = no intersection) index we map from
+                    notNanFrom = np.where(np.isnan(idx)==False)[0] #dont include NaNs (NaNs = no intersection) index we map from
+                    notNanTo = idx[~np.isnan(idx)] #indices we map power to
+                    notNanTo = idx1.astype(int) #cast as integer
+                    isNanTo = idx[np.isnan(idx)] #indices we map power to
+                    isNanTo = idx2.astype(int) #cast as integer
+
                     if len(notNan)>0:
-                        Pgyro[idx1] += Pdiv[notNan]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[notNan,vSlice]
-                        #Pgyro[idx1] += Pdiv[notNan]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[notNan,vSlice]
-                        #qGyro[idx1] += q[notNan]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[notNan,vSlice]
-                        #multiply by hdotn: incident angle of helix * face normal
-                        #qGyro[idx1] *= np.abs(GYRO.hdotn[gyroPhase,vPhase,vSlice,idx1])
+                        #multiple Froms can light up the same To, so we loop
+                        for i in range(len(notNan)):
+                            Pgyro[notNanTo[i]] += Pdiv[notNanFrom[i]]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[notNanFrom[i],vSlice]
+
                     if len(isNan)>0:
                         PNaN += np.sum(Pdiv[isNan]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[isNan,vSlice])
 
         #print("\nTEST2")
         #print(GYRO.intersectRecord[0,0,0,1711])
         #print(Pgyro[1711])
-
-
 
         GYRO.gyroPowMatrix += Pgyro
         GYRO.gyroNanPower += PNaN

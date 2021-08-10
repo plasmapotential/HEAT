@@ -380,7 +380,7 @@ class CAD:
         """
         Writes a mesh object to STL file named by part number.
         If mesh is a list of mesh objects, then write a separate file for
-        each mesh object in the list.  Does not overwrite / clobber
+        each mesh object in the list.  Clobbers if overWriteMask is True
         """
         if resolution == None:
             resolution = self.ROIGridRes
@@ -406,7 +406,7 @@ class CAD:
             filename = path + label[i] + "___" + resolution +"mm.stl"
             print("Writing mesh file: " + filename)
             log.info("Writing mesh file: " + filename)
-            if os.path.exists(filename):
+            if os.path.exists(filename) and self.overWriteMask == False:
                 pass
             else:
                 mesh[i].write(filename)
