@@ -75,7 +75,10 @@ else:
     #default freecad path
 #    FreeCADPath = '/opt/freecad/squashfs-root/usr/lib'
     #FreeCADPath = '/usr/lib/freecad/lib'
-    FreeCADPath = '/usr/lib/freecad-python3/lib'
+    # for ubuntu repo build
+    #FreeCADPath = '/usr/lib/freecad-python3/lib'
+    # for daily builds
+    FreeCADPath = '/usr/lib/freecad-daily-python3/lib'
     #default source code location (EFIT class should be here)
     EFITPath = '/home/tom/source'
     #default openFOAM source path v1912

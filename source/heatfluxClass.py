@@ -1004,17 +1004,17 @@ class heatFlux:
                     isNanFrom = np.where(np.isnan(idx)==True)[0] #include NaNs (NaNs = no intersection) index we map from
                     notNanFrom = np.where(np.isnan(idx)==False)[0] #dont include NaNs (NaNs = no intersection) index we map from
                     notNanTo = idx[~np.isnan(idx)] #indices we map power to
-                    notNanTo = idx1.astype(int) #cast as integer
+                    notNanTo = notNanTo.astype(int) #cast as integer
                     isNanTo = idx[np.isnan(idx)] #indices we map power to
-                    isNanTo = idx2.astype(int) #cast as integer
+                    isNanTo = isNanTo.astype(int) #cast as integer
 
-                    if len(notNan)>0:
+                    if len(notNanFrom)>0:
                         #multiple Froms can light up the same To, so we loop
-                        for i in range(len(notNan)):
+                        for i in range(len(notNanFrom)):
                             Pgyro[notNanTo[i]] += Pdiv[notNanFrom[i]]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[notNanFrom[i],vSlice]
 
-                    if len(isNan)>0:
-                        PNaN += np.sum(Pdiv[isNan]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[isNan,vSlice])
+                    if len(isNanFrom)>0:
+                        PNaN += np.sum(Pdiv[isNanFrom]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[isNanFrom,vSlice])
 
         #print("\nTEST2")
         #print(GYRO.intersectRecord[0,0,0,1711])

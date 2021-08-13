@@ -1620,8 +1620,8 @@ class GUIobj():
         for PFC in self.PFCs:
             #for tiles that are run in multiple mapDirections
             #add quantities that are superposition of multiple mapDirection runs
-            if PFC.name in names:
-                idx = names.index(PFC.name)
+            if PFC.name in names or PFC.name.split('_')[0] in names: #split for multiple mapDirections on same PFC
+                idx = names.index(PFC.name.split('_')[0])
                 if 'HFpc' in runList:
                     hfOptical[idx]+=PFC.qDiv.copy()
                     hfAll[idx]+=PFC.qDiv.copy()
@@ -1666,7 +1666,7 @@ class GUIobj():
                 #user can just get NormPCs individually for each tile
                 Npoints += len(PFC.centers)
                 centers = np.append(centers,PFC.centers)
-                names.append(PFC.name)
+                names.append(PFC.name.split('_')[0])
 
         #now build something we can write to csv (ie numpy)
         hfOpticalNumpy = np.array([])
