@@ -168,7 +168,7 @@ class MHD:
 
 
 
-    def Bfield_pointcloud(self, ep, R, Z, phi, powerDirection, normal=False):
+    def Bfield_pointcloud(self, ep, R, Z, phi, powerDir=None, normal=False):
         """
         Creates a Bfield Pointcloud that can be saved in a .csv file
         This pointcloud is then used by ParaView to overlay the
@@ -179,15 +179,22 @@ class MHD:
         Calculator should have this formula:
         (iHat*Bx) + (jHat*By) + (kHat*Bz)
 
-        powerDirection is the direction power flows onto the PFC
+        powerDirection is the direction power flows onto the PFC, and can be assigned by
+        user if desired.  Otherwise, it is calculated in PFC class for each mesh
+        element
 
         Note: this function returns the normal Bfield components if normal=True
 
         """
-        Bt0Direction = np.sign(ep.g['Bt0']) #account for machine Bt direction
-        Bt = ep.BtFunc.ev(R,Z)*powerDirection*Bt0Direction
-        BR = ep.BRFunc.ev(R,Z)*powerDirection*Bt0Direction
-        BZ = ep.BZFunc.ev(R,Z)*powerDirection*Bt0Direction
+        if powerDir != None:
+            Bt0Direction = np.sign(ep.g['Bt0']) #account for machine Bt direction
+            Bt = ep.BtFunc.ev(R,Z)*powerDir*Bt0Direction
+            BR = ep.BRFunc.ev(R,Z)*powerDir*Bt0Direction
+            BZ = ep.BZFunc.ev(R,Z)*powerDir*Bt0Direction
+        else:
+            Bt = ep.BtFunc.ev(R,Z)
+            BR = ep.BRFunc.ev(R,Z)
+            BZ = ep.BZFunc.ev(R,Z)
         #print(BR)
         #print(Bt)
         #print(BZ)

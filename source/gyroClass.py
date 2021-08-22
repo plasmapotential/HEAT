@@ -360,7 +360,8 @@ class GYRO:
         """
         parallelized gyro trace.  called by multiprocessing.pool.map()
 
-        i is index of parallel run from multiprocessing
+        i is index of parallel run from multiprocessing, corresponds to a mesh face
+        we are tracing in the ROI
 
         writes helical trace to self.helixTrace[i] in 2D matrix format:
             columns = X,Y,Z
@@ -435,6 +436,46 @@ class GYRO:
             use = np.where(self.psiMask[:,self.GYRO_HLXmap[i]] == 1)[0]
         else:
             use = np.arange(len(self.PFC_t1))
+
+        #Filter by toroidal angle
+        if self.phiFilterSwitch == True:
+            phiP1 = self.PFC_phiP1
+            phiP2 = self.PFC_phiP2
+            phiP3 = self.PFC_phiP3
+            phiMin = self.phiMin[i]
+            phiMax = self.phiMax[i]
+
+            #angle wrap cases (assumes we never trace in MAFOT steps larger than 10degrees)
+            if np.abs(phiMin-phiMax) > np.radians(5):
+                phiP1[phiP1<0] += 2*np.pi
+                phiP2[phiP2<0] += 2*np.pi
+                phiP3[phiP3<0] += 2*np.pi
+                if phiMin < 0: phiMin+=2*np.pi
+                if phiMax < 0: phiMax+=2*np.pi
+
+            #account for toroidal sign convention
+            if phiMin > phiMax:
+                pMin = phiMax
+                pMax = phiMin
+            else:
+                pMin = phiMin
+                pMax = phiMax
+
+
+            #target faces outside of this toroidal slice
+            test0 = np.logical_and(phiP1 < pMin,
+                                   phiP2 < pMin,
+                                   phiP3 < pMin)
+            test1 = np.logical_and(phiP1 > pMax,
+                                   phiP2 > pMax,
+                                   phiP3 > pMax)
+            test = np.logical_or(test0,test1)
+            use = np.where(test == False)[0]
+
+        else:
+            use = np.arange(len(self.PFC_t1))
+
+
         Nt = len(use)
 
         t0 = time.time()
@@ -443,11 +484,11 @@ class GYRO:
             q13D = np.repeat(q1[:,np.newaxis], Nt, axis=1)
             q23D = np.repeat(q2[:,np.newaxis], Nt, axis=1)
 
-            sign1 = np.sign(tools.signedVolume2(q13D,self.PFC_t1,self.PFC_t2,self.PFC_t3,ax=2))
-            sign2 = np.sign(tools.signedVolume2(q23D,self.PFC_t1,self.PFC_t2,self.PFC_t3,ax=2))
-            sign3 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t1,self.PFC_t2,ax=2))
-            sign4 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t2,self.PFC_t3,ax=2))
-            sign5 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t3,self.PFC_t1,ax=2))
+            sign1 = np.sign(tools.signedVolume2(q13D,self.PFC_t1[use],self.PFC_t2[use],self.PFC_t3[use],ax=2))
+            sign2 = np.sign(tools.signedVolume2(q23D,self.PFC_t1[use],self.PFC_t2[use],self.PFC_t3[use],ax=2))
+            sign3 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t1[use],self.PFC_t2[use],ax=2))
+            sign4 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t2[use],self.PFC_t3[use],ax=2))
+            sign5 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t3[use],self.PFC_t1[use],ax=2))
 
             test1 = (sign1 != sign2)
             test2 = np.logical_and(sign3==sign4,sign3==sign5)
@@ -502,8 +543,8 @@ class GYRO:
         # Möller, Tomas; Trumbore, Ben (1997). "Fast, Minimum Storage Ray-Triangle Intersection".
         #      Journal of Graphics Tools. 2: 21–28. doi:10.1080/10867651.1997.10487468.
         else:
-            E1 = (self.PFC_t2 - self.PFC_t1)
-            E2 = (self.PFC_t3 - self.PFC_t1)
+            E1 = (self.PFC_t2[use] - self.PFC_t1[use])
+            E2 = (self.PFC_t3[use] - self.PFC_t1[use])
             D = (q2-q1)
             Dmag = np.linalg.norm(D, axis=1)
             eps = 0.0000001
@@ -515,7 +556,7 @@ class GYRO:
                 with np.errstate(divide='ignore', invalid='ignore'):
                     #test1 = a<eps #ray parallel to triangle
                     f=1.0/a
-                    s = q1[j] - self.PFC_t1
+                    s = q1[j] - self.PFC_t1[use]
                     u = f * np.sum(s*h, axis=1)
                     test2 = np.logical_or(u<0.0, u>1.0) #ray inside triangle
                     q = np.cross(s,E1)
@@ -525,7 +566,7 @@ class GYRO:
                     test4 = np.logical_or(l<0.0, l>Dmag[j]) #ray long enough to intersect triangle
                 if np.sum(~np.any([test1,test2,test3,test4], axis=0))>0:
                     #we assume first intersection in this array is the intersection
-                    PFC_index = np.where(np.any([test1,test2,test3,test4], axis=0)==False)[0][0]
+                    PFC_index = use[ np.where(np.any([test1,test2,test3,test4], axis=0)==False)[0][0] ]
                     #map this index (of self.PFC_tX) back to global index (of self.tX)
                     index = self.PFCintersectMap[PFC_index]
                     #gyro trace incident angle:
@@ -572,6 +613,8 @@ class GYRO:
 
         updates lastPhase variable and helixTrace
         """
+#        #include toroidal angle filtering
+#        GYRO.phiFilterSwitch = False
         #magnetic field trace
         self.helixTrace = [None] * len(self.p0)
         N = len(self.p1)

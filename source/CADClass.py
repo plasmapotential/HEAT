@@ -134,11 +134,20 @@ class CAD:
         #list of unique intersect parts
         self.intersectList = list(set( [j for row in self.ROIintersects for j in row] ))
 
-        #initialize intersect variables
-        self.intersectParts = ['None' for i in range(len(self.intersectList))]
-        self.intersectMeshes = ['None' for i in range(len(self.intersectList))]
-        self.intersectCtrs = ['None' for i in range(len(self.intersectList))]
-        self.intersectNorms = ['None' for i in range(len(self.intersectList))]
+        #if user defined 'all' in PFC file
+        if sum([x in ['all','All',' all', ' All', 'ALL'] for x in self.intersectList]) > 0:
+            #initialize intersect variables for all parts in STP file
+            self.intersectParts = ['None' for i in range(len(self.CADparts))]
+            self.intersectMeshes = ['None' for i in range(len(self.CADparts))]
+            self.intersectCtrs = ['None' for i in range(len(self.CADparts))]
+            self.intersectNorms = ['None' for i in range(len(self.CADparts))]
+            self.intersectList = [obj.Label for obj in self.CADparts]
+        else:
+            #initialize intersect variables defined in file
+            self.intersectParts = ['None' for i in range(len(self.intersectList))]
+            self.intersectMeshes = ['None' for i in range(len(self.intersectList))]
+            self.intersectCtrs = ['None' for i in range(len(self.intersectList))]
+            self.intersectNorms = ['None' for i in range(len(self.intersectList))]
 
         return
 

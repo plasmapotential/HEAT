@@ -1582,7 +1582,7 @@ def buildPFCbox():
             )
 
 def loadPFCtable():
-    params = ['timesteps','PFCname','powerDirection','DivCode','intersectName']
+    params = ['timesteps','PFCname','DivCode','intersectName']
     cols = [{'id': p, 'name': p} for p in params]
     data = [{}]
     return dash_table.DataTable(
@@ -2053,9 +2053,9 @@ def runTabChecklist():
             children=[
                 dcc.Checklist(
                     options=[
-                        {'label': 'B-field powerDir point cloud ', 'value': 'Bpc'},
+                        {'label': 'B-field point cloud ', 'value': 'Bpc'},
                         {'label': 'Normal vector point cloud', 'value': 'NormPC'},
-                        {'label': 'backfaceMask point cloud', 'value': 'backfacePC'},
+                        {'label': 'powerDir point cloud', 'value': 'powerDirPC'},
                         {'label': 'psiN point cloud', 'value': 'psiPC'},
                         {'label': 'bdotn point cloud', 'value': 'bdotnPC'},
                         {'label': 'Heat flux point cloud', 'value': 'HFpc'},

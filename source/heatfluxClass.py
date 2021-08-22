@@ -728,7 +728,7 @@ class heatFlux:
         """
         xyz = PFC.centers
         r,z,phi = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
-        BNorms = MHD.Bfield_pointcloud(PFC.ep, r, z, phi, PFC.powerDirection, normal=True)
+        BNorms = MHD.Bfield_pointcloud(PFC.ep, r, z, phi, PFC.powerDir, normal=True)
         PFC.bdotn = np.multiply(PFC.norms, BNorms).sum(1)
         return
 
@@ -745,8 +745,8 @@ class heatFlux:
 
         R_omp = self.map_R_psi(psi,PFC)
         Z_omp = np.zeros(R_omp.shape)
-        # Dot product between surface normal and B field creates PFC.bdotn (angle of incidence)
-        self.HFincidentAngle(PFC, MHD)
+        # Dot product between surface normal and B field
+        #self.HFincidentAngle(PFC, MHD)
         # Calculate Magnitude of B at Divertor
         Bp_div = PFC.ep.BpFunc.ev(R_div,Z_div)
         Bt_div = PFC.ep.BtFunc.ev(R_div,Z_div)

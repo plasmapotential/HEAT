@@ -692,13 +692,6 @@ class GUIobj():
         print(self.CAD.ROIList)
         log.info(self.CAD.ROIList)
 
-        self.PFCs = []
-        #initialize PFC objects for each ROI part
-        for i,row in enumerate(self.timestepMap.values):
-            PFC = pfcClass.PFC(row, self.rootDir, self.dataPath)
-            PFC.makePFC(self.MHD, self.CAD, i, self.timestepMap['powerDirection'][i], clobberFlag=True)
-            self.PFCs.append(PFC)
-
         #Find potential intersections by file as they correspond to ROI PFCs,
         # then mesh 'em using FreeCAD Standard mesh algorithm
         self.CAD.getIntersectsFromFile(self.timestepMap)
@@ -712,6 +705,14 @@ class GUIobj():
         log.info("Potential intersects on these tiles:")
         print(self.CAD.intersectList)
         log.info(self.CAD.intersectList)
+
+
+        self.PFCs = []
+        #initialize PFC objects for each ROI part
+        for i,row in enumerate(self.timestepMap.values):
+            PFC = pfcClass.PFC(row, self.rootDir, self.dataPath, self.CAD.intersectList)
+            PFC.makePFC(self.MHD, self.CAD, i, clobberFlag=True)
+            self.PFCs.append(PFC)
 
         #Build HEAT file tree
         tools.buildDirectories(self.CAD.ROIList,
@@ -884,7 +885,7 @@ class GUIobj():
         """
         ctrs = PFC.centers
         R,Z,phi = tools.xyz2cyl(ctrs[:,0],ctrs[:,1],ctrs[:,2])
-        PFC.Bxyz = self.MHD.Bfield_pointcloud(PFC.ep, R, Z, phi, PFC.powerDirection)
+        PFC.Bxyz = self.MHD.Bfield_pointcloud(PFC.ep, R, Z, phi)
         self.MHD.write_B_pointcloud(ctrs,PFC.Bxyz,PFC.controlfilePath)
         return
 
@@ -1022,14 +1023,11 @@ class GUIobj():
         return
 
 
-    def backfacePC(self, PFC):
+    def powerDirPC(self, PFC):
         """
-        create a pointcloud for mesh center locations where 1=shadowed, 0=not shadowed
-        using the backface culling algorithm
+        create a pointcloud for mesh center locations for power direction
         """
-
-        PFC.backfaceMask = PFC.backfaceCulling(PFC.centers,PFC.norms,self.MHD,PFC.ep,PFC.powerDirection)
-        PFC.write_backface_pointcloud(PFC.centers,PFC.backfaceMask,PFC.controlfilePath)
+        PFC.write_powerDir_pointcloud(PFC.centers,PFC.powerDir,PFC.controlfilePath)
         return
 
     def bdotnPC(self, PFC):
@@ -1064,7 +1062,7 @@ class GUIobj():
         runList options are:
         Bpc             Bfield point cloud
         psiPC           Normalized psi point cloud
-        backfacePC      backface culling point cloud
+        powerDirPC      power direction point cloud
         NormPC          Normal Field point cloud
         bdotnPC         bdotn poitn cloud
         HFpc            heat flux point cloud
@@ -1075,7 +1073,7 @@ class GUIobj():
         print("HEAT RUN INITIALIZED")
         log.info("HEAT RUN INITIALIZED")
         t0 = time.time()
-        allowedOptions = ['HFpc', 'backfacePC', 'bdotnPC', 'Bpc', 'psiPC', 'NormPC', 'GyroPC']
+        allowedOptions = ['HFpc', 'powerDirPC', 'bdotnPC', 'Bpc', 'psiPC', 'NormPC', 'GyroPC']
         #make sure that something in runList can be run in this function, else return
         if len([i for i in runList if i in allowedOptions]) < 1:
             print("No HEAT point cloud option to run")
@@ -1121,6 +1119,11 @@ class GUIobj():
                     PFC.t = t
                     PFC.ep = PFC.EPs[tIdx]
                     PFC.shadowed_mask = PFC.shadowMasks[tIdx]
+                    #bfield info for this timestep
+                    r,z,phi = tools.xyz2cyl(PFC.centers[:,0],PFC.centers[:,1],PFC.centers[:,2])
+                    PFC.BNorms = self.MHD.Bfield_pointcloud(PFC.ep, r, z, phi, powerDir=None, normal=True)
+                    PFC.bdotn = np.multiply(PFC.norms, PFC.BNorms).sum(1)
+                    PFC.powerDir = np.sign(PFC.bdotn)
                     print('\n')
                     print("*"*20)
                     print('PFC Name: '+ PFC.name)
@@ -1149,8 +1152,8 @@ class GUIobj():
                         self.psiPC(PFC)
                     if 'NormPC' in runList:
                         self.NormPC(PFC)
-                    if 'backfacePC' in runList:
-                        self.backfacePC(PFC)
+                    if 'powerDirPC' in runList:
+                        self.powerDirPC(PFC)
                     if 'bdotnPC' in runList:
                         self.bdotnPC(PFC)
 
@@ -1282,6 +1285,7 @@ class GUIobj():
         #Check for intersections with MAFOT struct
         t0 = time.time()
         PFC.findShadows_structure(self.MHD, self.CAD)
+        #PFC.findIntersectionFreeCADKDTree(self.MHD,self.CAD)
         print("Intersection calculation took {:f} s".format(time.time() - t0))
 
         #Run MAFOT laminar for 3D plasmas
@@ -1421,6 +1425,7 @@ class GUIobj():
             if self.CAD.intersectList[i] in self.CAD.ROIList:
                 pass
             else:
+                print("Adding target "+self.CAD.intersectList[i]+" to intersects with {:f} faces".format(target.CountFacets))
                 numTargetFaces += target.CountFacets
                 #append target data
                 for face in target.Facets:
@@ -1607,7 +1612,7 @@ class GUIobj():
         hfGyro = []
         hfAll = []
         shadow =[]
-        backface =[]
+        powerDir =[]
         shadowGyro = []
         bdotn = []
         psi = []
@@ -1633,9 +1638,9 @@ class GUIobj():
                     hfAll[idx]+=PFC.qGyro.copy()
                     shadowGyro[idx]+=PFC.gyroShadowMask.copy()
                     shadowGyro[idx].astype(bool)
-                elif 'backfacePC' in runList:
-                    backface[idx]+=PFC.backfaceMask.copy()
-                    backface[idx].astype(bool)
+                elif 'powerDirPC' in runList:
+                    powerDir[idx]+=PFC.powerDir.copy()
+                    powerDir[idx].astype(bool)
                 #some quantities cant be added (like psi)
                 #just use one mapDirection for these cases
                 else:
@@ -1652,8 +1657,8 @@ class GUIobj():
                         hfAll.append(PFC.qDiv.copy()+PFC.qGyro.copy())
                     else:
                         hfAll[-1]+=PFC.qGyro.copy()
-                if 'backfacePC' in runList:
-                    backface.append(PFC.backfaceMask.copy())
+                if 'powerDirPC' in runList:
+                    powerDir.append(PFC.powerDir.copy())
                 if 'bdotnPC' in runList:
                     bdotn.append(PFC.bdotn.copy())
                 if 'psiPC' in runList:
@@ -1674,7 +1679,7 @@ class GUIobj():
         hfAllNumpy = np.array([])
         shadowNumpy = np.array([])
         shadowGyroNumpy = np.array([])
-        backfaceNumpy = np.array([])
+        powerDirNumpy = np.array([])
         bdotnNumpy = np.array([])
         psiNumpy = np.array([])
         normNumpy = np.array([])
@@ -1688,8 +1693,8 @@ class GUIobj():
             shadowNumpy = np.append(shadowNumpy, arr)
         for arr in shadowGyro:
             shadowGyroNumpy = np.append(shadowGyroNumpy, arr)
-        for arr in backface:
-            backfaceNumpy = np.append(backfaceNumpy, arr)
+        for arr in powerDir:
+            powerDirNumpy = np.append(powerDirNumpy, arr)
         for arr in bdotn:
             bdotnNumpy = np.append(bdotnNumpy, arr)
         for arr in psi:
@@ -1708,8 +1713,8 @@ class GUIobj():
                 self.HF.write_heatflux_pointcloud(centers,hfAllNumpy,tPath,tag,'all')
         if 'shadowPC' in runList:
             PFC.write_shadow_pointcloud(centers,shadowNumpy,tPath,tag)
-        if 'backfacePC' in runList:
-            PFC.write_backface_pointcloud(centers,backfaceNumpy,tPath,tag)
+        if 'powerDirPC' in runList:
+            PFC.write_powerDir_pointcloud(centers,powerDirNumpy,tPath,tag)
         if 'bdotnPC' in runList:
             PFC.write_bdotn_pointcloud(centers,bdotnNumpy, tPath,tag)
         if 'psiPC' in runList:
@@ -1746,9 +1751,9 @@ class GUIobj():
             src = tPath + 'shadowMask_optical_all.csv'
             dest = movieDir + 'shadowMask_optical_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
-        if 'backfacePC' in runList:
-            src = tPath + 'backfaceMask_all.csv'
-            dest = movieDir + 'backfaceMask_{:06d}.csv'.format(t)
+        if 'powerDirPC' in runList:
+            src = tPath + 'powerDir_all.csv'
+            dest = movieDir + 'powerDir_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
         if 'bdotnPC' in runList:
             src = tPath + 'bdotnPointCloud_all.csv'
