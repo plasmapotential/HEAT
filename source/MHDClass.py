@@ -19,6 +19,54 @@ from scipy.interpolate import interp1d
 import logging
 log = logging.getLogger(__name__)
 
+def setupForTerminalUse(gFile=None):
+    """
+    Sets up an MHD object so that it can be used from python console
+    without running HEAT.  This is convenient when a user wants to load
+    MHD EQ directly from the python console.
+
+    To use, user needs to set pythonpath to include path of this file and EFIT:
+    import sys
+    EFITPath = '/home/tom/source'
+    HEATPath = '/home/tom/source/HEAT/github/source'
+    sys.path.append(EFITPath)
+    sys.path.append(HEATPath)
+    import MHDClass
+
+    Then user needs to run this function to set up the MHD object:
+    MHD = MHDClass.setupForTerminalUse()
+
+    if user wants to load MHD EQ, they need to set gFile
+    arguments when calling this function, otherwise it just returns an
+    empty MHD object:
+    MHD = MHDClass.setupForTerminalUse(gFile=gFilePath)
+
+    if you want access some gFile parameters, use the ep.g:
+    Example to see available parameters:
+    MHD.ep.g.keys()
+    Example to see Rlim, Zlim:
+    MHD.ep.g['wall']
+
+
+
+    returns an MHD class object ie: MHD = MHDClass.MHD()
+
+    """
+    rootDir = ''
+    dataPath = ''
+
+    import MHDClass
+    MHD = MHDClass.MHD(rootDir,dataPath)
+
+
+    if gFile!=None:
+        print("Making MHD() object with ep included")
+        MHD.ep = EP.equilParams(gFile)
+    else:
+        print("Not including ep in MHD() object")
+    return MHD
+
+
 class MHD:
 
     def __init__(self, rootDir, dataPath):
@@ -107,6 +155,7 @@ class MHD:
 
         return
 
+
     def make1EFITobject(self,shot,t,gfile=None):
         """
         Creates an equilParams_class object for a SINGLE timesteps. equilParams
@@ -186,21 +235,22 @@ class MHD:
         Note: this function returns the normal Bfield components if normal=True
 
         """
-        if powerDir != None:
-            Bt0Direction = np.sign(ep.g['Bt0']) #account for machine Bt direction
-            Bt = ep.BtFunc.ev(R,Z)*powerDir*Bt0Direction
-            BR = ep.BRFunc.ev(R,Z)*powerDir*Bt0Direction
-            BZ = ep.BZFunc.ev(R,Z)*powerDir*Bt0Direction
-        else:
-            Bt = ep.BtFunc.ev(R,Z)
-            BR = ep.BRFunc.ev(R,Z)
-            BZ = ep.BZFunc.ev(R,Z)
-        #print(BR)
-        #print(Bt)
-        #print(BZ)
-        #print(max(abs(BR)))
-        #print(max(abs(Bt)))
-        #print(max(abs(BZ)))
+#        if powerDir != None:
+#            Bt0Direction = np.sign(ep.g['Bt0']) #account for machine Bt direction
+#            Bt = ep.BtFunc.ev(R,Z)*powerDir*Bt0Direction
+#            BR = ep.BRFunc.ev(R,Z)*powerDir*Bt0Direction
+#            BZ = ep.BZFunc.ev(R,Z)*powerDir*Bt0Direction
+#        else:
+        Bt = ep.BtFunc.ev(R,Z)
+        BR = ep.BRFunc.ev(R,Z)
+        BZ = ep.BZFunc.ev(R,Z)
+        #print("TEST=====")
+        #print(BR[0])
+        #print(Bt[0])
+        #print(BZ[0])
+        #print(max(BR))
+        #print(max(Bt))
+        #print(max(BZ))
         try:
             Bxyz = np.zeros((len(BR),3))
         except:

@@ -2479,8 +2479,18 @@ def gFileMultipiers():
             dcc.Input(id="FpolMult", className="gfileBoxInput", value="1.0"),
             html.Label("Fpol Addition", style={'margin':'0 10px 0 10px'}),
             dcc.Input(id="FpolAdd", className="gfileBoxInput", value="0.0"),
+            html.Label("Bt0 Multiplier", style={'margin':'0 10px 0 10px'}),
+            dcc.Input(id="Bt0Mult", className="gfileBoxInput", value="1.0"),
+            html.Label("Bt0 Addition", style={'margin':'0 10px 0 10px'}),
+            dcc.Input(id="Bt0Add", className="gfileBoxInput", value="0.0"),
+            html.Label("Ip Multiplier", style={'margin':'0 10px 0 10px'}),
+            dcc.Input(id="IpMult", className="gfileBoxInput", value="1.0"),
+            html.Label("Ip Addition", style={'margin':'0 10px 0 10px'}),
+            dcc.Input(id="IpAdd", className="gfileBoxInput", value="0.0"),
             html.Button("Apply Corrections", id="applyMult", n_clicks=0, style={'margin':'0 10px 10px 0'}),
-            html.Div(id="hiddenDivMult")
+            html.Div(id="hiddenDivMult"),
+            html.Label("*Sign of Bt0 and Ip checked for helicity in traces (MAFOT)", style={'margin':'0 10px 0 10px'}),
+            html.Label("**Sign of psiRZ, psiSep, psiAxis, checked for helicity in point clouds (HEAT)", style={'margin':'0 10px 0 10px'}),
         ],
         className="gfileBox",
     )
@@ -2616,9 +2626,14 @@ def interpolateNsteps(n_clicks, N, data):
                State('psiSepAdd','value'),
                State('psiAxisAdd','value'),
                State('FpolAdd','value'),
+               State('Bt0Mult','value'),
+               State('Bt0Add','value'),
+               State('IpMult','value'),
+               State('IpAdd','value'),
                State('timeSlider', 'value')])
 def applyMult(n_clicks, psiRZMult, psiSepMult, psiAxisMult, FpolMult,
-              psiRZAdd,psiSepAdd,psiAxisAdd,FpolAdd,t):
+              psiRZAdd,psiSepAdd,psiAxisAdd,FpolAdd,
+              Bt0Mult,Bt0Add,IpMult,IpAdd,t):
     """
     apply multiplier to psiRZ, psiSep, psiAxis, Fpol for currently
     selected equilibrium timestep
@@ -2632,15 +2647,19 @@ def applyMult(n_clicks, psiRZMult, psiSepMult, psiAxisMult, FpolMult,
     psiSepMult = eval(parser.expr(psiSepMult).compile())
     psiAxisMult = eval(parser.expr(psiAxisMult).compile())
     FpolMult = eval(parser.expr(FpolMult).compile())
+    Bt0Mult = eval(parser.expr(Bt0Mult).compile())
+    IpMult = eval(parser.expr(IpMult).compile())
 
     psiRZAdd = eval(parser.expr(psiRZAdd).compile())
     psiSepAdd = eval(parser.expr(psiSepAdd).compile())
     psiAxisAdd = eval(parser.expr(psiAxisAdd).compile())
     FpolAdd = eval(parser.expr(FpolAdd).compile())
-
+    Bt0Add = eval(parser.expr(Bt0Add).compile())
+    IpAdd = eval(parser.expr(IpAdd).compile())
 
     gui.gfileClean(psiRZMult,psiSepMult,psiAxisMult,FpolMult,
-                   psiRZAdd,psiSepAdd,psiAxisAdd,FpolAdd,t)
+                   psiRZAdd,psiSepAdd,psiAxisAdd,FpolAdd,
+                   Bt0Mult,Bt0Add,IpMult,IpAdd,t)
     return [html.Label("Corrections Applied", style={'color':'#f5d142'})]
 
 @app.callback(Output('hiddenDivSep', 'children'),

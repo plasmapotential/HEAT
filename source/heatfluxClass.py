@@ -101,9 +101,10 @@ class heatFlux:
             if self.lqCNmode == 'eich':
                 self.getEichFromEQ(ep)
                 HFdict["\u03BB Near Mode"] = 'Eich Regression #15'
+                HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqEich
             else:
                 HFdict["\u03BB Near Mode"] = 'User Defined'
-            HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqEich
+                HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqCN
             HFdict["Common Region Far Heat Flux Width (\u03BBq CF) [mm]"] = self.lqCF
             HFdict["Common Region Near Power Fraction"] = self.fracCN
             HFdict["Common Region Near Power Fraction"] = self.fracCF

@@ -554,7 +554,10 @@ class PFC:
             CTLfile = self.controlfilePath + self.controlfileStruct
             q1 = np.zeros((len(self.centers),3))
             q2 = np.zeros((len(self.centers),3))
+
             #run forward mesh elements
+            print("Forward Trace")
+            log.info("Forward Trace")
             mapDirectionStruct = 1.0
             startIdx = 1 #Match MAFOT sign convention for toroidal direction (CCW=+)
             self.fwdUse = np.where(self.powerDir==-1)[0]
@@ -566,7 +569,10 @@ class PFC:
             os.remove(self.structOutfile) #clean up
             q1[self.fwdUse] = structData[0::2,:] #even indexes are first trace point
             q2[self.fwdUse] = structData[1::2,:] #odd indexes are second trace point
+
             #run reverse mesh elements
+            print("Reverse Trace")
+            log.info("Reverse Trace")
             mapDirectionStruct = -1.0
             startIdx = 0 #Match MAFOT sign convention for toroidal direction
             self.revUse = np.where(self.powerDir==1)[0]
@@ -624,7 +630,10 @@ class PFC:
             use = np.where(self.shadowed_mask == 0)[0]
             intersect_mask2 = np.zeros((len(use)))
             q2 = np.zeros((len(self.centers[use]),3))
+
             #run forward mesh elements
+            print("Forward Trace")
+            log.info("Forward Trace")
             mapDirectionStruct = 1.0
             startIdx = 1 #Match MAFOT sign convention for toroidal direction
             self.fwdUse = np.where(self.powerDir[use]==-1)[0]
@@ -635,7 +644,10 @@ class PFC:
             structData = tools.readStructOutput(self.structOutfile)
             os.remove(self.structOutfile) #clean up
             q2[self.fwdUse] = structData[1::2,:] #odd indexes are second trace point
+
             #run reverse mesh elements
+            print("Reverse Trace")
+            log.info("Reverse Trace")
             mapDirectionStruct = -1.0
             startIdx = 0 #Match MAFOT sign convention for toroidal direction
             self.revUse = np.where(self.powerDir[use]==1)[0]
@@ -688,38 +700,52 @@ class PFC:
                 q2 = np.zeros((len(StartPoints),3))
 
                 #run forward mesh elements
+                print("Forward Trace")
+                log.info("Forward Trace")
                 mapDirectionStruct = 1.0
                 startIdx = 1 #Match MAFOT sign convention for toroidal direction
                 self.fwdUse = np.where(self.powerDir[use[use2]]==-1)[0]
-                MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
-                #Perform first integration step
-                MHD.writeMAFOTpointfile(StartPoints[self.fwdUse],self.gridfileStruct)
-                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
-                structData = tools.readStructOutput(self.structOutfile)
-                os.remove(self.structOutfile) #clean up
-                q1[self.fwdUse] = structData[0::2,:] #odd indexes are second trace point
-                q2[self.fwdUse] = structData[1::2,:] #odd indexes are second trace point
+                if len(self.fwdUse) == 0:
+                    print("No more traces in forward direction")
+                    log.info("No more traces in forward direction")
+                else:
+                    MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
+                    #Perform first integration step
+                    MHD.writeMAFOTpointfile(StartPoints[self.fwdUse],self.gridfileStruct)
+                    MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                    structData = tools.readStructOutput(self.structOutfile)
+                    os.remove(self.structOutfile) #clean up
+                    q1[self.fwdUse] = structData[0::2,:] #odd indexes are second trace point
+                    q2[self.fwdUse] = structData[1::2,:] #odd indexes are second trace point
 
                 #run reverse mesh elements
+                print("Reverse Trace")
+                log.info("Reverse Trace")
                 mapDirectionStruct = -1.0
                 startIdx = 0 #Match MAFOT sign convention for toroidal direction
                 self.revUse = np.where(self.powerDir[use[use2]]==1)[0]
-                MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
-                #Perform first integration step
-                MHD.writeMAFOTpointfile(StartPoints[self.revUse],self.gridfileStruct)
-                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
-                structData = tools.readStructOutput(self.structOutfile)
-                os.remove(self.structOutfile) #clean up
-                q1[self.revUse] = structData[1::2,:] #odd indexes are second trace point
-                q2[self.revUse] = structData[0::2,:] #odd indexes are second trace point
+                if len(self.revUse) == 0:
+                    print("No more traces in reverse direction")
+                    log.info("No more traces in reverse direction")
+                else:
+                    MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
+                    #Perform first integration step
+                    MHD.writeMAFOTpointfile(StartPoints[self.revUse],self.gridfileStruct)
+                    MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                    structData = tools.readStructOutput(self.structOutfile)
+                    os.remove(self.structOutfile) #clean up
+                    q1[self.revUse] = structData[1::2,:] #odd indexes are second trace point
+                    q2[self.revUse] = structData[0::2,:] #odd indexes are second trace point
 
                 if tools.psiFilterSwitch is True:
                     psiUse2 = psiUse[use2]
                 else:
                     psiUse2 = None
                 intersect_mask2[use2] = self.intersectTest2(q1,q2,targetPoints, psiUse2, psiIntersect, ptIdx)
-                #intersect_mask2[use2] = self.intersectTest2(structData,targetPoints,psiSource[use][use2], psiIntersect, ptIdx)
-
+                #intersect_mask2[use2] = self.intersectTestBasic(q1,q2,
+                #                                        targetPoints,targetNorms,
+                #                                        MHD,self.ep,
+                #                                        psiUse, psiIntersect, ptIdx)
 
                 #for debugging, save a shadowmask at each step up fieldline
                 if shadowMaskClouds == True:
@@ -1003,8 +1029,11 @@ class PFC:
         r,z,phi = tools.xyz2cyl(tools.targetCtrs[:,0],tools.targetCtrs[:,1],tools.targetCtrs[:,2])
         targetBNorms = MHD.Bfield_pointcloud(ep, r, z, phi, powerDir=None, normal=True)
         bdotn = np.multiply(targetNorms, targetBNorms).sum(1)
-        tools.targetsFwdUse = np.where(bdotn > 0)[0]
-        tools.targetsRevUse = np.where(bdotn < 0)[0]
+        #tools.targetsFwdUse = np.where(bdotn > 0)[0]
+        #tools.targetsRevUse = np.where(bdotn < 0)[0]
+        powerDir = bdotn * np.sign(self.ep.g['Bt0']) * -1
+        tools.targetsFwdUse = np.where(powerDir > 0)[0]
+        tools.targetsRevUse = np.where(powerDir < 0)[0]
         NtFwd_use = len(tools.targetsFwdUse)
         NtRev_use = len(tools.targetsRevUse)
 

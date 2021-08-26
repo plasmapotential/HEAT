@@ -27,6 +27,7 @@ import copy
 import EFIT.equilParams_class as EP
 import GUIscripts.plotlyGUIplots as pgp
 import trimesh
+import multiprocessing
 
 log = logging.getLogger(__name__)
 tools = toolsClass.tools()
@@ -289,7 +290,7 @@ class GUIobj():
 
 #        self.t = self.MHD.timesteps[0]
         self.MHD.makeEFITobjects()
-        self.NCPUs = 4
+        self.NCPUs = multiprocessing.cpu_count() - 2 #reserve 2 cores for overhead
         self.MHD.psiSepLimiter = None
 
         self.MHD.setTypes()
@@ -310,7 +311,8 @@ class GUIobj():
         return
 
     def gfileClean(self, psiRZMult,psiSepMult,psiAxisMult,FpolMult,
-                   psiRZAdd,psiSepAdd,psiAxisAdd,FpolAdd, t):
+                   psiRZAdd,psiSepAdd,psiAxisAdd,FpolAdd,
+                   Bt0Mult,Bt0Add,IpMult,IpAdd,t):
         """
         multiplies values in MHD ep object with scalars defined by user in html gui
         """
@@ -334,17 +336,31 @@ class GUIobj():
         print("Fpol Addition = {:f}".format(FpolAdd))
         log.info("Fpol Addition = {:f}".format(FpolAdd))
 
+        print("Bt0 Multiplier = {:f}".format(Bt0Mult))
+        log.info("Bt0 Multiplier = {:f}".format(Bt0Mult))
+        print("Bt0 Addition = {:f}".format(Bt0Add))
+        log.info("Bt0 Addition = {:f}".format(Bt0Add))
+
+        print("Ip Multiplier = {:f}".format(IpMult))
+        log.info("Ip Multiplier = {:f}".format(IpMult))
+        print("Ip Addition = {:f}".format(IpAdd))
+        log.info("Ip Addition = {:f}".format(IpAdd))
+
         idx = np.where(t==self.MHD.timesteps)[0][0]
         ep = self.MHD.ep[idx]
         ep.g['psiRZ'] *= psiRZMult
         ep.g['psiSep'] *= psiSepMult
         ep.g['psiAxis'] *= psiAxisMult
         ep.g['Fpol'] *= FpolMult
+        ep.g['Bt0'] *= Bt0Mult
+        ep.g['Ip'] *= IpMult
 
         ep.g['psiRZ'] += psiRZAdd
         ep.g['psiSep'] += psiSepAdd
         ep.g['psiAxis'] += psiAxisAdd
         ep.g['Fpol'] += FpolAdd
+        ep.g['Bt0'] += Bt0Add
+        ep.g['Ip'] += IpAdd
 
         psi = ep.g['psiRZ']
         psiSep = ep.g['psiSep']
@@ -1123,7 +1139,7 @@ class GUIobj():
                     r,z,phi = tools.xyz2cyl(PFC.centers[:,0],PFC.centers[:,1],PFC.centers[:,2])
                     PFC.BNorms = self.MHD.Bfield_pointcloud(PFC.ep, r, z, phi, powerDir=None, normal=True)
                     PFC.bdotn = np.multiply(PFC.norms, PFC.BNorms).sum(1)
-                    PFC.powerDir = np.sign(PFC.bdotn)
+                    PFC.powerDir = np.sign(PFC.bdotn)*np.sign(PFC.ep.g['Bt0'])*-1.0
                     print('\n')
                     print("*"*20)
                     print('PFC Name: '+ PFC.name)
@@ -1166,14 +1182,19 @@ class GUIobj():
                         log.info('Optical Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumOptical)))
 
             totalPowPow = 0
+            totalPowPowCirc = 0
             for PFC in self.PFCs:
                 print("=== Last timestep's PFC arrays: Optical ===")
                 tmpPow = self.HF.power_sum_mesh(PFC, scale2circ=False, verbose=False)
+                tmpPowCirc = self.HF.power_sum_mesh(PFC, scale2circ=True, verbose=False)
                 totalPowPow += tmpPow
+                totalPowPowCirc += tmpPowCirc
                 print(PFC.name + ":\t{:.6f}".format(tmpPow))
                 log.info(PFC.name + ":\t{:.6f}".format(tmpPow))
                 print("PFC array sum: {:.6f}".format(totalPowPow))
                 log.info("PFC array sum: {:.6f}".format(totalPowPow))
+                print("scale2circ sum:\t{:.6f}".format(totalPowPowCirc))
+                log.info("scale2circ sum:\t{:.6f}".format(totalPowPowCirc))
 
             if 'GyroPC' in runList:
                 print("\n===+++ GYRO ORBIT CALCULATION +++===")
