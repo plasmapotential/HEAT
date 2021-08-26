@@ -39,6 +39,9 @@ Tom's email:  tlooby@vols.utk.edu
 ## Recent Updates
 The latest HEAT appImage is available under the "Releases" page.  This new version (v1.3.2)
 contains the following updates, bug fixes, and user feature request:
+ - Acceleration structures for intersection checking
+ - powerDir is now a mesh quantity
+ - "all" is an option in PFC input file
  - Ion gyro orbit heat loads
  - Ion gyro orbit trajectory tracing
  - Ion gyro orbit plots on Outputs tab
