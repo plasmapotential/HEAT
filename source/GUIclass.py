@@ -672,6 +672,7 @@ class GUIobj():
         self.timestepMap = self.timestepMap.rename(columns=lambda x: x.strip())
         self.timestepMap['PFCname'] = self.timestepMap['PFCname'].str.strip()
         self.timestepMap['intersectName'] = self.timestepMap['intersectName'].str.strip()
+        self.timestepMap['excludeName'] = self.timestepMap['excludeName'].str.strip()
         self.timestepMap['DivCode'] = self.timestepMap['DivCode'].str.strip()
         return
 
@@ -688,6 +689,7 @@ class GUIobj():
         self.timestepMap = self.timestepMap.rename(columns=lambda x: x.strip())
         self.timestepMap['PFCname'] = self.timestepMap['PFCname'].str.strip()
         self.timestepMap['intersectName'] = self.timestepMap['intersectName'].str.strip()
+        self.timestepMap['excludeName'] = self.timestepMap['excludeName'].str.strip()
         self.timestepMap['DivCode'] = self.timestepMap['DivCode'].str.strip()
         return
 
@@ -717,15 +719,15 @@ class GUIobj():
                                 path=self.CAD.STLpath,
                                 resolution=self.CAD.gridRes
                                 )
-        print("Potential intersects on these tiles:")
-        log.info("Potential intersects on these tiles:")
+        print("All potential intersects on these tiles:")
+        log.info("All potential intersects on these tiles:")
         print(self.CAD.intersectList)
         log.info(self.CAD.intersectList)
 
 
         self.PFCs = []
         #initialize PFC objects for each ROI part
-        for i,row in enumerate(self.timestepMap.values):
+        for i,row in self.timestepMap.iterrows():
             PFC = pfcClass.PFC(row, self.rootDir, self.dataPath, self.CAD.intersectList)
             PFC.makePFC(self.MHD, self.CAD, i, clobberFlag=True)
             self.PFCs.append(PFC)
@@ -871,7 +873,7 @@ class GUIobj():
         return
 
     def getGyroInputs(self,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
-                      N_vPhase, N_vSlice, ionFrac):
+                      N_vPhase, N_vSlice, ionFrac, gyroSource):
         """
         Sets up the gyro module
         """
@@ -885,6 +887,12 @@ class GUIobj():
         self.GYRO.ionMassAMU = float(ionMassAMU)
         self.GYRO.vMode = vMode
         self.GYRO.ionFrac = float(ionFrac)
+        #set up power source
+        self.GYRO.gyroSourceTag = str(gyroSource)
+        if self.GYRO.gyroSourceTag == 'allROI':
+            self.GYRO.gyroSources = self.CAD.ROIList
+        else:
+            self.GYRO.gyroSources = [gyroSource]
         #set up GYRO object
         self.GYRO.setupConstants(self.GYRO.ionMassAMU)
         print('Loaded Gyro Orbit Settings')
@@ -892,6 +900,7 @@ class GUIobj():
         print('Gyro tracing distance [degrees] = {:f}'.format(float(gyroDeg)))
         print('Plasma Temperature Mode = ' + vMode)
         print('Number of Monte Carlo runs per point = {:f}'.format(float(self.GYRO.N_MC)))
+        print("Source of gyro orbit power = "+self.GYRO.gyroSourceTag)
         return
 
     def bfieldAtSurface(self, PFC):
@@ -933,6 +942,17 @@ class GUIobj():
         xyz = np.array([x,y,z]).T
         controlfile = '_structCTL.dat'
         dphi = 1.0
+
+
+        if len(xyz.shape) > 1:
+            R,Z,phi = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
+        else:
+            R,Z,phi = tools.xyz2cyl(xyz[0],xyz[1],xyz[2])
+
+
+        Bt = self.MHD.ep[0].BtFunc.ev(R,Z)
+        BR = self.MHD.ep[0].BRFunc.ev(R,Z)
+        BZ = self.MHD.ep[0].BZFunc.ev(R,Z)
 
         if self.MHD.shotPath[-1]=='/':
             gridfile = self.MHD.shotPath + '{:06d}/struct_grid.dat'.format(t)
@@ -1209,8 +1229,9 @@ class GUIobj():
                     if t not in PFC.timesteps:
                         pass
                     else:
-                        print("\n------PFC: "+PFC.name+"------")
-                        self.gyroOrbitIntersects(PFC)
+                        if PFC.name in self.GYRO.gyroSources:
+                            print("\n------PFC: "+PFC.name+"------")
+                            self.gyroOrbitIntersects(PFC)
 
                 #redistribute ion optical power and build intersectRecord
                 self.gyroOrbitHF()
@@ -1384,13 +1405,14 @@ class GUIobj():
 
         #redistribute power
         for PFC in self.PFCs:
-            #setup velocities and velocity phase angles
-            self.GYRO.setupVelocities(PFC.N_gyroCenters)
-            #setup gyroPhase angle
-            self.GYRO.uniformGyroPhaseAngle()
-            #setup frequencies
-            self.GYRO.setupFreqs(PFC.Bmag[PFC.PFC_GYROmap,-1])
-            self.HF.gyroHF(self.GYRO, PFC)
+            if PFC.name in self.GYRO.gyroSources:
+                #setup velocities and velocity phase angles
+                self.GYRO.setupVelocities(PFC.N_gyroCenters)
+                #setup gyroPhase angle
+                self.GYRO.uniformGyroPhaseAngle()
+                #setup frequencies
+                self.GYRO.setupFreqs(PFC.Bmag[PFC.PFC_GYROmap,-1])
+                self.HF.gyroHF(self.GYRO, PFC)
 
         for PFC in self.PFCs:
             #print("PFC NAME: "+PFC.name)
@@ -1427,6 +1449,9 @@ class GUIobj():
         #first include the PFCs in the ROI
         print("CAD ROI List:")
         print(self.CAD.ROIList)
+        print("GYRO Source List")
+        print(self.GYRO.gyroSources)
+
         for i,target in enumerate(self.CAD.ROImeshes):
             totalMeshCounter+=target.CountFacets
             numTargetFaces += target.CountFacets

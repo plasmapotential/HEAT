@@ -1582,7 +1582,7 @@ def buildPFCbox():
             )
 
 def loadPFCtable():
-    params = ['timesteps','PFCname','DivCode','intersectName']
+    params = ['timesteps','PFCname','DivCode','intersectName','excludeName']
     cols = [{'id': p, 'name': p} for p in params]
     data = [{}]
     return dash_table.DataTable(
@@ -1616,7 +1616,8 @@ def parse_contents(contents, filename):
 @app.callback([Output('PFCdataStorage', 'data'),
                Output('pfcTable', 'data'),
                Output('pfcTable', 'columns'),
-               Output('hiddenDivPFC3', 'children')],
+               Output('hiddenDivPFC3', 'children'),
+               Output('gyroSource', 'options')],
               [Input('loadPFC', 'n_clicks'),
                Input('pfctable-upload', 'filename')],
               [State('PFCdataStorage', 'data'),
@@ -1627,6 +1628,7 @@ def parse_contents(contents, filename):
                State('MachFlag', 'value')])
 def PFCtable(n_clicks, filename, dataStore, ts, uploadContents,
              tableData, tableColumns, MachFlag):
+    tD = tD = [{}]
     if dataStore==None:
         print('Initializing HTML PFC data storage object')
         dataStore = {}
@@ -1645,10 +1647,13 @@ def PFCtable(n_clicks, filename, dataStore, ts, uploadContents,
             gui.getPFCinputs(defaultMask=True)
             tableData = gui.timestepMap.to_dict('records')
             tableColumns = [{"name": i, "id": i} for i in gui.timestepMap.columns]
+            tD = tableData.copy()
+
         #load PFC data from page and send it to HEAT
         else:
             gui.getPFCdataFromGUI(tableData)
             gui.getPFCinputs(defaultMask=False)
+            tD = gui.timestepMap.to_dict('records')
 
         hiddenDiv = [html.Label("Loaded PFC Data into HEAT", style={'color':'#f5d142'})]
 
@@ -1658,11 +1663,22 @@ def PFCtable(n_clicks, filename, dataStore, ts, uploadContents,
         tableData = df.to_dict('records')
         tableColumns = [{"name": i, "id": i} for i in df.columns]
         hiddenDiv = [html.Label("Loaded file: "+filename, style={'color':'#34b3ed'})]
+        tD = [{}]
+
     else:
         hiddenDiv = []
 
+    #build dictionary for gyro orbit source dropdown
+    ROIdict = []
+    ROIdict.append({'label': "All ROI PFCs", 'value': 'allROI'})
+    if tD != [{}]:
+        tD = pd.DataFrame.from_dict(tableData)[list (tableData[0].keys())]
+        names = tD.rename(columns=lambda x: x.strip())['PFCname'].values
+        for name in names:
+            n = name.replace(' ', '')
+            ROIdict.append({'label': n, 'value': n})
 
-    return dataStore, tableData, tableColumns, hiddenDiv
+    return dataStore, tableData, tableColumns, hiddenDiv, ROIdict
 
 #Download PFC Default file button connect
 @app.callback([Output('downloadPFC', 'data'),
@@ -1703,6 +1719,14 @@ def buildGYRObox():
                                 loadGyroSettings(mode=None,hidden=True),
                                ],
                     ),
+            html.Label("Gyro Orbit Power Source"),
+            dcc.Dropdown(
+                id='gyroSource',
+                className="wideSelect",
+                style={'backgroundColor': 'transparent', 'color':'transparent'},
+
+                #value='allROIs',
+                ),
             html.Br(),
             html.Button("Load Gyro Settings", id="loadGYRO", n_clicks=0, style={'margin':'0 10px 10px 0'}),
             html.Div(id="hiddenDivGyro")
@@ -1852,17 +1876,18 @@ def velocityFromFile(className):
                State('gyroT_eV', 'value'),
                State('N_vPhase', 'value'),
                State('N_vSlice', 'value'),
-               State('ionFrac', 'value')
+               State('ionFrac', 'value'),
+               State('gyroSource', 'value')
               ])
 def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
-             N_vPhase, N_vSlice, ionFrac):
+             N_vPhase, N_vSlice, ionFrac, gyroSource):
     """
     sets up GYRO module
     """
     if n_clicks == 0:
         raise PreventUpdate
     gui.getGyroInputs(N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
-                      N_vPhase, N_vSlice, ionFrac)
+                      N_vPhase, N_vSlice, ionFrac, gyroSource)
     gyroPhaseFig = gyroPhasePlots(update=True)
     vPhaseFig = vPhasePlots(update=True)
     vSliceFig = vSlicePlots(update=True)
@@ -1877,6 +1902,7 @@ def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
             'Number of samples in velocity phase space':N_vPhase,
             'Number of samples from Maxwellian velocity distribution':N_vSlice,
             'Fraction of power carried by ions':ionFrac,
+            'Source for gyro orbit power':gyroSource,
             }
 
     return [html.Label("Loaded Gyro Orbit Data into HEAT", style={'color':'#f5d142'}),

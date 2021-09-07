@@ -1,24 +1,50 @@
-# This is a HEAT input file responsible for:
-# 1) assigning intersection PFCs to each heat flux calculation PFC
-# 2) assigning MapDirection to each PFC
-# 3) assigning the timesteps to use each PFC for
+#PFC CSV FILE
 #
-# you can use colons (:) to insert a range of timesteps or to insert multiple intersects
-# but each PFC needs its own line (and sometimes two if you need to trace in both directions)
-# commas are the delimiter here, so don't use them inside columns or you'll break pandas
+#This is a HEAT input file responsible for:
+# 1) Defining the PFCs in the Region of Interest (ROI)
+# 2) Defining the intersection PFCs that the ROI PFCs could be shadowed by
+# 3) Defining the timesteps we run HEAT for, w.r.t. each PFC
+# 4) Defining which divertor each PFC is in
+# 5) Defining any PFCs we want to exclude from the intersection calculation
 #
-# Example
-# 100:105, E-ED1450-013, -1, E-ED1450-013:E-ED1390-003:E-ED1450-071
+#The first line in this file should always be:
+#timesteps, PFCname, DivCode, intersectName, excludeName
 #
-# this would calculate HF on E-ED1450-013 for all (available) timesteps between
-# 100ms and 105ms, checking for intersections with E-ED1450-013, E-ED1390-003,
-# and E-ED1450-071, with traces running in the reversed MapDirection
+#Each new row under this header line represents a new PFC in the ROI.
+#Definitions of each column (comma separated variable) from this header line:
+#  timesteps: timesteps we include the PFC in during the HEAT calculation
+#  PFCname: name of the PFC we want to calculate heat loads on.  Name should
+#           be taken directly from the part in the CAD STP file.
+#  DivCode:  divertor code.  This can be: LO, LI, UO, UI, which correspond to:
+#            Lower Outer, Lower Inner, Upper Outer, Upper Inner.  These codes
+#            are how each PFC in the ROI get flagged as belonging to a specific
+#            divertor, and will affect their power later (Psol * powerFrac)
+#  intersectName:  name of the PFCs that may cast a magnetic shadow upon the PFC
+#                  we are calculating power on.  If we launch field lines from the
+#                  PFCname part and follow them up the SOL, we may hit one of these
+#                  intersectName PFCs.  If the user is unsure of this value, "all"
+#                  can be specified to check against all parts in the CAD.
+#                  Multiple PFCs can be specified by using ":" between part names.
+#  excludeName:  name of PFCs to exclude in the intersection check.  This can be
+#                useful when we use the "all" switch for intersectName and want
+#                to exclude some obvious PFCs.
+#
+#Example to calculate heat loads on PFC001, a PFC in the Lower Outer divertor,
+# for the first 100ms of the discharge, checking for shadows (intersections)
+# with PFC001 (self), PFC002 and PFC003:
+# timesteps, PFCname, DivCode, intersectName, excludeName
+# 0:100, PFC001, LO, PFC001:PFC002:PFC003, none
+#
+#Example to calculate heat loads on PFC001, a PFC in the Upper Inner divertor,
+# for timesteps 100:200ms of the discharge, checking for shadows (intersections)
+# with all PFCs in the CAD file:
+# timesteps, PFCname, DivCode, intersectName, excludeName
+# 100:200, PFC001, UI, all, none
 #
 #
 #
-# 40-1783_2 TILE UPPER
-# 40-1782_3 TILE LOWER TYPE A0
-timesteps, PFCname, MapDirection, DivCode, intersectName
+#
+timesteps, PFCname, DivCode, intersectName, excludeName
 ### OUTER DIVERTOR
 #0:250, outDivLeft, -1, LO, outDivLeft:outDivCenter:outDivRight:ROB:COB:LOB
 #0:250, outDivCenter, -1, LO, outDivCenter:outDivRight:DivIntersect:COB:LOB:ROBrotated

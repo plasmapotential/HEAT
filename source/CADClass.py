@@ -135,7 +135,8 @@ class CAD:
         self.intersectList = list(set( [j for row in self.ROIintersects for j in row] ))
 
         #if user defined 'all' in PFC file
-        if sum([x in ['all','All',' all', ' All', 'ALL'] for x in self.intersectList]) > 0:
+        includeTags = ['all','All',' all', ' All', 'ALL']
+        if sum([x in includeTags for x in self.intersectList]) > 0:
             #initialize intersect variables for all parts in STP file
             self.intersectParts = ['None' for i in range(len(self.CADparts))]
             self.intersectMeshes = ['None' for i in range(len(self.CADparts))]

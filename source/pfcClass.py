@@ -30,28 +30,35 @@ class PFC:
     rootDir is root location of python modules (where dashGUI.py lives)
     dataPath is the location where we write all output to
     """
-    def __init__(self, timestepMapRow, rootDir, dataPath, intersectList):
+    def __init__(self, timestepMapRow, rootDir, dataPath, CADintersectList):
         #Parse PFC input file row data into PFC object
-        self.timeStr = timestepMapRow[0]
-        self.name = timestepMapRow[1]
-#        self.mapDirection = timestepMapRow[2]
-#        self.mapDirectionStruct = self.mapDirection
-#        self.powerDirection = -self.mapDirectionStruct #we always trace away from tile, power flows into it
-#        self.powerDirection = timestepMapRow[2]
-#        self.mapDirectionStruct = -self.powerDirection
-#        self.mapDirection = -self.powerDirection
-#        print(self.name)
-#        print("Power Direction: {:f}".format(self.powerDirection))
-#        print("Map Direction: {:f}".format(self.mapDirectionStruct))
-
+        self.timeStr = timestepMapRow['timesteps']
+        self.name = timestepMapRow['PFCname']
         self.timeLimits = np.asarray( self.timeStr.split(':') ).astype(int)
         deltat = self.timeLimits[1]-self.timeLimits[0]
         self.timesteps = np.linspace(self.timeLimits[0],self.timeLimits[1],deltat+1,dtype=int)
         #name of divertor this PFC is in (ie upper outer)
-        self.DivCode = timestepMapRow[2]
+        self.DivCode = timestepMapRow['DivCode']
         #names of tiles that will be checked for magnetic field line shadowing
-        #self.intersects = timestepMapRow[4].split(':')
-        self.intersects = intersectList
+        excludeList = timestepMapRow['excludeName'].split(':')
+        intersectList = timestepMapRow['intersectName'].split(':')
+
+        allTags = ['all','All',' all', ' All', 'ALL']
+        noneTags = ['None', 'none', 'NONE' 'NA', 'na', 0, None, 0.0]
+        #include all PFCs if 'all' in intersectName column
+        if (x in allTags for x in intersectList):
+            self.intersects = CADintersectList.copy()
+        else:
+            self.intersects = intersectList
+
+        #exclude user defined PFCs
+        for item in excludeList:
+            if item in self.intersects:
+                self.intersects.remove(item)
+
+        print(self.name + " intersections on these PFCs: ")
+        print(self.intersects)
+
         #set up HEAT paths
         self.rootDir = rootDir
         tools.rootDir = self.rootDir
@@ -152,8 +159,6 @@ class PFC:
             self.gridfileStruct = MHD.shotPath + '/' + '{:06d}/'.format(self.t) + self.name + '/struct_grid.dat'
         self.outputFile = self.controlfilePath + 'lam.dat'
         self.structOutfile = self.controlfilePath + 'struct.dat'
-
-
 
         return
 
@@ -267,240 +272,6 @@ class PFC:
             tools.createVTKOutput(pcfile, 'points', name)
         return
 
-    def findIntersectionFreeCADKDTree(self,MHD,CAD,verbose=False, shadowMaskClouds=False):
-        """
-        finds intersections using freecad's built in kdTree space partitioning
-
-        Not used but left for reference
-        acceleration structure in HEAT is toroidal / poloidal flux filtering, not kd trees
-        """
-
-        use = np.where(self.shadowed_mask == 0)[0]
-
-        print("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
-        log.info("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
-        print('Number of target parts: {:f}'.format(len(self.intersects)))
-        log.info('Number of target parts: {:f}'.format(len(self.intersects)))
-
-        #for debugging, save a shadowmask at each step up fieldline
-        if shadowMaskClouds == True:
-            self.write_shadow_pointcloud(self.centers,self.shadowed_mask,self.controlfilePath,tag='original')
-
-        #MAFOT always returns ordered points in CCW (from top) direction,
-        #so we need to check which direction we are running so we read the output
-        #correctly
-        if self.mapDirectionStruct == -1:
-            print('Tracing with reversed Map Direction')
-            log.info('Tracing with reversed Map Direction')
-            startIdx = 0
-        else:
-            print('Tracing with forward Map Direction')
-            log.info('Tracing with forward Map Direction')
-            startIdx = 1
-
-        #set switch for psi filtering
-        tools.psiFilterSwitch = self.psiFilterSwitch
-
-        #===INTERSECTION TEST 1 (tricky frontface culling / first step up field line)
-        dphi = 1.0
-        MHD.ittStruct = 1.0
-        numSteps = MHD.nTrace #actual trace is (numSteps + 1)*dphi degrees
-        #If numSteps = 0, dont do intersection checking
-        if numSteps > 0:
-            print("\nIntersection Test #1")
-            CTLfile = self.controlfilePath + self.controlfileStruct
-            MHD.writeControlFile(CTLfile, self.t, self.mapDirectionStruct, mode='struct')
-            #Perform first integration step
-            MHD.writeMAFOTpointfile(self.centers[use],self.gridfileStruct)
-            MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
-            structData = tools.readStructOutput(self.structOutfile)
-            os.remove(self.structOutfile) #clean up
-
-            #run intersection test, return empty dict if not found
-            ptIdx = np.where(use==594)[0]
-            bfMask = False
-            mask, intersects = self.intersectTestKdTree(CAD,MHD,structData,self.ep,self.powerDirection,bfMask,ptIdx)
-            self.shadowed_mask[use] = mask
-
-            #for debugging, save a shadowmask at each step up fieldline
-            if shadowMaskClouds == True:
-                self.write_shadow_pointcloud(self.centers,self.shadowed_mask,self.controlfilePath,tag='test0')
-
-        #===INTERSECTION TEST 2 (multiple steps up field line)
-        #Starts at second step up field line
-        if numSteps > 1:
-            print("\nIntersection Test #2")
-            MHD.writeControlFile(self.controlfileStruct, self.t, self.mapDirectionStruct, mode='struct')
-            use = np.where(self.shadowed_mask == 0)[0]
-            intersect_mask2 = np.zeros((len(use)))
-
-            #Perform first integration step but dont use for finding intersections
-            MHD.writeMAFOTpointfile(self.centers[use],self.gridfileStruct)
-            MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
-            structData = tools.readStructOutput(self.structOutfile)
-            os.remove(self.structOutfile) #clean up
-
-            #Perform subsequent integration steps.  Use the point we left off at in
-            #last loop iteration as the point we launch from in next loop iteration
-            #This amounts to 'walking' up the field line looking for intersections,
-            #which is important when field line curvature makes intersections happen
-            #farther than 1-2 degrees from PFC surface.
-            #
-            #if you need to reference stuff from the original arrays (ie self.centers)
-            #you need to do nested uses (ie: self.centers[use][use2]).
-            use2 = np.where(intersect_mask2 == 0)[0]
-            for i in range(numSteps):
-                print("\nIntersect Trace #2 Step {:d}".format(i))
-                log.info("\nIntersect Trace #2 Step {:d}".format(i))
-                useOld = use2
-                use2 = np.where(intersect_mask2 == 0)[0]
-                #if all faces are shadowed, break
-                if len(use2) == 0:
-                    print("All faces shadowed on this PFC. Moving onto next PFC...")
-                    log.info("All faces shadowed on this PFC. Moving onto next PFC...")
-                    break
-
-                indexes = np.where([x==useOld for x in use2])[1] #map current steps's index back to intersect_mask2 index
-
-                StartPoints = structData[startIdx::2,:][indexes] #odd indexes are second trace point
-                MHD.writeMAFOTpointfile(StartPoints,self.gridfileStruct)
-                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
-                structData = tools.readStructOutput(self.structOutfile)
-                os.remove(self.structOutfile) #clean up
-
-                #run intersection test, return empty dict if not found
-                bfMask = False
-                mask, intersects = self.intersectTestKdTree(CAD,MHD,structData,self.ep,self.powerDirection,bfMask,ptIdx=None)
-                intersect_mask2[use2] = mask
-
-                #for debugging, save a shadowmask at each step up fieldline
-                if shadowMaskClouds == True:
-                    self.shadowed_mask[use] = intersect_mask2
-                    self.write_shadow_pointcloud(self.centers,self.shadowed_mask,self.controlfilePath,tag='test{:d}'.format(i+1))
-                print("Step {:d} complete".format(i))
-                log.info("Step {:d} complete".format(i))
-
-            #Now revise shadowed_mask taking intersections into account
-            self.shadowed_mask[use] = intersect_mask2
-        print("Completed Intersection Check")
-
-
-        return
-
-    def intersectTestKdTree(self,CAD,MHD,sources,ep,powerDir,bfMask=False,ptIdx=None):
-        """
-        runs a KD Tree intersect test in parallel
-
-        return shadowMask and (if intersected) intersection face indexes
-
-        Not used but left for reference
-        acceleration structure in HEAT is toroidal / poloidal flux filtering, not kd trees
-        """
-        q1 = sources[::2,:] #even indexes are first trace point
-        q2 = sources[1::2,:] #odd indexes are second trace point
-        N = len(q2)
-        mask = np.zeros((N))
-        intersects = np.ones((N))*np.nan
-        use = np.where(mask==0.0)[0]
-        print("Tracing {:d} points and checking for intersections".format(len(use)))
-
-        for i,target in enumerate(CAD.intersectMeshes):
-            mesh = target.copy()
-            #Cull target front face (PFC front faces will only intersect with
-            # other PFC shadowed faces for optical approximation)
-            if bfMask == True:
-                #append target data
-                targetPoints = []
-                targetNorms = []
-                for face in target.Facets:
-                    targetPoints.append(face.Points)
-                    targetNorms.append(face.Normal)
-                targetPoints = np.asarray(targetPoints)/1000.0 #scale to m
-                targetNorms = np.asarray(targetNorms)
-                targetCtrs = self.getTargetCenters(targetPoints)
-                targetBackfaceMask = self.backfaceCulling(targetCtrs,targetNorms,MHD,ep,powerDir)
-                frontFaces = np.where(targetBackfaceMask==0)[0]
-                mesh.removeFacets(frontFaces)
-            #check if this target is a potential intersection
-            if CAD.intersectList[i] in self.intersects:
-                use = np.where(mask==0.0)[0]
-                if len(use) == 0: #all points intersected
-                    break
-
-                for j in range(len(use)):
-                    rayOrig = q1[use][j,:]*1000.0 #scale to mm for FreeCAD
-                    rayTerm = q2[use][j,:]*1000.0
-                    rayVec = rayTerm - rayOrig
-                    rayDist = np.linalg.norm(rayVec)
-                    rayDir = rayVec / rayDist
-                    intersect = mesh.nearestFacetOnRay((rayOrig[0],rayOrig[1],rayOrig[2]),(rayDir[0],rayDir[1],rayDir[2]))
-
-                    #we found an intersection
-                    if bool(intersect):
-                        #check if self intersection, wrong toroidal dir, or too far
-                        #this could fail if the intersection mesh element is within 1e-3mm of rayOrig and not same face
-                        while True:
-                            #get the location of the intersection
-                            idx = list(intersect.keys())[0]
-                            loc = list(intersect.values())[0]
-                            d = np.dot(loc-rayOrig, rayDir)
-                            if np.abs(d) < 1e-3 or d < 0.0 or d > rayDist:
-                                mesh.removeFacets([idx])
-                                intersect = mesh.nearestFacetOnRay((rayOrig[0],rayOrig[1],rayOrig[2]),(rayDir[0],rayDir[1],rayDir[2]))
-                                if bool(intersect)==False:
-                                    break
-                            else:
-                                #get the index of the intersection
-                                mask[use[j]] = 1.0
-                                intersects[use[j]] = list(intersect.keys())[0]
-
-                                break
-
-
-                    if j==ptIdx:
-                        if bfMask == True:
-                            print(len(frontFaces))
-                            print(frontFaces)
-                        print(rayOrig)
-                        print(rayTerm)
-                        print(rayDir)
-                        print(intersect)
-                        print(bool(intersect))
-
-
-#                print("Intersection test #1 using KDtree algorithm")
-#                log.info("Intersection test #1 using KDtree algorithm")
-#                t0 = time.time()
-#                #Prepare intersectionTest across multiple cores
-#                Ncores = multiprocessing.cpu_count() -2 #reserve 2 cores for overhead
-#                #in case we run on single core machine
-#                if Ncores <= 0:
-#                    Ncores = 1
-#                print('Initializing parallel intersection check across {:d} cores'.format(Ncores))
-#                log.info('Initializing parallel intersection check across {:d} cores'.format(Ncores))
-#                #each worker receives a single start and end point (q1 and q2),
-#                #corresponding to one trace from the MAFOT structure output.
-#                #The worker accesses the many potential intersection triangle vertices
-#                #through tools class variables (p1,p2,p3).  Making p1,p2,p3 tools class
-#                #variables eliminates the overhead of transmitting these matrices to
-#                #each worker, which yields about an order of magnitude speedup.
-#                print('Spawning tasks to workers')
-#                log.info('Spawning tasks to workers')
-#                #Do this try clause to kill any zombie threads that don't terminate
-#                try:
-#                    pool = multiprocessing.Pool(Ncores)
-#                    print("Using kD-Tree intersection algorithm")
-#                    log.info("Using kD-tree intersection algorithm")
-#                    intersects = np.asarray(pool.map(tools.intersectionTestParallelKdTree, np.arange(N)))
-#                finally:
-#                    pool.close()
-#                    pool.join()
-#                    del pool
-#                hits = np.where(intersects != None)[0]
-#                mask[use][hits] = 1.0
-
-        print("Found {:d} intersections".format(int(np.sum(mask))))
-        return mask, intersects
 
 
     def findShadows_structure(self,MHD,CAD,verbose=False, shadowMaskClouds=False):
@@ -561,14 +332,15 @@ class PFC:
             mapDirectionStruct = 1.0
             startIdx = 1 #Match MAFOT sign convention for toroidal direction (CCW=+)
             self.fwdUse = np.where(self.powerDir==-1)[0]
-            MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
-            #Perform first integration step
-            MHD.writeMAFOTpointfile(self.centers[self.fwdUse],self.gridfileStruct)
-            MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
-            structData = tools.readStructOutput(self.structOutfile)
-            os.remove(self.structOutfile) #clean up
-            q1[self.fwdUse] = structData[0::2,:] #even indexes are first trace point
-            q2[self.fwdUse] = structData[1::2,:] #odd indexes are second trace point
+            if len(self.fwdUse) != 0:
+                MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
+                #Perform first integration step
+                MHD.writeMAFOTpointfile(self.centers[self.fwdUse],self.gridfileStruct)
+                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                structData = tools.readStructOutput(self.structOutfile)
+                os.remove(self.structOutfile) #clean up
+                q1[self.fwdUse] = structData[0::2,:] #even indexes are first trace point
+                q2[self.fwdUse] = structData[1::2,:] #odd indexes are second trace point
 
             #run reverse mesh elements
             print("Reverse Trace")
@@ -576,14 +348,15 @@ class PFC:
             mapDirectionStruct = -1.0
             startIdx = 0 #Match MAFOT sign convention for toroidal direction
             self.revUse = np.where(self.powerDir==1)[0]
-            MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
-            #Perform first integration step
-            MHD.writeMAFOTpointfile(self.centers[self.revUse],self.gridfileStruct)
-            MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
-            structData = tools.readStructOutput(self.structOutfile)
-            os.remove(self.structOutfile) #clean up
-            q1[self.revUse] = structData[1::2,:] #even indexes are first trace point
-            q2[self.revUse] = structData[0::2,:] #odd indexes are second trace point
+            if len(self.revUse) != 0:
+                MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
+                #Perform first integration step
+                MHD.writeMAFOTpointfile(self.centers[self.revUse],self.gridfileStruct)
+                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                structData = tools.readStructOutput(self.structOutfile)
+                os.remove(self.structOutfile) #clean up
+                q1[self.revUse] = structData[1::2,:] #even indexes are first trace point
+                q2[self.revUse] = structData[0::2,:] #odd indexes are second trace point
 
             #this is for printing information about a specific mesh element
             #you can get the element # from paraview Point ID
@@ -637,13 +410,14 @@ class PFC:
             mapDirectionStruct = 1.0
             startIdx = 1 #Match MAFOT sign convention for toroidal direction
             self.fwdUse = np.where(self.powerDir[use]==-1)[0]
-            MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
-            #Perform first integration step
-            MHD.writeMAFOTpointfile(self.centers[use[self.fwdUse]],self.gridfileStruct)
-            MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
-            structData = tools.readStructOutput(self.structOutfile)
-            os.remove(self.structOutfile) #clean up
-            q2[self.fwdUse] = structData[1::2,:] #odd indexes are second trace point
+            if len(self.fwdUse) != 0:
+                MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
+                #Perform first integration step
+                MHD.writeMAFOTpointfile(self.centers[use[self.fwdUse]],self.gridfileStruct)
+                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                structData = tools.readStructOutput(self.structOutfile)
+                os.remove(self.structOutfile) #clean up
+                q2[self.fwdUse] = structData[1::2,:] #odd indexes are second trace point
 
             #run reverse mesh elements
             print("Reverse Trace")
@@ -651,13 +425,14 @@ class PFC:
             mapDirectionStruct = -1.0
             startIdx = 0 #Match MAFOT sign convention for toroidal direction
             self.revUse = np.where(self.powerDir[use]==1)[0]
-            MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
-            #Perform first integration step
-            MHD.writeMAFOTpointfile(self.centers[use[self.revUse]],self.gridfileStruct)
-            MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
-            structData = tools.readStructOutput(self.structOutfile)
-            os.remove(self.structOutfile) #clean up
-            q2[self.revUse] = structData[0::2,:] #even indexes are second trace point
+            if len(self.revUse) != 0:
+                MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
+                #Perform first integration step
+                MHD.writeMAFOTpointfile(self.centers[use[self.revUse]],self.gridfileStruct)
+                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                structData = tools.readStructOutput(self.structOutfile)
+                os.remove(self.structOutfile) #clean up
+                q2[self.revUse] = structData[0::2,:] #even indexes are second trace point
 
 
             if paraviewIndex is not None:
@@ -804,6 +579,11 @@ class PFC:
         PFCList = self.intersects
         #PFCList.append(self.name)
         PFCList = np.unique(PFCList)
+        #if we are using this PFC as a source, remove it from intersections
+        #if we run in allROI gyroSource mode, all ROI PFCs are included as intersections
+        if self.name == GYRO.gyroSourceTag:
+            rmv = np.where(PFCList == self.name)[0]
+            PFCList = np.delete(PFCList, rmv)
         GYRO.PFCintersectMap = []
         for pfc in PFCList:
             if pfc in GYRO.CADtargetNames:
@@ -1406,3 +1186,242 @@ class PFC:
         z[:,1] = p2[:,2]
         z[:,2] = p3[:,2]
         return tools.faceCenters(x,y,z)
+
+
+#==============================================================================
+#                LEGACY FUNCTIONS LEFT FOR REFERENCE (DO NOT WORK!)
+#==============================================================================
+    def findIntersectionFreeCADKDTree(self,MHD,CAD,verbose=False, shadowMaskClouds=False):
+        """
+        finds intersections using freecad's built in kdTree space partitioning
+
+        Not used but left for reference
+        acceleration structure in HEAT is toroidal / poloidal flux filtering, not kd trees
+        """
+
+        use = np.where(self.shadowed_mask == 0)[0]
+
+        print("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
+        log.info("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
+        print('Number of target parts: {:f}'.format(len(self.intersects)))
+        log.info('Number of target parts: {:f}'.format(len(self.intersects)))
+
+        #for debugging, save a shadowmask at each step up fieldline
+        if shadowMaskClouds == True:
+            self.write_shadow_pointcloud(self.centers,self.shadowed_mask,self.controlfilePath,tag='original')
+
+        #MAFOT always returns ordered points in CCW (from top) direction,
+        #so we need to check which direction we are running so we read the output
+        #correctly
+        if self.mapDirectionStruct == -1:
+            print('Tracing with reversed Map Direction')
+            log.info('Tracing with reversed Map Direction')
+            startIdx = 0
+        else:
+            print('Tracing with forward Map Direction')
+            log.info('Tracing with forward Map Direction')
+            startIdx = 1
+
+        #set switch for psi filtering
+        tools.psiFilterSwitch = self.psiFilterSwitch
+
+        #===INTERSECTION TEST 1 (tricky frontface culling / first step up field line)
+        dphi = 1.0
+        MHD.ittStruct = 1.0
+        numSteps = MHD.nTrace #actual trace is (numSteps + 1)*dphi degrees
+        #If numSteps = 0, dont do intersection checking
+        if numSteps > 0:
+            print("\nIntersection Test #1")
+            CTLfile = self.controlfilePath + self.controlfileStruct
+            MHD.writeControlFile(CTLfile, self.t, self.mapDirectionStruct, mode='struct')
+            #Perform first integration step
+            MHD.writeMAFOTpointfile(self.centers[use],self.gridfileStruct)
+            MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+            structData = tools.readStructOutput(self.structOutfile)
+            os.remove(self.structOutfile) #clean up
+
+            #run intersection test, return empty dict if not found
+            ptIdx = np.where(use==594)[0]
+            bfMask = False
+            mask, intersects = self.intersectTestKdTree(CAD,MHD,structData,self.ep,self.powerDirection,bfMask,ptIdx)
+            self.shadowed_mask[use] = mask
+
+            #for debugging, save a shadowmask at each step up fieldline
+            if shadowMaskClouds == True:
+                self.write_shadow_pointcloud(self.centers,self.shadowed_mask,self.controlfilePath,tag='test0')
+
+        #===INTERSECTION TEST 2 (multiple steps up field line)
+        #Starts at second step up field line
+        if numSteps > 1:
+            print("\nIntersection Test #2")
+            MHD.writeControlFile(self.controlfileStruct, self.t, self.mapDirectionStruct, mode='struct')
+            use = np.where(self.shadowed_mask == 0)[0]
+            intersect_mask2 = np.zeros((len(use)))
+
+            #Perform first integration step but dont use for finding intersections
+            MHD.writeMAFOTpointfile(self.centers[use],self.gridfileStruct)
+            MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+            structData = tools.readStructOutput(self.structOutfile)
+            os.remove(self.structOutfile) #clean up
+
+            #Perform subsequent integration steps.  Use the point we left off at in
+            #last loop iteration as the point we launch from in next loop iteration
+            #This amounts to 'walking' up the field line looking for intersections,
+            #which is important when field line curvature makes intersections happen
+            #farther than 1-2 degrees from PFC surface.
+            #
+            #if you need to reference stuff from the original arrays (ie self.centers)
+            #you need to do nested uses (ie: self.centers[use][use2]).
+            use2 = np.where(intersect_mask2 == 0)[0]
+            for i in range(numSteps):
+                print("\nIntersect Trace #2 Step {:d}".format(i))
+                log.info("\nIntersect Trace #2 Step {:d}".format(i))
+                useOld = use2
+                use2 = np.where(intersect_mask2 == 0)[0]
+                #if all faces are shadowed, break
+                if len(use2) == 0:
+                    print("All faces shadowed on this PFC. Moving onto next PFC...")
+                    log.info("All faces shadowed on this PFC. Moving onto next PFC...")
+                    break
+
+                indexes = np.where([x==useOld for x in use2])[1] #map current steps's index back to intersect_mask2 index
+
+                StartPoints = structData[startIdx::2,:][indexes] #odd indexes are second trace point
+                MHD.writeMAFOTpointfile(StartPoints,self.gridfileStruct)
+                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                structData = tools.readStructOutput(self.structOutfile)
+                os.remove(self.structOutfile) #clean up
+
+                #run intersection test, return empty dict if not found
+                bfMask = False
+                mask, intersects = self.intersectTestKdTree(CAD,MHD,structData,self.ep,self.powerDirection,bfMask,ptIdx=None)
+                intersect_mask2[use2] = mask
+
+                #for debugging, save a shadowmask at each step up fieldline
+                if shadowMaskClouds == True:
+                    self.shadowed_mask[use] = intersect_mask2
+                    self.write_shadow_pointcloud(self.centers,self.shadowed_mask,self.controlfilePath,tag='test{:d}'.format(i+1))
+                print("Step {:d} complete".format(i))
+                log.info("Step {:d} complete".format(i))
+
+            #Now revise shadowed_mask taking intersections into account
+            self.shadowed_mask[use] = intersect_mask2
+        print("Completed Intersection Check")
+
+
+        return
+
+    def intersectTestKdTree(self,CAD,MHD,sources,ep,powerDir,bfMask=False,ptIdx=None):
+        """
+        runs a KD Tree intersect test in parallel
+
+        return shadowMask and (if intersected) intersection face indexes
+
+        Not used but left for reference
+        acceleration structure in HEAT is toroidal / poloidal flux filtering, not kd trees
+        """
+        q1 = sources[::2,:] #even indexes are first trace point
+        q2 = sources[1::2,:] #odd indexes are second trace point
+        N = len(q2)
+        mask = np.zeros((N))
+        intersects = np.ones((N))*np.nan
+        use = np.where(mask==0.0)[0]
+        print("Tracing {:d} points and checking for intersections".format(len(use)))
+
+        for i,target in enumerate(CAD.intersectMeshes):
+            mesh = target.copy()
+            #Cull target front face (PFC front faces will only intersect with
+            # other PFC shadowed faces for optical approximation)
+            if bfMask == True:
+                #append target data
+                targetPoints = []
+                targetNorms = []
+                for face in target.Facets:
+                    targetPoints.append(face.Points)
+                    targetNorms.append(face.Normal)
+                targetPoints = np.asarray(targetPoints)/1000.0 #scale to m
+                targetNorms = np.asarray(targetNorms)
+                targetCtrs = self.getTargetCenters(targetPoints)
+                targetBackfaceMask = self.backfaceCulling(targetCtrs,targetNorms,MHD,ep,powerDir)
+                frontFaces = np.where(targetBackfaceMask==0)[0]
+                mesh.removeFacets(frontFaces)
+            #check if this target is a potential intersection
+            if CAD.intersectList[i] in self.intersects:
+                use = np.where(mask==0.0)[0]
+                if len(use) == 0: #all points intersected
+                    break
+
+                for j in range(len(use)):
+                    rayOrig = q1[use][j,:]*1000.0 #scale to mm for FreeCAD
+                    rayTerm = q2[use][j,:]*1000.0
+                    rayVec = rayTerm - rayOrig
+                    rayDist = np.linalg.norm(rayVec)
+                    rayDir = rayVec / rayDist
+                    intersect = mesh.nearestFacetOnRay((rayOrig[0],rayOrig[1],rayOrig[2]),(rayDir[0],rayDir[1],rayDir[2]))
+
+                    #we found an intersection
+                    if bool(intersect):
+                        #check if self intersection, wrong toroidal dir, or too far
+                        #this could fail if the intersection mesh element is within 1e-3mm of rayOrig and not same face
+                        while True:
+                            #get the location of the intersection
+                            idx = list(intersect.keys())[0]
+                            loc = list(intersect.values())[0]
+                            d = np.dot(loc-rayOrig, rayDir)
+                            if np.abs(d) < 1e-3 or d < 0.0 or d > rayDist:
+                                mesh.removeFacets([idx])
+                                intersect = mesh.nearestFacetOnRay((rayOrig[0],rayOrig[1],rayOrig[2]),(rayDir[0],rayDir[1],rayDir[2]))
+                                if bool(intersect)==False:
+                                    break
+                            else:
+                                #get the index of the intersection
+                                mask[use[j]] = 1.0
+                                intersects[use[j]] = list(intersect.keys())[0]
+
+                                break
+
+
+                    if j==ptIdx:
+                        if bfMask == True:
+                            print(len(frontFaces))
+                            print(frontFaces)
+                        print(rayOrig)
+                        print(rayTerm)
+                        print(rayDir)
+                        print(intersect)
+                        print(bool(intersect))
+
+
+#                print("Intersection test #1 using KDtree algorithm")
+#                log.info("Intersection test #1 using KDtree algorithm")
+#                t0 = time.time()
+#                #Prepare intersectionTest across multiple cores
+#                Ncores = multiprocessing.cpu_count() -2 #reserve 2 cores for overhead
+#                #in case we run on single core machine
+#                if Ncores <= 0:
+#                    Ncores = 1
+#                print('Initializing parallel intersection check across {:d} cores'.format(Ncores))
+#                log.info('Initializing parallel intersection check across {:d} cores'.format(Ncores))
+#                #each worker receives a single start and end point (q1 and q2),
+#                #corresponding to one trace from the MAFOT structure output.
+#                #The worker accesses the many potential intersection triangle vertices
+#                #through tools class variables (p1,p2,p3).  Making p1,p2,p3 tools class
+#                #variables eliminates the overhead of transmitting these matrices to
+#                #each worker, which yields about an order of magnitude speedup.
+#                print('Spawning tasks to workers')
+#                log.info('Spawning tasks to workers')
+#                #Do this try clause to kill any zombie threads that don't terminate
+#                try:
+#                    pool = multiprocessing.Pool(Ncores)
+#                    print("Using kD-Tree intersection algorithm")
+#                    log.info("Using kD-tree intersection algorithm")
+#                    intersects = np.asarray(pool.map(tools.intersectionTestParallelKdTree, np.arange(N)))
+#                finally:
+#                    pool.close()
+#                    pool.join()
+#                    del pool
+#                hits = np.where(intersects != None)[0]
+#                mask[use][hits] = 1.0
+
+        print("Found {:d} intersections".format(int(np.sum(mask))))
+        return mask, intersects

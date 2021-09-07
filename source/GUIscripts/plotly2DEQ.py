@@ -416,6 +416,8 @@ def makePlotlyBpBt(ep, MachFlag, logFile=False):
     #Bt = ep.BtFunc.ev(R,Z)
     Bp = ep.Bp_2D
     Bt = ep.Bt_2D
+    Br = ep.B_R
+    Bz = ep.B_Z
 
     if MachFlag == 'nstx':
         rlim, zlim = nstxu_wall(oldwall=False) #FOR NSTXU
@@ -435,8 +437,8 @@ def makePlotlyBpBt(ep, MachFlag, logFile=False):
     import plotly.express as px
     from plotly.subplots import make_subplots
 
-    fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.05, shared_yaxes=True,
-                    subplot_titles=("Bt [T]", "Bp [T]"))
+    fig = make_subplots(rows=2, cols=2, horizontal_spacing=0.05, vertical_spacing=0.05, shared_yaxes=True,
+                    subplot_titles=("Bt [T]", "Bp [T]", "Br [T]", "Bz [T]"))
 
     fig.add_trace(
         go.Contour(
@@ -501,18 +503,191 @@ def makePlotlyBpBt(ep, MachFlag, logFile=False):
         col=2
         )
 
+
+
+    fig.add_trace(
+        go.Contour(
+            z=Br,
+            x=r, # horizontal axis
+            y=z, # vertical axis
+            colorscale='Purples',
+            contours_coloring='heatmap',
+            name='Br',
+            showscale=False,
+            ncontours=30,
+            ),
+        row=2,
+        col=1
+        )
+    #Wall in green
+    fig.add_trace(
+        go.Scatter(
+            x=rlim,
+            y=zlim,
+            mode="markers+lines",
+            name="Wall",
+            line=dict(
+                color="#19fa1d"
+                    ),
+            ),
+        row=2,
+        col=1
+        )
+
+    fig.add_trace(
+        go.Contour(
+            z=Bz,
+            x=r, # horizontal axis
+            y=z, # vertical axis
+            colorscale='Plotly3',
+            contours_coloring='heatmap',
+            name='Bz',
+            showscale=False,
+            ncontours=30,
+            ),
+        row=2,
+        col=2
+        )
+    #Wall in green
+    fig.add_trace(
+        go.Scatter(
+            x=rlim,
+            y=zlim,
+            mode="markers+lines",
+            name="Wall",
+            line=dict(
+                color="#19fa1d"
+                    ),
+            ),
+        row=2,
+        col=2
+        )
+
+
+
+
+
+
     fig.update_layout(showlegend=False,
         margin=dict(
         l=5,
         r=5,
         b=30,
         t=50,
-        pad=2
+        pad=2,
         ),
+        height=800,
     )
     return fig
 
 
+
+
+
+def makePlotlyBrBz(ep, MachFlag, logFile=False):
+    """
+    returns a DASH object for use directly in dash app
+    """
+
+    if logFile is True:
+        log = logging.getLogger(__name__)
+
+    r = ep.g['R']
+    z = ep.g['Z']
+    R,Z = np.meshgrid(r, z)
+
+    #Bp = ep.BpFunc.ev(R,Z)
+    #Bt = ep.BtFunc.ev(R,Z)
+    Br = ep.B_R
+    Bz = ep.B_Z
+
+    if MachFlag == 'nstx':
+        rlim, zlim = nstxu_wall(oldwall=False) #FOR NSTXU
+    else:
+        rlim = ep.g['wall'][:,0]
+        zlim = ep.g['wall'][:,1]
+
+    import plotly
+    import plotly.graph_objects as go
+    import plotly.express as px
+    from plotly.subplots import make_subplots
+
+    fig = make_subplots(rows=2, cols=1, horizontal_spacing=0.05, shared_yaxes=True,
+                    subplot_titles=("Br [T]", "Bz [T]"))
+
+    fig.add_trace(
+        go.Contour(
+            z=Br,
+            x=r, # horizontal axis
+            y=z, # vertical axis
+            #colorscale='cividis',
+            contours_coloring='heatmap',
+            name='Br',
+            showscale=False,
+            ncontours=30,
+            ),
+        row=1,
+        col=1
+        )
+    #Wall in green
+    fig.add_trace(
+        go.Scatter(
+            x=rlim,
+            y=zlim,
+            mode="markers+lines",
+            name="Wall",
+            line=dict(
+                color="#19fa1d"
+                    ),
+            ),
+        row=1,
+        col=1
+        )
+
+    fig.add_trace(
+        go.Contour(
+            z=Bz,
+            x=r, # horizontal axis
+            y=z, # vertical axis
+            #colorscale='cividis',
+            contours_coloring='heatmap',
+            name='Bz',
+            showscale=False,
+            ncontours=30,
+            ),
+        row=1,
+        col=2
+        )
+    #Wall in green
+    fig.add_trace(
+        go.Scatter(
+            x=rlim,
+            y=zlim,
+            mode="markers+lines",
+            name="Wall",
+            line=dict(
+                color="#19fa1d"
+                    ),
+            ),
+        row=1,
+        col=2
+        )
+
+
+
+
+
+
+    fig.update_layout(showlegend=False,
+        margin=dict(
+        l=5,
+        r=5,
+        b=30,
+        t=50,
+        pad=2,
+        ),
+    )
+    return fig
 
 
 

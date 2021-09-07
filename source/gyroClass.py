@@ -619,7 +619,10 @@ class GYRO:
         self.helixTrace = [None] * len(self.p0)
         N = len(self.p1)
         #Prepare helical trace across multiple cores
-        Ncores = multiprocessing.cpu_count() - 2 #reserve 1 core for overhead
+        Ncores = multiprocessing.cpu_count() - 2 #reserve 2 cores for overhead
+        #in case we run on single core machine
+        if Ncores <= 0:
+            Ncores = 1
         print('Initializing parallel helix trace across {:d} cores'.format(Ncores))
         log.info('Initializing parallel helix trace across {:d} cores'.format(Ncores))
         #each worker receives a single start and end point (p0 and p1),
