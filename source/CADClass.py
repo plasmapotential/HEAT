@@ -184,7 +184,7 @@ class CAD:
                 print("Mesh exists, loading...")
                 self.loadIntersectMesh(name)
             else:
-                print("New mesh.  Creating...")
+                print("New mesh.  Creating "+partnum)
                 self.intersectObjFromPartnum(partnum, resolution)
 
         #Now get face centers, normals, areas
@@ -203,10 +203,10 @@ class CAD:
         for part in partslist:
 #            idx = np.where(np.asarray(self.ROI) == part)[0][0]
             count = 0
-            for i in range(len(self.CADobjs)):
-                if part == self.CADobjs[i].Label:
+            for i in range(len(self.CADparts)):
+                if part == self.CADparts[i].Label:
                     count += 1
-                    self.ROIparts[idx] = self.CADobjs[i]
+                    self.ROIparts[idx] = self.CADparts[i]
                     self.ROImeshes[idx] = self.part2mesh(self.ROIparts[idx])[0]
 
             if count == 0:
@@ -229,10 +229,10 @@ class CAD:
         for part in partslist:
             count = 0
             idx = np.where(np.asarray(self.intersectList) == part)[0][0]
-            for i in range(len(self.CADobjs)):
-                if part == self.CADobjs[i].Label:
+            for i in range(len(self.CADparts)):
+                if part == self.CADparts[i].Label:
                     count += 1
-                    self.intersectParts[idx] = self.CADobjs[i]
+                    self.intersectParts[idx] = self.CADparts[i]
                     if resolution=="standard":
                         self.intersectMeshes[idx] = self.part2meshStandard(self.intersectParts[idx])[0]
                     else:
@@ -503,24 +503,25 @@ class CAD:
                 print("Check HEAT output for Mesh Not Found errors")
                 log.info("No Mesh for one of these objects.  Did you have a typo in input file?")
                 log.info("Check HEAT output for Mesh Not Found errors")
-            N_facets = mesh.CountFacets
-            x = np.zeros((N_facets,3))
-            y = np.zeros((N_facets,3))
-            z = np.zeros((N_facets,3))
+            else:
+                N_facets = mesh.CountFacets
+                x = np.zeros((N_facets,3))
+                y = np.zeros((N_facets,3))
+                z = np.zeros((N_facets,3))
 
-            for i,facet in enumerate(mesh.Facets):
-                #mesh points
-                for j in range(3):
-                    x[i][j] = facet.Points[j][0]
-                    y[i][j] = facet.Points[j][1]
-                    z[i][j] = facet.Points[j][2]
+                for i,facet in enumerate(mesh.Facets):
+                    #mesh points
+                    for j in range(3):
+                        x[i][j] = facet.Points[j][0]
+                        y[i][j] = facet.Points[j][1]
+                        z[i][j] = facet.Points[j][2]
 
-            # scale and permute if necessary
-            x,y,z = self.scale_and_permute(x,y,z)
-            # get face normals and face centers
-            norms.append(self.faceNormals(mesh))
-            centers.append(self.faceCenters(x,y,z))
-            areas.append(self.faceAreas(mesh))
+                # scale and permute if necessary
+                x,y,z = self.scale_and_permute(x,y,z)
+                # get face normals and face centers
+                norms.append(self.faceNormals(mesh))
+                centers.append(self.faceCenters(x,y,z))
+                areas.append(self.faceAreas(mesh))
         return norms,centers,areas
 
 

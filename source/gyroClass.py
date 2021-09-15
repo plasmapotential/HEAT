@@ -115,8 +115,13 @@ class GYRO:
         T_eV is temperature in eV
 
         can also be found with: d/dv( v*f(v) ) = 0
+
+        note that this is for v, not vPerp or v||:
+        <v^2> = 3KT/m
+        <vPerp^2> = 2KT/m
+        <v||^2> = KT/m
         """
-        return np.sqrt(2.0*T_eV/(self.mass_eV/self.c**2))
+        return np.sqrt(3.0*T_eV/(self.mass_eV/self.c**2))
 
 
     def setupFreqs(self, B):
@@ -167,7 +172,14 @@ class GYRO:
         len(self.t1) is number of points in divertor we are calculating HF on
         """
         #get velocity space phase angles
-        self.uniformVelPhaseAngle()
+        #if N_vPhase > 1, sample uniformly thru vPhase space
+        #Else, sample so that 2/3 energy goes to vPerp
+        #ie <v^2> = 3KT/m; <vPerp^2> = 2KT/m; <v||> = KT/m
+        #so vPerp = sqrt(2)v||
+        if self.N_vPhase > 1:
+            self.uniformVelPhaseAngle()
+        else:
+            self.vPhases = np.array([np.arccos(np.sqrt(2.0/3.0))])
 
         if self.vMode == 'single':
             print("Gyro orbit calculation from single plasma temperature")
@@ -291,7 +303,7 @@ class GYRO:
             p1 = BtraceXYZ[i+1,:]
             #vector
             delP = p1 - p0
-            #magnitude
+            #magnitude or length of line segment
             magP = np.sqrt(delP[0]**2 + delP[1]**2 + delP[2]**2)
             #time it takes to transit line segment
             delta_t = magP / (vParallel)
@@ -547,7 +559,7 @@ class GYRO:
             E2 = (self.PFC_t3[use] - self.PFC_t1[use])
             D = (q2-q1)
             Dmag = np.linalg.norm(D, axis=1)
-            eps = 0.0000001
+            eps = 1e-12
             for j in range(len(helix_rot)-1):
                 D[j] = D[j] / np.linalg.norm(D, axis=1)[j]
                 h = np.cross(D[j], E2)
@@ -582,6 +594,9 @@ class GYRO:
         #print the trace for a specific index
         if self.traceIndex2 is not None:
             if self.traceIndex2 == i:
+                if np.sum(~np.any([test1,test2,test3,test4], axis=0))>0:
+                    print("TEST====")
+                    print(use[ np.where(np.any([test1,test2,test3,test4], axis=0)==False)[0] ])
                 #print("Saving Index data to CSV and VTK formats")
                 #save data to csv format
                 head = 'X[mm],Y[mm],Z[mm]'

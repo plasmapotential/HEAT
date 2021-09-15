@@ -659,6 +659,9 @@ class PFC:
 
         #Walk downstream along GC path tracing helices and looking for intersections
         N_GCdeg = GYRO.gyroDeg*2 + 1
+        gP = 0
+        vP = 0
+        vS = 0
         #gyroPhase loop
         for gyroPhase in range(GYRO.N_gyroPhase):
             print("\n============GyroPhase: {:f} rad".format(GYRO.gyroPhases[gyroPhase]))
@@ -669,6 +672,7 @@ class PFC:
                 #velocity slice loop
                 for vSlice in range(GYRO.N_vSlice):
                     print("============vSLice #: {:f}".format(vSlice))
+                    print("Current gyro run (gP,vP,vS): ({:d},{:d},{:d})".format(gP,vP,vS))
                     #initialize phase angle for this MC run
                     GYRO.lastPhase = np.ones((self.N_gyroCenters))*GYRO.gyroPhases[gyroPhase]
                     #calculate velocities and radii for this MC run
@@ -747,7 +751,9 @@ class PFC:
                             print("All helices intersected a face.  Breaking early.")
                             break
 
-
+                    vS += 1
+                vP += 1
+            gP += 1
         print("Gyro Trace Completed")
         log.info("Gyro Trace Completed")
 
