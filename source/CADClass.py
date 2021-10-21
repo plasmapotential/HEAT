@@ -90,7 +90,7 @@ class CAD:
 
 
         self.allowed_vars = [
-                            'ROIGridRes',
+#                            'ROIGridRes',
                             'gridRes',
 #                            'permute_mask',
 #                            'unitConvert',
@@ -117,6 +117,22 @@ class CAD:
         self.ROImeshes = ['None' for i in range(len(self.ROI))]
         self.ROIctrs = ['None' for i in range(len(self.ROI))]
         self.ROInorms = ['None' for i in range(len(self.ROI))]
+        res = timestepMap['resolution'].values
+        self.ROIresolutions = list(res)
+        return
+
+    def getGyroSources(self, gyroSources):
+        """
+        Writes GyroSources as list to CAD object.  Input is timestepMap dataframe
+        which is read by function in PFCClass.
+        """
+        #self.ROIList = list(set(self.ROI)) #does not preserve order
+        self.gyroSources = list(gyroSources)
+        self.gyroParts = ['None' for i in range(len(self.gyroSources))]
+        self.gyroMeshes = ['None' for i in range(len(self.gyroSources))]
+        self.gyroCtrs = ['None' for i in range(len(self.gyroSources))]
+        self.gyroNorms = ['None' for i in range(len(self.gyroSources))]
+        self.gyroAreas = ['None' for i in range(len(self.gyroSources))]
         return
 
     def getIntersectsFromFile(self, timestepMap):
@@ -158,9 +174,10 @@ class CAD:
         Checks to see if STLs at desired resolution exist.  If they do, load em.
         If they don't, create them.
         """
-        if resolution == None:  resolution=self.ROIGridRes
         for idx,partnum in enumerate(self.ROI):
-            name = self.STLpath + partnum + "___" + resolution +"mm.stl"
+            if resolution == None:
+                resolution = float(self.ROIresolutions[idx])
+            name = self.STLpath + partnum + "___{:.2f}mm.stl".format(resolution)
             if os.path.exists(name) and self.overWriteMask == False:
                 print("Mesh exists, loading...")
                 self.loadROIMesh(name,idx)
@@ -191,6 +208,25 @@ class CAD:
         self.intersectNorms,self.intersectCtrs,self.intersectAreas = self.normsCentersAreas(self.intersectMeshes)
         return
 
+    def getGyroSourceMeshes(self, resolution=None):
+        """
+        Checks to see if STLs at desired resolution exist.  If they do, load em.
+        If they don't, create them.
+        """
+        if resolution == None:  resolution=self.ROIGridRes
+        for idx,partnum in enumerate(self.gyroSources):
+            name = self.STLpath + partnum + "___" + resolution +"mm.stl"
+            if os.path.exists(name) and self.overWriteMask == False:
+                print("Mesh exists, loading...")
+                self.loadGyroMesh(name,idx)
+            else:
+                print("New mesh.  Creating...")
+                self.gyroParts[idx], self.gyroMeshes[idx] = self.objFromPartnum(partnum,idx)
+
+        #Now get face centers, normals, areas
+        self.gyroNorms,self.gyroCtrs,self.gyroAreas = self.normsCentersAreas(self.gyroMeshes)
+        return
+
     def ROIobjFromPartnum(self, partslist, idx):
         """
         Generates ROI objects from list of part numbers.
@@ -207,7 +243,7 @@ class CAD:
                 if part == self.CADparts[i].Label:
                     count += 1
                     self.ROIparts[idx] = self.CADparts[i]
-                    self.ROImeshes[idx] = self.part2mesh(self.ROIparts[idx])[0]
+                    self.ROImeshes[idx] = self.part2mesh(self.ROIparts[idx], self.ROIresolutions[idx])[0]
 
             if count == 0:
                 print("Part "+part+" not found in CAD.  Cannot Mesh!")
@@ -244,7 +280,29 @@ class CAD:
 
         return
 
+    def objFromPartnum(self, partslist, idx):
+        """
+        Generates objects from list of part names.
+        """
+        #Check if this is a single file or list and make it a list
+        if type(partslist) == str:
+            partslist = [partslist]
+        #Build a list of parts CAD objects
+        parts = []
+        meshes = []
+        for part in partslist:
+#            idx = np.where(np.asarray(self.ROI) == part)[0][0]
+            count = 0
+            for i in range(len(self.CADparts)):
+                if part == self.CADparts[i].Label:
+                    count += 1
+                    parts.append(self.CADparts[i])
+                    meshes.append(self.part2mesh(self.CADparts[i])[0])
 
+            if count == 0:
+                print("Part "+part+" not found in CAD.  Cannot Mesh!")
+                log.info("Part "+part+" not found in CAD.  Cannot Mesh!")
+        return parts, meshes
 
     def loadSTEP(self):
         """
@@ -327,7 +385,7 @@ class CAD:
             labels.append(part.Label)
         return labels
 
-    def part2mesh(self, part, resolution=None, mode='fine'):
+    def part2mesh(self, part, resolution, mode='fine'):
         """
         Converts CAD object to mesh object, and adds mesh object to CAD document
         if part is a list of objects, returns a list of meshes.
@@ -338,8 +396,7 @@ class CAD:
         This function uses the FreeCAD Mefisto algorithm, and defines mesh
         by maximum edge length (resolution)
         """
-        if resolution == None: resolution = float(self.ROIGridRes)
-        else: resolution = float(resolution)
+        resolution = float(resolution)
         #Check if this is a single file or list and make it a list
         if type(part) != list:
             part = [part]
@@ -389,24 +446,20 @@ class CAD:
         return meshes
 
 
-    def writeMesh2file(self, mesh, label, path='./', resolution=None):
+    def writeMesh2file(self, mesh, label, resolution, path='./'):
         """
         Writes a mesh object to STL file named by part number.
         If mesh is a list of mesh objects, then write a separate file for
         each mesh object in the list.  Clobbers if overWriteMask is True
         """
-        if resolution == None:
-            resolution = self.ROIGridRes
-
-        if type(resolution) != str:
-            resolution=str(resolution)
         #Check if this is a single file or list and make it a list
         if type(mesh) != list:
             mesh = [mesh]
         if type(label)!= np.ndarray:
             if type(label) != list:
                 label = [label]
-
+        if type(resolution) != list:
+            resolution=[resolution]*len(mesh)
 
         #Recursively make dirs for STLs
         print("making STL directory")
@@ -416,15 +469,15 @@ class CAD:
         for i in range(len(mesh)):
             # ___ (3 underdashes) is the str we use to separate mesh name from resolution
             # this MATTERS when we read back in a mesh (see self.loadROIMesh and self.loadIntersectMesh)
-            filename = path + label[i] + "___" + resolution +"mm.stl"
+            filename = path + label[i] + "___" + str(resolution[i]) +"mm.stl"
             print("Writing mesh file: " + filename)
             log.info("Writing mesh file: " + filename)
             if os.path.exists(filename) and self.overWriteMask == False:
                 pass
             else:
                 mesh[i].write(filename)
-        print("\nWrote meshes to file at resolution: " + resolution)
-        log.info("\nWrote meshes to file at resolution: " + resolution)
+        print("\nWrote meshes to files")
+        log.info("\nWrote meshes to files")
         return
 
     def loadROIMesh(self, filenames, idx):
@@ -474,6 +527,28 @@ class CAD:
         log.info("Loaded STL files")
         return
 
+    def loadGyroMesh(self, filenames, idx):
+        """
+        Reads a previously generated STL file and saves object into class.  If
+        filename is a list of filenames, then read each into a separate index
+        of mesh variable in class.  filename should match a part number from the
+        ROI
+        """
+        #Check if this is a single file or list and make it a list
+        if type(filenames) == str:
+            filenames = [filenames]
+        for file in filenames:
+            mesh = Mesh.Mesh(file)
+            partnum = file.split('/')[-1].split('___')[0]
+#            idx = np.where(np.asarray(self.ROI) == partnum)[0][0]
+            #Find CAD object that matches this part number
+            for i in range(len(self.CADobjs)):
+                if partnum == self.CADobjs[i].Label:
+                    self.gyroParts[idx] = self.CADobjs[i]
+            self.gyroMeshes[idx] = mesh
+        print("Loaded STL files")
+        log.info("Loaded STL files")
+        return
 
 
     def load1Mesh(self, filename):

@@ -545,10 +545,47 @@ class PFC:
         CTLfile = self.controlfilePath + self.controlfileStruct
         MHD.ittGyro = GYRO.gyroDeg
         print("Tracing guiding centers for {:f} degrees".format(GYRO.gyroDeg))
-        MHD.writeControlFile(CTLfile, self.t, 0, mode='gyro') #0 for both directions
-        MHD.writeMAFOTpointfile(self.gyroCenters,self.gridfileStruct)
-        MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
+
+        #MHD.writeControlFile(CTLfile, self.t, 0, mode='gyro') #0 for both directions
+        #trace
+        if GYRO.gyroSourceTag == 'allROI':
+            MHD.writeMAFOTpointfile(self.gyroCenters,self.gridfileStruct)
+            MHD.writeControlFile(CTLfile, self.t, 0, mode='gyro') #0 for both directions
+            MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
                                     self.controlfileStruct)
+
+
+        else:
+            #here we assume for gyroPlanes the entire PFC has 1 powerDir
+            if self.powerDir[0] > 0:
+                MHD.writeMAFOTpointfile(self.gyroCenters,self.gridfileStruct)
+                MHD.writeControlFile(CTLfile, self.t, 1, mode='gyro') #0 for both directions
+                MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
+                                        self.controlfileStruct)
+            else:
+                MHD.writeMAFOTpointfile(self.gyroCenters,self.gridfileStruct)
+                MHD.writeControlFile(CTLfile, self.t, -1, mode='gyro') #0 for both directions
+                MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
+                                        self.controlfileStruct)
+
+            #currently only support tracing one direction for gyroSourcePlanes.
+            #could modify this else to have fwd and rev capabilities for
+            #traces in multiple directions.
+            #would need to build self.guidingCenterPaths appropriately
+            #run forward
+            #fwd = np.where(self.powerDir == 1)[0]
+            #MHD.writeMAFOTpointfile(self.gyroCenters[fwd],self.gridfileStruct)
+            #MHD.writeControlFile(CTLfile, self.t, 1, mode='gyro') #0 for both directions
+            #MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
+            #                            self.controlfileStruct)
+            ##run reverse
+            #rev = np.where(self.powerDir == -1)[0]
+            #MHD.writeMAFOTpointfile(self.gyroCenters[rev],self.gridfileStruct)
+            #MHD.writeControlFile(CTLfile, self.t, -1, mode='gyro') #0 for both directions
+            #MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
+            #                        self.controlfileStruct)
+
+
         self.guidingCenterPaths = tools.readStructOutput(self.structOutfile)
         #os.remove(self.structOutfile) #clean up
         #os.remove(self.gridfileStruct) #clean up
@@ -658,7 +695,10 @@ class PFC:
         GYRO.setupFreqs(self.Bmag[self.PFC_GYROmap,-1])
 
         #Walk downstream along GC path tracing helices and looking for intersections
-        N_GCdeg = GYRO.gyroDeg*2 + 1
+        if GYRO.gyroSourceTag == "allROI":
+            N_GCdeg = GYRO.gyroDeg*2 + 1
+        else:
+            N_GCdeg = GYRO.gyroDeg + 1
         gP = 0
         vP = 0
         vS = 0
@@ -685,6 +725,7 @@ class PFC:
                     print("vPerp = {:f} m/s".format(GYRO.vPerpMC[0]))
                     print("vParallel = {:f} m/s".format(GYRO.vParallelMC[0]))
                     print("rGyro = {:f} m".format(GYRO.rGyroMC[0]))
+                    print("Bmag = {:f} T".format(self.Bmag[0,-1]))
                     #use cProfile to profile this loop speed
                     #profiler = cProfile.Profile()
                     #profiler.enable()
@@ -753,7 +794,9 @@ class PFC:
 
                     vS += 1
                 vP += 1
+                vS = 0
             gP += 1
+            vP = 0
         print("Gyro Trace Completed")
         log.info("Gyro Trace Completed")
 

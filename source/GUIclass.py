@@ -602,15 +602,13 @@ class GUIobj():
 
         return
 
-    def getCADResInputs(self,ROIGridRes=None,gridRes=None):
+    def getCADResInputs(self,gridRes=None):
         """
         Loads CAD inputs
         """
         import numpy as np
         tools.initializeInput(self.CAD, infile=self.infile)
         self.CAD.rootDir = self.rootDir #set HEAT rootDir from HEATgui.py
-        if ROIGridRes is not None:
-            self.CAD.ROIGridRes = ROIGridRes
         if gridRes is not None:
             #check if intersection grid resolution string is a number,
             #if not use standard mesh algorithms
@@ -704,7 +702,7 @@ class GUIobj():
             self.readPFCfile(self.pfcFile)
         self.CAD.getROI(self.timestepMap)
         self.CAD.getROImeshes()
-        self.CAD.writeMesh2file(self.CAD.ROImeshes, self.CAD.ROI, path=self.CAD.STLpath)
+        self.CAD.writeMesh2file(self.CAD.ROImeshes, self.CAD.ROI, self.CAD.ROIresolutions, path=self.CAD.STLpath)
         print("Calculating HF on these tiles:")
         log.info("Calculating HF on these tiles:")
         print(self.CAD.ROIList)
@@ -873,7 +871,7 @@ class GUIobj():
         return
 
     def getGyroInputs(self,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
-                      N_vPhase, N_vSlice, ionFrac, gyroSource):
+                      N_vPhase, N_vSlice, ionFrac, gyroSources):
         """
         Sets up the gyro module
         """
@@ -888,11 +886,21 @@ class GUIobj():
         self.GYRO.vMode = vMode
         self.GYRO.ionFrac = float(ionFrac)
         #set up power source
-        self.GYRO.gyroSourceTag = str(gyroSource)
+        self.GYRO.gyroSourceTag = str(gyroSources)
         if self.GYRO.gyroSourceTag == 'allROI':
             self.GYRO.gyroSources = self.CAD.ROIList
         else:
-            self.GYRO.gyroSources = [gyroSource]
+            print("Meshing Gyro Source Objects")
+            log.info("Meshing Gyro Source Objects")
+            self.GYRO.gyroSources = [gyroSources]
+            #self.CAD.getGyroSources(gyroSources)
+            #self.CAD.getGyroSourceMeshes()
+            #self.CAD.writeMesh2file(self.CAD.gyroMeshes, self.CAD.gyroSources, path=self.CAD.STLpath)
+            print("Gyro Traces Launched from these tiles:")
+            log.info("Gyro Traces Launched from these tiles:")
+            print(self.GYRO.gyroSources)
+            log.info(self.GYRO.gyroSources)
+
         #set up GYRO object
         self.GYRO.setupConstants(self.GYRO.ionMassAMU)
         print('Loaded Gyro Orbit Settings')
@@ -1254,7 +1262,7 @@ class GUIobj():
                         print('Escaped Gyro Power = {:f}'.format(self.GYRO.gyroNanPower))
                         print("Gyro orbit calculation took: {:f} [s]\n".format(time.time() - tGyro))
 
-                print("=== Last timestep's PFC arrays: Gyro ===")
+                print("\=== Last timestep's PFC arrays: Gyro ===")
                 totalPowPow = 0
                 for PFC in self.PFCs:
                     if t not in PFC.timesteps:
@@ -1437,8 +1445,11 @@ class GUIobj():
         totalMeshCounter = 0
         numTargetFaces = 0
         numROIFaces = 0
+        numGyroFaces = 0
         targetPoints = []
         targetNorms = []
+        gyroPoints = []
+        gyroNorms = []
         self.GYRO.CADtargetNames = []
         self.GYRO.CADROINames = []
         self.GYRO.CADROIindexes = []
@@ -1479,11 +1490,28 @@ class GUIobj():
                     targetPoints.append(face.Points)
                     targetNorms.append(face.Normal)
 
+        #PFCs that are gyroSources
+        #for i,target in enumerate(self.CAD.gyroMeshes):
+        #    numGyroFaces += target.CountFacets
+        #    #append target data
+        #    for face in target.Facets:
+        #        gyroPoints.append(face.Points)
+        #        gyroNorms.append(face.Normal)
+        #gyro sources
+        #gyroPoints = np.asarray(gyroPoints)/1000.0 #scale to m
+        #gyroNorms = np.asarray(gyroNorms)
+        #self.GYRO.s1 = gyroPoints[:,0,:] #source point 1 of mesh triangle
+        #self.GYRO.s2 = gyroPoints[:,1,:] #source point 2 of mesh triangle
+        #self.GYRO.s3 = gyroPoints[:,2,:] #source point 3 of mesh triangle
+        #self.GYRO.Ns = len(self.GYRO.s1)
+        #self.GYRO.gyroCenters = tools.getTargetCenters(gyroPoints)
+
+        #targets
         targetPoints = np.asarray(targetPoints)/1000.0 #scale to m
         targetNorms = np.asarray(targetNorms)
-        self.GYRO.t1 = targetPoints[:,0,:] #point 1 of mesh triangle
-        self.GYRO.t2 = targetPoints[:,1,:] #point 2 of mesh triangle
-        self.GYRO.t3 = targetPoints[:,2,:] #point 3 of mesh triangle
+        self.GYRO.t1 = targetPoints[:,0,:] #target point 1 of mesh triangle
+        self.GYRO.t2 = targetPoints[:,1,:] #target point 2 of mesh triangle
+        self.GYRO.t3 = targetPoints[:,2,:] #target point 3 of mesh triangle
         self.GYRO.Nt = len(self.GYRO.t1)
         self.GYRO.intersectCenters = tools.getTargetCenters(targetPoints)
         self.GYRO.intersectNorms = np.zeros(targetNorms.shape)
@@ -1497,7 +1525,6 @@ class GUIobj():
         self.GYRO.CADTGT_CADROImap = np.arange(self.GYRO.N_CADROI)
 
         return
-
 
     def prepareGyroMaps(self, tIdx):
         """
@@ -1874,7 +1901,6 @@ class GUIobj():
                     'tmin':None,
                     'tmax':None,
                     'nTrace': None,
-                    'ROIGridRes': None,
                     'gridRes': None,
                     'STPfile': None,
                     'hfMode': None,
@@ -1933,7 +1959,6 @@ class GUIobj():
                     'tmin': self.MHD.tmin,
                     'tmax': self.MHD.tmax,
                     'nTrace': self.MHD.nTrace,
-                    'ROIGridRes': self.CAD.ROIGridRes,
                     'gridRes': self.CAD.gridRes,
                     'lqEich': self.HF.lqEich,
                     'S': self.HF.S,
@@ -2157,7 +2182,6 @@ class GUIobj():
             log.info("Creating openFOAM symlink to STL")
             #old method used ROIGridRes, but this can sometimes create non-watertight mesh
             #new method uses standard FreeCAD mesher (not mefisto) to make better volume mesh
-            #PFC.OFpart = PFC.name + "___" + self.CAD.ROIGridRes
             PFC.OFpart = PFC.name + "___" + "standard"
             triSurfaceLocation = partDir+'/constant/triSurface/' + PFC.OFpart +"mm.stl"
 

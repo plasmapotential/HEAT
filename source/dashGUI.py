@@ -473,7 +473,6 @@ def inputDragDrop(file, contents, MachFlag):
                State('tmin', 'value'),
                State('tmax', 'value'),
                State('nTrace', 'value'),
-               State('ROIGridRes', 'value'),
                State('gridRes', 'value'),
                State('lqEich', 'value'),
                State('S', 'value'),
@@ -519,7 +518,6 @@ def saveGUIinputs(  n_clicks,
                     tmin,
                     tmax,
                     nTrace,
-                    ROIGridRes,
                     gridRes,
                     lqEich,
                     S,
@@ -571,7 +569,6 @@ def saveGUIinputs(  n_clicks,
     data['tmin'] = tmin
     data['tmax'] = tmax
     data['nTrace'] = nTrace
-    data['ROIGridRes'] = ROIGridRes
     data['gridRes'] = gridRes
     data['lqEich'] = lqEich
     data['S'] = S
@@ -875,8 +872,8 @@ def buildCADbox():
             draggable='yes',
             children=[
                 html.H6("CAD Settings"),
-                html.Label(id="ROIgridResLabel", children="Heat Flux Resolution [mm]  "),
-                dcc.Input(id="ROIGridRes", className="textInput"),
+                #html.Label(id="ROIgridResLabel", children="Heat Flux Resolution [mm]  "),
+                #dcc.Input(id="ROIGridRes", className="textInput"),
                 html.Label(id="gridResLabel", children="Intersect Resolution [mm]"),
                 dcc.Input(id="gridRes", className="textInput"),
                 html.Button("Load Res Settings", id="loadRes", style={'margin':'10px 10px 10px 10px'}),
@@ -905,18 +902,16 @@ def buildCADbox():
 @app.callback([Output('hiddenDivCAD1', 'children'),
                Output('CADDataStorage', 'data')],
               [Input('loadRes', 'n_clicks')],
-              [State('ROIGridRes', 'value'),
-               State('gridRes', 'value'),
+              [State('gridRes', 'value'),
                State('MachFlag', 'value')])
-def loadRes(n_clicks, ROIGridRes, gridRes, MachFlag):
+def loadRes(n_clicks, gridRes, MachFlag):
     if n_clicks is None:
         raise PreventUpdate
     if MachFlag is None:
         return [html.Label("Select a machine", style={'color':'#fc0313'})]
-    gui.getCADResInputs(ROIGridRes,gridRes)
+    gui.getCADResInputs(gridRes)
 
     CADdata = {
-        'Heat Flux Max Edge Length [mm]':ROIGridRes,
         'Intersect Max Edge Length [mm]':gridRes
         }
 
@@ -1582,7 +1577,7 @@ def buildPFCbox():
             )
 
 def loadPFCtable():
-    params = ['timesteps','PFCname','DivCode','intersectName','excludeName']
+    params = ['timesteps','PFCname','resolution','DivCode','intersectName','excludeName']
     cols = [{'id': p, 'name': p} for p in params]
     data = [{}]
     return dash_table.DataTable(
@@ -3213,7 +3208,6 @@ Session storage callbacks and functions
                Output('tmin', 'value'),
                Output('tmax', 'value'),
                Output('nTrace', 'value'),
-               Output('ROIGridRes', 'value'),
                Output('gridRes', 'value'),
                Output('lqEich', 'value'),
                Output('S', 'value'),
@@ -3297,7 +3291,6 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('tmin', ''),
             data.get('tmax', ''),
             data.get('nTrace', ''),
-            data.get('ROIGridRes', ''),
             data.get('gridRes', ''),
             data.get('lqEich', ''),
             data.get('S', ''),

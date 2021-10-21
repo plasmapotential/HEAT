@@ -469,7 +469,7 @@ class tools:
 
         #Perform Intersection Test
         D = self.D[i] / np.linalg.norm(self.D, axis=1)[i]
-        eps = 0.0000001
+        eps = 0.0
         h = np.cross(D, self.E2[use0[use2]])
         a = np.sum(self.E1[use0[use2]]*h, axis=1)
         test1 = np.logical_and( a>-eps, a<eps) #ray parallel to triangle

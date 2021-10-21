@@ -110,18 +110,16 @@ class GYRO:
 
     def temp2thermalVelocity(self, T_eV):
         """
-        Calculates thermal velocity from a temperature
+        Calculates thermal velocity from a temperature, where thermal velocity
+        is defined as the most probable speed
 
         T_eV is temperature in eV
 
         can also be found with: d/dv( v*f(v) ) = 0
 
-        note that this is for v, not vPerp or v||:
-        <v^2> = 3KT/m
-        <vPerp^2> = 2KT/m
-        <v||^2> = KT/m
+        note that this is for v, not vPerp or v||
         """
-        return np.sqrt(3.0*T_eV/(self.mass_eV/self.c**2))
+        return np.sqrt(2.0*T_eV/(self.mass_eV/self.c**2))
 
 
     def setupFreqs(self, B):
@@ -159,7 +157,7 @@ class GYRO:
         self.rGyro = np.zeros((N_pts,N_MC))
 
         for i in range(N_MC):
-            self.rGyro[:,i] = vPerp[i] / self.omegaGyro
+            self.rGyro[:,i] = vPerp[i] / np.abs(self.omegaGyro)
 
         return
 
@@ -172,14 +170,7 @@ class GYRO:
         len(self.t1) is number of points in divertor we are calculating HF on
         """
         #get velocity space phase angles
-        #if N_vPhase > 1, sample uniformly thru vPhase space
-        #Else, sample so that 2/3 energy goes to vPerp
-        #ie <v^2> = 3KT/m; <vPerp^2> = 2KT/m; <v||> = KT/m
-        #so vPerp = sqrt(2)v||
-        if self.N_vPhase > 1:
-            self.uniformVelPhaseAngle()
-        else:
-            self.vPhases = np.array([np.arccos(np.sqrt(2.0/3.0))])
+        self.uniformVelPhaseAngle()
 
         if self.vMode == 'single':
             print("Gyro orbit calculation from single plasma temperature")
@@ -213,12 +204,13 @@ class GYRO:
         self.energyIntegrals = np.zeros((len(self.T0),self.N_vSlice))
         self.energyFracs = np.zeros((len(self.T0),self.N_vSlice))
         for i in range(len(self.T0)):
-            #get velocity range for this T0
+            #get speed range for this T0
             v = self.vScan[i,:]
-            #generate the (here maxwellian) PDF
-            pdf = lambda x: (self.mass_eV/self.c**2) / (self.T0[i]) * np.exp(-(self.mass_eV/self.c**2 * x**2) / (2*self.T0[i]) )
-            #speed pdf
-            v_pdf = v * pdf(v)
+            #generate the (here maxwellian) velocity vector PDF
+            #pdf = lambda x: (self.mass_eV/self.c**2) / (self.T0[i]) * np.exp(-(self.mass_eV/self.c**2 * x**2) / (2*self.T0[i]) )
+            pdf = lambda x: ( (self.mass_eV/self.c**2) / (2 * np.pi * self.T0[i]) )**(3.0/2.0) * np.exp(-(self.mass_eV/self.c**2 * x**2) / (2*self.T0[i]) )
+            #speed pdf (integrate over solid angle)
+            v_pdf = 4*np.pi * v**2 * pdf(v)
             #generate the CDF
             v_cdf = np.cumsum(v_pdf[1:])*np.diff(v)
             v_cdf = np.insert(v_cdf, 0, 0)
@@ -229,8 +221,11 @@ class GYRO:
             cdfMax = v_cdf[-1]
             cdfMin = v_cdf[0]
             sliceWidth = cdfMax / (self.N_vSlice+1)
+            #CDF location of vSlices omitting 0 and 1
             cdfSlices = np.linspace(0,1,self.N_vSlice+2)[1:-1]
+            #CDF location of velocity bin bounds omitting 0 and 1
             cdfBounds = np.linspace(0,1,self.N_vSlice+1)[1:-1]
+            #vSlices are Maxwellian distribution sample locations (@ bin centers)
             self.vSlices[i,:] = inverseCDF(cdfSlices)
             vBounds = inverseCDF(cdfBounds)
             vBounds = np.insert(vBounds,0,0)
@@ -238,29 +233,30 @@ class GYRO:
             #Now find energies that correspond to these vSlices
             #we integrate: v**2 * f(v)
             #energy pdf (missing 1/2*mass but that gets divided out later anyways )
-            EofV = lambda x: x**2 * pdf(x)
+            #EofV = lambda x: x**2 * pdf(x)
+            #EofV = lambda x: 4*np.pi * x**4 * pdf(x)
+            f_E = lambda x: 2 * np.sqrt(x / np.pi) * (self.T0[i])**(-3.0/2.0) * np.exp(-x / self.T0[i])
             #energy slices that correspond to velocity slices
-            self.energySlices[i,:] = EofV(self.vSlices[i,:])
-            #energy integrals and fractions
+            self.energySlices[i,:] = f_E(0.5 * (self.mass_eV/self.c**2) * self.vSlices[i,:]**2)
+            #energy integrals
             for j in range(self.N_vSlice):
-                self.energyIntegrals[i,j] = integrate.quad(EofV, vBounds[j], vBounds[j+1])[0]
+                Elo = 0.5 * (self.mass_eV/self.c**2) * vBounds[j]**2
+                Ehi = 0.5 * (self.mass_eV/self.c**2) * vBounds[j+1]**2
+                self.energyIntegrals[i,j] = integrate.quad(f_E, Elo, Ehi)[0]
             energyTotal = self.energyIntegrals[i,:].sum()
+            #for testing
+            if i==0:
+                print("Integral Test===")
+                print(energyTotal)
+                print(integrate.quad(f_E, 0.0, self.vMax[i])[0])
+
+            #energy fractions
             for j in range(self.N_vSlice):
                 self.energyFracs[i,j] = self.energyIntegrals[i,j] / energyTotal
 
         print("Found N_vPhase velocities of equal probability")
         log.info("Found N_vPhase velocities of equal probability")
         return
-
-    def maxwellian(self, x):
-        """
-        returns a maxwellian distribution with x as independent variable.  x
-        must either be scalar or len(T0)
-
-        Uses mass, T0, c, from class
-        """
-        pdf = (self.mass_eV/self.c**2) / (self.T0) * np.exp(-(self.mass_eV/self.c**2 * x**2) / (2*self.T0) )
-        return pdf
 
     def uniformGyroPhaseAngle(self):
         """
@@ -559,7 +555,7 @@ class GYRO:
             E2 = (self.PFC_t3[use] - self.PFC_t1[use])
             D = (q2-q1)
             Dmag = np.linalg.norm(D, axis=1)
-            eps = 1e-12
+            eps = 0.0
             for j in range(len(helix_rot)-1):
                 D[j] = D[j] / np.linalg.norm(D, axis=1)[j]
                 h = np.cross(D[j], E2)

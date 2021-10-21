@@ -110,6 +110,7 @@ def convert2PointCloud(pcfile, prefix):
     #Make a new directory specifically for Paraview VTK results, if it doesn't
     #already exist
     PVdir = dir+"/paraview"
+    print(PVdir)
     if not os.path.exists(PVdir):
         os.makedirs(PVdir)
 
