@@ -46,7 +46,7 @@ class PFC:
         allTags = ['all','All',' all', ' All', 'ALL']
         noneTags = ['None', 'none', 'NONE' 'NA', 'na', 0, None, 0.0]
         #include all PFCs if 'all' in intersectName column
-        if (x in allTags for x in intersectList):
+        if sum([x in allTags for x in intersectList]) > 0:
             self.intersects = CADintersectList.copy()
         else:
             self.intersects = intersectList
@@ -67,7 +67,7 @@ class PFC:
         #filter by toroidal angle (phi)
         self.phiFilterSwitch = True
         #filter by poloidal flux (psi)
-        self.psiFilterSwitch = False
+        self.psiFilterSwitch = True
         return
 
     def allowed_class_vars(self):
@@ -369,26 +369,10 @@ class PFC:
             else:
                 ptIdx = None
 
-            #find psi for all points we launch traces from
-            if tools.psiFilterSwitch is True:
-                R,Z,Phi = tools.xyz2cyl(self.centers[:,0], self.centers[:,1], self.centers[:,2])
-                psiSource = self.ep.psiFunc.ev(R,Z)
-                psiUse = psiSource[use]
-
-                #find psi for all points we potentially intersect with
-                targetCtrs = self.getTargetCenters(targetPoints)
-                R,Z,Phi = tools.xyz2cyl(targetCtrs[:,0], targetCtrs[:,1], targetCtrs[:,2])
-                psiIntersect = self.ep.psiFunc.ev(R,Z)
-            else:
-                psiSource = None
-                psiUse = None
-                psiIntersect = None
-
             #First we do basic intersection checking
             intersect_mask = self.intersectTestBasic(q1,q2,
                                                     targetPoints,targetNorms,
-                                                    MHD,self.ep,
-                                                    psiUse, psiIntersect, ptIdx)
+                                                    MHD,self.ep,ptIdx)
 
             self.shadowed_mask[use] = intersect_mask
 
@@ -512,11 +496,7 @@ class PFC:
                     q1[self.revUse] = structData[1::2,:] #odd indexes are second trace point
                     q2[self.revUse] = structData[0::2,:] #odd indexes are second trace point
 
-                if tools.psiFilterSwitch is True:
-                    psiUse2 = psiUse[use2]
-                else:
-                    psiUse2 = None
-                intersect_mask2[use2] = self.intersectTest2(q1,q2,targetPoints, psiUse2, psiIntersect, ptIdx)
+                intersect_mask2[use2] = self.intersectTest2(q1,q2,targetPoints,ptIdx)
                 #intersect_mask2[use2] = self.intersectTestBasic(q1,q2,
                 #                                        targetPoints,targetNorms,
                 #                                        MHD,self.ep,
@@ -631,13 +611,18 @@ class PFC:
         GYRO.PFC_t1 = GYRO.t1[GYRO.PFCintersectMap]
         GYRO.PFC_t2 = GYRO.t2[GYRO.PFCintersectMap]
         GYRO.PFC_t3 = GYRO.t3[GYRO.PFCintersectMap]
-        #Prepare for toroidal angle filter
+
+        #Prepare filters
         R,Z,phi = tools.xyz2cyl(GYRO.PFC_t1[:,0],GYRO.PFC_t1[:,1],GYRO.PFC_t1[:,2])
         GYRO.PFC_phiP1 = phi
+        GYRO.PFC_psiP1 = self.ep.psiFunc.ev(R,Z)
         R,Z,phi = tools.xyz2cyl(GYRO.PFC_t2[:,0],GYRO.PFC_t2[:,1],GYRO.PFC_t2[:,2])
         GYRO.PFC_phiP2 = phi
+        GYRO.PFC_psiP2 = self.ep.psiFunc.ev(R,Z)
         R,Z,phi = tools.xyz2cyl(GYRO.PFC_t3[:,0],GYRO.PFC_t3[:,1],GYRO.PFC_t3[:,2])
         GYRO.PFC_phiP3 = phi
+        GYRO.PFC_psiP3 = self.ep.psiFunc.ev(R,Z)
+
         GYRO.PFC_Nt = len(GYRO.PFC_t1)
 
         print("PFC "+self.name+" has {:f} / {:f} intersects and {:f} / {:f} ROIs".format(GYRO.PFC_Nt, GYRO.Nt, self.N_gyroCenters, GYRO.N_CADROI))
@@ -646,24 +631,6 @@ class PFC:
         GYRO.phiFilterSwitch = self.phiFilterSwitch
         #Filter intersects by psi #this is broken currently todo: fix
         GYRO.psiFilterSwitch = self.psiFilterSwitch
-
-        if GYRO.psiFilterSwitch == True:
-            #find psi for all points we launch traces from
-            R,Z,Phi = tools.xyz2cyl(self.gyroCenters[:,0], self.gyroCenters[:,1], self.gyroCenters[:,2])
-            psiSource = self.ep.psiFunc.ev(R,Z)
-            #find psi for all points we potentially intersect with
-            targetPoints = np.hstack([GYRO.PFC_t1, GYRO.PFC_t2, GYRO.PFC_t3]).reshape(GYRO.PFC_Nt,3,3)
-            targetCtrs = self.getTargetCenters(targSetPoints)
-            R,Z,Phi = tools.xyz2cyl(targetCtrs[:,0],targetCtrs[:,1],targetCtrs[:,2])
-            psiIntersect = self.ep.psiFunc.ev(R,Z)
-            print("Calculating psiMask")
-            #create psiMask, which will be used to eliminate intersection checking
-            #on any face that is not on the same flux surface as the source face
-            #this is a form of dimensionality reduction
-            GYRO.psiMask = tools.buildMask(psiSource, psiIntersect, thresh=1)
-            print("psiMask reduction ratio: {:f}".format(np.sum(GYRO.psiMask) / (GYRO.PFC_Nt*self.N_gyroCenters)))
-            print("Example # points within psi bounds: {:f}".format(np.sum(GYRO.psiMask[:,0])))
-            print("Compared to # of potential points: {:f}".format(GYRO.PFC_Nt))
 
         #limit RAM consumption (if True, runs helix intersection check in loop instead of matrix)
         #in future should adapt this so that it dynamically allocates RAM using resource package
@@ -771,11 +738,13 @@ class PFC:
                                 print(GYRO.p0[GYRO.traceIndex2,:])
                                 print(GYRO.p1[GYRO.traceIndex2,:])
 
-                            #for toroidal angle filtering
+                            #for filtering
                             R,Z,phi = tools.xyz2cyl(GYRO.p0[:,0],GYRO.p0[:,1],GYRO.p0[:,2])
                             GYRO.phiMin = phi
+                            GYRO.psiMin = self.ep.psiFunc.ev(R,Z)
                             R,Z,phi = tools.xyz2cyl(GYRO.p1[:,0],GYRO.p1[:,1],GYRO.p1[:,2])
                             GYRO.phiMax = phi
+                            GYRO.psiMax = self.ep.psiFunc.ev(R,Z)
 
                             #calculate helix path for this step down guiding center path
                             #GYRO.intersectRecord[gyroPhase,vPhase,vSlice,use], hdotn = GYRO.multipleGyroTrace()
@@ -813,7 +782,7 @@ class PFC:
         return
 
     def intersectTestBasic(self,q1,q2,targets,targetNorms,MHD,ep,
-                           psiSource, psiTarget, ptIdx=None, mode='MT'):
+                           ptIdx=None, mode='MT'):
         """
         checks if any of the lines (field line traces) generated by MAFOT
         struct program intersect any of the target mesh faces.
@@ -924,6 +893,7 @@ class PFC:
             tools.D = (tools.q2-tools.q1)
             tools.Dmag = np.linalg.norm(tools.D, axis=1)
 
+        #rejection filter for toroidal steps
         if self.phiFilterSwitch == True:
             #Prepare for toroidal angle filter
             R,Z,phi = tools.xyz2cyl(tools.p1[:,0],tools.p1[:,1],tools.p1[:,2])
@@ -936,6 +906,20 @@ class PFC:
             tools.phiMin = phi
             R,Z,phi = tools.xyz2cyl(tools.q2[:,0],tools.q2[:,1],tools.q2[:,2])
             tools.phiMax = phi
+
+        #rejection filter for poloidal flux surfaces
+        if tools.psiFilterSwitch is True:
+            #Prepare for poloidal angle filter
+            R,Z,phi = tools.xyz2cyl(tools.p1[:,0],tools.p1[:,1],tools.p1[:,2])
+            tools.psiP1 = self.ep.psiFunc.ev(R,Z)
+            R,Z,phi = tools.xyz2cyl(tools.p2[:,0],tools.p2[:,1],tools.p2[:,2])
+            tools.psiP2 = self.ep.psiFunc.ev(R,Z)
+            R,Z,phi = tools.xyz2cyl(tools.p3[:,0],tools.p3[:,1],tools.p3[:,2])
+            tools.psiP3 = self.ep.psiFunc.ev(R,Z)
+            R,Z,phi = tools.xyz2cyl(tools.q1[:,0],tools.q1[:,1],tools.q1[:,2])
+            tools.psiMin = self.ep.psiFunc.ev(R,Z)
+            R,Z,phi = tools.xyz2cyl(tools.q2[:,0],tools.q2[:,1],tools.q2[:,2])
+            tools.psiMax = self.ep.psiFunc.ev(R,Z)
 
 
         print('Entering basic intersection test for {:d} potential intersection faces'.format(NtFwd_use+NtRev_use))
@@ -1011,8 +995,7 @@ class PFC:
 
 
 
-    def intersectTest2(self,q1,q2,targets,
-                        psiSource=None,psiTarget=None,ptIdx=None,mode='MT'):
+    def intersectTest2(self,q1,q2,targets,ptIdx=None,mode='MT'):
         """
         Run an intersection test against all possible source faces
         sources is endpoints of line
@@ -1053,18 +1036,7 @@ class PFC:
             tools.D = (tools.q2-tools.q1)
             tools.Dmag = np.linalg.norm(tools.D, axis=1)
 
-        #create psiMask, which will be used to eliminate intersection checking
-        #on any face that is not on the same flux surface as the source face
-        #this is a form of dimensionality reduction
-        if tools.psiFilterSwitch is True:
-            print("Calculating psiMask")
-            tools.psiMask = tools.buildMask(psiSource, psiTarget)
-            print("psiMask reduction ratio: {:f}".format(np.sum(tools.psiMask) / (Nt*N)))
-            print("Example # points within psi bounds: {:f}".format(np.sum(tools.psiMask[:,0])))
-            print("Compared to # of potential points: {:f}".format(Nt))
-            if ptIdx is not None:
-                print("psiMask for ptIDX: {:f}".format(np.sum(tools.psiMask[:,ptIdx])))
-
+        #rejection filter for toroidal steps
         if self.phiFilterSwitch == True:
             #Prepare for toroidal angle filter (could move this into findShadows_structure for intersectTest2)
             R,Z,phi = tools.xyz2cyl(tools.p1[:,0],tools.p1[:,1],tools.p1[:,2])
@@ -1077,6 +1049,21 @@ class PFC:
             tools.phiMin = phi
             R,Z,phi = tools.xyz2cyl(tools.q2[:,0],tools.q2[:,1],tools.q2[:,2])
             tools.phiMax = phi
+
+        #rejection filter for poloidal flux surfaces
+        if tools.psiFilterSwitch is True:
+            #Prepare for poloidal angle filter
+            R,Z,phi = tools.xyz2cyl(tools.p1[:,0],tools.p1[:,1],tools.p1[:,2])
+            tools.psiP1 = self.ep.psiFunc.ev(R,Z)
+            R,Z,phi = tools.xyz2cyl(tools.p2[:,0],tools.p2[:,1],tools.p2[:,2])
+            tools.psiP2 = self.ep.psiFunc.ev(R,Z)
+            R,Z,phi = tools.xyz2cyl(tools.p3[:,0],tools.p3[:,1],tools.p3[:,2])
+            tools.psiP3 = self.ep.psiFunc.ev(R,Z)
+            R,Z,phi = tools.xyz2cyl(tools.q1[:,0],tools.q1[:,1],tools.q1[:,2])
+            tools.psiMin = self.ep.psiFunc.ev(R,Z)
+            R,Z,phi = tools.xyz2cyl(tools.q2[:,0],tools.q2[:,1],tools.q2[:,2])
+            tools.psiMax = self.ep.psiFunc.ev(R,Z)
+
 
         print('Entering intersection Test #1 for {:d} potential intersection faces'.format(Nt))
         log.info('Entering intersection Test #1 for {:d} potential intersection faces'.format(Nt))

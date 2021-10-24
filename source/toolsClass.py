@@ -190,19 +190,21 @@ class tools:
             f.write('#\n')
             f.write('#This is a HEAT input file responsible for:\n')
             f.write('# 1) Defining the PFCs in the Region of Interest (ROI)\n')
-            f.write('# 2) Defining the intersection PFCs that the ROI PFCs could be shadowed by\n')
-            f.write('# 3) Defining the timesteps we run HEAT for, w.r.t. each PFC\n')
-            f.write('# 4) Defining which divertor each PFC is in\n')
-            f.write('# 5) Defining any PFCs we want to exclude from the intersection calculation\n')
+            f.write('# 2) Defining the heat flux calculation mesh resolution for each PFC in ROI\n')
+            f.write('# 3) Defining the intersection PFCs that the ROI PFCs could be shadowed by\n')
+            f.write('# 4) Defining the timesteps we run HEAT for, w.r.t. each PFC\n')
+            f.write('# 5) Defining which divertor each PFC is in\n')
+            f.write('# 6) Defining any PFCs we want to exclude from the intersection calculation\n')
             f.write('#\n')
             f.write('#The first line in this file should always be:\n')
-            f.write('#timesteps, PFCname, DivCode, intersectName, excludeName\n')
+            f.write('#timesteps, PFCname, resolution, DivCode, intersectName, excludeName\n')
             f.write('#\n')
             f.write('#Each new row under this header line represents a new PFC in the ROI.\n')
             f.write('#Definitions of each column (comma separated variable) from this header line:\n')
             f.write('#  timesteps: timesteps we include the PFC in during the HEAT calculation\n')
             f.write('#  PFCname: name of the PFC we want to calculate heat loads on.  Name should\n')
             f.write('#           be taken directly from the part in the CAD STP file.\n')
+            f.write('#  resolution: heat flux resolution on PFCname.\n')
             f.write('#  DivCode:  divertor code.  This can be: LO, LI, UO, UI, which correspond to:\n')
             f.write('#            Lower Outer, Lower Inner, Upper Outer, Upper Inner.  These codes\n')
             f.write('#            are how each PFC in the ROI get flagged as belonging to a specific\n')
@@ -218,20 +220,20 @@ class tools:
             f.write('#                to exclude some obvious PFCs.\n')
             f.write('#\n')
             f.write('#Example to calculate heat loads on PFC001, a PFC in the Lower Outer divertor,\n')
-            f.write('# for the first 100ms of the discharge, checking for shadows (intersections)\n')
-            f.write('# with PFC001 (self), PFC002 and PFC003:\n')
-            f.write('# timesteps, PFCname, DivCode, intersectName, excludeName\n')
-            f.write('# 0:100, PFC001, LO, PFC001:PFC002:PFC003, none\n')
+            f.write('# at 5.0 mm heat flux mesh resolution, for the first 100ms of the discharge, \n')
+            f.write('# checking for shadows (intersections) with PFC001 (self), PFC002 and PFC003:\n')
+            f.write('# timesteps, PFCname, resolution, DivCode, intersectName, excludeName\n')
+            f.write('# 0:100, PFC001, 5.0, LO, PFC001:PFC002:PFC003, none\n')
             f.write('#\n')
             f.write('#Example to calculate heat loads on PFC001, a PFC in the Upper Inner divertor,\n')
-            f.write('# for timesteps 100:200ms of the discharge, checking for shadows (intersections)\n')
-            f.write('# with all PFCs in the CAD file:\n')
-            f.write('# timesteps, PFCname, DivCode, intersectName, excludeName\n')
-            f.write('# 100:200, PFC001, UI, all, none\n')
+            f.write('# at 1.0 mm heat flux mesh resolution, for timesteps 100:200ms of the discharge, \n')
+            f.write('# checking for shadows (intersections), with all PFCs in the CAD file:\n')
+            f.write('# timesteps, PFCname, resolution, DivCode, intersectName, excludeName\n')
+            f.write('# 100:200, PFC001, 1.0, UI, all, none\n')
             f.write('#\n')
             f.write('#\n')
             f.write('#\n')
-            f.write('timesteps, PFCname, DivCode, intersectName, excludeName\n')
+            f.write('timesteps, PFCname, resolution, DivCode, intersectName, excludeName\n')
 
         print("Default PFC file saved")
         log.info("Default PFC file saved")
@@ -401,6 +403,10 @@ class tools:
                     phiP1 = self.phiP1[self.targetsFwdUse]
                     phiP2 = self.phiP2[self.targetsFwdUse]
                     phiP3 = self.phiP3[self.targetsFwdUse]
+                if self.psiFilterSwitch == True:
+                    psiP1 = self.psiP1[self.targetsFwdUse]
+                    psiP2 = self.psiP2[self.targetsFwdUse]
+                    psiP3 = self.psiP3[self.targetsFwdUse]
 
             else:
                 use0 = self.targetsRevUse
@@ -411,6 +417,10 @@ class tools:
                     phiP1 = self.phiP1[self.targetsRevUse]
                     phiP2 = self.phiP2[self.targetsRevUse]
                     phiP3 = self.phiP3[self.targetsRevUse]
+                if self.psiFilterSwitch == True:
+                    psiP1 = self.psiP1[self.targetsRevUse]
+                    psiP2 = self.psiP2[self.targetsRevUse]
+                    psiP3 = self.psiP3[self.targetsRevUse]
         #check all faces (no culling)
         else:
             use0 = np.arange(len(self.p1))
@@ -421,140 +431,37 @@ class tools:
                 phiP1 = self.phiP1
                 phiP2 = self.phiP2
                 phiP3 = self.phiP3
-
-
+            if self.psiFilterSwitch == True:
+                psiP1 = self.psiP1
+                psiP2 = self.psiP2
+                psiP3 = self.psiP3
 
 
         #Filter by psi
         if self.psiFilterSwitch == True:
-            use1 = np.where(self.psiMask[:,i] == 1)[0]
-        else:
-            use1 = np.arange(len(p1))
+            psiMin = self.psiMin[i]
+            psiMax = self.psiMax[i]
 
-        #Filter by toroidal angle
-        if self.phiFilterSwitch == True:
-            phiMin = self.phiMin[i]
-            phiMax = self.phiMax[i]
-
-            #angle wrap cases (assumes we never trace in MAFOT steps larger than 5degrees)
-            if np.abs(phiMin-phiMax) > np.radians(5):
-                phiP1[phiP1<0] += 2*np.pi
-                phiP2[phiP2<0] += 2*np.pi
-                phiP3[phiP3<0] += 2*np.pi
-                if phiMin < 0: phiMin+=2*np.pi
-                if phiMax < 0: phiMax+=2*np.pi
-
-            #account for toroidal sign convention
-            if phiMin > phiMax:
-                pMin = phiMax
-                pMax = phiMin
+            #account for psi sign convention
+            if psiMin > psiMax:
+                pMin = psiMax
+                pMax = psiMin
             else:
-                pMin = phiMin
-                pMax = phiMax
+                pMin = psiMin
+                pMax = psiMax
 
             #target faces outside of this toroidal slice
-            test0 = np.logical_and(phiP1 < pMin,
-                                   phiP2 < pMin,
-                                   phiP3 < pMin)
-            test1 = np.logical_and(phiP1 > pMax,
-                                   phiP2 > pMax,
-                                   phiP3 > pMax)
+            test0 = np.logical_and(psiP1 < pMin,
+                                   psiP2 < pMin,
+                                   psiP3 < pMin)
+            test1 = np.logical_and(psiP1 > pMax,
+                                   psiP2 > pMax,
+                                   psiP3 > pMax)
             test = np.logical_or(test0,test1)
-            use2 = np.where(test == False)[0]
+            usePsi = np.where(test == False)[0]
 
         else:
-            use2 = np.arange(len(p1))
-
-        Nt = len(use0[use2])
-
-        #Perform Intersection Test
-        D = self.D[i] / np.linalg.norm(self.D, axis=1)[i]
-        eps = 0.0
-        h = np.cross(D, self.E2[use0[use2]])
-        a = np.sum(self.E1[use0[use2]]*h, axis=1)
-        test1 = np.logical_and( a>-eps, a<eps) #ray parallel to triangle
-        with np.errstate(divide='ignore', invalid='ignore'):
-            f=1.0/a #sometimes results in div by 0 (python warning)
-            s = self.q1[i] - self.p1[use0[use2]]
-            u = f * np.sum(s*h, axis=1)
-            test2 = np.logical_or(u<0.0, u>1.0) #ray inside triangle
-            q = np.cross(s,self.E1[use0[use2]])
-            v = f*np.sum(D*q, axis=1)
-            test3 =  np.logical_or(v<0.0, (u+v)>1.0) #ray inside triangle
-            l = f*np.sum(self.E2[use0[use2]]*q, axis=1) #sometimes results in invalid mult (python warning)
-            test4 = np.logical_or(l<0.0, l>self.Dmag[i]) #ray long enough to intersect triangle
-        if np.sum(~np.any([test1,test2,test3,test4], axis=0))>0:
-            result = 1
-        else:
-            result = 0
-
-        #print which face we intersect with if ptIdx is this i
-        if self.ptIdx is not None:
-            if self.ptIdx == i:
-                #we assume first intersection in this array is the intersection
-                targetIdx = np.where(np.any([test1,test2,test3,test4], axis=0)==False)[0]
-                if len(targetIdx)>0:
-                    self.targetIdx = targetIdx
-                    print("Found ptIdx's intersection target vertices:")
-                    print(self.p1[use0[use2[self.targetIdx]]])
-                    print(self.p2[use0[use2[self.targetIdx]]])
-                    print(self.p3[use0[use2[self.targetIdx]]])
-                print("ptIdx's last trace step:")
-                print(self.q1[i])
-                print(self.q2[i])
-
-
-        return result
-
-
-    def intersectTestParallel(self, i):
-        """
-        Intersection test that does not check for self intersections
-
-        i is index of parallel run from multiprocessing
-
-        q1 and q2 are start/end points of trace
-        p1,p2,p3 are points of potential intersection faces
-
-        using Signed Volume line + triangle intersection rule
-        """
-        #backface culling
-        if self.bfCull == True:
-            if self.powerDir[i] < 0:
-                use0 = self.targetsFwdUse
-                p1 = self.p1Fwd
-                p2 = self.p2Fwd
-                p3 = self.p3Fwd
-                if self.phiFilterSwitch == True:
-                    phiP1 = self.phiP1[self.targetsFwdUse]
-                    phiP2 = self.phiP2[self.targetsFwdUse]
-                    phiP3 = self.phiP3[self.targetsFwdUse]
-
-            else:
-                use0 = self.targetsRevUse
-                p1 = self.p1Rev
-                p2 = self.p2Rev
-                p3 = self.p3Rev
-                if self.phiFilterSwitch == True:
-                    phiP1 = self.phiP1[self.targetsRevUse]
-                    phiP2 = self.phiP2[self.targetsRevUse]
-                    phiP3 = self.phiP3[self.targetsRevUse]
-        #check all faces (no culling)
-        else:
-            use0 = np.arange(len(self.p1))
-            p1 = self.p1
-            p2 = self.p2
-            p3 = self.p3
-            if self.phiFilterSwitch == True:
-                phiP1 = self.phiP1
-                phiP2 = self.phiP2
-                phiP3 = self.phiP3
-
-        #Filter by psi (poloidal flux)
-        if self.psiFilterSwitch == True:
-            use1 = np.where(self.psiMask[:,i] == 1)[0]
-        else:
-            use1 = np.arange(len(p1))
+            usePsi = np.arange(len(p1))
 
         #Filter by phi (toroidal angle)
         if self.phiFilterSwitch == True:
@@ -585,35 +492,202 @@ class tools:
                                    phiP2 > pMax,
                                    phiP3 > pMax)
             test = np.logical_or(test0,test1)
-            use2 = np.where(test == False)[0]
+            usePhi = np.where(test == False)[0]
 
         else:
-            use2 = np.arange(len(p1))
+            usePhi = np.arange(len(p1))
 
-        Nt = len(use0[use2])
+        #combine filter algorithms
+        useF = np.intersect1d(usePsi,usePhi)
+
+        Nt = len(use0[useF])
+
+        #Perform Intersection Test
+        D = self.D[i] / np.linalg.norm(self.D, axis=1)[i]
+        eps = 0.0
+        h = np.cross(D, self.E2[use0[useF]])
+        a = np.sum(self.E1[use0[useF]]*h, axis=1)
+        test1 = np.logical_and( a>-eps, a<eps) #ray parallel to triangle
+        with np.errstate(divide='ignore', invalid='ignore'):
+            f=1.0/a #sometimes results in div by 0 (python warning)
+            s = self.q1[i] - self.p1[use0[useF]]
+            u = f * np.sum(s*h, axis=1)
+            test2 = np.logical_or(u<0.0, u>1.0) #ray inside triangle
+            q = np.cross(s,self.E1[use0[useF]])
+            v = f*np.sum(D*q, axis=1)
+            test3 =  np.logical_or(v<0.0, (u+v)>1.0) #ray inside triangle
+            l = f*np.sum(self.E2[use0[useF]]*q, axis=1) #sometimes results in invalid mult (python warning)
+            test4 = np.logical_or(l<0.0, l>self.Dmag[i]) #ray long enough to intersect triangle
+        if np.sum(~np.any([test1,test2,test3,test4], axis=0))>0:
+            result = 1
+        else:
+            result = 0
+
+        #print which face we intersect with if ptIdx is this i
+        if self.ptIdx is not None:
+            if self.ptIdx == i:
+                #we assume first intersection in this array is the intersection
+                targetIdx = np.where(np.any([test1,test2,test3,test4], axis=0)==False)[0]
+                if len(targetIdx)>0:
+                    self.targetIdx = targetIdx
+                    print("Found ptIdx's intersection target vertices:")
+                    print(self.p1[use0[useF[self.targetIdx]]])
+                    print(self.p2[use0[useF[self.targetIdx]]])
+                    print(self.p3[use0[useF[self.targetIdx]]])
+                print("ptIdx's last trace step:")
+                print(self.q1[i])
+                print(self.q2[i])
+
+
+        return result
+
+
+    def intersectTestParallel(self, i):
+        """
+        Intersection test that does not check for self intersections
+
+        i is index of parallel run from multiprocessing
+
+        q1 and q2 are start/end points of trace
+        p1,p2,p3 are points of potential intersection faces
+
+        using Signed Volume line + triangle intersection rule
+        """
+        #backface culling
+        if self.bfCull == True:
+            if self.powerDir[i] < 0:
+                use0 = self.targetsFwdUse
+                p1 = self.p1Fwd
+                p2 = self.p2Fwd
+                p3 = self.p3Fwd
+                if self.phiFilterSwitch == True:
+                    phiP1 = self.phiP1[self.targetsFwdUse]
+                    phiP2 = self.phiP2[self.targetsFwdUse]
+                    phiP3 = self.phiP3[self.targetsFwdUse]
+                if self.psiFilterSwitch == True:
+                    psiP1 = self.psiP1[self.targetsFwdUse]
+                    psiP2 = self.psiP2[self.targetsFwdUse]
+                    psiP3 = self.psiP3[self.targetsFwdUse]
+
+            else:
+                use0 = self.targetsRevUse
+                p1 = self.p1Rev
+                p2 = self.p2Rev
+                p3 = self.p3Rev
+                if self.phiFilterSwitch == True:
+                    phiP1 = self.phiP1[self.targetsRevUse]
+                    phiP2 = self.phiP2[self.targetsRevUse]
+                    phiP3 = self.phiP3[self.targetsRevUse]
+                if self.psiFilterSwitch == True:
+                    psiP1 = self.psiP1
+                    psiP2 = self.psiP2
+                    psiP3 = self.psiP3
+        #check all faces (no culling)
+        else:
+            use0 = np.arange(len(self.p1))
+            p1 = self.p1
+            p2 = self.p2
+            p3 = self.p3
+            if self.phiFilterSwitch == True:
+                phiP1 = self.phiP1
+                phiP2 = self.phiP2
+                phiP3 = self.phiP3
+            if self.psiFilterSwitch == True:
+                psiP1 = self.psiP1
+                psiP2 = self.psiP2
+                psiP3 = self.psiP3
+
+
+        #Filter by psi
+        if self.psiFilterSwitch == True:
+            psiMin = self.psiMin[i]
+            psiMax = self.psiMax[i]
+
+            #account for psi sign convention
+            if psiMin > psiMax:
+                pMin = psiMax
+                pMax = psiMin
+            else:
+                pMin = psiMin
+                pMax = psiMax
+
+            #target faces outside of this toroidal slice
+            test0 = np.logical_and(psiP1 < pMin,
+                                   psiP2 < pMin,
+                                   psiP3 < pMin)
+            test1 = np.logical_and(psiP1 > pMax,
+                                   psiP2 > pMax,
+                                   psiP3 > pMax)
+            test = np.logical_or(test0,test1)
+            usePsi = np.where(test == False)[0]
+
+        else:
+            usePsi = np.arange(len(p1))
+
+        #Filter by phi (toroidal angle)
+        if self.phiFilterSwitch == True:
+            phiMin = self.phiMin[i]
+            phiMax = self.phiMax[i]
+
+            #angle wrap cases (assumes we never trace in MAFOT steps larger than 5degrees)
+            if np.abs(phiMin-phiMax) > np.radians(5):
+                phiP1[phiP1<0] += 2*np.pi
+                phiP2[phiP2<0] += 2*np.pi
+                phiP3[phiP3<0] += 2*np.pi
+                if phiMin < 0: phiMin+=2*np.pi
+                if phiMax < 0: phiMax+=2*np.pi
+
+            #account for toroidal sign convention
+            if phiMin > phiMax:
+                pMin = phiMax
+                pMax = phiMin
+            else:
+                pMin = phiMin
+                pMax = phiMax
+
+            #target faces outside of this toroidal slice
+            test0 = np.logical_and(phiP1 < pMin,
+                                   phiP2 < pMin,
+                                   phiP3 < pMin)
+            test1 = np.logical_and(phiP1 > pMax,
+                                   phiP2 > pMax,
+                                   phiP3 > pMax)
+            test = np.logical_or(test0,test1)
+            usePhi = np.where(test == False)[0]
+
+        else:
+            usePhi = np.arange(len(p1))
+
+        #combine filter algorithms
+        useF = np.intersect1d(usePsi,usePhi)
+
+        Nt = len(use0[useF])
 
         #Perform Intersection Test
         q13D = np.repeat(self.q1[i,np.newaxis], Nt, axis=0)
         q23D = np.repeat(self.q2[i,np.newaxis], Nt, axis=0)
-        sign1 = np.sign(self.signedVolume2(q13D,self.p1[use],self.p2[use],self.p3[use]))
-        sign2 = np.sign(self.signedVolume2(q23D,self.p1[use],self.p2[use],self.p3[use]))
-        sign3 = np.sign(self.signedVolume2(q13D,q23D,self.p1[use],self.p2[use]))
-        sign4 = np.sign(self.signedVolume2(q13D,q23D,self.p2[use],self.p3[use]))
-        sign5 = np.sign(self.signedVolume2(q13D,q23D,self.p3[use],self.p1[use]))
+        sign1 = np.sign(self.signedVolume2(q13D,self.p1[use0[useF]],self.p2[use0[useF]],self.p3[use0[useF]]))
+        sign2 = np.sign(self.signedVolume2(q23D,self.p1[use0[useF]],self.p2[use0[useF]],self.p3[use0[useF]]))
+        sign3 = np.sign(self.signedVolume2(q13D,q23D,self.p1[use0[useF]],self.p2[use0[useF]]))
+        sign4 = np.sign(self.signedVolume2(q13D,q23D,self.p2[use0[useF]],self.p3[use0[useF]]))
+        sign5 = np.sign(self.signedVolume2(q13D,q23D,self.p3[use0[useF]],self.p1[use0[useF]]))
         test1 = (sign1 != sign2)
         test2 = np.logical_and(sign3==sign4,sign3==sign5)
 
         #print which face we intersect with if ptIdx is this i
         if self.ptIdx is not None:
             if self.ptIdx == i:
-                targetIdx = np.where(np.logical_and(test1,test2))[0]
+                #we assume first intersection in this array is the intersection
+                targetIdx = np.where(np.any([test1,test2,test3,test4], axis=0)==False)[0]
                 if len(targetIdx)>0:
                     self.targetIdx = targetIdx
                     print("Found ptIdx's intersection target vertices:")
-                    print(self.p1[self.targetIdx])
-                    print(self.p2[self.targetIdx])
-                    print(self.p3[self.targetIdx])
-
+                    print(self.p1[use0[useF[self.targetIdx]]])
+                    print(self.p2[use0[useF[self.targetIdx]]])
+                    print(self.p3[use0[useF[self.targetIdx]]])
+                print("ptIdx's last trace step:")
+                print(self.q1[i])
+                print(self.q2[i])
 
         #return 1 if we intersected
         if np.sum(np.logical_and(test1,test2)) > 0:
@@ -623,20 +697,6 @@ class tools:
 
         return result
 
-    def toroidalFilterParallel(self,i):
-        """
-        parallel toroidal filtering
-        """
-        #target faces outside of this toroidal slice
-        test0 = np.logical_and(self.phiP1 < self.phiMin[i],
-                               self.phiP2 < self.phiMin[i],
-                               self.phiP3 < self.phiMin[i])
-        test1 = np.logical_and(self.phiP1 > self.phiMax[i],
-                               self.phiP2 > self.phiMax[i],
-                               self.phiP3 > self.phiMax[i])
-        test = np.logical_or(test0,test1)
-        use = np.where(test == False)[0]
-        return use
 
     def intersectTestNoLoop(self):
         """

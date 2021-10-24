@@ -1309,7 +1309,10 @@ class GUIobj():
         # Time Loop: postprocessing
         for tIdx,t in enumerate(self.MHD.timesteps):
             #path for this timestep
-            tPath = self.MHD.shotPath + '/' + '{:06d}/'.format(t)
+            if self.MHD.shotPath[-1]=='/':
+                tPath = self.MHD.shotPath + '{:06d}/'.format(t)
+            else:
+                tPath = self.MHD.shotPath + '/' + '{:06d}/'.format(t)
             #merge multiple pointclouds into one single pointcloud for visualization
             self.combinePFCpointcloud(runList, tPath)
             #copy each timestep's composite point clouds to central location for
@@ -1692,59 +1695,34 @@ class GUIobj():
         norm = np.array([])
         bField = np.array([])
 
-        names = []
         centers = np.array([])
         Npoints = 0
         for PFC in self.PFCs:
-            #for tiles that are run in multiple mapDirections
-            #add quantities that are superposition of multiple mapDirection runs
-            if PFC.name in names or PFC.name.split('_')[0] in names: #split for multiple mapDirections on same PFC
-                idx = names.index(PFC.name.split('_')[0])
-                if 'HFpc' in runList:
-                    hfOptical[idx]+=PFC.qDiv.copy()
-                    hfAll[idx]+=PFC.qDiv.copy()
-                    #HFPC always runs shadowMask too
-                    shadow[idx]+=PFC.shadowed_mask.copy()
-                    shadow[idx].astype(bool)
-                elif 'GyroPC' in runList:
-                    hfGyro[idx]+=PFC.qGyro.copy()
-                    hfAll[idx]+=PFC.qGyro.copy()
-                    shadowGyro[idx]+=PFC.gyroShadowMask.copy()
-                    shadowGyro[idx].astype(bool)
-                elif 'powerDirPC' in runList:
-                    powerDir[idx]+=PFC.powerDir.copy()
-                    powerDir[idx].astype(bool)
-                #some quantities cant be added (like psi)
-                #just use one mapDirection for these cases
+            if 'HFpc' in runList:
+                hfOptical.append(PFC.qDiv.copy())
+                shadow.append(PFC.shadowed_mask.copy())
+                hfAll.append(PFC.qDiv.copy())
+            if 'GyroPC' in runList:
+                hfGyro.append(PFC.qGyro.copy())
+                shadowGyro.append(PFC.gyroShadowMask.copy())
+                if 'HFpc' not in runList: #when we run HEAT twice, 2nd time gyro only
+                    hfAll.append(PFC.qDiv.copy()+PFC.qGyro.copy())
                 else:
-                    pass
-            else:
-                if 'HFpc' in runList:
-                    hfOptical.append(PFC.qDiv.copy())
-                    shadow.append(PFC.shadowed_mask.copy())
-                    hfAll.append(PFC.qDiv.copy())
-                if 'GyroPC' in runList:
-                    hfGyro.append(PFC.qGyro.copy())
-                    shadowGyro.append(PFC.gyroShadowMask.copy())
-                    if 'HFpc' not in runList: #when we run HEAT twice, 2nd time gyro only
-                        hfAll.append(PFC.qDiv.copy()+PFC.qGyro.copy())
-                    else:
-                        hfAll[-1]+=PFC.qGyro.copy()
-                if 'powerDirPC' in runList:
-                    powerDir.append(PFC.powerDir.copy())
-                if 'bdotnPC' in runList:
-                    bdotn.append(PFC.bdotn.copy())
-                if 'psiPC' in runList:
-                    psi.append(PFC.psimin.copy())
-                if 'NormPC' in runList:
-                    norm = np.append(norm, PFC.norms.copy())
-                if 'Bpc' in runList:
-                    bField = np.append(bField, PFC.Bxyz.copy())
-                #note that I don't do the normal vector NormPC (its same every timestep)
-                #user can just get NormPCs individually for each tile
-                Npoints += len(PFC.centers)
-                centers = np.append(centers,PFC.centers)
-                names.append(PFC.name.split('_')[0])
+                    hfAll[-1]+=PFC.qGyro.copy()
+            if 'powerDirPC' in runList:
+                powerDir.append(PFC.powerDir.copy())
+            if 'bdotnPC' in runList:
+                bdotn.append(PFC.bdotn.copy())
+            if 'psiPC' in runList:
+                psi.append(PFC.psimin.copy())
+            if 'NormPC' in runList:
+                norm = np.append(norm, PFC.norms.copy())
+            if 'Bpc' in runList:
+                bField = np.append(bField, PFC.Bxyz.copy())
+            #note that I don't do the normal vector NormPC (its same every timestep)
+            #user can just get NormPCs individually for each tile
+            Npoints += len(PFC.centers)
+            centers = np.append(centers,PFC.centers)
 
         #now build something we can write to csv (ie numpy)
         hfOpticalNumpy = np.array([])
@@ -2132,8 +2110,19 @@ class GUIobj():
         else:
             self.OF.caseDir = self.MHD.shotPath + '/openFoam/heatFoam'
         tools.makeDir(self.OF.caseDir)
+        #set up directory for all .foam files
+        self.OF.allFoamsDir = self.OF.caseDir + '/allFoams'
+        tools.makeDir(self.OF.allFoamsDir)
         #set up OF parts for each PFC part
         for PFC in self.PFCs:
+            #check if PFC is a gyroSource Plane
+            if self.GYRO.gyroSourceTag == 'allROI':
+                pass
+            else:
+                if PFC.name in self.GYRO.gyroSources:
+                    print("Not including "+PFC.name+" in thermal analysis")
+                    continue
+
             print("Running openFOAM for PFC: "+PFC.name)
             log.info("Running openFOAM for PFC: "+PFC.name)
             partDir = self.OF.caseDir + '/' + PFC.name
@@ -2315,7 +2304,7 @@ class GUIobj():
                                        templateVarFile,
                                        stlfile)
 
-            #generate 3D volume mesh or coy from file
+            #generate 3D volume mesh or copy from file
             print("Generating volume mesh")
             log.info("Generating volume mesh")
             self.OF.generate3Dmesh(PFC.OFpart, self.CAD.overWriteMask)
@@ -2329,7 +2318,7 @@ class GUIobj():
                 log.info("openFOAM timestep: {:d}".format(t))
                 OFt = t/1000.0 #in [s] for openFOAM
 
-                #copy variable files into each timestep for solver
+                #make timeDir folder and copy HF
                 timeDir = partDir + '/{:f}'.format(OFt).rstrip('0').rstrip('.')
                 #timestep field prescriptions
                 HFt0 = partDir+'/{:f}'.format(self.OF.OFtMin).rstrip('0').rstrip('.')+'/HF'
@@ -2388,6 +2377,23 @@ class GUIobj():
             print("thermal analysis complete...")
             log.info("thermal analysis complete...")
 
+
+            #THIS DOES NOT WORK.  FUTURE WORK TO CREATE SINGLE .foam FILE
+            ##build single .foam directory structure
+            #print("Building allFoams directory")
+            #log.info("Building allFoams directory")
+            #for t in OFtimesteps:
+            #    OFt = t/1000.0 #in [s] for openFOAM
+            #    #make timeDir folder and copy HF
+            #    timeDir = partDir + '/{:f}'.format(OFt).rstrip('0').rstrip('.')
+            #    #make the allFoam timestep directory for this timestep
+            #    allFoamTimeDir = self.OF.allFoamsDir + '/{:f}'.format(OFt).rstrip('0').rstrip('.')
+            #    try:
+            #        os.mkdir(allFoamTimeDir)
+            #        #copy fields to folder?
+            #    except:
+            #        pass
+
         print("openFOAM run completed.")
         log.info("openFOAM run completed.")
         return
@@ -2404,6 +2410,14 @@ class GUIobj():
         data = []
         pfcNames = []
         for PFC in self.PFCs:
+            #check if PFC is a gyroSource Plane
+            if self.GYRO.gyroSourceTag == 'allROI':
+                pass
+            else:
+                if PFC.name in self.GYRO.gyroSources:
+                    print("Not including "+PFC.name+" in MinMax plots")
+                    continue
+
             if self.MHD.shotPath[-1]=='/':
                 partDir = self.MHD.shotPath + 'openFoam/heatFoam/'+PFC.name
             else:

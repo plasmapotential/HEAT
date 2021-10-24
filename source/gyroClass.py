@@ -245,10 +245,10 @@ class GYRO:
                 self.energyIntegrals[i,j] = integrate.quad(f_E, Elo, Ehi)[0]
             energyTotal = self.energyIntegrals[i,:].sum()
             #for testing
-            if i==0:
-                print("Integral Test===")
-                print(energyTotal)
-                print(integrate.quad(f_E, 0.0, self.vMax[i])[0])
+            #if i==0:
+            #    print("Integral Test===")
+            #    print(energyTotal)
+            #    print(integrate.quad(f_E, 0.0, self.vMax[i])[0])
 
             #energy fractions
             for j in range(self.N_vSlice):
@@ -441,9 +441,32 @@ class GYRO:
 
         #Filter by psi
         if self.psiFilterSwitch == True:
-            use = np.where(self.psiMask[:,self.GYRO_HLXmap[i]] == 1)[0]
+            psiP1 = self.PFC_psiP1
+            psiP2 = self.PFC_psiP2
+            psiP3 = self.PFC_psiP3
+            psiMin = self.psiMin[i]
+            psiMax = self.psiMax[i]
+
+            #account for psi sign convention
+            if psiMin > psiMax:
+                pMin = psiMax
+                pMax = psiMin
+            else:
+                pMin = psiMin
+                pMax = psiMax
+
+            #target faces outside of this toroidal slice
+            test0 = np.logical_and(psiP1 < pMin,
+                                   psiP2 < pMin,
+                                   psiP3 < pMin)
+            test1 = np.logical_and(psiP1 > pMax,
+                                   psiP2 > pMax,
+                                   psiP3 > pMax)
+            test = np.logical_or(test0,test1)
+            usePsi = np.where(test == False)[0]
+
         else:
-            use = np.arange(len(self.PFC_t1))
+            usePsi = np.arange(len(self.PFC_t1))
 
         #Filter by toroidal angle
         if self.phiFilterSwitch == True:
@@ -478,11 +501,13 @@ class GYRO:
                                    phiP2 > pMax,
                                    phiP3 > pMax)
             test = np.logical_or(test0,test1)
-            use = np.where(test == False)[0]
+            usePhi = np.where(test == False)[0]
 
         else:
-            use = np.arange(len(self.PFC_t1))
+            usePhi = np.arange(len(self.PFC_t1))
 
+        #combine filter algorithms
+        use = np.intersect1d(usePsi,usePhi)
 
         Nt = len(use)
 

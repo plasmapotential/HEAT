@@ -7,7 +7,7 @@ gridRes, standard
 #==============================================================
 #                MHD Variables
 #==============================================================
-shot, 116313
+shot, 204118
 tmin, 0
 tmax, 5000
 nTrace, 10
@@ -37,7 +37,7 @@ fracLO,0.7
 #                Ion Gyro Orbit HF Variables
 #==============================================================
 N_gyroSteps, 6
-gyroDeg, 20
+gyroDeg, 10
 gyroT_eV, 10
 N_vSlice, 1
 N_vPhase, 1

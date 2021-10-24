@@ -476,6 +476,7 @@ class CAD:
                 pass
             else:
                 mesh[i].write(filename)
+
         print("\nWrote meshes to files")
         log.info("\nWrote meshes to files")
         return
