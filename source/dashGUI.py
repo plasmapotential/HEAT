@@ -612,6 +612,7 @@ def saveGUIinputs(  n_clicks,
     return [outputDiv, send_file(gui.tmpDir + "HEATinput.csv")]
 
 
+
 #==========MHD==========
 def buildMHDbox():
     """
@@ -2057,6 +2058,8 @@ def runChildren():
             children = [
                 html.H4("HEAT Run Settings", className="buttonRibbon"),
                 html.Br(),
+                html.H6("Acceleration, Filters, Settings: "),
+                buildRunSettings(),
                 html.H6("Point Clouds at Tile Surface:"),
                 runTabChecklist(),
                 html.H6("Traces from Points:"),
@@ -2066,6 +2069,30 @@ def runChildren():
                 ],
             className="wideBoxDark",
                 )
+
+
+#==========HEAT Run Settings==========
+def buildRunSettings():
+    """
+    returns user options for the HEAT run
+    """
+    return html.Div(
+            id="runSettings",
+            className="buttonRibbon",
+            children=[
+                html.Label(children="Acceleration Filters:  "),
+                dcc.Checklist(
+                    options=[
+                        {'label': 'Toroidal Filter', 'value': 'torFilt'},
+                        {'label': 'Psi Filter', 'value': 'psiFilt'},
+                    ],
+                    value=['torFilt'],
+                    id='accFilters',
+                    className="PCbox",
+                )
+            ],
+        )
+
 
 
 def runTabChecklist():
@@ -2330,6 +2357,7 @@ def loadGyroTrace(display):
                State('N_gyroSteps_trace','value'),
                State('gyroDir_trace','value'),
                State('gyroPhase_trace','value'),
+               State('accFilters','value'),
                ])
 def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
             BtraceTableData,
@@ -2337,13 +2365,18 @@ def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
             xGyroTrace,yGyroTrace,zGyroTrace,
             t,
             gyroT_eV_trace,gyroDeg_trace,N_gyroSteps_trace,
-            gyroDir_trace,gyroPhase_trace):
+            gyroDir_trace,gyroPhase_trace, accFilters):
     if n_clicks == 0:
         raise PreventUpdate
 
+    #acceleration structure filters
+    gui.loadAccFilters(accFilters)
+
+    #Bfield trace
     if 'Btrace' in Btrace:
         gui.BtraceMultiple(BtraceTableData, t)
 
+    #gyro orbit trace
     if 'gyrotrace' in gyrotrace:
         gui.gyroTrace(xGyroTrace,yGyroTrace,zGyroTrace,t,gyroPhase_trace,
                       gyroDeg_trace,N_gyroSteps_trace,gyroDir_trace,gyroT_eV_trace)

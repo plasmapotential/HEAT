@@ -292,7 +292,11 @@ class PFC:
 
         totalMeshCounter = 0
         for i,target in enumerate(CAD.intersectMeshes):
-            totalMeshCounter+=target.CountFacets
+            try:
+                totalMeshCounter+=target.CountFacets
+            except:
+                print("Cannot count faces because "+CAD.intersectList[i]+" is not a mesh!")
+                continue
             #check if this target is a potential intersection
             if CAD.intersectList[i] in self.intersects:
                 numTargetFaces += target.CountFacets
