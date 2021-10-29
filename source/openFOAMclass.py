@@ -195,9 +195,9 @@ class OpenFOAM():
         """
         #determine number of logical cpus and leave 1 for overhead
         if psutil.cpu_count(logical=True) < 2:
-            NCPU = 1
+            self.NCPU = 1
         else:
-            NCPU = psutil.cpu_count(logical=True) - 1
+            self.NCPU = psutil.cpu_count(logical=True) - 1
         with open(file, 'w') as f:
             f.write('xMin {:f};\n'.format(self.xMin))
             f.write('xMax {:f};\n'.format(self.xMax))
@@ -221,7 +221,7 @@ class OpenFOAM():
             f.write('zMid {:f};\n'.format(self.zMid))
             f.write('STLfileName '+STLpart+';\n')
             f.write('STLlayerName '+STLpart+'_firstSolid;\n')
-            f.write('NCPU '+str(NCPU)+';\n')
+            f.write('NCPU '+str(self.NCPU)+';\n')
         return
 
     def writeShellScript(self,logFile, parallel=False):
@@ -251,10 +251,11 @@ class OpenFOAM():
             self.partDir += '/'
 
         #determine number of logical cpus and leave 1 for overhead
-        if psutil.cpu_count(logical=True) < 2:
-            NCPU = 1
-        else:
-            NCPU = psutil.cpu_count(logical=True) - 1
+        #now done in template file creation method
+        #if psutil.cpu_count(logical=True) < 2:
+        #    self.NCPU = 1
+        #else:
+        #    self.NCPU = psutil.cpu_count(logical=True) - 1
 
 
 #        #write openfoam sourcing script to generate environment variables
@@ -294,12 +295,10 @@ class OpenFOAM():
             else:
                 #Run snappyHexMesh across multiple processors
                 #this feature should be added in one day...sigh...for now its a placeholder
-                #you'll have to set up blocks in blockMeshDict or this will not work.
-                #problem is you need to allocate processors in advance.
-                #see: "2.3.11 Running in parallel"
-                #from https://cfd.direct/openfoam/user-guide/v8-damBreak/#x7-610002.3.11
+                #you need to download libscotch-6.0 from ubuntu repo,
+                #then build scotchDecomp from source from src/parallel/decompose/scotchDecomp
                 f.write('decomposePar > ' + logFile + '\n')
-                f.write('mpirun --use-hwthread-cpus -np '+str(NCPU)+' snappyHexMesh -parallel -overwrite > '+logFile+ '\n')
+                f.write('mpirun --use-hwthread-cpus -np '+str(self.NCPU)+' snappyHexMesh -parallel -overwrite > '+logFile+ '\n')
                 f.write('reconstructParMesh -mergeTol 1e-6 -latestTime -constant > '+logFile+ '\n')
 
         os.chmod(file, 0o744)
@@ -427,6 +426,8 @@ class OpenFOAM():
         """
         print('Running Thermal Analysis')
         log.info('Running Thermal Analysis')
+        print('See HEAT LogFile Tab for Status')
+        log.info('See HEAT LogFile Tab for Status')
 
         from subprocess import run
         #Copy the current environment

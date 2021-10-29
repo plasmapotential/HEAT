@@ -102,6 +102,7 @@ class GYRO:
         self.kB = 8.617e-5 #ev/K
         self.e = 1.602e-19 # C
         self.c = 299792458 #m/s
+        self.diamag = -1 #diamagnetism = -1 for ions, 1 for electrons
 
         self.mass_eV = ionMassAMU * self.AMU
         self.Z=1 #assuming isotopes of hydrogen here
@@ -134,7 +135,7 @@ class GYRO:
         if np.isscalar(self.omegaGyro):
             self.omegaGyro = np.array([self.omegaGyro])
 
-        self.fGyro = self.omegaGyro/(2*np.pi)
+        self.fGyro = np.abs(self.omegaGyro)/(2*np.pi)
         self.TGyro = 1.0/self.fGyro
         return
 
@@ -326,7 +327,7 @@ class GYRO:
             xfm = np.vstack([u,v,w]).T
             #get helix path along (proxy) z axis reference frame
             x_helix = self.rGyro*np.cos(self.omegaGyro*t + gyroPhase)
-            y_helix = self.rGyro*np.sin(self.omegaGyro*t + gyroPhase)
+            y_helix = self.diamag*self.rGyro*np.sin(self.omegaGyro*t + gyroPhase)
             z_helix = np.zeros((len(t)))
             #perform rotation to field line reference frame
             helix = np.vstack([x_helix,y_helix,z_helix]).T
@@ -415,7 +416,7 @@ class GYRO:
         omega = self.omegaGyro[self.GYRO_HLXmap][i]
         theta = self.lastPhase[self.GYRO_HLXmap][i]
         x_helix = rGyro*np.cos(omega*t + theta)
-        y_helix = rGyro*np.sin(omega*t + theta)
+        y_helix = self.diamag*rGyro*np.sin(omega*t + theta)
         z_helix = np.zeros((len(t)))
         #perform rotation to field line reference frame
         helix = np.vstack([x_helix,y_helix,z_helix]).T

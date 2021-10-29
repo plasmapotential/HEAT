@@ -931,6 +931,7 @@ class GUIobj():
         PFC.Bmag[:,1] = PFC.centers[:,1] # Y
         PFC.Bmag[:,2] = PFC.centers[:,2] # Z
         PFC.Bmag[:,3] = np.sqrt(PFC.Bxyz[:,0]**2+PFC.Bxyz[:,1]**2+PFC.Bxyz[:,2]**2)
+        PFC.Bsign = np.sign(PFC.ep.g['Bt0'])
         return
 
     def BtraceMultiple(self,data,t):
@@ -1039,6 +1040,7 @@ class GUIobj():
         BR = ep.BRFunc.ev(R,Z)
         BZ = ep.BZFunc.ev(R,Z)
         B = np.sqrt(BR**2 + Bt**2 + BZ**2)
+        Bmag = np.sign(ep.g['Bt0'])
         #Calculate frequencies and gyro radius
         self.GYRO.setupFreqs(B)
         self.GYRO.setupRadius(vPerp)
@@ -1122,9 +1124,12 @@ class GUIobj():
             phiFilterSwitch = False
 
         #for now all PFCs share a single filter state
-        for PFC in self.PFCs:
-            PFC.psiFilterSwitch = psiFilterSwitch
-            PFC.phiFilterSwitch = phiFilterSwitch
+        try:
+            for PFC in self.PFCs:
+                PFC.psiFilterSwitch = psiFilterSwitch
+                PFC.phiFilterSwitch = phiFilterSwitch
+        except:
+            print("No PFCs to set filter switches for.  Skipping.")
         return
 
 
@@ -2149,12 +2154,14 @@ class GUIobj():
         #set up OF parts for each PFC part
         for PFC in self.PFCs:
             #check if PFC is a gyroSource Plane
-            if self.GYRO.gyroSourceTag == 'allROI':
-                pass
-            else:
-                if PFC.name in self.GYRO.gyroSources:
-                    print("Not including "+PFC.name+" in thermal analysis")
-                    continue
+            if hasattr(self.GYRO, 'gyroSourceTag'):
+                #check if PFC is a gyroSource Plane
+                if self.GYRO.gyroSourceTag == 'allROI':
+                    pass
+                else:
+                    if PFC.name in self.GYRO.gyroSources:
+                        print("Not including "+PFC.name+" in thermal analysis")
+                        continue
 
             print("Running openFOAM for PFC: "+PFC.name)
             log.info("Running openFOAM for PFC: "+PFC.name)
@@ -2345,6 +2352,20 @@ class GUIobj():
             qDiv = np.zeros((len(PFC.centers)))
             ctrs = copy.copy(PFC.centers)*1000.0
 
+
+            #in the future if you want adaptive meshing for each timestep this whole
+            #section needs to be revised.  for now, you can only have 1 boundary
+            #condition set of points.  We take timestep 0 from the PFC
+            #and get the points from a file.  This enables user to swap out
+            #HF_allSources.csv in between HF and Temp runs, to create non-uniform mesh
+            #get the mesh centers from one of the timesteps
+            t = self.MHD.timesteps[0]
+            if self.MHD.shotPath[-1]=='/':
+                HFcsv = self.MHD.shotPath + '{:06d}/'.format(t) + PFC.name + '/HF_allSources.csv'
+            else:
+                HFcsv = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/HF.allSources.csv'
+            OFcenters = pd.read_csv(HFcsv).iloc[:,0:3].values
+
             #cycle through timesteps and get HF data from HEAT tree
             for t in OFtimesteps:
                 print("openFOAM timestep: {:d}".format(t))
@@ -2380,17 +2401,18 @@ class GUIobj():
                     else:
                         HFcsv = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/HF.allSources.csv'
                     qDiv = pd.read_csv(HFcsv)['HeatFlux'].values
+                    #OFcenters = pd.read_csv(HFcsv).iloc[:,0:3].values
                     #write boundary condition
                     print("Maximum qDiv for this PFC and time: {:f}".format(qDiv.max()))
-                    self.HF.write_openFOAM_boundary(ctrs,qDiv,partDir,OFt)
+                    self.HF.write_openFOAM_boundary(OFcenters,qDiv,partDir,OFt)
                 elif (t < self.MHD.timesteps.min()) or (t > self.MHD.timesteps.max()):
                     #apply zero HF outside of discharge domain (ie tiles cooling)
                     print("OF.timestep: {:d} outside MHD domain".format(t))
                     log.info("OF.timestep: {:d} outside MHD domain".format(t))
-                    qDiv = np.zeros((len(ctrs)))
+                    qDiv = np.zeros((len(OFcenters)))
                     #write boundary condition
                     print("Maximum qDiv for this PFC and time: {:f}".format(qDiv.max()))
-                    self.HF.write_openFOAM_boundary(ctrs,qDiv,partDir,OFt)
+                    self.HF.write_openFOAM_boundary(OFcenters,qDiv,partDir,OFt)
                 else:
                     #boundary using last timestep that we calculated a HF for
                     #(basically a heaviside function in time)
@@ -2444,12 +2466,13 @@ class GUIobj():
         pfcNames = []
         for PFC in self.PFCs:
             #check if PFC is a gyroSource Plane
-            if self.GYRO.gyroSourceTag == 'allROI':
-                pass
-            else:
-                if PFC.name in self.GYRO.gyroSources:
-                    print("Not including "+PFC.name+" in MinMax plots")
-                    continue
+            if hasattr(self.GYRO, 'gyroSourceTag'):
+                if self.GYRO.gyroSourceTag == 'allROI' :
+                    pass
+                else:
+                    if PFC.name in self.GYRO.gyroSources:
+                        print("Not including "+PFC.name+" in MinMax plots")
+                        continue
 
             if self.MHD.shotPath[-1]=='/':
                 partDir = self.MHD.shotPath + 'openFoam/heatFoam/'+PFC.name
