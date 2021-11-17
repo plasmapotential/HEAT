@@ -100,7 +100,7 @@ AppDir:
     id: HEATAppimage
     name: HEAT_AppImage
     icon: flame
-    version: v1.4.1
+    version: v1.4.2
 #    # Set the python executable as entry point
 #    exec: usr/bin/python3
 #    # Set the application main script path as argument. Use '$@' to forward CLI parameters

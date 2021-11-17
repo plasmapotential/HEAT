@@ -887,12 +887,13 @@ class GUIobj():
         self.GYRO.ionFrac = float(ionFrac)
         #set up power source
         self.GYRO.gyroSourceTag = str(gyroSources)
-        if self.GYRO.gyroSourceTag == 'allROI':
+        if 'allROI' in self.GYRO.gyroSourceTag:
             self.GYRO.gyroSources = self.CAD.ROIList
         else:
-            print("Meshing Gyro Source Objects")
-            log.info("Meshing Gyro Source Objects")
-            self.GYRO.gyroSources = [gyroSources]
+            if type(gyroSources) == list:
+                self.GYRO.gyroSources = gyroSources
+            else:
+                self.GYRO.gyroSources = [gyroSources]
             #self.CAD.getGyroSources(gyroSources)
             #self.CAD.getGyroSourceMeshes()
             #self.CAD.writeMesh2file(self.CAD.gyroMeshes, self.CAD.gyroSources, path=self.CAD.STLpath)

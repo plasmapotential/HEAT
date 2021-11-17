@@ -1624,7 +1624,7 @@ def parse_contents(contents, filename):
                State('MachFlag', 'value')])
 def PFCtable(n_clicks, filename, dataStore, ts, uploadContents,
              tableData, tableColumns, MachFlag):
-    tD = tD = [{}]
+    tD = [{}]
     if dataStore==None:
         print('Initializing HTML PFC data storage object')
         dataStore = {}
@@ -1659,14 +1659,14 @@ def PFCtable(n_clicks, filename, dataStore, ts, uploadContents,
         tableData = df.to_dict('records')
         tableColumns = [{"name": i, "id": i} for i in df.columns]
         hiddenDiv = [html.Label("Loaded file: "+filename, style={'color':'#34b3ed'})]
-        tD = [{}]
+        tD = tableData.copy()
 
     else:
         hiddenDiv = []
 
     #build dictionary for gyro orbit source dropdown
     ROIdict = []
-    ROIdict.append({'label': "All ROI PFCs", 'value': 'allROI'})
+    #ROIdict.append({'label': "", 'value': ''})
     if tD != [{}]:
         tD = pd.DataFrame.from_dict(tableData)[list (tableData[0].keys())]
         names = tD.rename(columns=lambda x: x.strip())['PFCname'].values
@@ -1717,18 +1717,27 @@ def buildGYRObox():
                     ),
             html.Label("Gyro Orbit Power Source"),
             dcc.Dropdown(
-                id='gyroSource',
+                id='sourceMode',
                 className="wideSelect",
                 style={'backgroundColor': 'transparent', 'color':'transparent'},
-
-                #value='allROIs',
+                options=[
+                    {'label': 'All ROI PFCs', 'value': 'allROI'},
+                    {'label': 'User Selected PFCs', 'value': 'custom'},
+                    ],
+                value=None,
                 ),
+            html.Div(id='gyroSourceParams',
+                     children=[
+                                loadSourceSettings(mode=None,hidden=True),
+                               ],
+                    ),
             html.Br(),
             html.Button("Load Gyro Settings", id="loadGYRO", n_clicks=0, style={'margin':'0 10px 10px 0'}),
             html.Div(id="hiddenDivGyro")
         ],
         className="HFbox",
     )
+
 
 def gyroInputBoxes():
     return html.Div(
@@ -1776,6 +1785,7 @@ def gyroInputBoxes():
 @app.callback([Output('gyroVparams', 'children')],
               [Input('vMode', 'value')])
 def hfParameters(mode):
+    #select velocity mode
     div = [loadGyroSettings(mode=mode, hidden=False)]
     return [div]
 
@@ -1856,6 +1866,86 @@ def velocityFromFile(className):
         className = className
     )
 
+
+
+
+
+@app.callback([Output('gyroSourceParams', 'children')],
+              [Input('sourceMode', 'value')],
+              [State('gyroSource', 'options'),
+               State('loadPFC', 'n_clicks')]
+              )
+def gyroParameters(mode, options, n_clicks):
+    if n_clicks == 0:
+        raise PreventUpdate
+    #select gyroSource mode
+    div = [loadSourceSettings(mode=mode, hidden=False, options=options)]
+    return [div]
+
+def loadSourceSettings(mode=None, hidden=False, options=None):
+    #do this hidden business so that we can always load defaults into these id's
+    #hideMask corresponds to the following parameters:
+    #[eichProfile, commonRegion, privateRegion]
+    hideMask = ['hiddenBox','hiddenBox']
+    if mode=='allROI':
+        hideMask = ['hfInput','hiddenBox']
+    elif mode=='custom':
+        hideMask = ['hiddenBox','hfInput']
+    if hidden==True or mode==None:
+        hideMask=['hiddenBox','hiddenBox']
+
+    return html.Div(
+            children=[
+                #use single temperature to define entire divertor
+                html.Div(
+                    #className=hideMask[0],
+                    children=[
+                        allROISource(hideMask[0]),
+                        ]
+                ),
+                #read temperature pointcloud from file and interpolate to PFC surface
+                html.Div(
+                    #className=hideMask[1],
+                    children=[
+                        customSource(hideMask[1], options),
+                        ]
+                ),
+                    ],
+                    )
+
+
+def customSource(className, options):
+    if options == None: options = [{'label':'', 'value':''}]
+    div = html.Div(
+            children = [
+                html.Div(
+                    children=[
+                        dcc.Checklist(
+                            id='gyroSource',
+                            className="checkListBox",
+                            options=options,
+                            value=['allROI'],
+                        ),
+                    ],
+                    className="wideBoxNoColor"
+                    )
+                ],
+            className=className,
+            )
+    return div
+
+def allROISource(className):
+    return html.Div(
+        children=[
+            html.Label("Using all ROI PFCs as gyro power sources", style={'color':'#f5d142'})
+        ],
+        className = className
+    )
+
+
+
+
+
 #Load GYRO button connect
 @app.callback([Output('hiddenDivGyro', 'children'),
                Output('gyroPhasePlot', 'children'),
@@ -1882,11 +1972,18 @@ def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
     """
     if n_clicks == 0:
         raise PreventUpdate
+
+    #handle gyro orbit dropdown (user can only select all or custom PFCs)
+    if ('allROI' in gyroSource) and (len(gyroSource)>1):
+        gyroSource.remove('allROI')
+
     gui.getGyroInputs(N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
                       N_vPhase, N_vSlice, ionFrac, gyroSource)
     gyroPhaseFig = gyroPhasePlots(update=True)
     vPhaseFig = vPhasePlots(update=True)
     vSliceFig = vSlicePlots(update=True)
+
+
 
     GYROdata = {
             'Number of steps per helix period':N_gyroSteps,

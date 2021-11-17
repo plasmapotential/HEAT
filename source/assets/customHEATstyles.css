@@ -229,6 +229,15 @@ body {
 /*    box-shadow: 3px 6px #242526; */
 }
 
+.checkListBox{
+    align-items: center;
+	  background-color: #252626;
+    width: 95%;
+    text-align:left;
+    margin: 10px 10px 10px 10px;
+/*    box-shadow: 3px 6px #242526; */
+}
+
 .runContentBox{
 /*  width: 90%; */
   display: flex;

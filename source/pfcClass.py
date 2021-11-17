@@ -602,7 +602,7 @@ class PFC:
         PFCList = np.unique(PFCList)
         #if we are using this PFC as a source, remove it from intersections
         #if we run in allROI gyroSource mode, all ROI PFCs are included as intersections
-        if self.name == GYRO.gyroSourceTag:
+        if self.name in GYRO.gyroSources:
             rmv = np.where(PFCList == self.name)[0]
             PFCList = np.delete(PFCList, rmv)
         GYRO.PFCintersectMap = []
@@ -666,7 +666,7 @@ class PFC:
         GYRO.setupFreqs(self.Bmag[self.PFC_GYROmap,-1])
 
         #Walk downstream along GC path tracing helices and looking for intersections
-        if GYRO.gyroSourceTag == "allROI":
+        if "allROI" in GYRO.gyroSources:
             N_GCdeg = GYRO.gyroDeg*2 + 1
         else:
             N_GCdeg = GYRO.gyroDeg + 1
