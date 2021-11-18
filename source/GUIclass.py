@@ -888,7 +888,10 @@ class GUIobj():
         #set up power source
         self.GYRO.gyroSourceTag = str(gyroSources)
         if 'allROI' in self.GYRO.gyroSourceTag:
-            self.GYRO.gyroSources = self.CAD.ROIList
+            try:
+                self.GYRO.gyroSources = self.CAD.ROIList
+            except:
+                print("NO CAD Loaded.  Cannot initialize ROIList.")
         else:
             if type(gyroSources) == list:
                 self.GYRO.gyroSources = gyroSources

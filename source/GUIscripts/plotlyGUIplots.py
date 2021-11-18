@@ -264,9 +264,11 @@ def plotlyVSlicePlot(m,c,T0,vSlices,v):
     """
 
     #generate the (here maxwellian) PDF
-    pdf = lambda x: (m/c**2) / (T0) * np.exp(-(m/c**2 * x**2) / (2*T0) )
-    v_pdf = v * pdf(v)
-    vSlice_pdf = vSlices * pdf(vSlices)
+    #pdf = lambda x: (m/c**2) / (T0) * np.exp(-(m/c**2 * x**2) / (2*T0) )
+    #v_pdf = v * pdf(v)
+    pdf = lambda x: ( (m/c**2) / (2 * np.pi * T0) )**(3.0/2.0) * np.exp(-(m/c**2 * x**2) / (2*T0) )
+    v_pdf = 4*np.pi * v**2 * pdf(v)
+    vSlice_pdf = 4*np.pi * vSlices**2 * pdf(vSlices)
 
 
 
