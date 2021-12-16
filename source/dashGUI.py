@@ -260,7 +260,7 @@ def build_tabs():
                     ),
                     dcc.Tab(
                         id="gfileCleaner-tab",
-                        label="gFile Tools",
+                        label="GEQDSK Tools",
                         value="tab3",
                         style=tab_style,
                         selected_style=tab_selected_style,
@@ -1731,6 +1731,7 @@ def buildGYRObox():
                                 loadSourceSettings(mode=None,hidden=True),
                                ],
                     ),
+            html.Label("(Note: Sources are OMITTED from Temp Calculation)"),
             html.Br(),
             html.Button("Load Gyro Settings", id="loadGYRO", n_clicks=0, style={'margin':'0 10px 10px 0'}),
             html.Div(id="hiddenDivGyro")
@@ -1951,6 +1952,7 @@ def allROISource(className):
                Output('gyroPhasePlot', 'children'),
                Output('vPhasePlot', 'children'),
                Output('vSlicePlot', 'children'),
+               Output('cdfSlicePlot', 'children'),
                Output('GYRODataStorage', 'data')
                ],
               [Input('loadGYRO', 'n_clicks')],
@@ -1982,6 +1984,7 @@ def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
     gyroPhaseFig = gyroPhasePlots(update=True)
     vPhaseFig = vPhasePlots(update=True)
     vSliceFig = vSlicePlots(update=True)
+    cdfSliceFig = cdfSlicePlots(update=True)
 
 
 
@@ -2002,6 +2005,7 @@ def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
             gyroPhaseFig,
             vPhaseFig,
             vSliceFig,
+            cdfSliceFig,
             GYROdata]
 
 
@@ -2522,7 +2526,8 @@ def buildGfileCleanerTab():
 def gfileChildren():
     return html.Div(
         children = [
-            html.H4("gFile Tools", style={"text-align":"center", "width":"100%"}),
+            html.H4("GEQDSK Tools", style={"text-align":"center", "width":"100%"}),
+            #html.Div( children=MHDplot(), className="MHDplotBox2" ),
             html.H6("Loaded gFile Parameters:"),
             html.Div( children=buildGfileTable(), className="gfileTable" ),
             html.Div( children=buildGfilePlots(), className="gfileTable" ),
@@ -2926,6 +2931,14 @@ def outputChildren():
                     ],
                 className="wideBoxDarkColumn",
             ),
+            #cdfSlice plot
+            html.Div(
+                children=[
+                    html.H6("HEAT PDF vs. CDF Slices (run HEAT for plot):"),
+                    html.Div(children=cdfSlicePlots(update=False), id="cdfSlicePlot"),
+                    ],
+                className="wideBoxDarkColumn",
+            ),
             ],
         className="wideBoxDark",
         )
@@ -3157,6 +3170,33 @@ def vSlicePlots(update=False):
     """
     if update==True:
         fig = gui.vSlicePlot()
+
+        return html.Div(
+            className="plotBox",
+            children=[
+                dcc.Graph(id="", figure=fig),
+                ],
+                )
+    else:
+
+        return html.Div(
+            children=[
+                html.Label("Run gyro orbit calculation to get plot", style={'color':'#52caeb'})
+                ],
+            className="gfileBox"
+            )
+
+def cdfSlicePlots(update=False):
+    """
+    div for gyro orbit CDF slice / distribution plot
+
+    if update is False, just return an empty div, so that nothing happens on
+    page load.  If update=True, get qDivs and update the plot.
+
+    This is called at the end of a HEAT run (runHEAT callback) button click
+    """
+    if update==True:
+        fig = gui.cdfSlicePlot()
 
         return html.Div(
             className="plotBox",

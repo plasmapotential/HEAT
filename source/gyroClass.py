@@ -182,7 +182,7 @@ class GYRO:
             #set upper bound of v*f(v) (note that this cuts off high energy particles)
             self.vMax = 5 * self.vThermal
             #get 100 points to initialize functional form of f(v) (note this is a 2D matrix cause vMax is 2D)
-            self.vScan = np.linspace(0,self.vMax,1000).T
+            self.vScan = np.linspace(0,self.vMax,10000).T
             #get velocity slices for each T0
             self.pullEqualProbabilityVelocities()
 
@@ -199,11 +199,14 @@ class GYRO:
 
         each vSlice is positioned at a place in the PDF so it has an equal probability
         of occuring.  ie the area under the PDF curve between each vSlice is equal.
+
+        in loop, i is mesh element index
         """
         self.vSlices = np.ones((len(self.T0),self.N_vSlice))*np.nan
         self.energySlices = np.zeros((len(self.T0),self.N_vSlice))
         self.energyIntegrals = np.zeros((len(self.T0),self.N_vSlice))
         self.energyFracs = np.zeros((len(self.T0),self.N_vSlice))
+        self.vBounds = np.zeros((len(self.T0),self.N_vSlice+1))
         for i in range(len(self.T0)):
             #get speed range for this T0
             v = self.vScan[i,:]
@@ -218,19 +221,41 @@ class GYRO:
             #create bspline interpolators for the cdf and cdf inverse
             inverseCDF = interp1d(v_cdf, v, kind='linear')
             forwardCDF = interp1d(v, v_cdf, kind='linear')
-            #calculate N_vSlice velocities for each pdf each with equal area (probability)
-            cdfMax = v_cdf[-1]
-            cdfMin = v_cdf[0]
-            sliceWidth = cdfMax / (self.N_vSlice+1)
-            #CDF location of vSlices omitting 0 and 1
-            cdfSlices = np.linspace(0,1,self.N_vSlice+2)[1:-1]
+            #CDF location of vSlices and bin boundaries
+            cdfBounds = np.linspace(0,v_cdf[-1],self.N_vSlice+1)
             #CDF location of velocity bin bounds omitting 0 and 1
-            cdfBounds = np.linspace(0,1,self.N_vSlice+1)[1:-1]
+            #old method does not make vSlices truly bin centers
+            #cdfBounds = np.linspace(0,1,self.N_vSlice+1)[1:-1]
+
+            #old method 2 spaces centers uniformly
+#            #calculate N_vSlice velocities for each pdf each with equal area (probability)
+#            cdfMax = v_cdf[-1]
+#            cdfMin = v_cdf[0]
+#            sliceWidth = cdfMax / (self.N_vSlice+1)
+#            #CDF location of vSlices omitting 0 and 1
+#            cdfSlices = np.linspace(0,1,self.N_vSlice+2)[1:-1]
+#            #CDF location of velocity bin bounds omitting 0 and 1
+#            #old method does not make vSlices truly bin centers
+#            #cdfBounds = np.linspace(0,1,self.N_vSlice+1)[1:-1]
+#            #new method makes vSlices bin centers, except for the end bins
+#            cdfBounds = np.diff(cdfSlices)/2.0 + cdfSlices[:-1]
+#            #vSlices are Maxwellian distribution sample locations (@ bin centers)
+#            self.vSlices[i,:] = inverseCDF(cdfSlices)
+#            vBounds = inverseCDF(cdfBounds)
+#            vBounds = np.insert(vBounds,0,0)
+#            vBounds = np.append(vBounds,self.vMax[i])
+
+            #new method spaces bins uniformly, then makes vSlices center of these bins in CDF space
+            cdfSlices = np.diff(cdfBounds)/2.0 + cdfBounds[:-1]
             #vSlices are Maxwellian distribution sample locations (@ bin centers)
             self.vSlices[i,:] = inverseCDF(cdfSlices)
             vBounds = inverseCDF(cdfBounds)
-            vBounds = np.insert(vBounds,0,0)
-            vBounds = np.append(vBounds,self.vMax[i])
+            self.vBounds[i,:] = vBounds
+            #print(cdfBounds)
+            #print(cdfSlices)
+            #print(self.vBounds)
+            #print(self.vSlices)
+
             #Now find energies that correspond to these vSlices
             #we integrate: v**2 * f(v)
             #energy pdf (missing 1/2*mass but that gets divided out later anyways )

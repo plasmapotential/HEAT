@@ -253,7 +253,7 @@ def plotlyVPhasePlot(vPhases):
     return fig
 
 
-def plotlyVSlicePlot(m,c,T0,vSlices,v):
+def plotlyVSlicePlot(m,c,T0,vSlices,vBounds,v):
     """
     returns a DASH object for use directly in dash app
     m is mass [eV]
@@ -264,13 +264,11 @@ def plotlyVSlicePlot(m,c,T0,vSlices,v):
     """
 
     #generate the (here maxwellian) PDF
-    #pdf = lambda x: (m/c**2) / (T0) * np.exp(-(m/c**2 * x**2) / (2*T0) )
-    #v_pdf = v * pdf(v)
     pdf = lambda x: ( (m/c**2) / (2 * np.pi * T0) )**(3.0/2.0) * np.exp(-(m/c**2 * x**2) / (2*T0) )
     v_pdf = 4*np.pi * v**2 * pdf(v)
     vSlice_pdf = 4*np.pi * vSlices**2 * pdf(vSlices)
-
-
+    vThermal = np.sqrt(2.0*T0/(m/c**2))
+    vMax = 5.0 * vThermal
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=v, y=v_pdf,
@@ -283,12 +281,174 @@ def plotlyVSlicePlot(m,c,T0,vSlices,v):
                         marker={'symbol':"square", 'size':16},
                         name='Slices'))
 
+    #add bin boundaries
+    #for i in range(len(vBounds)):
+    #    fig.add_vline(x=vBounds[i], line_width=3, line_dash="dash", line_color="green")
+
 
     fig.update_layout(
         title="Velocity Distribution (vSlices)",
         yaxis= dict(showticklabels=False),
-        xaxis_title="Velocity",
+        yaxis_range=[0,max(v_pdf)*1.05],
+        xaxis_range=[0,vMax],
+        xaxis_title="Velocity [m/s]",
         font=dict(size=18),
         )
+
+    fig.update_layout(legend=dict(
+        yanchor="top",
+        y=0.95,
+        xanchor="right",
+        x=0.95
+        ),
+        )
+
+    return fig
+
+
+
+def plotlycdfSlicePlot(m,c,T0,vSlices,vBounds,v,N_vSlice):
+    """
+    returns a DASH object for use directly in dash app
+    m is mass [eV]
+    c is speed of light [m/s]
+    T0 is temperature [eV]
+    vSlices is slice velocities [m/s]
+    v is all velocities in distribution scan (ie vScan) [m/s]
+    """
+
+    #generate the (here maxwellian) PDF
+    pdf = lambda x: ( (m/c**2) / (2 * np.pi * T0) )**(3.0/2.0) * np.exp(-(m/c**2 * x**2) / (2*T0) )
+    v_pdf = 4*np.pi * v**2 * pdf(v)
+    vThermal = np.sqrt(2.0*T0/(m/c**2))
+    vMax = 5.0 * vThermal
+
+    #generate the CDF
+    v_cdf = np.cumsum(v_pdf[1:])*np.diff(v)
+    v_cdf = np.insert(v_cdf, 0, 0)
+    #CDF location of vSlices and bin boundaries
+    cdfBounds = np.linspace(0,v_cdf[-1],N_vSlice+1)
+    cdfSlices = np.diff(cdfBounds)/2.0 + cdfBounds[:-1]
+
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=v, y=v_cdf,
+                        mode='lines',
+                        line={'width':6, 'color':'purple'},
+                        name='Maxwellian CDF'))
+
+    fig.add_trace(go.Scatter(x=vSlices, y=cdfSlices,
+                        mode='markers',
+                        marker={'symbol':"square", 'size':16},
+                        name='Slices'))
+
+    for i in range(len(cdfBounds)):
+        fig.add_vline(x=vBounds[i], line_width=3, line_dash="dash", line_color="green")
+
+
+    fig.update_layout(
+        title="Cumulative Distribution Function",
+        yaxis= dict(showticklabels=True),
+        yaxis_range=[0,1.05],
+        xaxis_range=[0,vMax],
+        xaxis_title="Velocity [m/s]",
+        font=dict(size=18),
+        )
+
+    fig.update_layout(legend=dict(
+        yanchor="bottom",
+        y=0.05,
+        xanchor="right",
+        x=0.95
+        ),
+        )
+
+    return fig
+
+
+def plotlyallSlicePlot(m,c,T0,vSlices,vBounds,v,N_vSlice):
+    """
+    returns a DASH object for use directly in dash app
+    m is mass [eV]
+    c is speed of light [m/s]
+    T0 is temperature [eV]
+    vSlices is slice velocities [m/s]
+    v is all velocities in distribution scan (ie vScan) [m/s]
+    """
+
+    #generate the (here maxwellian) PDF
+    pdf = lambda x: ( (m/c**2) / (2 * np.pi * T0) )**(3.0/2.0) * np.exp(-(m/c**2 * x**2) / (2*T0) )
+    v_pdf = 4*np.pi * v**2 * pdf(v)
+    vThermal = np.sqrt(2.0*T0/(m/c**2))
+    vMax = 5.0 * vThermal
+    vSlice_pdf = 4*np.pi * vSlices**2 * pdf(vSlices)
+    #generate the CDF
+    v_cdf = np.cumsum(v_pdf[1:])*np.diff(v)
+    v_cdf = np.insert(v_cdf, 0, 0)
+    #CDF location of vSlices and bin boundaries
+    cdfBounds = np.linspace(0,v_cdf[-1],N_vSlice+1)
+    cdfSlices = np.diff(cdfBounds)/2.0 + cdfBounds[:-1]
+
+
+
+
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.05, x_title="Velocity [m/s]",)
+
+    #PDF Traces
+    fig.add_trace(go.Scatter(x=v, y=v_pdf,
+                        mode='lines',
+                        line={'width':6},
+                        name='Maxwellian PDF',
+                        showlegend=True),
+                        row=1, col=1)
+
+    fig.add_trace(go.Scatter(x=vSlices, y=vSlice_pdf,
+                        mode='markers',
+                        marker={'symbol':"circle", 'size':16, "color":"black"},
+                        name='PDF Slices'),
+                        row=1, col=1)
+
+    #CDF Traces
+    fig.add_trace(go.Scatter(x=v, y=v_cdf,
+                        mode='lines',
+                        line_dash="dashdot",
+                        line={'width':6, 'color':'purple'},
+                        name='Maxwellian CDF',
+                        showlegend=True),
+                        row=2, col=1)
+
+    fig.add_trace(go.Scatter(x=vSlices, y=cdfSlices,
+                        mode='markers',
+                        marker={'symbol':"cross", 'size':16, "color":"darkgreen"},
+                        name='CDF Slices'),
+                        row=2, col=1)
+
+    #Bin boundaries (vertical for PDF, horizontal for CDF)
+    for i in range(len(cdfBounds)):
+        #fig.add_vline(dict(x=vBounds[i], line_width=3, line_dash="dash", line_color="green"), row=2, col=1)
+        fig.add_shape(dict(type="line", x0=vBounds[i], x1=vBounds[i], y0=0, y1=max(v_pdf)*1.05, line_color="firebrick", line_width=3, line_dash="dot"), row=1, col=1)
+        fig.add_shape(dict(type="line", x0=0, x1=vMax, y0=cdfBounds[i], y1=cdfBounds[i], line_color="firebrick", line_width=3, line_dash="dot"), row=2, col=1)
+
+
+    fig.update_layout(
+        title="Velocity PDF vs. CDF",
+#        yaxis= dict(showticklabels=True),
+#        yaxis_range=[0,1.05*max(v_pdf)],
+#        xaxis_range=[0,vMax],
+        font=dict(size=18),
+        )
+
+    fig.update_yaxes(range=[-1e-6,max(v_pdf)*1.05], showticklabels=False, row=1,col=1)
+    fig.update_yaxes(range=[-0.05,1.05], showticklabels=True, row=2,col=1)
+
+    fig.update_layout(legend=dict(
+        yanchor="top",
+        y=0.98,
+        xanchor="right",
+        x=0.95,
+        font=dict(size=14),
+        ),
+        )
+    #fig.update_layout(showlegend=False)
 
     return fig

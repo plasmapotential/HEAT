@@ -126,6 +126,11 @@ class PFC:
         PFC.phiMin = phi.min()
         PFC.phiMax = phi.max()
 
+        #phi vector at each mesh center
+        self.phiVec = np.zeros((len(R), 3))
+        self.phiVec[:,0] = -np.cos(np.pi/2.0 - phi)
+        self.phiVec[:,1] = np.sin(np.pi/2.0 - phi)
+
         #get MHD objects corresponding to those timesteps
         self.EPs = [] #containers for multiple ep
         self.shadowMasks = [] #container for multiple shadowed_mask

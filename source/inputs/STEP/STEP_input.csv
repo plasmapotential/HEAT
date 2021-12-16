@@ -10,16 +10,16 @@ gridRes, standard
 shot, 000001
 tmin, 0
 tmax, 200
-nTrace, 30
+nTrace, 5
 dataPath, /home/tom/data/HEAT/
 plasma3Dmask, 0 #1=true, 0=false
 #==============================================================
 #                HF Variables
 #==============================================================
 hfMode, eich
-lqEich, 3.0
-S, 1.0
-Psol, 1
+lqEich, 10.0
+S, 10.0
+Psol, 10
 qBG, 0.0
 lqCN, 50.0
 lqCF, 5.0

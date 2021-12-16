@@ -1210,6 +1210,9 @@ class GUIobj():
                     PFC.BNorms = self.MHD.Bfield_pointcloud(PFC.ep, r, z, phi, powerDir=None, normal=True)
                     PFC.bdotn = np.multiply(PFC.norms, PFC.BNorms).sum(1)
                     PFC.powerDir = np.sign(PFC.bdotn)*np.sign(PFC.ep.g['Bt0'])*-1.0
+                    #powerDir can also be calculated using dot product of phi
+                    #PFC.bdotphi = np.multiply(PFC.BNorms, PFC.phiVec).sum(1)
+                    #PFC.powerDir = np.sign(PFC.bdotn)*np.sign(PFC.bdotphi)*-1.0
                     print('\n')
                     print("*"*20)
                     print('PFC Name: '+ PFC.name)
@@ -2622,5 +2625,22 @@ class GUIobj():
                                    self.GYRO.c,
                                    self.GYRO.T0[0],
                                    self.GYRO.vSlices[0,:],
+                                   self.GYRO.vBounds[0,:],
                                    self.GYRO.vScan[0])
+        return fig
+
+    def cdfSlicePlot(self):
+        """
+        return a vSlice figure with vSlices
+        """
+        #setup velocities and velocity phase angles
+        self.GYRO.setupVelocities(1)
+        fig = pgp.plotlyallSlicePlot(self.GYRO.mass_eV,
+                                     self.GYRO.c,
+                                     self.GYRO.T0[0],
+                                     self.GYRO.vSlices[0,:],
+                                     self.GYRO.vBounds[0,:],
+                                     self.GYRO.vScan[0],
+                                     self.GYRO.N_vSlice,
+                                     )
         return fig

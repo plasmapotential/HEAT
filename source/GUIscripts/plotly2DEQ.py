@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import logging
 
 
-def makePlotlyEQDiv(shot, time, MachFlag, ep, gfile=None, logFile=False):
+def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None, logFile=False):
     """
     returns a DASH object for use directly in dash app
     """
@@ -45,6 +45,13 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, gfile=None, logFile=False):
     else:
         rlim = ep.g['wall'][:,0]
         zlim = ep.g['wall'][:,1]
+
+# for aspect ratio
+#    if height==None:
+#        height=1000
+#    aspect = (z.max()-z.min()) / (r.max()-r.min())
+#    width = (1.0/aspect)*height
+
 
 
     levels = sorted(np.append([0.0,0.05,0.1,0.25,0.5,0.75,0.95, 1.0], np.linspace(0.99,psi.max(),15)))
@@ -155,6 +162,10 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, gfile=None, logFile=False):
         xaxis_title="R [m]",
         yaxis_title="Z [m]",
         autosize=True,
+        #for aspect ratio
+        #autosize=False,
+        #width=width*1.1,
+        #height=height,
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
         showlegend=False,
