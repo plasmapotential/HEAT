@@ -21,50 +21,37 @@ There were three objectives taken into consideration when designing HEAT:
 2) post-shot confirmation of heat loads and associated physics models
 3) design optimization
 
-The first HEAT paper has been accepted by the journal Fusion Science and Technology.  
-It will be published under open access.  After the publisher has finished edits,
-the DOI will be: 10.1080/15361055.2021.1951532 .  A link will be provided on this
-page when available.
+The first HEAT paper has been published by the journal Fusion Science and Technology.  The paper is available to the public under open access and can be found here: https://doi.org/10.1080/15361055.2021.1951532
 
 An appImage is available so that users can run HEAT on a linux machine with a single
 file.  appImage is available under 'releases' and has been tested on Ubuntu18.04, Ubuntu20.04,
 Centos7, Centos8.  The appImage release is still in beta version, so there are likely still bugs.
 Bugs can be submitted to this github repo.
 
-The author engineer is Tom Looby, a PhD candidate for Oak Ridge National Lab.
-This project is openSource under the MIT license.
+The author engineer is Tom Looby,  a Postdoctoral Researcher at Oak Ridge National Laboratory.  The project began during Tom's PhD.  This project is open source under the MIT license.
 
-Tom's email:  tlooby@vols.utk.edu
+Tom's email:  loobytp@ornl.gov
 
 ## Recent Updates
-The latest HEAT appImage is available under the "Releases" page.  This new version (v1.3.2)
-contains the following updates, bug fixes, and user feature request:
- - Acceleration structures for intersection checking
- - powerDir is now a mesh quantity
- - "all" is an option in PFC input file
+The latest HEAT appImage is available under the "Releases" page.  Some recent updates, bug fixes, and user feature requests include:
  - Ion gyro orbit heat loads
  - Ion gyro orbit trajectory tracing
  - Ion gyro orbit plots on Outputs tab
  - Multiple material selections for OpenFOAM
  - Updated OpenFOAM to v2106 from v1912
- - Timestamp checking for STP files (no more deleting STP and STL folders)
- - Multiple field line traces from user uploaded file
- - Fixed / cleaned input file system
- - Added table to Outputs tab with all user inputs
- - Bp and Bt plots on gFile Tools tab for users to check gFile scaling / directions
- - Added OpenFOAM write timestep controls
- - STL check for watertight meshes
- - Added backfaceMask, a shadowMask corresponding to backface culling
- - More that I am probably forgetting...
-
 
 ## Installation and Tutorials
 HEAT installation instructions and tutorials can be found here:
 https://heat-flux-engineering-analysis-toolkit-heat.readthedocs.io/en/latest/
 
-## Examples:
-Below are a few examples of HEAT output.  HEAT produces time varying 3D heat fluxes, and can easily create visualizations leveraging the power of ParaVIEW.  There is also a HEAT presentation from Aug 2020 available [here](https://docs.google.com/presentation/d/1aqJRaxt97P6R4Kqz7xyaoegtxssHQQPuwvJgVM4cCII/edit?usp=sharing).
+Note that the videos are from an earlier version of HEAT, and do not reflect the most recent appImage perfectly.  They will be updated in early 2022.
 
+## Examples:
+Below are a few examples of HEAT output.  HEAT produces time varying 3D heat fluxes, and can easily create visualizations leveraging the power of ParaVIEW.  
+
+There is a HEAT presentation from Aug 2020 available [here](https://docs.google.com/presentation/d/1aqJRaxt97P6R4Kqz7xyaoegtxssHQQPuwvJgVM4cCII/edit?usp=sharing)
+
+And a presentation from Dec 2021 available [here](https://docs.google.com/presentation/d/1BF2DvYyuPM_ATutrNDVy_r3_vKbj0a8H2UtDaoGvVg8/edit?usp=sharing)
 
 Example output for 30 degree section of the NSTX-U divertor with Equilibrium, Heat Flux, Temperature:
 ![Alt text](HF_T_EQ.gif "Example output of EQ, HF, T, video")
@@ -72,11 +59,14 @@ Example output for 30 degree section of the NSTX-U divertor with Equilibrium, He
 Example output of PFC tile temperature for various strike points sweep frequencies:
 ![Alt text](sideBySide.gif "Example output of EQ, HF, T, video")
 
-Example output for limited discharges:
-![Alt text](limiter.gif "Example output of EQ, HF, T, video")
+Example trace for ion gyro orbit tracing:
+![Alt text](gyroTrace.png "Example ion gyro orbit trajectory")
 
 Example output for ion gyro orbit tracing:
-![Alt text](gyroTrace.png "Example ion gyro orbit trajectory")
+![Alt text](gyroHF.png "Example ion gyro orbit output")
+
+Example output for limited discharges:
+![Alt text](limiter.gif "Example output of EQ, HF, T, video")
 
 HEAT Dash / plotly GUI:
 ![Alt text](gui1.png "HEAT DASH GUI")
