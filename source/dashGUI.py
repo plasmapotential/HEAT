@@ -29,66 +29,135 @@ rootDir, PVPath
 import os
 import sys
 import subprocess
-#If this code is being run inside an appImage, then we set our paths up accordingly
+##If this code is being run inside an appImage, then we set our paths up accordingly
+#try:
+#    AppImage = os.environ["APPIMAGE"]
+#    inAppImage = True
+#except:
+#    inAppImage = False
+
+#determine if this code is being run from appImage, docker, or local dir
 try:
-    AppImage = os.environ["APPIMAGE"]
-    inAppImage = True
+    runMode = os.environ["runMode"]
 except:
-    inAppImage = False
+    runMode = 'local'
 
 #default HEAT output directory
 homeDir = os.environ["HOME"]
 dataPath = homeDir + '/HEAT/data'
 
-if inAppImage == True:
+#=== Set up paths and environment vars
+### appImage
+if runMode == 'appImage':
     print("Running in appImage mode\n")
+
+    ### USER ROOT HEATDIR
     AppDir = os.environ["APPDIR"]
+    #Root HEAT source code directory
+    rootDir = AppDir + '/usr/src'
+
+    ### PARAVIEW
     #Include the location of the paraview binaries
     #Specifically we need the python libs and pvpython
     PVPath = os.environ["PVPath"]
     pvpythonCMD = os.environ["pvpythonCMD"]
-    #Root HEAT source code directory
-    rootDir = AppDir + '/usr/src'
+
+    ### OPENFOAM
     #openFOAM bashrc location v1912
     #OFbashrc = AppDir + '/usr/opt/openfoam/openfoam1912/etc/bashrc'
     #OFdir = AppDir+'/usr/opt/openfoam/openfoam1912'
     #openFOAM bashrc location v2106
-    OFbashrc = AppDir + '/usr/opt/openfoam/etc/bashrc'
-    OFdir = AppDir+'/usr/opt/openfoam'
-    #default freecad path
-    #FreeCADPath = AppDir + '/opt/freecad/squashfs-root/usr/lib'
-    FreeCADPath = AppDir + '/usr/lib/freecad-python3/lib'
-    #default source code location (EFIT class should be here)
-    EFITPath = AppDir + '/usr/src'
+    OFbashrc = AppDir + '/opt/openfoam/etc/bashrc'
+    OFdir = AppDir+'/opt/openfoam'
     #python site packages where PyFoam resides
     pyFoamPath = AppDir + '/lib/python3.8/site-packages'
 
+    ### FREECAD
+    #default freecad path
+    #FreeCADPath = AppDir + '/opt/freecad/squashfs-root/usr/lib'
+    FreeCADPath = AppDir + '/usr/lib/freecad-python3/lib'
+
+    ### ORNL EFIT MODULE
+    #default source code location (EFIT class should be here)
+    EFITPath = AppDir + '/usr/src'
+
+###  Docker container
+elif runMode == 'docker':
+    print("Running in Docker mode\n")
+
+    ### USER ROOT HEATDIR
+    #Root HEAT source code directory
+    rootDir = homeDir + '/source/HEAT'
+    #default AppDir for when running in docker mode
+    AppDir = os.environ["APPDIR"]
+
+    ### PARAVIEW
+    #Include the location of the paraview binaries.
+    #Specifically we need the python libs and pvpython
+    PVPath = homeDir + '/lib/python3.8/site-packages'
+    pvpythonCMD = homeDir + '/opt/paraview/bin/pvpython'
+
+    ### FREECAD
+    #docker ubuntu repo freecad path
+    FreeCADPath = '/usr/lib/freecad-python3/lib'
+
+    ### ORNL EFIT CLASS
+    #default source code location (EFIT class should be here)
+    EFITPath = homeDir + '/source'
+
+    ### OPENFOAM
+    #default openFOAM source path v1912
+    #OFbashrc = '/opt/openfoam/openfoam-OpenFOAM-v1912/etc/bashrc'
+    #default openFOAM source path v2106
+    OFbashrc = AppDir + '/opt/openfoam/etc/bashrc'
+    #python site packages where PyFoam resides
+    pyFoamPath = homeDir + '/.local/lib/python3.8/site-packages'
+    #pyFoam python scripts
+    pyFoamPath = '/'
+
+    #ENV VARS
+    #create necessary environment variables when outside appImage
+    os.environ["PVPath"] = PVPath
+    os.environ["pvpythonCMD"] = pvpythonCMD
+
 else:
     ###  If developing you will need to edit these manually!
-    print("Running in dev mode\n")
+    print("Running in local developer mode\n")
+    print("You will need a manually compiled environment")
+    ### USER ROOT HEATDIR
+    #Root HEAT source code directory
+    rootDir = homeDir + '/source/HEAT/github/source'
+
+    ### PARAVIEW
     #Include the location of the paraview binaries.
     #Specifically we need the python libs and pvpython
     PVPath = '/opt/paraview/ParaView-5.9.0-RC2-MPI-Linux-Python3.8-64bit/lib/python3.8/site-packages'
     pvpythonCMD = '/opt/paraview/ParaView-5.9.0-RC2-MPI-Linux-Python3.8-64bit/bin/pvpython'
-    #Root HEAT source code directory
-    rootDir = '/home/tom/source/HEAT/github/source'
-    #default freecad path
-#    FreeCADPath = '/opt/freecad/squashfs-root/usr/lib'
-    #FreeCADPath = '/usr/lib/freecad/lib'
+
+    ### FREECAD
+    #downloaded appImage freecad path
+    FreeCADPath = '/opt/freecad/squashfs-root/usr/lib'
     # for ubuntu repo build
     #FreeCADPath = '/usr/lib/freecad-python3/lib'
+    #FreeCADPath = '/usr/lib/freecad/lib'
     # for daily builds
-    FreeCADPath = '/usr/lib/freecad-daily-python3/lib'
+    #FreeCADPath = '/usr/lib/freecad-daily-python3/lib'
+
+    ### ORNL EFIT CLASS
     #default source code location (EFIT class should be here)
-    EFITPath = '/home/tom/source'
+    EFITPath = homeDir + '/source'
+
+    ### OPENFOAM
     #default openFOAM source path v1912
     #OFbashrc = '/opt/openfoam/openfoam-OpenFOAM-v1912/etc/bashrc'
     #default openFOAM source path v2106
     OFbashrc = '/opt/openfoam/OpenFOAM-v2106/etc/bashrc'
     #python site packages where PyFoam resides
-    pyFoamPath = '/home/tom/.local/lib/python3.8/site-packages'
+    pyFoamPath = homeDir + '/.local/lib/python3.8/site-packages'
     #pyFoam python scripts
     pyFoamPath = '/'
+
+    #ENV VARS
     #default AppDir for when running in dev mode
     AppDir = 'not in appImage mode'
     #create necessary environment variables when outside appImage
@@ -98,7 +167,7 @@ else:
 #default logfile location
 logFile = dataPath + '/HEATlog.txt'
 #list of tokamak flags that are options in HEAT (if adding new tokamak add flag to list)
-machineList = ['d3d','nstx','st40','step','sparc']
+machineList = ['d3d','nstx','st40','step','sparc','west','kstar']
 
 #===============================================================================
 
@@ -385,7 +454,9 @@ def buildMachineSelector():
                         {'label': 'DIII-D', 'value': 'd3d'},
                         {'label': 'ST40', 'value': 'st40'},
                         {'label': 'STEP', 'value': 'step'},
-                        {'label': 'SPARC', 'value': 'sparc'}
+                        {'label': 'SPARC', 'value': 'sparc'},
+                        {'label': 'WEST', 'value': 'west'},
+                        {'label': 'K-STAR', 'value': 'kstar'}
                         ],
                     value=None
                     ),

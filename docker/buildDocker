@@ -1,0 +1,61 @@
+#!/bin/bash
+#Engineer: T Looby
+#Date: 01/27/2022
+#Description:  creates docker container from ORNL dev machine
+
+# remove previous build
+rm -rf dockerDir
+
+# make new docker staging directory for docker context
+mkdir -p dockerDir/source/HEAT
+
+# copy HEAT into the AppDir
+cp -r github/source/*  dockerDir/source/HEAT/
+
+# copy ORNL EFIT module
+cp -r /home/tom/source/EFIT dockerDir/source/EFIT
+
+# copy MAFOT bins and libs
+mkdir -p dockerDir/opt/mafot/bin
+mkdir -p dockerDir/opt/mafot/lib
+cp -r /home/tom/source/HEAT/MAFOT/bin/* dockerDir/opt/mafot/bin/
+cp -r /home/tom/source/HEAT/MAFOT/lib/* dockerDir/opt/mafot/lib/
+
+#copy paraview bins and libs
+mkdir -p dockerDir/opt/paraview/bin
+mkdir -p dockerDir/opt/paraview/lib
+cp -rn /opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/bin/* dockerDir/opt/paraview/bin/
+cp -rn /opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/lib/* dockerDir/opt/paraview/lib/
+cp -rn /opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/plugins/* dockerDir/opt/paraview/lib/
+
+#copy v2106 openfoam
+# copy openFoam bins and libs
+mkdir -p dockerDir/opt/openfoam/lib
+cp -rn /opt/openfoam/OpenFOAM-v2106/etc dockerDir/opt/openfoam/etc
+cp -rn /opt/openfoam/OpenFOAM-v2106/bin dockerDir/opt/openfoam/bin
+cp -rn /opt/openfoam/OpenFOAM-v2106/platforms dockerDir/opt/openfoam/platforms
+# set up environment var files for openfoam inside container
+rm dockerDir/opt/openfoam/etc/bashrc
+mv dockerDir/opt/openfoam/etc/bashrc_HEAT dockerDir/opt/openfoam/etc/bashrc
+rm dockerDir/opt/openfoam/etc/config.sh/setup
+mv dockerDir/opt/openfoam/etc/config.sh/setupHEAT dockerDir/opt/openfoam/etc/config.sh/setup
+# copy swak4foam bins and libs (for groovyBC)
+mkdir -p dockerDir/opt/swak4foam/bin
+mkdir -p dockerDir/opt/swak4foam/lib
+cp -rn /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/bin/* dockerDir/opt/swak4foam/bin/
+cp -rn /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/lib/* dockerDir/opt/swak4foam/lib/
+
+#make file for docker build files
+mkdir -p dockerDir/dockerBuildFiles
+# copy python requirements file
+cp -n requirements.txt dockerDir/
+# copy dockerfile, recipes, bash scripts
+cp -n buildDocker dockerDir/
+cp -n docker-compose.yml dockerDir/
+cp -n Dockerfile dockerDir/
+
+#run docker build command
+echo "Building docker image..."
+cd dockerDir
+
+docker build -t plasmapotential/heat .

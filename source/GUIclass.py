@@ -169,6 +169,24 @@ class GUIobj():
             self.CAD.STLpath = self.dataPath + '/SPARC/STLs/'
             self.CAD.STPpath = self.dataPath + '/SPARC/STPs/'
 
+        elif self.MachFlag == 'west':
+            print('Loading WEST Input Filestream')
+            log.info('Loading WEST Input Filestream')
+            self.infile = self.rootDir + '/inputs/WEST/WEST_input.csv'
+            self.pfcFile = self.rootDir + '/inputs/WEST/WESTpfcs.csv'
+            self.OF.meshDir = self.dataPath + '/WEST/3Dmeshes'
+            self.CAD.STLpath = self.dataPath + '/WEST/STLs/'
+            self.CAD.STPpath = self.dataPath + '/WEST/STPs/'
+
+        elif self.MachFlag == 'kstar':
+            print('Loading K-STAR Input Filestream')
+            log.info('Loading K-STAR Input Filestream')
+            self.infile = self.rootDir + '/inputs/KSTAR/KSTAR_input.csv'
+            self.pfcFile = self.rootDir + '/inputs/KSTAR/KSTARpfcs.csv'
+            self.OF.meshDir = self.dataPath + '/KSTAR/3Dmeshes'
+            self.CAD.STLpath = self.dataPath + '/KSTAR/STLs/'
+            self.CAD.STPpath = self.dataPath + '/KSTAR/STPs/'
+
         else:
             print("INVALID MACHINE SELECTION!  Defaulting to NSTX-U!")
             log.info("INVALID MACHINE SELECTION!  Defaulting to NSTX-U!")
@@ -242,6 +260,16 @@ class GUIobj():
             self.CAD.assembly_mask = False
 
         elif self.MachFlag == 'sparc':
+            self.CAD.permute_mask = False
+            self.CAD.unitConvert = 1.0
+            self.CAD.assembly_mask = False
+
+        elif self.MachFlag == 'west':
+            self.CAD.permute_mask = False
+            self.CAD.unitConvert = 1.0
+            self.CAD.assembly_mask = False
+
+        elif self.MachFlag == 'kstar':
             self.CAD.permute_mask = False
             self.CAD.unitConvert = 1.0
             self.CAD.assembly_mask = False
@@ -2156,8 +2184,8 @@ class GUIobj():
             self.OF.caseDir = self.MHD.shotPath + '/openFoam/heatFoam'
         tools.makeDir(self.OF.caseDir)
         #set up directory for all .foam files
-        self.OF.allFoamsDir = self.OF.caseDir + '/allFoams'
-        tools.makeDir(self.OF.allFoamsDir)
+        #self.OF.allFoamsDir = self.OF.caseDir + '/allFoams'
+        #tools.makeDir(self.OF.allFoamsDir)
         #set up OF parts for each PFC part
         for PFC in self.PFCs:
             #check if PFC is a gyroSource Plane

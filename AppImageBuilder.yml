@@ -36,9 +36,9 @@ script:
 #  - cp -rn /opt/paraview/oldRevs/ParaView-5.8.1-MPI-Linux-Python3.7-64bit/bin/* AppDir/usr/bin/
 #  - cp -rn /opt/paraview/oldRevs/ParaView-5.8.1-MPI-Linux-Python3.7-64bit/lib/* AppDir/usr/lib/
 #  - cp -rn /opt/paraview/oldRevs/ParaView-5.8.1-MPI-Linux-Python3.7-64bit/plugins/* AppDir/usr/lib/
-  - cp -rn /opt/paraview/ParaView-5.9.0-RC2-MPI-Linux-Python3.8-64bit/bin/* AppDir/usr/bin/
-  - cp -rn /opt/paraview/ParaView-5.9.0-RC2-MPI-Linux-Python3.8-64bit/lib/* AppDir/usr/lib/
-  - cp -rn /opt/paraview/ParaView-5.9.0-RC2-MPI-Linux-Python3.8-64bit/plugins/* AppDir/usr/lib/
+  - cp -rn /opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/bin/* AppDir/usr/bin/
+  - cp -rn /opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/lib/* AppDir/usr/lib/
+  - cp -rn /opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/plugins/* AppDir/usr/lib/
 #  - cp -rn /opt/paraview/ParaView-5.9.0-RC2-MPI-Linux-Python3.8-64bit/bin AppDir/usr/opt/paraview/bin
 #  - cp -rn /opt/paraview/ParaView-5.9.0-RC2-MPI-Linux-Python3.8-64bit/lib AppDir/usr/opt/paraview/lib
 #  - cp -rn /opt/paraview/ParaView-5.9.0-RC2-MPI-Linux-Python3.8-64bit/plugins AppDir/usr/opt/paraview/plugins
@@ -60,18 +60,17 @@ script:
 
   #======v2106 openfoam
   # copy openFoam bins and libs
-  - mkdir -p AppDir/usr/opt/openfoam
-  - cp -rn /opt/openfoam/OpenFOAM-v2106/etc AppDir/usr/opt/openfoam/etc
-  - cp -rn /opt/openfoam/OpenFOAM-v2106/bin AppDir/usr/opt/openfoam/bin
-  - cp -rn /opt/openfoam/OpenFOAM-v2106/platforms AppDir/usr/opt/openfoam/platforms
+  - mkdir -p AppDir/opt/openfoam/lib
+  - cp -rn /opt/openfoam/OpenFOAM-v2106/etc AppDir/opt/openfoam/etc
+  - cp -rn /opt/openfoam/OpenFOAM-v2106/bin AppDir/opt/openfoam/bin
   # set up environment var files for openfoam inside appimage
-  - rm AppDir/usr/opt/openfoam/etc/bashrc
-  - mv AppDir/usr/opt/openfoam/etc/bashrc_HEAT AppDir/usr/opt/openfoam/etc/bashrc
-  - rm AppDir/usr/opt/openfoam/etc/config.sh/setup
-  - mv AppDir/usr/opt/openfoam/etc/config.sh/setupHEAT AppDir/usr/opt/openfoam/etc/config.sh/setup
+  - rm AppDir/opt/openfoam/etc/bashrc
+  - mv AppDir/opt/openfoam/etc/bashrc_HEAT AppDir/opt/openfoam/etc/bashrc
+  - rm AppDir/opt/openfoam/etc/config.sh/setup
+  - mv AppDir/opt/openfoam/etc/config.sh/setupHEAT AppDir/opt/openfoam/etc/config.sh/setup
   # copy swak4foam bins and libs (for groovyBC)
-  - cp -rn /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/bin/* AppDir/usr/opt/openfoam/platforms/linux64GccDPInt32Opt/bin
-  - cp -rn /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/lib/* AppDir/usr/opt/openfoam/platforms/linux64GccDPInt32Opt/lib
+  - cp -rn /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/bin/* AppDir/opt/openfoam/bin
+  - cp -rn /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/lib/* AppDir/opt/openfoam/lib
 
   # Make data dir
   - mkdir -p ${HOME}/HEAT/data
@@ -93,6 +92,14 @@ script:
   - rm /home/tom/source/HEAT/github/AppImageBuilder.yml
   - cp -r /home/tom/source/HEAT/AppImageBuilder.yml /home/tom/source/HEAT/github/AppImageBuilder.yml
 
+  # copy docker files
+  #- rm /home/tom/source/HEAT/github/docker-compose.yml
+  #- rm /home/tom/source/HEAT/github/Dockerfile
+  #- rm /home/tom/source/HEAT/github/buildDocker
+  #- cp -r /home/tom/source/HEAT/docker-compose.yml /home/tom/source/HEAT/github/docker-compose.yml
+  #- cp -r /home/tom/source/HEAT/Dockerfile /home/tom/source/HEAT/github/Dockerfile
+  #- cp -r /home/tom/source/HEAT/buildDocker /home/tom/source/HEAT/github/buildDocker
+
 AppDir:
   path: ./AppDir
 
@@ -100,7 +107,7 @@ AppDir:
     id: HEATAppimage
     name: HEAT_AppImage
     icon: flame
-    version: v1.4.3
+    version: v1.4.4
 #    # Set the python executable as entry point
 #    exec: usr/bin/python3
 #    # Set the application main script path as argument. Use '$@' to forward CLI parameters
@@ -192,7 +199,7 @@ AppDir:
       #for OpenFOAM v1912
       #PATH: '${APPDIR}/bin:${APPDIR}/usr/bin:${APPDIR}/usr/opt/openfoam/openfoam1912/platforms/linux64GccDPInt32Opt/bin:${APPDIR}/usr/opt/openfoam/openfoam1912/bin:${PATH}'
       #for OpenFOAM v2106
-      PATH: '${APPDIR}/bin:${APPDIR}/usr/bin:${APPDIR}/usr/opt/openfoam/platforms/linux64GccDPInt32Opt/bin:${APPDIR}/usr/opt/openfoam/bin:${PATH}'
+      PATH: '${APPDIR}/bin:${APPDIR}/usr/bin:${APPDIR}/usr/opt/openfoam/bin:${PATH}'
       LD_LIBRARY_PATH: '${APPDIR}/lib:${APPDIR}/lib/x86_64-linux-gnu:${APPDIR}/usr/lib:${APPDIR}/opt/libc/lib:${APPDIR}/opt/libc/lib/x86_64-linux-gnu:${APPDIR}/usr/lib/x86_64-linux-gnu:${APPDIR}/lib:${APPDIR}/usr/lib/x86_64-linux-gnu/netgen'
       # Set python home
       # See https://docs.python.org/3/using/cmdline.html#envvar-PYTHONHOME
@@ -204,8 +211,8 @@ AppDir:
       PYTHONPATH: '${PYTHONPATH}:${APPDIR}/lib/python3.8:${APPDIR}/lib/python3.8/site-packages:${APPDIR}/lib/python3.8/dist-packages:${APPDIR}/usr/local/mdsplus/python:${APPDIR}/usr/lib/python3/dist-packages/paraview'
 
       #PYTHONPATH: '${APPDIR}/lib/python3.7:${APPDIR}/lib/python3.7/site-packages:${APPDIR}/lib/python3.7/dist-packages:${APPDIR}/usr/local/mdsplus/python:${APPDIR}/usr/lib/python3/dist-packages/paraview'
-      # Set inAppImage environment variable
-      inAppImage: 'True'
+      # Set runMode to appImage
+      runMode: 'appImage'
       # Set paraview env var
       pvpythonCMD: '${APPDIR}/usr/bin/pvpython'
       PVPath: '${APPDIR}/usr/lib/python3/dist-packages/paraview'

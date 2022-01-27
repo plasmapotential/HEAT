@@ -308,9 +308,10 @@ class CAD:
         """
         Loads CAD STEP (ISO 10303-21) file into object
         """
+        print("Loading STEP file...")
+        log.info("Loading STEP file...")
         self.CAD = Import.open(self.STPfile)
         self.CADdoc = FreeCAD.ActiveDocument
-
         #Coordinate permutation if necessary
         if self.permute_mask=='True' or self.permute_mask == True:
             self.permuteSTEP()

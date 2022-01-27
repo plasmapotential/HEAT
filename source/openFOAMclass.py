@@ -235,12 +235,20 @@ class OpenFOAM():
 
         """
         #check if we are in appImage mode to get correct bash location
-        try:
-            AppImage = os.environ["APPIMAGE"]
-            shebang = '#!' + os.environ["APPDIR"] + '/bin/bash'
-            AppDir = os.environ["APPDIR"]
-            inAppImage = True
 
+        try:
+            runMode = os.environ["runMode"]
+            if runMode == 'appImage':
+                shebang = '#!' + os.environ["APPDIR"] + '/bin/bash'
+                AppDir = os.environ["APPDIR"]
+                inAppImage = True
+            elif runMode == 'docker':
+                shebang = '#!/bin/bash'
+                AppDir = os.environ["APPDIR"]
+                inAppImage = False
+            else:
+                shebang = '#!/bin/bash'
+                inAppImage = False
         except:
             inAppImage = False
             shebang = '#!/bin/bash'
@@ -384,16 +392,20 @@ class OpenFOAM():
         from subprocess import run
         #Copy the current environment
         current_env = os.environ.copy()
+        #point to correct path for bash (varies depending upon runMode)
         try:
-            appDir = os.environ["APPDIR"]
-            inAppImage = True
+            runMode = os.environ["runMode"]
+            if runMode == 'appImage':
+                appDir = os.environ["APPDIR"]
+                bashExec = appDir+'/bin/bash'
+            else:
+                bashExec = '/bin/bash'
         except:
-            appDir = ''
-            inAppImage = False
+            bashExec = '/bin/bash'
         #run blockMesh, snappyHexMesh
         meshCMD = self.partDir+self.cmd3Dmesh
         try:
-            p = run([meshCMD], env=current_env, cwd=self.partDir, shell=True, executable=appDir+'/bin/bash')
+            p = run([meshCMD], env=current_env, cwd=self.partDir, shell=True, executable=bashExec)
             retcode = p.returncode
             if retcode < 0:
                 print("OF mesh child was terminated by signal", -retcode, file=sys.stderr)
@@ -432,17 +444,21 @@ class OpenFOAM():
         from subprocess import run
         #Copy the current environment
         current_env = os.environ.copy()
+        #point to correct path for bash (varies depending upon runMode)
         try:
-            appDir = os.environ["APPDIR"]
-            inAppImage = True
+            runMode = os.environ["runMode"]
+            if runMode == 'appImage':
+                appDir = os.environ["APPDIR"]
+                bashExec = appDir+'/bin/bash'
+            else:
+                bashExec = '/bin/bash'
         except:
-            appDir = ''
-            inAppImage = False
+            bashExec = '/bin/bash'
 
         #run topoSet, createPatch, heatFoam, paraFoam -touchAll
         thermalCMD = self.partDir+self.cmdThermal
         try:
-            p = run([thermalCMD], env=current_env, cwd=self.partDir, shell=True, executable=appDir+'/bin/bash')
+            p = run([thermalCMD], env=current_env, cwd=self.partDir, shell=True, executable=bashExec)
             retcode = p.returncode
             if retcode < 0:
                 print("thermal analysis child was terminated by signal", -retcode, file=sys.stderr)
