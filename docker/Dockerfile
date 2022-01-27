@@ -1,5 +1,12 @@
-#HEAT Dockerfile
-#to build docker image, run this command in HEAT rootDir:
+#Dockerfile
+#Engineer: T Looby
+#Date: 01/27/2022
+#Description:  Dockerfile for building HEAT docker image
+#
+#this script should only be run on ORNL dev machine
+#script is not run directly, but is used when buildDocker bash
+#script is run.  buildDocker script calls this file using syntax
+#similar to this:
 # docker build -t plasmapotential/heat -f ./Dockerfile ./github/source
 
 # start from base
@@ -43,4 +50,3 @@ EXPOSE 8050
 
 # start app
 CMD [ "python3", "./source/HEAT/dashGUI.py", "0.0.0.0", "8050" ]
-#CMD [ "/bin/bash" ]
