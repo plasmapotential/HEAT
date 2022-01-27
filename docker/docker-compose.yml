@@ -12,29 +12,32 @@ services:
     image: "plasmapotential/heat"
     ports:
       - "8050:8050"
-    volumes:
-      #change volumes below to match your development (host) machine
-      #format is: /host/path:/container/path
-      #user should not edit container paths
-      #
-      # HEAT data directory on this machine (if exists)
-      - /home/tom/HEAT:/root/HEAT
-      # HEAT source code from github
-      - /home/tom/source/HEAT/github/source:/root/source/HEAT
-      # ORNL EFIT class from github (if you have access)
-      - /home/tom/source/EFIT:/root/EFIT
-      # MAFOT bins and libs
-      - /home/tom/source/HEAT/MAFOT/bin:/root/opt/mafot/bin
-      - /home/tom/source/HEAT/MAFOT/lib:/root/opt/mafot/lib
-      # openFOAM bins and libs
-      - /opt/openfoam/OpenFOAM-v2106/bin:/root/opt/openfoam/bin
-      - /opt/openfoam/OpenFOAM-v2106/lib:/root/opt/openfoam/lib
-      #swak4foam bins / libs
-      - /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/bin:/root/opt/swak4foam/bin
-      - /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/lib:/root/opt/swak4foam/lib
+#    volumes:
+#      #change volumes below to match your development (host) machine
+#      #format is: /host/path:/container/path
+#      #user should not edit container paths
+#      #
+#      # HEAT data directory on this machine (if exists)
+#      - /home/tom/HEAT:/root/HEAT
+#      # HEAT source code from github
+#      - /home/tom/source/HEAT/github/source:/root/source/HEAT
+#      # ORNL EFIT class from github (if you have access)
+#      - /home/tom/source/EFIT:/root/EFIT
+#      # MAFOT bins and libs
+#      - /home/tom/source/HEAT/MAFOT/bin:/root/opt/mafot/bin
+#      - /home/tom/source/HEAT/MAFOT/lib:/root/opt/mafot/lib
+#      # openFOAM bins and libs
+#      - /opt/openfoam/OpenFOAM-v2106/bin:/root/opt/openfoam/bin
+#      - /opt/openfoam/OpenFOAM-v2106/lib:/root/opt/openfoam/lib
+#      #swak4foam bins / libs
+#      - /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/bin:/root/opt/swak4foam/bin
+#      - /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/lib:/root/opt/swak4foam/lib
     stdin_open: true # docker run -i
     tty: true        # docker run -t
-    #note, to run an interactive shell use this command:
-    # docker-compose run HEAT /bin/bash
-    # to change image tag name:
-    # docker tag plasmapotential/heat:latest plasmapotential/heat:<tag>
+
+#NOTES:
+#to run an interactive shell use this command:
+# docker-compose run HEAT /bin/bash
+#
+# to change image tag name:
+# docker tag plasmapotential/heat:latest plasmapotential/heat:<tag>

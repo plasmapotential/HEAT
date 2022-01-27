@@ -1,7 +1,8 @@
 #!/bin/bash
 #Engineer: T Looby
 #Date: 01/27/2022
-#Description:  creates docker container from ORNL dev machine
+#Description:  prepares docker context, then creates docker container
+#              from ORNL dev machine
 
 # remove previous build
 rm -rf dockerDir
@@ -54,8 +55,24 @@ cp -n buildDocker dockerDir/
 cp -n docker-compose.yml dockerDir/
 cp -n Dockerfile dockerDir/
 
+#copy docker files to HEAT rootDir for uploading to github
+#this clobbers old files
+# copy python requirements file
+cp requirements.txt /home/tom/source/HEAT/github/docker/
+# copy dockerfile, recipes, bash scripts
+cp buildDocker /home/tom/source/HEAT/github/docker/
+cp docker-compose.yml /home/tom/source/HEAT/github/docker/
+cp Dockerfile /home/tom/source/HEAT/github/docker/
+
 #run docker build command
 echo "Building docker image..."
 cd dockerDir
 
 docker build -t plasmapotential/heat .
+
+#after creating image, tag it using the following command
+# docker tag plasmapotential/heat:latest plasmapotential/heat:<tag>
+#
+#upload to dockerhub via the following command
+# docker push plasmapotential/heat:<tag>
+#
