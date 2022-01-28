@@ -12,13 +12,13 @@ services:
     image: "plasmapotential/heat"
     ports:
       - "8050:8050"
-#    volumes:
-#      #change volumes below to match your development (host) machine
-#      #format is: /host/path:/container/path
-#      #user should not edit container paths
-#      #
-#      # HEAT data directory on this machine (if exists)
-#      - /home/tom/HEAT:/root/HEAT
+    volumes:
+      #change volumes below to match your development (host) machine
+      #format is: /host/path:/container/path
+      #user should not edit container paths
+      #
+      # HEAT data directory on this machine (if exists)
+      - ${HOME}:/root/HEAT
 #      # HEAT source code from github
 #      - /home/tom/source/HEAT/github/source:/root/source/HEAT
 #      # ORNL EFIT class from github (if you have access)
