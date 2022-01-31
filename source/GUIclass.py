@@ -88,10 +88,12 @@ class GUIobj():
             print("Directory " , tempDir ,  " Created ")
         return
 
-    def machineSelect(self, MachFlag):
+    def machineSelect(self, MachFlag, machineList):
         """
         Select a machine and set the necessary paths
         """
+        self.machineList = machineList
+        self.MHD.machineList = machineList
         self.MachFlag = MachFlag
         self.MHD.MachFlag = MachFlag
         self.setInitialFiles()

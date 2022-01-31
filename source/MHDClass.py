@@ -360,8 +360,6 @@ class MHD:
                 f.write('useIcoil(0=no,1=yes)=\t{:d}\n'.format(self.useIcoil))
             elif(self.MachFlag == 'nstx'):
                 f.write('useECcoil(0=no,1=yes)=\t{:d}\n'.format(self.useECcoil))
-            elif(self.MachFlag in ['st40', 'step', 'sparc']):
-                f.write('useECcoil(0=no,1=yes)=\t{:d}\n'.format(self.useECcoil))
             elif(self.MachFlag == 'mast'):
                 f.write('useCcoil(0=no,1=yes)=\t{:d}\n'.format(self.useCcoil))
                 f.write('useIcoil(0=no,1=yes)=\t{:d}\n'.format(self.useIcoil))
@@ -369,10 +367,11 @@ class MHD:
                 f.write('useFcoil(0=no,1=yes)=\t{:d}\n'.format(self.useFcoil))
                 f.write('useCcoil(0=no,1=yes)=\t{:d}\n'.format(self.useCcoil))
                 f.write('useIcoil(0=no,1=yes)=\t{:d}\n'.format(self.useIcoil))
+            else:
+                f.write('useECcoil(0=no,1=yes)=\t{:d}\n'.format(self.useECcoil))
 
-            if self.MachFlag in ['iter', 'nstx', 'mast', 'st40', 'd3d', 'step', 'sparc']:
+            if self.MachFlag in self.machineList:
                 f.write('useFilament(0=no)=\t{:d}\n'.format(self.useFilament))
-            if self.MachFlag in ['iter', 'nstx', 'st40', 'd3d', 'step', 'sparc']:
                 f.write('useTe_profile(0=no)=	{:d}\n'.format(self.useTe_profile))
 
             f.write('ParticleDirection(1=co-pass,-1=ctr-pass,0=field-lines)=\t{:d}\n'
@@ -385,7 +384,6 @@ class MHD:
 
             if self.MachFlag in ['dt']:
                 f.write('useFilament(0=no)=\t{:d}\n'.format(self.useFilament))
-
                 f.write('useBusError(0=no,1=yes)=\t{:d}\n'.format(self.useBus))
                 f.write('useBcoilError(0=no,1=yes)=\t{:d}\n'.format(self.useBcoil))
 

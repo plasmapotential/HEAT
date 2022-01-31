@@ -131,8 +131,8 @@ else:
     ### PARAVIEW
     #Include the location of the paraview binaries.
     #Specifically we need the python libs and pvpython
-    PVPath = '/opt/paraview/ParaView-5.9.0-RC2-MPI-Linux-Python3.8-64bit/lib/python3.8/site-packages'
-    pvpythonCMD = '/opt/paraview/ParaView-5.9.0-RC2-MPI-Linux-Python3.8-64bit/bin/pvpython'
+    PVPath = '/opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/lib/python3.8/site-packages'
+    pvpythonCMD = '/opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/bin/pvpython'
 
     ### FREECAD
     #downloaded appImage freecad path
@@ -430,7 +430,7 @@ def buildDefaultPaths():
             dcc.Input(id="dataPath", className="textInput", value=dataPath),
             html.Label("OpenFOAM bashrc file", className="textInputHidden"),
             dcc.Input(id="OFbashrc", className="textInputHidden", value=OFbashrc),
-            html.Label("AppImage Mount Directory: "+AppDir)
+            html.Label("Image Mount Directory: "+AppDir)
         ],
         className="colBox"
     )
@@ -505,7 +505,7 @@ def machineSelector(MachFlag):
     if MachFlag == None:
         machFlagChosen = "Select a machine"
         return [html.Label(machFlagChosen, style={'color':'#fc0313'})]
-    gui.machineSelect(MachFlag)
+    gui.machineSelect(MachFlag, machineList)
     machFlagChosen = "Selected "+MachFlag
     return [html.Label(machFlagChosen, style={'color':'#f5d142'})]
 
