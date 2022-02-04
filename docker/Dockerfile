@@ -49,4 +49,4 @@ RUN python3 -m pip install -r requirements.txt
 EXPOSE 8050
 
 # start app
-CMD [ "python3", "./source/HEAT/dashGUI.py", "0.0.0.0", "8050" ]
+CMD [ "python3", "./source/HEAT/launchHEAT.py", "--a", "0.0.0.0", "--p", "8050", "--m", "g" ]
