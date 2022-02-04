@@ -177,7 +177,14 @@ class CAD:
         for idx,partnum in enumerate(self.ROI):
             if resolution == None:
                 resolution = float(self.ROIresolutions[idx])
-            name = self.STLpath + partnum + "___{:.2f}mm.stl".format(resolution)
+
+            #standard meshing algorithm
+            if type(resolution) == str:
+                name = self.STLpath + partnum + "___"+resolution+".stl".format(resolution)
+            #mefisto meshing algorithm
+            else:
+                name = self.STLpath + partnum + "___{:.2f}mm.stl".format(resolution)
+
             if os.path.exists(name) and self.overWriteMask == False:
                 print("Mesh exists, loading...")
                 self.loadROIMesh(name,idx)
@@ -196,7 +203,14 @@ class CAD:
         """
         if resolution == None:  resolution=self.gridRes
         for partnum in self.intersectList:
-            name = self.STLpath + partnum + "___" + resolution +"mm.stl"
+
+            #standard meshing algorithm
+            if type(resolution) == str:
+                name = self.STLpath + partnum + "___"+resolution+".stl".format(resolution)
+            #mefisto meshing algorithm
+            else:
+                name = self.STLpath + partnum + "___{:.2f}mm.stl".format(resolution)
+
             if os.path.exists(name) and self.overWriteMask == False:
                 print("Mesh exists, loading...")
                 self.loadIntersectMesh(name)
@@ -473,7 +487,7 @@ class CAD:
 
             #standard meshing algorithm
             if type(resolution[i]) == str:
-                filename = path + label[i] + "___"+resolution[i]+"mm.stl"
+                filename = path + label[i] + "___"+resolution[i]+".stl"
             #mefisto meshing algorithm
             else:
                 filename = path + label[i] + "___{:.2f}mm.stl".format(float(resolution[i]))

@@ -684,7 +684,7 @@ class MHD:
                 shutil.rmtree(timeDir)
                 os.mkdir(timeDir)
             except OSError as e:
-                print ("Error: %s - %s." % (e.filename, e.strerror))
+                print ("Timedir removal error: %s - %s." % (e.filename, e.strerror))
                 return
 
         shutil.copyfile(oldgfile, newgfile)

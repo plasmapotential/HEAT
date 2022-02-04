@@ -301,10 +301,12 @@ class engineObj():
         else:
             self.MHD.shotPath = self.dataPath + self.MHD.MachFlag +"_{:06d}".format(self.MHD.shot)
 
+        print("TEST1")
         self.MHD.get_mhd_inputs('nstx',self.MHD.gFileList)
-
+        print("TEST2")
 #        self.t = self.MHD.timesteps[0]
         self.MHD.makeEFITobjects()
+        print("TEST3")
         self.NCPUs = multiprocessing.cpu_count() - 2 #reserve 2 cores for overhead
         self.MHD.psiSepLimiter = None
 

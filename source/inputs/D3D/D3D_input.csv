@@ -17,41 +17,48 @@ plasma3Dmask, 0 #1=true, 0=false
 #                HF Variables
 #==============================================================
 hfMode, eich
-lqEich, 3.0
-S, 1.0
-Psol, 7
-qBG, 0.0
 lqCN, 3.0
 lqCF, 5.0
 lqPN, 1.0
 lqPF, 1.0
+lqCNmode, eich
+lqCFmode, None
+lqPNmode, None
+lqPFmode, None
+S, 1.0
+SMode, makowski
 fracCN, 0.6
 fracCF, 0.4
 fracPN, 0.1
 fracPF, 0.0
-fracUI,0.3
-fracUO,0.7
-fracLI,0.0
-fracLO,0.0
+fracUI,0.0
+fracUO,0.0
+fracLI,0.3
+fracLO,0.7
+Psol, 10
+qBG, 0.0
+fG, 0.6
 #==============================================================
-#                Ion Gyro Orbit Variables
+#                Ion Gyro Orbit HF Variables
 #==============================================================
-N_gyroSteps, 6
+N_gyroSteps, 5
 gyroDeg, 10
-gyroT_eV, 10
+gyroT_eV, 100
 N_vSlice, 1
 N_vPhase, 1
 N_gyroPhase, 1
 ionMassAMU, 2.014
 vMode, single
-ionFrac, 0.5
+ionFrac,0.5
+gyroSources, gyroSourcePlane
 #==============================================================
 #                OpenFOAM Variables
 #==============================================================
-OFtMin, 0.0
-OFtMax, 200.0
-deltaT, 0.05
-writeDeltaT, 0.05
+OFtMin, 0
+OFtMax, 20
+deltaT, 0.001
+writeDeltaT, 0.001
 STLscale, 1.0
 meshMinLevel, 1
 meshMaxLevel, 2
+material, SGL
