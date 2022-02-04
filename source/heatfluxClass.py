@@ -46,22 +46,28 @@ class heatFlux:
 
 
         self.allowed_vars = [
-                            'lqEich',
-                            'S',
-                            'Psol',
-                            'qBG',
-                            'lqPN',
-                            'lqPF',
+                            'hfMode',
                             'lqCN',
                             'lqCF',
-                            'fracPN',
-                            'fracPF',
+                            'lqPN',
+                            'lqPF',
+                            'lqCNmode',
+                            'lqCFmode',
+                            'lqPNmode',
+                            'lqPFmode',
+                            'S',
+                            'SMode',
                             'fracCN',
                             'fracCF',
+                            'fracPN',
+                            'fracPF',
                             'fracUI',
                             'fracUO',
                             'fracLI',
                             'fracLO',
+                            'Psol',
+                            'qBG',
+                            'fG'
                             ]
         return
 
@@ -69,7 +75,7 @@ class heatFlux:
         """
         Set variable types for the stuff that isnt a string from the input file
         """
-        self.lqEich = float(self.lqEich)
+        self.lqEich = float(self.lqCN)
         self.S = float(self.S)
         self.Psol = float(self.Psol)
         self.qBG = float(self.qBG)
@@ -87,6 +93,21 @@ class heatFlux:
         self.fracLO = float(self.fracLO)
         return
 
+
+    def getRegressionParams(self, ep):
+        """
+        loads regression parameters into variable (ie lqCN, S)
+
+        requires an equilibrium object, ep
+        """
+        if self.lqCNmode == 'eich':
+            self.getEichFromEQ(ep)
+            self.lqCN = self.lqEich
+
+        if self.SMode == 'makowski':
+            self.getSpreadingFromEQ(ep, self.fG)
+        return
+
     def getHFtableData(self, ep=None):
         """
         create a dictionary of HF parameters that are displayed in the DASH gui
@@ -99,7 +120,6 @@ class heatFlux:
         if self.hfMode == 'limiter':
             HFdict['Heat Flux Mode'] = 'Limiter'
             if self.lqCNmode == 'eich':
-                self.getEichFromEQ(ep)
                 HFdict["\u03BB Near Mode"] = 'Eich Regression #15'
                 HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqEich
             else:
@@ -112,6 +132,12 @@ class heatFlux:
 
         elif self.hfMode == 'multiExp':
             HFdict['Heat Flux Mode'] = 'Multiple (4) Exponentials'
+            if self.lqCNmode == 'eich':
+                HFdict["\u03BB Near Mode"] = 'Eich Regression #15'
+                HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqEich
+            else:
+                HFdict["\u03BB Near Mode"] = 'User Defined'
+                HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqCN
             HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqCN
             HFdict["Common Region Far Heat Flux Width (\u03BBq CF) [mm]"] = self.lqCF
             HFdict["Private Region Near Heat Flux Width (\u03BBq PN) [mm]"] = self.lqPN
@@ -124,14 +150,12 @@ class heatFlux:
         elif self.hfMode == 'eich':
             HFdict['Heat Flux Mode'] = 'Gaussian Spreading'
             if self.lqCNmode == 'eich':
-                self.getEichFromEQ(ep)
                 HFdict["\u03BB Mode"] = 'Eich Regression #15'
             else:
                 HFdict["\u03BB Mode"] = 'User Defined'
             HFdict["Heat Flux Width (\u03BBq) [mm]"] = self.lqEich
 
             if self.SMode == 'makowski':
-                self.getSpreadingFromEQ(ep, self.fG)
                 HFdict['Greenwald Density Fraction'] = self.fG
                 HFdict['Spreading (S) Mode'] = 'Makowski Figure 6'
             else:
@@ -371,7 +395,7 @@ class heatFlux:
             self.getHoraceckFromEQ(PFC.ep)
 
         #Multiple exponential profile (Brunner Profile)
-        if self.mode=='multiExp' or self.mode=='limiter':
+        if self.hfMode=='multiExp' or self.hfMode=='limiter':
             q[use] = self.multiExp_profile_fluxspace(PFC, R_omp, Bp_omp, psi, self.mode)
 
         #Eich Profile

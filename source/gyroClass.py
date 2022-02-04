@@ -47,7 +47,8 @@ class GYRO:
                     'N_gyroPhase',
                     'ionMassAMU',
                     'vMode',
-                    'ionFrac'
+                    'ionFrac',
+                    'gyroSources',
                             ]
         return
 

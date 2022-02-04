@@ -42,6 +42,7 @@ class OpenFOAM():
                              'STLscale',
                              'meshMinLevel',
                              'meshMaxLevel',
+                             'material'
                              ]
         return
 
@@ -295,19 +296,19 @@ class OpenFOAM():
             #source OF bashrc if in dev mode (already sourced in appImage)
             if inAppImage == False:
                 f.write(self.cmdSourceOF + '\n')
-            f.write('blockMesh > ' + logFile + '\n')
+            f.write('blockMesh | tee -a ' + logFile + '\n')
             #single core meshing
             if parallel==False:
-                f.write('snappyHexMesh -overwrite > '+logFile+ '\n')
+                f.write('snappyHexMesh -overwrite | tee -a '+logFile+ '\n')
             #parallel meshing
             else:
                 #Run snappyHexMesh across multiple processors
                 #this feature should be added in one day...sigh...for now its a placeholder
                 #you need to download libscotch-6.0 from ubuntu repo,
                 #then build scotchDecomp from source from src/parallel/decompose/scotchDecomp
-                f.write('decomposePar > ' + logFile + '\n')
-                f.write('mpirun --use-hwthread-cpus -np '+str(self.NCPU)+' snappyHexMesh -parallel -overwrite > '+logFile+ '\n')
-                f.write('reconstructParMesh -mergeTol 1e-6 -latestTime -constant > '+logFile+ '\n')
+                f.write('decomposePar | tee -a ' + logFile + '\n')
+                f.write('mpirun --use-hwthread-cpus -np '+str(self.NCPU)+' snappyHexMesh -parallel -overwrite | tee -a '+logFile+ '\n')
+                f.write('reconstructParMesh -mergeTol 1e-6 -latestTime -constant | tee -a '+logFile+ '\n')
 
         os.chmod(file, 0o744)
 
@@ -319,9 +320,9 @@ class OpenFOAM():
             #source OF bashrc if in dev mode (already sourced in appImage)
             if inAppImage == False:
                 f.write(self.cmdSourceOF + '\n')
-            f.write('topoSet > '+logFile+ '\n')
-            f.write('createPatch -overwrite > '+logFile+ '\n')
-            f.write('heatFoam > '+logFile+ '\n')
+            f.write('topoSet | tee -a '+logFile+ '\n')
+            f.write('createPatch -overwrite | tee -a '+logFile+ '\n')
+            f.write('heatFoam | tee -a '+logFile+ '\n')
             #f.write('paraFoam -touchAll\n')
             #f.write('touch '+ self.partName +'.foam\n')
         os.chmod(file, 0o775)
@@ -333,9 +334,9 @@ class OpenFOAM():
             #source OF bashrc if in dev mode (already sourced in appImage)
             if inAppImage == False:
                 f.write(self.cmdSourceOF + '\n')
-            f.write('topoSet > '+logFile+ '\n')
-            f.write('createPatch -overwrite > '+logFile+ '\n')
-            f.write('postProcess -func "probes" > '+logFile+ '\n')
+            f.write('topoSet | tee -a '+logFile+ '\n')
+            f.write('createPatch -overwrite | tee -a '+logFile+ '\n')
+            f.write('postProcess -func "probes" | tee -a '+logFile+ '\n')
         os.chmod(file, 0o744)
         return
 

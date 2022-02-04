@@ -114,6 +114,7 @@ class MHD:
                     'shot',
                     'tmin',
                     'tmax',
+                    'nTrace'
                     ]
         #floats = [
         #         'MapDirection',
@@ -130,10 +131,9 @@ class MHD:
 
         return
 
-    # Pull fresh gfile data from MDS+ tree, create directory tree in the process
     def get_mhd_inputs(self,machine='nstx',gFileList=None):
         """
-        get gfile from mds+ tree if gfile is None, otherwise use file
+        get gfile from mds+ tree if gfileList is None, otherwise use file
         """
         #load gfile from MDS+
         if gFileList is None:
@@ -145,7 +145,7 @@ class MHD:
                                                                 self.tmax,
                                                                 self.shotPath,
                                                                 clobberwait=False)
-        #load from file uploaded by user in GUI
+        #load from file in GUI or TUI
         else:
             self.timesteps = []
             for idx,gfile in enumerate(gFileList):
@@ -699,6 +699,8 @@ class MHD:
 
         the self.tmpDir directory is accessible to the GUI users for uploading
         and downloading
+
+        this function is called from GUI because objects are json / base64
         """
         import base64
         for i,gfile in enumerate(gFileList):

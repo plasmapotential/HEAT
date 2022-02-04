@@ -470,7 +470,13 @@ class CAD:
         for i in range(len(mesh)):
             # ___ (3 underdashes) is the str we use to separate mesh name from resolution
             # this MATTERS when we read back in a mesh (see self.loadROIMesh and self.loadIntersectMesh)
-            filename = path + label[i] + "___" + str(resolution[i]) +"mm.stl"
+
+            #standard meshing algorithm
+            if type(resolution[i]) == str:
+                filename = path + label[i] + "___"+resolution[i]+"mm.stl"
+            #mefisto meshing algorithm
+            else:
+                filename = path + label[i] + "___{:.2f}mm.stl".format(float(resolution[i]))
             print("Writing mesh file: " + filename)
             log.info("Writing mesh file: " + filename)
             if os.path.exists(filename) and self.overWriteMask == False:

@@ -17,14 +17,15 @@ plasma3Dmask, 0 #1=true, 0=false
 #                Optical HF Variables
 #==============================================================
 hfMode, eich
-lqEich, 3.0
-S, 1.0
-Psol, 10
-qBG, 0.0
 lqCN, 3.0
 lqCF, 5.0
 lqPN, 1.0
 lqPF, 1.0
+lqCNmode, eich
+lqCFmode, None
+lqPNmode, None
+lqPFmode, None
+SMode, makowski
 fracCN, 0.6
 fracCF, 0.4
 fracPN, 0.1
@@ -33,6 +34,10 @@ fracUI,0.0
 fracUO,0.0
 fracLI,0.3
 fracLO,0.7
+S, 1.0
+Psol, 10
+qBG, 0.0
+fG, 0.6
 #==============================================================
 #                Ion Gyro Orbit HF Variables
 #==============================================================

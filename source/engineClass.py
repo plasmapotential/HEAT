@@ -1,12 +1,12 @@
-#GUIclass.py
-#Description:   GUI Module
+#engineClass.py
+#Description:   HEAT engine
 #Engineer:      T Looby
-#Date:          20200115
+#Date:          20220131
 """
-This is the launch point for the HEAT code, when accessing from the HTML GUI.
-It calls HEAT functions and generates heat fluxes based upon user input.  These
-functions are usually called from the dashGUI.py script, which is the FLASK
-binding to html.
+HEAT Engine (formerly GUIclass.py)
+
+Connects GUI/TUI to other HEAT classes.  Steps thru time solving for
+HF, T, etc.
 """
 
 import CADClass
@@ -32,22 +32,7 @@ import multiprocessing
 log = logging.getLogger(__name__)
 tools = toolsClass.tools()
 
-def create_app(GUIobj):
-    """
-    Creates flask app with GUI object so that we can refer to it later.
-    """
-    from flask import Flask
-    app = Flask(__name__)
-    app.config['GUI'] = GUIobj
-    return app
-
-def create_DASH_app(GUIobj):
-    import dash
-    app = dash.Dash(__name__, meta_tags=[{"name": "viewport", "content": "width=device-width"}])
-    app.config['GUI'] = GUIobj
-    return app
-
-class GUIobj():
+class engineObj():
     def __init__(self, logFile, rootDir, dataPath, OFbashrc):
         #where HEAT log is written
         self.logFile = logFile
@@ -636,9 +621,8 @@ class GUIobj():
         """
         Loads CAD inputs
         """
-        import numpy as np
         tools.initializeInput(self.CAD, infile=self.infile)
-        self.CAD.rootDir = self.rootDir #set HEAT rootDir from HEATgui.py
+        self.CAD.rootDir = self.rootDir #set HEAT rootDir
         if gridRes is not None:
             #check if intersection grid resolution string is a number,
             #if not use standard mesh algorithms
@@ -650,14 +634,13 @@ class GUIobj():
 
     def getCAD(self,STPfile=None,STPdata=None, ts=None):
         """
-        Loads CAD file
+        Loads CAD file for GUI users
         """
-        import numpy as np
         if hasattr(self.CAD, 'gridRes'):
             pass
         else:
             tools.initializeInput(self.CAD, infile=self.infile)
-        self.CAD.rootDir = self.rootDir #set HEAT rootDir from HEATgui.py
+        self.CAD.rootDir = self.rootDir #set HEAT rootDir
 
         if STPfile is not None:
             #make STP path if it doesnt exist
@@ -676,7 +659,7 @@ class GUIobj():
                 self.CAD.overWriteMask = True #we need to also overwrite meshes
             else:
                 #if file was modified, overwrite
-                if ts != os.path.getmtime(newSTPpath):
+                if ts != os.stat(newSTPpath).st_mtime:
                     print("File was modified since last HEAT upload.  Overwriting...")
                     with open(newSTPpath, 'wb') as f:
                         f.write(STPdata)
@@ -690,6 +673,49 @@ class GUIobj():
             #load STP file using FreeCAD
             self.CAD.loadSTEP()
 
+        return
+
+    def getCADfromTUI(self,STPfile):
+        """
+        Loads CAD file for terminal users
+        """
+        try:
+            os.makedirs(self.CAD.STPpath)
+        except:
+            print("Did not create STPpath.  It probably exists already (HEAT already ran on this machine).")
+
+        #get file name
+        stpName = os.path.basename(STPfile)
+        #time last modified
+        mtime_orig = os.stat(STPfile).st_mtime
+        #time last read
+        atime_orig = os.stat(STPfile).st_atime
+        #we will copy to this cache directory for future use
+        newSTPpath = self.CAD.STPpath + stpName
+        #check to see if this STP file exists and write data to the file
+        if os.path.isfile(newSTPpath) == False:
+            print("New STP file.  Writing")
+            shutil.copyfile(STPfile, newSTPpath)
+            #set modified timestamps to match original
+            os.utime(newSTPpath, (atime_orig, mtime_orig))
+            self.CAD.overWriteMask = True #we need to also overwrite meshes
+        else:
+            #time last modified
+            mtime_new = os.stat(newSTPpath).st_mtime
+            #time last read
+            atime_new = os.stat(newSTPpath).st_atime
+            #if file was modified, overwrite
+            if mtime_orig != mtime_new:
+                print("File was modified since last HEAT upload.  Overwriting...")
+                shutil.copyfile(STPfile, newSTPpath)
+                os.utime(newSTPpath, (atime_orig, mtime_orig))
+                self.CAD.overWriteMask = True #we need to also overwrite meshes
+            else:
+                self.CAD.overWriteMask = False #meshes are already up to date
+                print("STP file is already in the HEAT database.  Not overwriting...")
+        self.CAD.STPfile = newSTPpath
+        #load STP file using FreeCAD
+        self.CAD.loadSTEP()
         return
 
     def getPFCdataFromGUI(self, data):
@@ -753,6 +779,8 @@ class GUIobj():
         log.info(self.CAD.intersectList)
 
 
+        print(self.MHD.timesteps)
+
         self.PFCs = []
         #initialize PFC objects for each ROI part
         for i,row in self.timestepMap.iterrows():
@@ -794,25 +822,23 @@ class GUIobj():
         tools.saveDefaultPFCfile(self.tmpDir)
         return
 
-    def getHFInputs(self,lqEich,S,P,qBG,lqPN,lqPF,lqCN,lqCF,
-                        fracPN, fracPF, fracCN, fracCF,
-                        fracUI,fracUO,fracLI,fracLO,
-                        mode, LRmask, LRpower,
-                        lqCNmode,lqCFmode,SMode,fG):
+    def getHFInputs(self,hfMode,LRmask,LRthresh,
+                    lqCN,lqCF,lqPN,lqPF,S,
+                    fracCN,fracCF,fracPN,fracPF,
+                    fracUI,fracUO,fracLI,fracLO,
+                    lqCNmode,lqCFmode,lqPNmode,lqPFmode,SMode,
+                    qBG,Psol,fG):
         """
         get heat flux inputs from gui or input file
         """
-        self.initializeHF()
-        self.HF.hfMode = mode
-        self.HF.lqEich = float(lqEich)
+        self.HF.hfMode = hfMode
         self.HF.lqCN = float(lqCN)
         self.HF.lqCF = float(lqCF)
         self.HF.lqPN = float(lqPN)
         self.HF.lqPF = float(lqPF)
         self.HF.S = float(S)
-        self.HF.Psol = float(P)
+        self.HF.Psol = float(Psol)
         self.HF.qBG = float(qBG)
-        self.HF.mode = mode
         self.HF.fracCN = float(fracCN)
         self.HF.fracCF = float(fracCF)
         self.HF.fracPN = float(fracPN)
@@ -829,11 +855,13 @@ class GUIobj():
 
         self.HF.lqCNmode = lqCNmode
         self.HF.lqCFmode = lqCFmode
+        self.HF.lqPNmode = lqPNmode
+        self.HF.lqPFmode = lqPFmode
         self.HF.SMode = SMode
         self.HF.fG = float(fG)
 
-        print("Mode = "+mode)
-        log.info("Mode = "+mode)
+        print("HF Mode = "+hfMode)
+        log.info("Hf Mode = "+hfMode)
         print("Psol = {:f}".format(self.HF.Psol))
         log.info("Psol = {:f}".format(self.HF.Psol))
         print("Upper Inner Div Power Fraction: {:f}".format(self.HF.fracUI))
@@ -846,41 +874,9 @@ class GUIobj():
         log.info("Lower Outer Div Power Fraction: {:f}".format(self.HF.fracLO))
         print("Long range intersection checking: "+LRmask)
 
-        if mode=='eich':
-            print("lqEich = {:f}".format(self.HF.lqEich))
-            print("S = {:f}".format(self.HF.S))
-            print("qBG = {:f}".format(self.HF.qBG))
-            print("fG = {:f}".format(self.HF.fG))
-            log.info("lqEich = {:f}".format(self.HF.lqEich))
-            log.info("S = {:f}".format(self.HF.S))
-            log.info("qBG = {:f}".format(self.HF.qBG))
-            log.info("fG = {:f}".format(self.HF.fG))
-        elif mode=='limiter':
-            print("lqCN = {:f}".format(self.HF.lqCN))
-            print("lqCF = {:f}".format(self.HF.lqCF))
-            print("fracCN = {:f}".format(self.HF.fracCN))
-            print("fracCF = {:f}".format(self.HF.fracCF))
-            log.info("lqCN = {:f}".format(self.HF.lqCN))
-            log.info("lqCF = {:f}".format(self.HF.lqCF))
-            log.info("fracCN = {:f}".format(self.HF.fracCN))
-            log.info("fracCF = {:f}".format(self.HF.fracCF))
-        elif mode=='multiExp':
-            print("lqCN = {:f}".format(self.HF.lqCN))
-            print("lqCF = {:f}".format(self.HF.lqCF))
-            print("lqPN = {:f}".format(self.HF.lqPN))
-            print("lqPF = {:f}".format(self.HF.lqPF))
-            print("fracCN = {:f}".format(self.HF.fracCN))
-            print("fracCF = {:f}".format(self.HF.fracCF))
-            print("fracPN = {:f}".format(self.HF.fracPN))
-            print("fracPF = {:f}".format(self.HF.fracPF))
-            log.info("lqCN = {:f}".format(self.HF.lqCN))
-            log.info("lqCF = {:f}".format(self.HF.lqCF))
-            log.info("lqPN = {:f}".format(self.HF.lqPN))
-            log.info("lqPF = {:f}".format(self.HF.lqPF))
-            log.info("fracCN = {:f}".format(self.HF.fracCN))
-            log.info("fracCF = {:f}".format(self.HF.fracCF))
-            log.info("fracPN = {:f}".format(self.HF.fracPN))
-            log.info("fracPF = {:f}".format(self.HF.fracPF))
+        #get regression parameters from MHD EQ
+        self.HF.getRegressionParams(self.MHD.ep[0])
+
         if hasattr(self.MHD, 'ep'):
             self.HF.HFdataDict = self.HF.getHFtableData(self.MHD.ep[0])
         else:
@@ -897,7 +893,102 @@ class GUIobj():
             else:
                 self.HF.HFdataDict = self.HF.getHFtableData(ep=None)
 
+        if hfMode=='eich':
+            print("lqCN = {:f}".format(self.HF.lqCN))
+            print("S = {:f}".format(self.HF.S))
+            print("qBG = {:f}".format(self.HF.qBG))
+            print("fG = {:f}".format(self.HF.fG))
+            log.info("lqEich = {:f}".format(self.HF.lqCN))
+            log.info("S = {:f}".format(self.HF.S))
+            log.info("qBG = {:f}".format(self.HF.qBG))
+            log.info("fG = {:f}".format(self.HF.fG))
+        elif hfMode=='limiter':
+            print("lqCN = {:f}".format(self.HF.lqCN))
+            print("lqCF = {:f}".format(self.HF.lqCF))
+            print("fracCN = {:f}".format(self.HF.fracCN))
+            print("fracCF = {:f}".format(self.HF.fracCF))
+            log.info("lqCN = {:f}".format(self.HF.lqCN))
+            log.info("lqCF = {:f}".format(self.HF.lqCF))
+            log.info("fracCN = {:f}".format(self.HF.fracCN))
+            log.info("fracCF = {:f}".format(self.HF.fracCF))
+        elif hfMode=='multiExp':
+            print("lqCN = {:f}".format(self.HF.lqCN))
+            print("lqCF = {:f}".format(self.HF.lqCF))
+            print("lqPN = {:f}".format(self.HF.lqPN))
+            print("lqPF = {:f}".format(self.HF.lqPF))
+            print("fracCN = {:f}".format(self.HF.fracCN))
+            print("fracCF = {:f}".format(self.HF.fracCF))
+            print("fracPN = {:f}".format(self.HF.fracPN))
+            print("fracPF = {:f}".format(self.HF.fracPF))
+            log.info("lqCN = {:f}".format(self.HF.lqCN))
+            log.info("lqCF = {:f}".format(self.HF.lqCF))
+            log.info("lqPN = {:f}".format(self.HF.lqPN))
+            log.info("lqPF = {:f}".format(self.HF.lqPF))
+            log.info("fracCN = {:f}".format(self.HF.fracCN))
+            log.info("fracCF = {:f}".format(self.HF.fracCF))
+            log.info("fracPN = {:f}".format(self.HF.fracPN))
+            log.info("fracPF = {:f}".format(self.HF.fracPF))
 
+        return
+
+    def loadHFParams(self, infile=None):
+        """
+        function for loading HF parameters on the fly (ie in the time loop)
+        """
+        if infile==None:
+            self.initializeHF()
+        else:
+            self.initializeHF(infile)
+        #initialize optical HF data from input file
+        self.getHFInputs(self.HF.hfMode,
+                         'no', #LRmask
+                         0.0, #LRthresh
+                         self.HF.lqCN,
+                         self.HF.lqCF,
+                         self.HF.lqPN,
+                         self.HF.lqPF,
+                         self.HF.S,
+                         self.HF.fracCN,
+                         self.HF.fracCF,
+                         self.HF.fracPN,
+                         self.HF.fracPF,
+                         self.HF.fracUI,
+                         self.HF.fracUO,
+                         self.HF.fracLI,
+                         self.HF.fracLO,
+                         self.HF.lqCNmode,
+                         self.HF.lqCFmode,
+                         self.HF.lqPNmode,
+                         self.HF.lqPFmode,
+                         self.HF.SMode,
+                         self.HF.qBG,
+                         self.HF.Psol,
+                         self.HF.fG)
+        return
+
+
+    def loadGYROParams(self, infile=None):
+        """
+        function for loading GYRO parameters on the fly (ie in the time loop)
+        """
+        if infile==None:
+            self.initializeGYRO()
+        else:
+            self.initializeGYRO(infile)
+
+        #initialize optical HF data from input file
+        self.getGyroInputs(
+                         self.GYRO.N_gyroSteps,
+                         self.GYRO.N_gyroPhase,
+                         self.GYRO.gyroDeg,
+                         self.GYRO.ionMassAMU,
+                         self.GYRO.vMode,
+                         self.GYRO.gyroT_eV,
+                         self.GYRO.N_vPhase,
+                         self.GYRO.N_vSlice,
+                         self.GYRO.ionFrac,
+                         self.GYRO.gyroSources,
+                         )
         return
 
     def getGyroInputs(self,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
@@ -923,10 +1014,10 @@ class GUIobj():
             except:
                 print("NO CAD Loaded.  Cannot initialize ROIList.")
         else:
-            if type(gyroSources) == list:
+            if type(gyroSources) == list: #GUI mode
                 self.GYRO.gyroSources = gyroSources
-            else:
-                self.GYRO.gyroSources = [gyroSources]
+            else: #terminal mode
+                self.GYRO.gyroSources = [x.split(":") for x in [self.GYRO.gyroSources]][0]
             #self.CAD.getGyroSources(gyroSources)
             #self.CAD.getGyroSourceMeshes()
             #self.CAD.writeMesh2file(self.CAD.gyroMeshes, self.CAD.gyroSources, path=self.CAD.STLpath)
@@ -1120,15 +1211,32 @@ class GUIobj():
         PFC.write_bdotn_pointcloud(PFC.centers, PFC.bdotn, PFC.controlfilePath)
 
 
-    def initializeHF(self):
+    def initializeHF(self, infile=None):
         """
         Initialize heat flux variables
         """
         print("-"*70)
-        print("HEAT FLUX MODULE INITIALIZED")
-        log.info("HEAT FLUX MODULE INITIALIZED")
+        print("Heat flux parameters read from file")
+        log.info("Heat flux parameters read from file")
         #Initialize HF Object
-        tools.initializeInput(self.HF, infile=self.infile)
+        if infile == None:
+            tools.initializeInput(self.HF, infile=self.infile)
+        else:
+            tools.initializeInput(self.HF, infile=infile)
+        return
+
+    def initializeGYRO(self, infile=None):
+        """
+        Initialize gyro orbit heat flux variables
+        """
+        print("-"*70)
+        print("Gyro orbit parameters read from file")
+        log.info("Gyro orbit parameters read from file")
+        #Initialize HF Object
+        if infile == None:
+            tools.initializeInput(self.GYRO, infile=self.infile)
+        else:
+            tools.initializeInput(self.GYRO, infile=infile)
         return
 
     def loadAccFilters(self, accFilters):
@@ -1176,20 +1284,20 @@ class GUIobj():
         timestep
 
         runList options are:
-        Bpc             Bfield point cloud
-        psiPC           Normalized psi point cloud
-        powerDirPC      power direction point cloud
-        NormPC          Normal Field point cloud
-        bdotnPC         bdotn poitn cloud
-        HFpc            heat flux point cloud
-        GyroPC          gyro orbit heat flux point cloud
+        B               Bfield glyph cloud
+        psiN            normalized psi point cloud
+        pwrDir          power direction point cloud
+        norm            normal vector point cloud
+        bdotn           bdotn poitn cloud
+        hfOpt           optical heat flux point cloud
+        hfGyro          gyro orbit heat flux point cloud
         """
         print('\n')
         print("-"*70)
         print("HEAT RUN INITIALIZED")
         log.info("HEAT RUN INITIALIZED")
         t0 = time.time()
-        allowedOptions = ['HFpc', 'powerDirPC', 'bdotnPC', 'Bpc', 'psiPC', 'NormPC', 'GyroPC']
+        allowedOptions = ['hfOpt', 'pwrDir', 'bdotn', 'B', 'psiN', 'norm', 'hfGyro']
         #make sure that something in runList can be run in this function, else return
         if len([i for i in runList if i in allowedOptions]) < 1:
             print("No HEAT point cloud option to run")
@@ -1200,7 +1308,7 @@ class GUIobj():
         powerByTile = np.zeros((len(self.PFCs)))
         divCodes = []
         #set up electron frac if not in gyro mode
-        if 'GyroPC' not in runList:
+        if 'hfGyro' not in runList:
             self.HF.elecFrac = 1.0
         else:
             self.HF.elecFrac = 1.0 - self.GYRO.ionFrac
@@ -1247,7 +1355,12 @@ class GUIobj():
                     print("*"*20)
                     print('PFC Name: '+ PFC.name)
                     log.info('PFC Name: '+ PFC.name)
-                    if 'HFpc' in runList:
+                    if 'hfOpt' in runList:
+                        #load HF settings for this timestep if applicable (terminal mode)
+                        try:
+                            self.loadHFParams(infile=self.inputFileList[tIdx])
+                        except:
+                            pass
                         self.HF_PFC(PFC, PFC.tag)
                         PFC.shadowMasks[tIdx] = PFC.shadowed_mask
                         PFC.powerSumOptical[tIdx] = self.HF.power_sum_mesh(PFC, mode='optical')
@@ -1265,18 +1378,18 @@ class GUIobj():
                         if PFC.DivCode not in divCodes:
                             powerTrue[tIdx] += self.HF.Psol*PFC.powerFrac
                         divCodes.append(PFC.DivCode)
-                    if 'Bpc' in runList:
+                    if 'B' in runList:
                         self.bfieldAtSurface(PFC)
-                    if 'psiPC' in runList:
+                    if 'psiN' in runList:
                         self.psiPC(PFC)
-                    if 'NormPC' in runList:
+                    if 'norm' in runList:
                         self.NormPC(PFC)
-                    if 'powerDirPC' in runList:
+                    if 'pwrDir' in runList:
                         self.powerDirPC(PFC)
-                    if 'bdotnPC' in runList:
+                    if 'bdotn' in runList:
                         self.bdotnPC(PFC)
 
-                    if 'HFpc' in runList:
+                    if 'hfOpt' in runList:
                         print('Total Input Power = {:f}'.format(np.sum(powerTrue)))
                         print('Theoretical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
                         print('Optical Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumOptical)))
@@ -1299,10 +1412,19 @@ class GUIobj():
                 print("scale2circ sum:\t{:.6f}".format(totalPowPowCirc))
                 log.info("scale2circ sum:\t{:.6f}".format(totalPowPowCirc))
 
-            if 'GyroPC' in runList:
+            if 'hfGyro' in runList:
                 print("\n===+++ GYRO ORBIT CALCULATION +++===")
                 log.info("\n===+++ GYRO ORBIT CALCULATION +++===")
                 tGyro = time.time()
+                #load GYRO settings for this timestep if applicable (terminal mode)
+                try:
+                    print("T!")
+                    self.loadGYROParams(infile=self.inputFileList[tIdx])
+                    print("T))))")
+                except:
+                    print("T()")
+                    pass
+
                 self.getGyroMeshes()
 
                 #generate index maps
@@ -1367,7 +1489,7 @@ class GUIobj():
 
 
             #generating allSources heat fluxes
-            if ('GyroPC' in runList) or ('HFpc' in runList):
+            if ('hfGyro' in runList) or ('hfOpt' in runList):
                 #set up time and equilibrium
                 PFC.t = t
                 for PFC in self.PFCs:
@@ -1376,7 +1498,7 @@ class GUIobj():
                     else:
                         print("Creating allSources CSV files")
                         R,Z,phi = tools.xyz2cyl(PFC.centers[:,0],PFC.centers[:,1],PFC.centers[:,2])
-                        if 'GyroPC' in runList:
+                        if 'hfGyro' in runList:
                             self.HF.write_heatflux_pointcloud(PFC.centers,PFC.qGyro+PFC.qDiv,PFC.controlfilePath,tag=PFC.tag,mode='all')
                         else:
                             self.HF.write_heatflux_pointcloud(PFC.centers,PFC.qDiv,PFC.controlfilePath,tag=PFC.tag,mode='all')
@@ -1773,29 +1895,29 @@ class GUIobj():
         centers = np.array([])
         Npoints = 0
         for PFC in self.PFCs:
-            if 'HFpc' in runList:
+            if 'hfOpt' in runList:
                 hfOptical.append(PFC.qDiv.copy())
                 shadow.append(PFC.shadowed_mask.copy())
                 hfAll.append(PFC.qDiv.copy())
-            if 'GyroPC' in runList:
+            if 'hfGyro' in runList:
                 hfGyro.append(PFC.qGyro.copy())
                 shadowGyro.append(PFC.gyroShadowMask.copy())
-                if 'HFpc' not in runList: #when we run HEAT twice, 2nd time gyro only
+                if 'hfOpt' not in runList: #when we run HEAT twice, 2nd time gyro only
                     hfAll.append(PFC.qDiv.copy()+PFC.qGyro.copy())
                 else:
                     hfAll[-1]+=PFC.qGyro.copy()
-            if 'powerDirPC' in runList:
+            if 'pwrDir' in runList:
                 powerDir.append(PFC.powerDir.copy())
-            if 'bdotnPC' in runList:
+            if 'bdotn' in runList:
                 bdotn.append(PFC.bdotn.copy())
-            if 'psiPC' in runList:
+            if 'psiN' in runList:
                 psi.append(PFC.psimin.copy())
-            if 'NormPC' in runList:
+            if 'norm' in runList:
                 norm = np.append(norm, PFC.norms.copy())
-            if 'Bpc' in runList:
+            if 'B' in runList:
                 bField = np.append(bField, PFC.Bxyz.copy())
-            #note that I don't do the normal vector NormPC (its same every timestep)
-            #user can just get NormPCs individually for each tile
+            #note that I don't do the normal vector norm (its same every timestep)
+            #user can just get norm individually for each tile
             Npoints += len(PFC.centers)
             centers = np.append(centers,PFC.centers)
 
@@ -1828,28 +1950,28 @@ class GUIobj():
 
         tag='all'
         centers = centers.reshape(Npoints,3)
-        if 'HFpc' in runList:
+        if 'hfOpt' in runList:
             self.HF.write_heatflux_pointcloud(centers,hfOpticalNumpy,tPath,tag,'optical')
             PFC.write_shadow_pointcloud(centers,shadowNumpy,tPath,tag)
             self.HF.write_heatflux_pointcloud(centers,hfAllNumpy,tPath,tag,'all')
-        if 'GyroPC' in runList:
+        if 'hfGyro' in runList:
             self.HF.write_heatflux_pointcloud(centers,hfGyroNumpy,tPath,tag,'gyro')
             PFC.write_shadow_pointcloud(centers,shadowGyroNumpy,tPath,tag,'gyro')
-            if 'HFpc' not in runList:
+            if 'hfOpt' not in runList:
                 self.HF.write_heatflux_pointcloud(centers,hfAllNumpy,tPath,tag,'all')
         if 'shadowPC' in runList:
             PFC.write_shadow_pointcloud(centers,shadowNumpy,tPath,tag)
-        if 'powerDirPC' in runList:
+        if 'pwrDir' in runList:
             PFC.write_powerDir_pointcloud(centers,powerDirNumpy,tPath,tag)
-        if 'bdotnPC' in runList:
+        if 'bdotn' in runList:
             PFC.write_bdotn_pointcloud(centers,bdotnNumpy, tPath,tag)
-        if 'psiPC' in runList:
+        if 'psiN' in runList:
             self.HF.write_psiN_pointcloud(centers,psiNumpy,tPath,tag)
             #self.HF.write_psiNThresh_pointcloud(centers,psiNumpy,tPath,tag)
-        if 'NormPC' in runList:
+        if 'norm' in runList:
             norm = norm.reshape(Npoints,3)
             self.CAD.write_normal_pointcloud(centers,norm,tPath,tag)
-        if 'Bpc' in runList:
+        if 'B' in runList:
             bField = bField.reshape(Npoints,3)
             self.MHD.write_B_pointcloud(centers, bField, tPath, tag)
 
@@ -1869,7 +1991,7 @@ class GUIobj():
             os.mkdir(movieDir)
         except FileExistsError:
             pass
-        if 'HFpc' in runList:
+        if 'hfOpt' in runList:
             src = tPath + 'HF_optical_all.csv'
             dest = movieDir + 'hfOptical_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
@@ -1877,27 +1999,27 @@ class GUIobj():
             src = tPath + 'shadowMask_optical_all.csv'
             dest = movieDir + 'shadowMask_optical_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
-        if 'powerDirPC' in runList:
+        if 'pwrDir' in runList:
             src = tPath + 'powerDir_all.csv'
             dest = movieDir + 'powerDir_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
-        if 'bdotnPC' in runList:
+        if 'bdotn' in runList:
             src = tPath + 'bdotnPointCloud_all.csv'
             dest = movieDir + 'bdotn_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
-        if 'psiPC' in runList:
+        if 'psiN' in runList:
             src = tPath + 'psiPointCloud_all.csv'
             dest = movieDir + 'psiN_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
-        if 'NormPC' in runList:
+        if 'norm' in runList:
             src = tPath + 'NormPointCloud_all.csv'
             dest = movieDir + 'normals_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
-        if 'Bpc' in runList:
+        if 'B' in runList:
             src = tPath + 'B_pointcloud_all.csv'
             dest = movieDir + 'Bfield_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
-        if 'GyroPC' in runList:
+        if 'hfGyro' in runList:
             src = tPath + 'HF_gyro_all.csv'
             dest = movieDir + 'hfGyro_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
@@ -1919,8 +2041,8 @@ class GUIobj():
         PFC.shadowed_mask = np.zeros((len(PFC.shadowed_mask)))
         self.getPsiEverywhere(PFC, PFC.tag)
 
-        print("Completed psiPC calculation")
-        log.info("Completed psiPC calculation")
+        print("Completed psiN calculation")
+        log.info("Completed psiN calculation")
 
         return
 
@@ -2013,7 +2135,7 @@ class GUIobj():
                     'tmax': self.MHD.tmax,
                     'nTrace': self.MHD.nTrace,
                     'gridRes': self.CAD.gridRes,
-                    'lqEich': self.HF.lqEich,
+                    'lqEich': self.HF.lqCN,
                     'S': self.HF.S,
                     'lqCN': self.HF.lqCN,
                     'lqCF': self.HF.lqCF,
@@ -2033,6 +2155,7 @@ class GUIobj():
                     'fracLI':self.HF.fracLI,
                     'fracLO':self.HF.fracLO,
                     'qBG' : self.HF.qBG,
+                    'fG' : self.HF.fG,
                     'OFtMin': self.OF.OFtMin,
                     'OFtMax': self.OF.OFtMax,
                     'deltaT': self.OF.deltaT,
@@ -2047,7 +2170,7 @@ class GUIobj():
                     'N_vPhase': self.GYRO.N_vPhase,
                     'N_gyroPhase': self.GYRO.N_gyroPhase,
                     'ionMassAMU': self.GYRO.ionMassAMU,
-                    #'hfMode': self.HF.hfMode,
+                    'hfMode': self.HF.hfMode,
                     #'vMode': self.GYRO.vMode,
                     'ionFrac': self.GYRO.ionFrac
                     }

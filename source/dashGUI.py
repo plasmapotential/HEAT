@@ -25,169 +25,7 @@ dashGUI.py <address> <port>
 You will need to set a few variables below, based upon your system paths
 rootDir, PVPath
 """
-#========= VARIABLES THAT ARE SYSTEM DEPENDENT =================================
 import os
-import sys
-import subprocess
-##If this code is being run inside an appImage, then we set our paths up accordingly
-#try:
-#    AppImage = os.environ["APPIMAGE"]
-#    inAppImage = True
-#except:
-#    inAppImage = False
-
-#determine if this code is being run from appImage, docker, or local dir
-try:
-    runMode = os.environ["runMode"]
-except:
-    runMode = 'local'
-
-#default HEAT output directory
-homeDir = os.environ["HOME"]
-dataPath = homeDir + '/HEAT/data'
-
-#=== Set up paths and environment vars
-### appImage
-if runMode == 'appImage':
-    print("Running in appImage mode\n")
-
-    ### USER ROOT HEATDIR
-    AppDir = os.environ["APPDIR"]
-    #Root HEAT source code directory
-    rootDir = AppDir + '/usr/src'
-
-    ### PARAVIEW
-    #Include the location of the paraview binaries
-    #Specifically we need the python libs and pvpython
-    PVPath = os.environ["PVPath"]
-    pvpythonCMD = os.environ["pvpythonCMD"]
-
-    ### OPENFOAM
-    #openFOAM bashrc location v1912
-    #OFbashrc = AppDir + '/usr/opt/openfoam/openfoam1912/etc/bashrc'
-    #OFdir = AppDir+'/usr/opt/openfoam/openfoam1912'
-    #openFOAM bashrc location v2106
-    OFbashrc = AppDir + '/opt/openfoam/etc/bashrc'
-    OFdir = AppDir+'/opt/openfoam'
-    #python site packages where PyFoam resides
-    pyFoamPath = AppDir + '/lib/python3.8/site-packages'
-
-    ### FREECAD
-    #default freecad path
-    #FreeCADPath = AppDir + '/opt/freecad/squashfs-root/usr/lib'
-    FreeCADPath = AppDir + '/usr/lib/freecad-python3/lib'
-
-    ### ORNL EFIT MODULE
-    #default source code location (EFIT class should be here)
-    EFITPath = AppDir + '/usr/src'
-
-###  Docker container
-elif runMode == 'docker':
-    print("Running in Docker mode\n")
-
-    ### USER ROOT HEATDIR
-    #Root HEAT source code directory
-    rootDir = homeDir + '/source/HEAT'
-    #default AppDir for when running in docker mode
-    AppDir = os.environ["APPDIR"]
-
-    ### PARAVIEW
-    #Include the location of the paraview binaries.
-    #Specifically we need the python libs and pvpython
-    PVPath = homeDir + '/lib/python3.8/site-packages'
-    pvpythonCMD = homeDir + '/opt/paraview/bin/pvpython'
-
-    ### FREECAD
-    #docker ubuntu repo freecad path
-    FreeCADPath = '/usr/lib/freecad-python3/lib'
-
-    ### ORNL EFIT CLASS
-    #default source code location (EFIT class should be here)
-    EFITPath = homeDir + '/source'
-
-    ### OPENFOAM
-    #default openFOAM source path v1912
-    #OFbashrc = '/opt/openfoam/openfoam-OpenFOAM-v1912/etc/bashrc'
-    #default openFOAM source path v2106
-    OFbashrc = AppDir + '/opt/openfoam/etc/bashrc'
-    #python site packages where PyFoam resides
-    pyFoamPath = homeDir + '/.local/lib/python3.8/site-packages'
-    #pyFoam python scripts
-    pyFoamPath = '/'
-
-    #ENV VARS
-    #create necessary environment variables when outside appImage
-    os.environ["PVPath"] = PVPath
-    os.environ["pvpythonCMD"] = pvpythonCMD
-
-else:
-    ###  If developing you will need to edit these manually!
-    print("Running in local developer mode\n")
-    print("You will need a manually compiled environment")
-    ### USER ROOT HEATDIR
-    #Root HEAT source code directory
-    rootDir = homeDir + '/source/HEAT/github/source'
-
-    ### PARAVIEW
-    #Include the location of the paraview binaries.
-    #Specifically we need the python libs and pvpython
-    PVPath = '/opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/lib/python3.8/site-packages'
-    pvpythonCMD = '/opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/bin/pvpython'
-
-    ### FREECAD
-    #downloaded appImage freecad path
-    FreeCADPath = '/opt/freecad/squashfs-root/usr/lib'
-    # for ubuntu repo build
-    #FreeCADPath = '/usr/lib/freecad-python3/lib'
-    #FreeCADPath = '/usr/lib/freecad/lib'
-    # for daily builds
-    #FreeCADPath = '/usr/lib/freecad-daily-python3/lib'
-
-    ### ORNL EFIT CLASS
-    #default source code location (EFIT class should be here)
-    EFITPath = homeDir + '/source'
-
-    ### OPENFOAM
-    #default openFOAM source path v1912
-    #OFbashrc = '/opt/openfoam/openfoam-OpenFOAM-v1912/etc/bashrc'
-    #default openFOAM source path v2106
-    OFbashrc = '/opt/openfoam/OpenFOAM-v2106/etc/bashrc'
-    #python site packages where PyFoam resides
-    pyFoamPath = homeDir + '/.local/lib/python3.8/site-packages'
-    #pyFoam python scripts
-    pyFoamPath = '/'
-
-    #ENV VARS
-    #default AppDir for when running in dev mode
-    AppDir = 'not in appImage mode'
-    #create necessary environment variables when outside appImage
-    os.environ["PVPath"] = PVPath
-    os.environ["pvpythonCMD"] = pvpythonCMD
-
-#default logfile location
-logFile = dataPath + '/HEATlog.txt'
-#list of tokamak flags that are options in HEAT (if adding new tokamak add flag to list)
-machineList = ['d3d','nstx','st40','step','sparc','west','kstar']
-
-#===============================================================================
-
-
-#=======UPDATE PATHS============================================================
-#orca installation location (for saving EQ plots)
-#pio.orca.config.executable='/usr/bin/orca'
-#append EFIT to python path
-sys.path.append(EFITPath)
-#append FreeCAD to python path
-sys.path.append(FreeCADPath)
-#append paraview to python path
-sys.path.append(PVPath)
-#append pyFoam site-packages location to python path
-sys.path.append(pyFoamPath)
-#append pvpython to binary path
-oldEnv = os.environ["PATH"]
-#os.environ["PATH"] = oldEnv + ':' + pvpythonCMD
-#===============================================================================
-
 import shutil
 import base64
 import io
@@ -212,30 +50,39 @@ tools = toolsClass.tools()
 from dash_extensions import Download
 from dash_extensions.snippets import send_file
 import ipaddress
-
-#Create log files that will be displayed in the HTML GUI
-from pathlib import Path
-if not os.path.exists(dataPath):
-    os.makedirs(dataPath)
-Path(logFile).touch()
 import logging
-logFlask = logging.getLogger('werkzeug')
-logFlask.disabled = True
-logging.basicConfig(filename=logFile, filemode="w", level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
 
-#Make sure all our python scripts are in the path
-from GUIclass import GUIobj
+#get relevant environment variables
+logFile = os.environ["logFile"]
+rootDir = os.environ["rootDir"]
+dataPath = os.environ["dataPath"]
+OFbashrc = os.environ["OFbashrc"]
+FreeCADPath = os.environ["FreeCADPath"]
+PVPath = os.environ["PVPath"]
+pvpythonCMD = os.environ["pvpythonCMD"]
+try:
+    AppDir = os.environ["APPDIR"]
+except:
+    AppDir = 'Not in appImage'
+
+
+#Import HEAT engine
+from engineClass import engineObj
+
+server = Flask(__name__)
 #app = dash.Dash(__name__, meta_tags=[{"name": "viewport", "content": "width=device-width"}])
 #Create our own server for downloading files
-server = Flask(__name__)
+
 app = dash.Dash(server=server, meta_tags=[{"name": "viewport", "content": "width=device-width"}],
                 prevent_initial_callbacks=False)
 
 #Eventually need to fix this so that we are not using a global variable
 #dash can acces Flask Cache so we should cache data by userID or something
 #for R&D this works
-gui = GUIobj(logFile, rootDir, dataPath, OFbashrc)
+gui = engineObj(logFile, rootDir, dataPath, OFbashrc)
+gui.UImode = 'g' #graphical mode
+
 
 """
 ==============================================================================
@@ -1283,6 +1130,22 @@ def multiExpParameters(className):
                     className="SelectorBoxInput",
                     style={'backgroundColor': 'transparent', 'color':'transparent'},
                     options=[
+                        {'label': 'From Eich Scaling', 'value': 'eich'},
+                        #{'label': 'From Brunner Scaling', 'value': 'brunner'},
+                        {'label': 'User Defined', 'value': 'user'}
+                        ],
+                    value=None,
+                    )
+                ]),
+            html.Div(
+                className="colBox",
+                children=[
+                    html.Label("Select Common Far Heat Flux Width source:"),
+                    dcc.Dropdown(
+                    id='multiExplqCFMode',
+                    className="SelectorBoxInput",
+                    style={'backgroundColor': 'transparent', 'color':'transparent'},
+                    options=[
                         #{'label': 'From Brunner Scaling', 'value': 'brunner'},
                         {'label': 'User Defined', 'value': 'user'}
                         ],
@@ -1292,6 +1155,41 @@ def multiExpParameters(className):
             ]
     )
     row2 = html.Div(
+        className="rowBox",
+        children = [
+            html.Div(
+                className="colBox",
+                children=[
+                    html.Label("Select Private Near Heat Flux Width source:"),
+                    dcc.Dropdown(
+                    id='multiExplqPNMode',
+                    className="SelectorBoxInput",
+                    style={'backgroundColor': 'transparent', 'color':'transparent'},
+                    options=[
+                        #{'label': 'From Brunner Scaling', 'value': 'brunner'},
+                        {'label': 'User Defined', 'value': 'user'}
+                        ],
+                    value=None,
+                    )
+                ]),
+            html.Div(
+                className="colBox",
+                children=[
+                    html.Label("Select Private Far Heat Flux Width source:"),
+                    dcc.Dropdown(
+                    id='multiExplqPFMode',
+                    className="SelectorBoxInput",
+                    style={'backgroundColor': 'transparent', 'color':'transparent'},
+                    options=[
+                        #{'label': 'From Brunner Scaling', 'value': 'brunner'},
+                        {'label': 'User Defined', 'value': 'user'}
+                        ],
+                    value=None,
+                    )
+                ]),
+            ]
+    )
+    row3 = html.Div(
             className="rowBox",
             children=[
                 html.Div(
@@ -1308,7 +1206,7 @@ def multiExpParameters(className):
                     ]),
             ])
 
-    row3 = html.Div(
+    row4 = html.Div(
             className="rowBox",
             children=[
                 html.Div(
@@ -1325,7 +1223,7 @@ def multiExpParameters(className):
                     ]),
             ])
 
-    row4 = html.Div(
+    row5 = html.Div(
             className="rowBox",
             children=[
                 html.Div(
@@ -1342,7 +1240,7 @@ def multiExpParameters(className):
                     ]),
             ])
 
-    row5 = html.Div(
+    row6 = html.Div(
             className="rowBox",
             children=[
                 html.Div(
@@ -1364,11 +1262,12 @@ def multiExpParameters(className):
     div = html.Div(
         className=className,
         children=[
-            #row1, #commented for now because only user defined is allowed (no regression)
+            row1, #commented for now because only user defined is allowed (no regression)
             row2,
             row3,
             row4,
-            row5
+            row5,
+            row6
         ]
     )
 
@@ -1513,9 +1412,9 @@ def commonRegionParameters():
                Output('HFDataStorage', 'data')],
               [Input('loadHF', 'n_clicks')],
               [State('hfMode', 'value'),
+               State('MachFlag', 'value'),
                State('lqEich', 'value'),
                State('S', 'value'),
-               State('qBG', 'value'),
                State('lqCN', 'value'),
                State('lqCF', 'value'),
                State('lqPN', 'value'),
@@ -1524,42 +1423,47 @@ def commonRegionParameters():
                State('fracCF', 'value'),
                State('fracPN', 'value'),
                State('fracPF', 'value'),
-               State('Psol', 'value'),
                State('fracUI', 'value'),
                State('fracUO', 'value'),
                State('fracLI', 'value'),
                State('fracLO', 'value'),
                State('LRmask', 'value'),
                State('LRthresh', 'value'),
-               State('MachFlag', 'value'),
                State('eichlqCNMode', 'value'),
-               #State('multiExplqCNMode', 'value'),
+               State('eichSMode', 'value'),
+               State('multiExplqCNMode', 'value'),
+               State('multiExplqCFMode', 'value'),
+               State('multiExplqPNMode', 'value'),
+               State('multiExplqPFMode', 'value'),
                State('limiterlqCNMode', 'value'),
                State('limiterlqCFMode', 'value'),
-               State('eichSMode', 'value'),
-               State('fG', 'value'),
                State('limlqCN', 'value'),
                State('limlqCF', 'value'),
                State('limfracCN', 'value'),
                State('limfracCF', 'value'),
+               State('qBG', 'value'),
+               State('Psol', 'value'),
+               State('fG', 'value'),
                ])
-def loadHF(n_clicks,hfMode,lqEich,S,qBG,lqCN,lqCF,lqPN,lqPF,
+def loadHF(n_clicks,hfMode,MachFlag,
+            lqEich,S,lqCN,lqCF,lqPN,lqPF,
             fracCN,fracCF,fracPN,fracPF,
-            Psol,fracUI,fracUO,fracLI,fracLO,
-            LRmask,LRthresh,MachFlag,
-            eichlqCNMode,limiterlqCNMode,limiterlqCFMode,SMode,fG,
-            limlqCN,limlqCF,limfracCN,limfracCF):
+            fracUI,fracUO,fracLI,fracLO,
+            LRmask,LRthresh,
+            eichlqCNMode,SMode,
+            multiExplqCNMode,multiExplqCFMode,multiExplqPNMode,multiExplqPFMode,
+            limiterlqCNMode,limiterlqCFMode,limlqCN,limlqCF,limfracCN,limfracCF,
+            qBG,Psol,fG):
     if MachFlag is None:
         raise PreventUpdate
     else:
         #set up the heat flux configuration (which scalings to use)
         if hfMode == 'limiter':
-            if limiterlqCFMode == 'user':
-                lqCNmode = limiterlqCNMode
-            else:
-                lqCNmode = 'eich'
-            SMode = 'user'
+            lqCNmode = limiterlqCNMode
             lqCFmode = limiterlqCFMode
+            lqPNmode = None
+            lqPFmode = None
+            SMode = None
             lqCN = limlqCN
             lqCF = limlqCF
             lqPN = 0.0
@@ -1570,39 +1474,36 @@ def loadHF(n_clicks,hfMode,lqEich,S,qBG,lqCN,lqCF,lqPN,lqPF,
             fracPF = 0.0
         elif hfMode == 'multiExp':
             #add this back in after brunner scaling is in HEAT:
-            # lqCNmode = multiExplqCNMode
-            lqCNmode = 'user'
-            lqCFmode = 'user'
-            lqPNmode = 'user'
-            lqPFmode = 'user'
-            lqEich = 0.0
-            S = 0.0
-            SMode = 'user'
-            lqCNmode = 'user'
+            lqCNmode = multiExplqCNMode
+            lqCFmode = multiExplqCFMode
+            lqPNmode = multiExplqPNMode
+            lqPFmode = multiExplqPFMode
+            lqCN = lqCN #unnecessary, but here for clarity
+            lqCF = lqCF #unnecessary, but here for clarity
+            lqPN = lqPN #unnecessary, but here for clarity
+            lqPF = lqCF #unnecessary, but here for clarity
+            SMode = None
 
         else: #eich mode is default
-            if eichlqCNMode == None:
-                lqCNmode = 'eich'
-            else:
-                lqCNmode = eichlqCNMode
+            lqCNmode = eichlqCNMode
             lqCFmode = None
-            if SMode == None:
-                SMode = 'makowski'
-            else:
-                SMode = SMode
+            lqPNmode = None
+            lqPFmode = None
             lqCN = lqEich
             lqCF = 0.0
             lqPN = 0.0
             lqPF = 0.0
-
+            SMode = SMode
         #could add private flux scalings here if they ever exist
 
-        #set up HF object in HEAT
-        gui.getHFInputs(lqEich,S,Psol,qBG,lqPN,lqPF,lqCN,lqCF,
-                        fracPN,fracPF,fracCN,fracCF,
+
+        gui.getHFInputs(hfMode,LRmask,LRthresh,
+                        lqCN,lqCF,lqPN,lqPF,S,
+                        fracCN,fracCF,fracPN,fracPF,
                         fracUI,fracUO,fracLI,fracLO,
-                        hfMode,LRmask,LRthresh,
-                        lqCNmode,lqCFmode,SMode,fG)
+                        lqCNmode,lqCFmode,lqPNmode,lqPFmode,SMode,
+                        qBG,Psol,fG)
+
 
         #Update output tab table
         HFdata = gui.HF.HFdataDict
@@ -2273,16 +2174,16 @@ def runTabChecklist():
             children=[
                 dcc.Checklist(
                     options=[
-                        {'label': 'B-field point cloud ', 'value': 'Bpc'},
-                        {'label': 'Normal vector point cloud', 'value': 'NormPC'},
-                        {'label': 'powerDir point cloud', 'value': 'powerDirPC'},
-                        {'label': 'psiN point cloud', 'value': 'psiPC'},
-                        {'label': 'bdotn point cloud', 'value': 'bdotnPC'},
-                        {'label': 'Heat flux point cloud', 'value': 'HFpc'},
-                        {'label': 'Gyro Orbit heat flux point cloud', 'value': 'GyroPC'},
-                        {'label': 'openFOAM thermal analysis', 'value': 'OFpc'},
+                        {'label': 'B-field point cloud ', 'value': 'B'},
+                        {'label': 'Normal vector point cloud', 'value': 'norm'},
+                        {'label': 'powerDir point cloud', 'value': 'pwrDir'},
+                        {'label': 'psiN point cloud', 'value': 'psiN'},
+                        {'label': 'bdotn point cloud', 'value': 'bdotn'},
+                        {'label': 'Heat flux point cloud', 'value': 'hfOpt'},
+                        {'label': 'Gyro Orbit heat flux point cloud', 'value': 'hfGyro'},
+                        {'label': 'openFOAM thermal analysis', 'value': 'T'},
                         ],
-                        value=['HFpc'],
+                        value=['hfOpt'],
                         id='checklistPC',
                         ),
                     ],
@@ -2555,13 +2456,13 @@ def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
 
     gui.runHEAT(runList)
 
-    if 'HFpc' in runList:
+    if 'hfOpt' in runList:
         #load HF distribution plots on output page
         qDistFig = hfDistPlots(update=True)
     else:
         qDistFig = hfDistPlots(update=False)
 
-    if 'OFpc' in runList:
+    if 'T' in runList:
         gui.runOpenFOAM()
         OFminmaxFig = OFmaxTPlots(update=True)
     else:
@@ -2570,7 +2471,7 @@ def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
     if 'OFtrace' in OFtrace:
         OFTprobeFig = OFTprobePlots(update=True,x=xOFtrace,y=yOFtrace,z=zOFtrace)
         #do these again here so that the plots on output tab dont go blank
-        #if the HFpc and OFpc boxes arent checked
+        #if the hfOpt and T boxes arent checked
         OFminmaxFig = OFmaxTPlots(update=True)
         qDistFig = hfDistPlots(update=True)
     else:
