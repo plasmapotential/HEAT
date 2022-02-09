@@ -16,4 +16,6 @@ else
   echo "'docker' and add yourself to it before running HEAT."
 fi
 #run docker compose
-docker-compose up
+#docker-compose up
+#run docker compose interactively
+docker-compose run HEAT /bin/bash

@@ -488,7 +488,8 @@ class CAD:
             # this MATTERS when we read back in a mesh (see self.loadROIMesh and self.loadIntersectMesh)
 
             #standard meshing algorithm
-            if type(resolution[i]) == str:
+            stdList = ['standard', 'Standard', 'STANDARD']
+            if resolution[i] in stdList:
                 filename = path + label[i] + "___"+resolution[i]+".stl"
             #mefisto meshing algorithm
             else:

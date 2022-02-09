@@ -299,9 +299,11 @@ class OpenFOAM():
             if inAppImage == False:
                 f.write(self.cmdSourceOF + '\n')
             f.write('blockMesh | tee -a ' + logFile + '\n')
+            #f.write('blockMesh > ' + logFile + '\n')
             #single core meshing
             if parallel==False:
                 f.write('snappyHexMesh -overwrite | tee -a '+logFile+ '\n')
+                #f.write('snappyHexMesh -overwrite > '+logFile+ '\n')
             #parallel meshing
             else:
                 #Run snappyHexMesh across multiple processors
@@ -325,6 +327,9 @@ class OpenFOAM():
             f.write('topoSet | tee -a '+logFile+ '\n')
             f.write('createPatch -overwrite | tee -a '+logFile+ '\n')
             f.write('heatFoam | tee -a '+logFile+ '\n')
+            #f.write('topoSet > '+logFile+ '\n')
+            #f.write('createPatch -overwrite > '+logFile+ '\n')
+            #f.write('heatFoam > '+logFile+ '\n')
             #f.write('paraFoam -touchAll\n')
             #f.write('touch '+ self.partName +'.foam\n')
         os.chmod(file, self.chmod)
@@ -385,6 +390,7 @@ class OpenFOAM():
 
 
         else:
+            print("Creating new polymesh as none existed")
             self.createNewMesh(newFile,file)
         return
 

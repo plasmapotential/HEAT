@@ -20,7 +20,7 @@ services:
       # HEAT data directory on this machine (if exists)
       - ${HOME}/HEAT:/root/HEAT
 #      # HEAT source code from github
-#      - /home/tom/source/HEAT/github/source:/root/source/HEAT
+      - /home/tom/source/HEAT/source:/root/source/HEAT
 #      # ORNL EFIT class from github (if you have access)
 #      - /home/tom/source/EFIT:/root/EFIT
 #      # MAFOT bins and libs
