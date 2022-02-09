@@ -4,7 +4,6 @@
 #Date:          20191111
 
 import EFIT.equilParams_class as EP
-import gfiles
 import toolsClass
 tools = toolsClass.tools()
 
@@ -69,7 +68,7 @@ def setupForTerminalUse(gFile=None):
 
 class MHD:
 
-    def __init__(self, rootDir, dataPath):
+    def __init__(self, rootDir, dataPath, chmod=0o774, GID=-1):
         """
         rootDir is root location of python modules (where dashGUI.py lives)
         dataPath is the location where we write all output to
@@ -77,6 +76,8 @@ class MHD:
         self.rootDir = rootDir
         tools.rootDir = self.rootDir
         self.dataPath = dataPath
+        self.chmod = chmod
+        self.GID = GID
         tools.dataPath = self.dataPath
         return
 
@@ -131,20 +132,23 @@ class MHD:
 
         return
 
-    def get_mhd_inputs(self,machine='nstx',gFileList=None):
+    def getGEQDSK(self,machine='nstx',gFileList=None):
         """
         get gfile from mds+ tree if gfileList is None, otherwise use file
         """
         #load gfile from MDS+
         if gFileList is None:
-            self.timesteps, self.preserveFlag = gfiles.write_multiple_gfiles(
-                                                                self.MachFlag,
-                                                                self.shot,
-                                                                self.tree,
-                                                                self.tmin,
-                                                                self.tmax,
-                                                                self.shotPath,
-                                                                clobberwait=False)
+            self.timesteps = gfiles.GEQDSKFromMDS(
+                                                  self.MachFlag,
+                                                  self.shot,
+                                                  self.tree,
+                                                  self.tmin,
+                                                  self.tmax,
+                                                  self.shotPath,
+                                                  clobber=True,
+                                                  chmod=self.chmod,
+                                                  GID=self.GID
+                                                  )
         #load from file in GUI or TUI
         else:
             self.timesteps = []
@@ -642,7 +646,7 @@ class MHD:
 
 
 
-    def copyGfile2tree(self,gFileName,idx,clobberflag='y'):
+    def copyGfile2tree(self,gFileName,idx,clobberflag=True):
         """
         Copies gfile to HEAT tree
         gFileName is name of gFile that is already located in self.tmpDir
@@ -665,30 +669,15 @@ class MHD:
 
         name = 'g{:06d}.{:05d}'.format(shot,time)
         #make tree for this shot
-        try:
-            os.mkdir(self.shotPath)
-        except:
-            pass
+        tools.makeDir(self.shotPath, clobberFlag=False, mode=self.chmod, GID=self.GID)
         #make tree for this timestep
         if self.shotPath[-1] != '/': self.shotPath += '/'
         timeDir = self.shotPath + '{:06d}/'.format(time)
         newgfile = timeDir + name
-        try:
-            os.mkdir(timeDir)
-        except:
-            pass
-        clobberlist = ['y','Y','yes','YES','Yes']
-        #Directory Clobber checking
-        if clobberflag in clobberlist:
-            try:
-                shutil.rmtree(timeDir)
-                os.mkdir(timeDir)
-            except OSError as e:
-                print ("Timedir removal error: %s - %s." % (e.filename, e.strerror))
-                return
 
+        #clobber and make time directory
+        tools.makeDir(timeDir, clobberFlag=clobberflag, mode=self.chmod, GID=self.GID)
         shutil.copyfile(oldgfile, newgfile)
-        print("Directory " , timeDir ,  " Created ")
         return time
 
 
@@ -898,6 +887,194 @@ class MHD:
 
         #return ep that can be written to file (note its not a real EP as defined by equilParams class)
         return newEP
+
+
+    def GEQDSKFromMDS(machine, shot, tree='efit01', tmin=None, tmax=None,
+                          rootDir=None, clobber=True, chmod=0o774, GID=-1 ):
+        """
+        Function for grabbing multiple gfiles associated with a single shot
+        machine: string. either 'nstx' or 'd3d' or 'st40'
+        you will need to add server info for others
+        shot: integer.  Shot number of interest
+        tmin: integer. initial time step in [ms]
+        tmax: integer. final time step in [ms]
+        note: if tmin and tmax are 'None', then we pull all timsteps
+        if only tmin = 'None' then tmin = minimum timestep
+        if only tmax = 'None' then tmax = maximum timestep
+        """
+        #Tune server address depending upon machine
+        if machine == 'nstx': Server='skylark.pppl.gov'
+        elif machine == 'd3d': Server='atlas.gat.com'
+        elif machine == 'st40':
+            Server='skylark2.pppl.gov'
+            tree='st40'
+
+        #Connect to server and get all timesteps.
+        import MDSplus
+        MDS = MDSplus.Connection(Server)
+        MDS.openTree(tree, shot)
+        base = 'RESULTS:GEQDSK:'
+        # get time slice
+        signal = 'GTIME'
+        timesteps = MDS.get(base + signal).data()*1000
+        MDS.closeTree(tree, shot)
+        #Handle the multiple potential inputs discussed above
+        if tmin==None and tmax==None:
+            tmin = 0
+            tmax = timesteps[-1]
+        elif tmin==None and tmax!=None: tmin = 0
+        elif tmin!=None and tmax==None: tmax = timesteps[-1]
+
+        # find times between tmin and tmax
+        use = np.where(np.logical_and(timesteps >=tmin, timesteps <=tmax))
+        ts = timesteps[use].astype(int)
+
+        #Directory where we will save these gfiles if one is not declared
+        if rootDir==None: dirName = machine + '_{:06d}'.format(shot)
+        else: dirName = rootDir
+
+        tools.makeDir(dirName, clobberFlag=True, mode=self.chmod, GID=self.GID)
+
+        #Pull gfiles and write into dirName/subdirectory where subdirectory
+        #is exclusively for that timestep
+        print('Pulling all gfiles between {:5d} and {:5d} [ms]'.format(int(tmin),int(tmax)))
+        for t in ts:
+            t_path = dirName + '/{:06d}'.format(t)
+            tools.makeDir(t_path, clobberFlag=True, mode=self.chmod, GID=self.GID)
+            self.MDSplusPull(shot,t,tree=tree,Server=Server,gpath=t_path)
+
+        return ts
+
+
+    def MDSplusPull(self, shot, time, tree='EFIT01', exact=False, Server='skylark.pppl.gov',
+              gpath='.'):
+
+        print('Reading shot =', shot, 'and time =', time, 'from MDS+ tree:', tree)
+        # in case those are passed in as strings
+        shot = int(shot)
+        time = int(time)
+        # Connect to server, open tree and go to g-file
+        MDS = MDSplus.Connection(Server)
+        MDS.openTree(tree, shot)
+        base = 'RESULTS:GEQDSK:'
+        # get time slice
+        signal = 'GTIME'
+        k = np.argmin(np.abs(MDS.get(base + signal).data()*1000 - time))
+        time0 = int(MDS.get(base + signal).data()[k]*1000)
+        if (time != time0):
+            if exact:
+                raise RuntimeError(tree + ' does not exactly contain time ' + str(time) + '  ->  Abort')
+            else:
+                print('Warning: ' + tree + ' does not exactly contain time ' + str(time) + ' the closest time is ' + str(time0))
+                print('Fetching time slice ' + str(time0))
+                #time = time0
+        # store data in dictionary
+        g = {'shot':shot, 'time':time}
+        # get header line
+        header = str(MDS.get(base + 'CASE').data()[k], 'utf-8')
+
+        # get all signals, use same names as in read_g_file
+        translate = {'MW': 'NR', 'MH': 'NZ', 'XDIM': 'Xdim', 'ZDIM': 'Zdim', 'RZERO': 'R0',
+                    'RMAXIS': 'RmAxis', 'ZMAXIS': 'ZmAxis', 'SSIMAG': 'psiAxis',
+                    'SSIBRY': 'psiSep', 'BCENTR': 'Bt0', 'CPASMA': 'Ip', 'FPOL': 'Fpol',
+                    'PRES': 'Pres', 'FFPRIM': 'FFprime', 'PPRIME': 'Pprime', 'PSIRZ': 'psiRZ',
+                    'QPSI': 'qpsi', 'NBDRY': 'Nlcfs', 'LIMITR': 'Nwall'}
+
+        for signal in translate:
+            try:
+                g[translate[signal]] = MDS.get(base + signal).data()[k]
+            except:
+                raise ValueError(signal +' retrieval failed.')
+        g['R1'] = MDS.get(base + 'RGRID1').data()[0]
+        g['Zmid'] = 0.0
+#       RLIM = MDS.get(base + 'RLIM').data()[:, 0]
+#       ZLIM = MDS.get(base + 'ZLIM').data()[:, 1]
+        RLIM = MDS.get(base + 'RLIM').data()[k]
+        ZLIM = MDS.get(base + 'ZLIM').data()[k]
+        g['wall'] = np.vstack((RLIM, ZLIM)).T
+        RBBBS = MDS.get(base + 'RBDRY').data()[k]# [:g['Nlcfs']]
+        ZBBBS = MDS.get(base + 'ZBDRY').data()[k]# [:g['Nlcfs']]
+        g['lcfs'] = np.vstack((RBBBS, ZBBBS)).T
+        KVTOR = 0
+        RVTOR = 0#1.7
+        NMASS = 0
+        RHOVN = MDS.get(base + 'RHOVN').data()[k]
+
+        # convert floats to integers
+        for item in ['NR', 'NZ', 'Nlcfs', 'Nwall']:
+            g[item] = int(g[item])
+        # convert single (float32) to double (float64) and round
+        for item in ['Xdim', 'Zdim', 'R0', 'R1', 'RmAxis', 'ZmAxis', 'psiAxis', 'psiSep',
+                    'Bt0', 'Ip']:
+            g[item] = np.round(np.float64(g[item]), 7)
+        # convert single arrays (float32) to double arrays (float64)
+        for item in ['Fpol', 'Pres', 'FFprime', 'Pprime', 'psiRZ', 'qpsi', 'lcfs', 'wall']:
+            g[item] = np.array(g[item], dtype=np.float64)
+        # write g-file to disk
+        if not (gpath[-1] == '/'):
+            gpath += '/'
+
+        # Writing to match J. Menard's idl script
+        # in /u/jmenard/idl/efit/efit_routines_jem.pro
+        # Scale FFprime, Pprime, psiRZ, qpsi, Ip, psiSep, psiAxis,
+        # per the AUTO keyword in J. Menard's function, 'rescale_gstructures'
+        #       -From the Menard script line 395:
+        # "This function re-scales the poloidal flux to be consistent with the
+        # specified sign of Ip, where Ip is the toroidal component of the plasma
+        # current in cylindrical coordinates, i.e. + --> C.C.W. as viewed from
+        # above.  Note that in the re-definition of q, the theta flux coordinate
+        # is C.C.W. in the poloidal plane, so that if Ip > 0 and Bt > 0, q will
+        # be negative, since then B.grad(theta) < 0."
+
+#       dsign = np.sign(g['Ip'])
+#       gsign = np.sign( (g['psiAxis'] - g['psiSep']) )
+#       qsign = np.sign(g['Fpol'][-1]) #F_edge sign
+#       g['FFprime'] *= dsign*gsign
+#       g['Pprime'] *= dsign*gsign
+#       g['psiRZ'] *= dsign*gsign
+#       g['qpsi'] *= -qsign*dsign
+#       g['Ip'] *= dsign
+#       g['psiSep'] *= dsign*gsign
+#       g['psiAxis'] *= dsign*gsign
+
+#       print('dsign = {:f}'.format(dsign))
+#       print('gsign = {:f}'.format(gsign))
+#       print('qsign = {:f}'.format(qsign))
+#       g['FFprime'] *= dsign*qsign*gsign
+#       g['Pprime'] *= dsign*qsign*gsign
+#       g['psiRZ'] *= dsign*qsign*gsign
+#       g['qpsi'] *= -qsign*dsign
+#       g['psiSep'] *= dsign*qsign*gsign
+#       g['psiAxis'] *= dsign*qsign*gsign
+#       g['Fpol'] *= dsign*qsign
+
+        # Now, write to file using same style as J. Menard script (listed above)
+        # Using function in WRITE_GFILE for reference
+        file = gpath + 'g' + format(shot, '06d') + '.' + format(time,'05d')
+        with open(file, 'w') as f:
+            if ('EFITD' in header or 'LRD' in header):
+                f.write(header)
+            else:
+                f.write('  EFITD    xx/xx/xxxx    #' + str(shot) + '  ' + str(time) + 'ms        ')
+                f.write('   3 ' + str(g['NR']) + ' ' + str(g['NZ']) + '\n')
+                f.write('% .9E% .9E% .9E% .9E% .9E\n'%(g['Xdim'], g['Zdim'], g['R0'], g['R1'], g['Zmid']))
+                f.write('% .9E% .9E% .9E% .9E% .9E\n'%(g['RmAxis'], g['ZmAxis'], g['psiAxis'], g['psiSep'], g['Bt0']))
+                f.write('% .9E% .9E% .9E% .9E% .9E\n'%(g['Ip'], g['psiAxis'], 0, g['RmAxis'], 0))
+                f.write('% .9E% .9E% .9E% .9E% .9E\n'%(g['ZmAxis'],0,g['psiSep'],0,0))
+                write_array(g['Fpol'], f)
+                write_array(g['Pres'], f)
+                write_array(g['FFprime'], f)
+                write_array(g['Pprime'], f)
+                write_array(g['psiRZ'].flatten(), f)
+                write_array(g['qpsi'], f)
+                f.write(str(g['Nlcfs']) + ' ' + str(g['Nwall']) + '\n')
+                write_array(g['lcfs'].flatten(), f)
+                write_array(g['wall'].flatten(), f)
+                f.write(str(KVTOR) + ' ' + format(RVTOR, ' .9E') + ' ' + str(NMASS) + '\n')
+                write_array(RHOVN, f)
+        os.chown(file, -1, self.GID)
+        os.chmod(file, self.chmod)
+        return time
 
     #=====================================================================
     #                       private functions

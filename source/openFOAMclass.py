@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 tools = toolsClass.tools()
 
 class OpenFOAM():
-    def __init__(self, rootDir, dataPath):
+    def __init__(self, rootDir, dataPath, chmod=0o774, GID=-1):
         """
         rootDir is root location of python modules (where dashGUI.py lives)
         dataPath is the location where we write all output to
@@ -26,6 +26,8 @@ class OpenFOAM():
         tools.rootDir = self.rootDir
         self.dataPath = dataPath
         tools.dataPath = self.dataPath
+        self.chmod = chmod
+        self.GID = GID
         #self.buildheatFoam()
         return
 
@@ -287,7 +289,7 @@ class OpenFOAM():
 #            else:
 #                f.write(self.cmdSourceOF + '\n')
 #
-#        os.chmod(sourceFile, 0o775)
+#        os.chmod(sourceFile, self.chmod)
 
         #Write 3D meshing script
         file = self.partDir + self.cmd3Dmesh
@@ -310,7 +312,7 @@ class OpenFOAM():
                 f.write('mpirun --use-hwthread-cpus -np '+str(self.NCPU)+' snappyHexMesh -parallel -overwrite | tee -a '+logFile+ '\n')
                 f.write('reconstructParMesh -mergeTol 1e-6 -latestTime -constant | tee -a '+logFile+ '\n')
 
-        os.chmod(file, 0o744)
+        os.chmod(file, self.chmod)
 
         #Write thermal analysis script
         file = self.partDir + self.cmdThermal
@@ -325,7 +327,7 @@ class OpenFOAM():
             f.write('heatFoam | tee -a '+logFile+ '\n')
             #f.write('paraFoam -touchAll\n')
             #f.write('touch '+ self.partName +'.foam\n')
-        os.chmod(file, 0o775)
+        os.chmod(file, self.chmod)
 
         #Write temperature probe script
         file = self.partDir + self.cmdTprobe
@@ -337,7 +339,7 @@ class OpenFOAM():
             f.write('topoSet | tee -a '+logFile+ '\n')
             f.write('createPatch -overwrite | tee -a '+logFile+ '\n')
             f.write('postProcess -func "probes" | tee -a '+logFile+ '\n')
-        os.chmod(file, 0o744)
+        os.chmod(file, self.chmod)
         return
 
 
@@ -416,11 +418,7 @@ class OpenFOAM():
             print("Execution failed:", e, file=sys.stderr)
 
         #Now copy this mesh to the 3D meshes folder for future use
-        try:
-            os.mkdir(newFile)
-        except:
-            print("Could not create polyMesh directory in OF folder")
-            log.info("Could not create polyMesh directory in OF folder")
+        tools.makeDir(newFile, clobberFlag=False, mode=self.chmod, GID=self.GID)
         shutil.copytree(newFile, file)
 # This method left here for reference:
 #            from PyFoam.Execution.BasicRunner import BasicRunner

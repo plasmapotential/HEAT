@@ -57,7 +57,7 @@ class CAD:
 
 
     """
-    def __init__(self, rootDir, dataPath):
+    def __init__(self, rootDir, dataPath, chmod=0o774, GID=-1):
         """
         dataPath is the location where we write all output to
         """
@@ -65,6 +65,8 @@ class CAD:
         tools.rootDir = self.rootDir
         self.dataPath = dataPath
         tools.dataPath = self.dataPath
+        self.chmod = chmod
+        self.GID = GID
         return
 
     def allowed_class_vars(self):
@@ -479,7 +481,7 @@ class CAD:
         #Recursively make dirs for STLs
         print("making STL directory")
         log.info("making STL directory: "+path)
-        os.makedirs(path, exist_ok=True)
+        tools.makeDir(path, clobberFlag=False, mode=self.chmod, GID=self.GID)
 
         for i in range(len(mesh)):
             # ___ (3 underdashes) is the str we use to separate mesh name from resolution

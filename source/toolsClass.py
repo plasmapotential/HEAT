@@ -18,10 +18,11 @@ class tools:
     setting up input file pipelines, generic coordinate transformations, etc.
     """
 
-    def __init__(self):
+    def __init__(self, chmod=0o774):
         #speed benchmarking tools
         self.testN = 0
         self.testTime = 0
+        self.chmod = chmod
         return
 
     def initializeInput(self, obj, infile=None):
@@ -834,7 +835,7 @@ class tools:
         return test
 
 
-    def buildDirectories(self, PFCnames, timesteps, dataPath, clobberFlag=True):
+    def buildDirectories(self, PFCnames, timesteps, dataPath, clobberFlag=True, chmod=0o774, GID=-1):
         """
         builds a HEAT tree from timesteps and PFC part names
         """
@@ -844,52 +845,51 @@ class tools:
                 timeDir = dataPath + '/{:06d}/'.format(t)
             else:
                 timeDir = dataPath + '{:06d}/'.format(t)
-            try:
-                os.mkdir(timeDir)
-                print("Tree Directory " , timeDir ,  " Created ")
-            except FileExistsError:
-                clobberFlagTime = False #don't overwrite time directories, just PFC directories
-                if clobberFlagTime is True:
-                    try: shutil.rmtree(timeDir)
-                    except OSError as e:
-                        print ("Error: %s - %s." % (e.filename, e.strerror))
-                        sys.exit()
 
-                    os.mkdir(timeDir)
-                    print("Tree Directory " , timeDir ,  " Created ")
+            #don't overwrite time directories, just PFC directories
+            self.makeDir(timeDir, clobberFlag=False, mode=chmod, GID=GID)
 
             #build directory for each PFC partname
             for name in PFCnames:
                 pfcDir = timeDir + name
-                try:
-                    os.mkdir(pfcDir)
-                    print("Tree Directory " , pfcDir ,  " Created ")
-                except FileExistsError:
-                    if clobberFlag is True:
-                        try: shutil.rmtree(pfcDir)
-                        except OSError as e:
-                            print ("Error: %s - %s." % (e.filename, e.strerror))
-                            return
-
-                        os.mkdir(pfcDir)
-                        print("Tree Directory " , pfcDir ,  " Created ")
+                #overwrite PFC directories
+                self.makeDir(pfcDir, clobberFlag=True, mode=chmod, GID=GID)
         return
 
-    def makeDir(self, dir, clobberFlag=True):
+    def makeDir(self, path, clobberFlag=True, mode=None, GID=None):
         """
         builds a directory with clobber checking.  for general use.
+        user can pass an octal Linux permissions mode, and
+        group ID #
         """
+        #Make directory
         try:
-            os.makedirs(dir)
-            print("Directory " , dir ,  " Created ")
+            os.makedirs(path)
+            print("Directory " , path ,  " Created ")
         except:
             if clobberFlag is True:
                 try:
-                    shutil.rmtree(dir)
-                    os.makedirs(dir)
-                    print("Directory " , dir ,  " Created ")
+                    shutil.rmtree(path)
+                    os.makedirs(path, mode=self.chmod)
+                    print("Directory " , path ,  " clobbered and created ")
                 except OSError as e:
                     print ("Error: %s - %s." % (e.filename, e.strerror))
+
+        #change permissions
+        if mode != None:
+            try:
+                os.chmod(path, mode)
+            except OSError as e:
+                print("Could not change directory permissions")
+                print ("Error: %s - %s." % (e.filename, e.strerror))
+
+        #change ownership
+        if GID != None:
+            try:
+                os.chown(path, -1, GID)
+            except OSError as e:
+                print("Could not change directory ownership")
+                print ("Error: %s - %s." % (e.filename, e.strerror))
         return
 
 

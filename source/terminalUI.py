@@ -32,6 +32,15 @@ try:
 except:
     AppDir = 'Not in appImage'
 
+try:
+    chmod = int(os.environ["HEATchmod"], 8) #convert from base 8
+except:
+    chmod = int(0o774, 8)
+
+try:
+    GID = int(os.environ["dockerGID"]) #group ID
+except:
+    GID = -1
 
 #Import HEAT engine class
 from engineClass import engineObj
@@ -41,16 +50,12 @@ class TUI():
         """
         intialize terminal user interface (TUI) object
         """
-        self.ENG = engineObj(logFile, rootDir, dataPath, OFbashrc)
-        ## CPUs
+        self.ENG = engineObj(logFile, rootDir, dataPath, OFbashrc, chmod, GID)
         self.ENG.NCPUs = multiprocessing.cpu_count() - 2 #reserve 2 cores for overhead
+        self.chmod = chmod
+        self.GID = GID
         #if data directory doesn't exist, create it
-        try:
-            os.mkdir(dataPath)
-        except:
-            print("Did not make new data directory: "+dataPath)
-            log.info("Did not make new data directory: "+dataPath)
-
+        tools.makeDir(dataPath, clobberFlag=False, mode=self.chmod, GID=self.GID)
         return
 
 
@@ -183,10 +188,7 @@ class TUI():
         self.ENG.MHD.shotPath = self.shotPath
 
         #make tree branch for this shot
-        try:
-            os.mkdir(self.shotPath)
-        except:
-            pass
+        tools.makeDir(self.shotPath, clobberFlag=False, mode=self.chmod, GID=self.GID)
 
         return
 
@@ -202,7 +204,7 @@ class TUI():
             #initialize MHD
             self.ENG.MHD.tmpDir = tmpDir
             self.ENG.MHD.tree = 'EFIT02'
-            self.ENG.MHD.get_mhd_inputs(machine=mach,gFileList=gFiles)
+            self.ENG.MHD.getGEQDSK(machine=mach,gFileList=gFiles)
             self.ENG.MHD.makeEFITobjects()
             self.ENG.MHD.psiSepLimiter = None
             self.ENG.MHD.setTypes()

@@ -26,6 +26,7 @@ You will need to set a few variables below, based upon your system paths
 rootDir, PVPath
 """
 import os
+import sys
 import shutil
 import base64
 import io
@@ -66,6 +67,15 @@ try:
 except:
     AppDir = 'Not in appImage'
 
+try:
+    chmod = int(os.environ["HEATchmod"], 8) #convert from base 8
+except:
+    chmod = int(0o774, 8)
+
+try:
+    GID = int(os.environ["dockerGID"]) #group ID
+except:
+    GID = -1
 
 #Import HEAT engine
 from engineClass import engineObj
@@ -80,7 +90,7 @@ app = dash.Dash(server=server, meta_tags=[{"name": "viewport", "content": "width
 #Eventually need to fix this so that we are not using a global variable
 #dash can acces Flask Cache so we should cache data by userID or something
 #for R&D this works
-gui = engineObj(logFile, rootDir, dataPath, OFbashrc)
+gui = engineObj(logFile, rootDir, dataPath, OFbashrc, chmod, GID)
 gui.UImode = 'g' #graphical mode
 
 
@@ -631,12 +641,7 @@ def loadMHD(n_clicks,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask,data
         raise PreventUpdate
 
     #if data directory doesn't exist, create it
-    try:
-        os.mkdir(dataPath)
-    except:
-        print("Did not make new data directory: "+dataPath)
-        log.info("Did not make new data directory: "+dataPath)
-        pass
+    tools.makeDir(dataPath, clobberFlag=False, mode=chmod, GID=GID)
 
     if plasma3Dmask == 'plasma3D': plasma3Dmask=1
     else:  plasma3Dmask=0
@@ -2015,14 +2020,14 @@ def OFinputBoxes():
             ),
             html.Div(
                 children=[
-                    html.Label("Minimum Resh Refinement Level"),
+                    html.Label("Minimum Mesh Refinement Level"),
                     dcc.Input(id="OFminMeshLev", className="textInput"),
                 ],
                 className="OFInput",
             ),
             html.Div(
                 children=[
-                    html.Label("Maximum Resh Refinement Level"),
+                    html.Label("Maximum Mesh Refinement Level"),
                     dcc.Input(id="OFmaxMeshLev", className="textInput"),
                 ],
                 className="OFInput",

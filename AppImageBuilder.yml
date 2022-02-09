@@ -28,17 +28,20 @@ script:
   - cp -r /home/tom/source/EFIT AppDir/usr/src/EFIT
   # make directories
   - mkdir -p AppDir/opt
-  - mkdir -p AppDir/usr/opt
-  - mkdir -p AppDir/usr/bin
-  - mkdir -p AppDir/usr/lib
-  - mkdir -p AppDir/usr/plugins
+  - mkdir -p AppDir/opt/paraview/bin
+  - mkdir -p AppDir/opt/paraview/lib
+  - mkdir -p AppDir/opt/mafot/bin
+  - mkdir -p AppDir/opt/mafot/lib
+  - mkdir -p AppDir/opt/openfoam/bin
+  - mkdir -p AppDir/opt/openfoam/lib
+
   # Copy ParaVIEW
 #  - cp -rn /opt/paraview/oldRevs/ParaView-5.8.1-MPI-Linux-Python3.7-64bit/bin/* AppDir/usr/bin/
 #  - cp -rn /opt/paraview/oldRevs/ParaView-5.8.1-MPI-Linux-Python3.7-64bit/lib/* AppDir/usr/lib/
 #  - cp -rn /opt/paraview/oldRevs/ParaView-5.8.1-MPI-Linux-Python3.7-64bit/plugins/* AppDir/usr/lib/
-  - cp -rn /opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/bin/* AppDir/usr/bin/
-  - cp -rn /opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/lib/* AppDir/usr/lib/
-  - cp -rn /opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/plugins/* AppDir/usr/lib/
+  - cp -rn /opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/bin/* AppDir/opt/paraview/bin/
+  - cp -rn /opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/lib/* AppDir/opt/paraview/lib/
+  - cp -rn /opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/plugins/* AppDir/opt/paraview/lib/
 #  - cp -rn /opt/paraview/ParaView-5.9.0-RC2-MPI-Linux-Python3.8-64bit/bin AppDir/usr/opt/paraview/bin
 #  - cp -rn /opt/paraview/ParaView-5.9.0-RC2-MPI-Linux-Python3.8-64bit/lib AppDir/usr/opt/paraview/lib
 #  - cp -rn /opt/paraview/ParaView-5.9.0-RC2-MPI-Linux-Python3.8-64bit/plugins AppDir/usr/opt/paraview/plugins
@@ -60,27 +63,25 @@ script:
 
   #======v2106 openfoam
   # copy openFoam bins and libs
-  - mkdir -p AppDir/opt/openfoam/lib
   - cp -rn /opt/openfoam/OpenFOAM-v2106/etc AppDir/opt/openfoam/etc
   - cp -rn /opt/openfoam/OpenFOAM-v2106/bin AppDir/opt/openfoam/bin
+  - cp -rn /opt/openfoam/OpenFOAM-v2106/platforms AppDir/opt/openfoam/platforms
   # set up environment var files for openfoam inside appimage
   - rm AppDir/opt/openfoam/etc/bashrc
   - mv AppDir/opt/openfoam/etc/bashrc_HEAT AppDir/opt/openfoam/etc/bashrc
   - rm AppDir/opt/openfoam/etc/config.sh/setup
   - mv AppDir/opt/openfoam/etc/config.sh/setupHEAT AppDir/opt/openfoam/etc/config.sh/setup
   # copy swak4foam bins and libs (for groovyBC)
-  - cp -rn /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/bin/* AppDir/opt/openfoam/bin
-  - cp -rn /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/lib/* AppDir/opt/openfoam/lib
+  - cp -rn /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/bin/* AppDir/opt/openfoam/bin/
+  - cp -rn /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/lib/* AppDir/opt/openfoam/lib/
 
   # Make data dir
   - mkdir -p ${HOME}/HEAT/data
   # touch logFile
   - touch ${HOME}/HEAT/data/HEATlog.txt
   # copy MAFOT binaries and libs into AppDir
-  - mkdir -p AppDir/bin
-  - mkdir -p AppDir/lib
-  - cp -r /home/tom/source/HEAT/MAFOT/bin/* AppDir/bin/
-  - cp -r /home/tom/source/HEAT/MAFOT/lib/* AppDir/lib/
+  - cp -r /home/tom/source/HEAT/MAFOT/bin/* AppDir/opt/mafot/bin/
+  - cp -r /home/tom/source/HEAT/MAFOT/lib/* AppDir/opt/mafot/lib/
   # copy files needed for test run (.geqdsk, .STP, input, pfc)
 #  - mkdir -p AppDir/test
 #  - cp -r /home/tom/NSTX/g204118.01004  AppDir/test/
@@ -107,12 +108,11 @@ AppDir:
     id: HEATAppimage
     name: HEAT_AppImage
     icon: flame
-    version: v1.4.4
+    version: v2.0.0
 #    # Set the python executable as entry point
 #    exec: usr/bin/python3
 #    # Set the application main script path as argument. Use '$@' to forward CLI parameters
-#    exec_args: "$APPDIR/usr/src/dashGUI.py $@"
-    # Use this bash script to enable the user to run HEAT, freecad, or paraview
+#    exec_args: "$APPDIR/usr/src/launchHEAT.py $@"
     exec: bin/bash
     exec_args: "$APPDIR/usr/src/appImageRunHEAT $@"
 
@@ -182,6 +182,8 @@ AppDir:
 #      - libxcb-dri3-0
 #      - libxcb-dri2-0
 #      - libxcb-present0
+      #for centos
+      - libxcursor-dev
       #openfoam stuff
 #      - openfoam2006
 #      - openfoam2006-dev
@@ -199,8 +201,8 @@ AppDir:
       #for OpenFOAM v1912
       #PATH: '${APPDIR}/bin:${APPDIR}/usr/bin:${APPDIR}/usr/opt/openfoam/openfoam1912/platforms/linux64GccDPInt32Opt/bin:${APPDIR}/usr/opt/openfoam/openfoam1912/bin:${PATH}'
       #for OpenFOAM v2106
-      PATH: '${APPDIR}/bin:${APPDIR}/usr/bin:${APPDIR}/usr/opt/openfoam/bin:${PATH}'
-      LD_LIBRARY_PATH: '${APPDIR}/lib:${APPDIR}/lib/x86_64-linux-gnu:${APPDIR}/usr/lib:${APPDIR}/opt/libc/lib:${APPDIR}/opt/libc/lib/x86_64-linux-gnu:${APPDIR}/usr/lib/x86_64-linux-gnu:${APPDIR}/lib:${APPDIR}/usr/lib/x86_64-linux-gnu/netgen'
+      PATH: '${APPDIR}/bin:${APPDIR}/usr/bin:${APPDIR}/opt/mafot/bin:${APPDIR}/opt/openfoam/bin:${APPDIR}/opt/paraview/bin:${APPDIR}/opt/openfoam/platforms/linux64GccDPInt32Opt/bin:${APPDIR}/opt/swak4foam/bin:${PATH}'
+      LD_LIBRARY_PATH: '${APPDIR}/lib:${APPDIR}/lib/x86_64-linux-gnu:${APPDIR}/usr/lib:${APPDIR}/opt/libc/lib:${APPDIR}/opt/libc/lib/x86_64-linux-gnu:${APPDIR}/usr/lib/x86_64-linux-gnu:${APPDIR}/lib:${APPDIR}/usr/lib/x86_64-linux-gnu/netgen:${APPDIR}/opt/mafot/lib:${APPDIR}/opt/openfoam/lib:${APPDIR}/opt/paraview/lib:${APPDIR}/opt/swak4foam/lib'
       # Set python home
       # See https://docs.python.org/3/using/cmdline.html#envvar-PYTHONHOME
       PYTHONHOME: '${APPDIR}/usr'
@@ -208,18 +210,15 @@ AppDir:
       # See https://docs.python.org/3/using/cmdline.html#envvar-PYTHONPATH
       #for paraview 5.8 and 5.9:
       #PYTHONPATH: '${APPDIR}/lib/python3.8:${APPDIR}/lib/python3.8/site-packages:${APPDIR}/lib/python3.8/dist-packages:${APPDIR}/usr/local/mdsplus/python:${APPDIR}/usr/lib/python3/dist-packages/paraview'
-      PYTHONPATH: '${PYTHONPATH}:${APPDIR}/lib/python3.8:${APPDIR}/lib/python3.8/site-packages:${APPDIR}/lib/python3.8/dist-packages:${APPDIR}/usr/local/mdsplus/python:${APPDIR}/usr/lib/python3/dist-packages/paraview'
+      PYTHONPATH: '${PYTHONPATH}:${APPDIR}/lib/python3.8:${APPDIR}/lib/python3.8/site-packages:${APPDIR}/lib/python3.8/dist-packages:${APPDIR}/usr/local/mdsplus/python:${APPDIR}/opt/paraview/lib/python3/dist-packages/paraview'
 
       #PYTHONPATH: '${APPDIR}/lib/python3.7:${APPDIR}/lib/python3.7/site-packages:${APPDIR}/lib/python3.7/dist-packages:${APPDIR}/usr/local/mdsplus/python:${APPDIR}/usr/lib/python3/dist-packages/paraview'
       # Set runMode to appImage
       runMode: 'appImage'
       # Set paraview env var
-      pvpythonCMD: '${APPDIR}/usr/bin/pvpython'
-      PVPath: '${APPDIR}/usr/lib/python3/dist-packages/paraview'
-      PVbin: '${APPDIR}/usr/bin/paraview'
-      #pvpythonCMD: '${APPDIR}/usr/opt/paraview/bin/pvpython'
-      #PVPath: '${APPDIR}/usr/opt/paraview/lib/python3/dist-packages/paraview'
-      #PVbin: '${APPDIR}/usr/opt/paraview/bin/paraview'
+      pvpythonCMD: '${APPDIR}/opt/paraview/pvpython'
+      PVPath: '${APPDIR}/opt/paraview/lib/python3/dist-packages/paraview'
+      PVbin: '${APPDIR}/opt/paraview/bin/paraview'
       # Set FreeCAD env var
       #freecadAppImage: 'FreeCAD_0.18-16146-rev1-Linux-Conda_Py3Qt5_glibc2.12-x86_64.AppImage'
       # Set preload to nothing

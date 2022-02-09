@@ -20,6 +20,7 @@ import time
 import numpy as np
 import logging
 import os
+import sys
 import pandas as pd
 import shutil
 import errno
@@ -33,7 +34,10 @@ log = logging.getLogger(__name__)
 tools = toolsClass.tools()
 
 class engineObj():
-    def __init__(self, logFile, rootDir, dataPath, OFbashrc):
+    def __init__(self, logFile, rootDir, dataPath, OFbashrc, chmod, GID):
+        #file read/write/execute permissions
+        self.chmod = chmod
+        self.GID = GID
         #where HEAT log is written
         self.logFile = logFile
         #where python source code is located (dashGUI.py)
@@ -60,17 +64,7 @@ class engineObj():
         tempDir = dataPath + '/tmpDir/'
         self.tmpDir = tempDir
         self.MHD.tmpDir = tempDir
-        try:
-            os.mkdir(tempDir)
-            print("Directory " , tempDir ,  " Created ")
-        except FileExistsError:
-            try: shutil.rmtree(tempDir)
-            except OSError as e:
-                print ("Error: %s - %s." % (e.filename, e.strerror))
-                sys.exit()
-
-            os.mkdir(tempDir)
-            print("Directory " , tempDir ,  " Created ")
+        tools.makeDir(tempDir, clobberFlag=True, mode=self.chmod, GID=self.GID)
         return
 
     def machineSelect(self, MachFlag, machineList):
@@ -89,11 +83,11 @@ class engineObj():
         """
         Create objects that we can reference later on
         """
-        self.MHD = MHDClass.MHD(self.rootDir, self.dataPath)
-        self.CAD = CADClass.CAD(self.rootDir, self.dataPath)
-        self.HF = heatfluxClass.heatFlux(self.rootDir, self.dataPath)
-        self.OF = openFOAMclass.OpenFOAM(self.rootDir, self.dataPath)
-        self.GYRO = gyroClass.GYRO(self.rootDir, self.dataPath)
+        self.MHD = MHDClass.MHD(self.rootDir, self.dataPath, self.chmod, self.GID)
+        self.CAD = CADClass.CAD(self.rootDir, self.dataPath, self.chmod, self.GID)
+        self.HF = heatfluxClass.heatFlux(self.rootDir, self.dataPath, self.chmod, self.GID)
+        self.OF = openFOAMclass.OpenFOAM(self.rootDir, self.dataPath, self.chmod, self.GID)
+        self.GYRO = gyroClass.GYRO(self.rootDir, self.dataPath, self.chmod, self.GID)
 
         #set up class variables for each object
         self.MHD.allowed_class_vars()
@@ -301,12 +295,10 @@ class engineObj():
         else:
             self.MHD.shotPath = self.dataPath + self.MHD.MachFlag +"_{:06d}".format(self.MHD.shot)
 
-        print("TEST1")
-        self.MHD.get_mhd_inputs('nstx',self.MHD.gFileList)
-        print("TEST2")
+
+        self.MHD.getGEQDSK('nstx',self.MHD.gFileList)
 #        self.t = self.MHD.timesteps[0]
         self.MHD.makeEFITobjects()
-        print("TEST3")
         self.NCPUs = multiprocessing.cpu_count() - 2 #reserve 2 cores for overhead
         self.MHD.psiSepLimiter = None
 
@@ -594,7 +586,7 @@ class engineObj():
 
 
         #rebuild eq objects
-        self.MHD.get_mhd_inputs(self.MachFlag,newGfiles)
+        self.MHD.getGEQDSK(self.MachFlag,newGfiles)
         self.MHD.makeEFITobjects()
 
 
@@ -646,10 +638,7 @@ class engineObj():
 
         if STPfile is not None:
             #make STP path if it doesnt exist
-            try:
-                os.makedirs(self.CAD.STPpath)
-            except:
-                print("Did not create STPpath.  It probably exists already (HEAT already ran on this machine).")
+            tools.makeDir(self.CAD.STPpath, clobberFlag=False, mode=self.chmod, GID=self.GID)
             newSTPpath = self.CAD.STPpath + STPfile
             #check to see if this STP file exists and write data to the file
             if os.path.isfile(newSTPpath) == False:
@@ -681,11 +670,7 @@ class engineObj():
         """
         Loads CAD file for terminal users
         """
-        try:
-            os.makedirs(self.CAD.STPpath)
-        except:
-            print("Did not create STPpath.  It probably exists already (HEAT already ran on this machine).")
-
+        tools.makeDir(self.CAD.STPpath, clobberFlag=False, mode=self.chmod, GID=self.GID)
         #get file name
         stpName = os.path.basename(STPfile)
         #time last modified
@@ -1989,10 +1974,7 @@ class engineObj():
         movieDir = self.MHD.shotPath + '/paraview/'
         tPath = self.MHD.shotPath + '/' + '{:06d}/'.format(t)
         #first try to make new directory
-        try:
-            os.mkdir(movieDir)
-        except FileExistsError:
-            pass
+        tools.makeDir(movieDir, clobberFlag=False, mode=self.chmod, GID=self.GID)
         if 'hfOpt' in runList:
             src = tPath + 'HF_optical_all.csv'
             dest = movieDir + 'hfOptical_{:06d}.csv'.format(t)
@@ -2309,10 +2291,10 @@ class engineObj():
             self.OF.caseDir = self.MHD.shotPath + 'openFoam/heatFoam'
         else:
             self.OF.caseDir = self.MHD.shotPath + '/openFoam/heatFoam'
-        tools.makeDir(self.OF.caseDir)
+        tools.makeDir(self.OF.caseDir, clobberFlag=True, mode=self.chmod, GID=self.GID)
         #set up directory for all .foam files
         #self.OF.allFoamsDir = self.OF.caseDir + '/allFoams'
-        #tools.makeDir(self.OF.allFoamsDir)
+        #tools.makeDir(self.OF.allFoamsDir, clobberFlag=False, mode=self.chmod, GID=self.GID)
         #set up OF parts for each PFC part
         for PFC in self.PFCs:
             #check if PFC is a gyroSource Plane
@@ -2331,7 +2313,7 @@ class engineObj():
             self.OF.partDir = partDir
             self.OF.partName = PFC.name
 
-            # tools.makeDir(partDir)
+            #tools.makeDir(partDir, clobberFlag=True, mode=self.chmod, GID=self.GID)
             #copy heatFoam template directory to this location
             try:
                 shutil.copytree(self.OF.templateCase, partDir)
@@ -2373,13 +2355,14 @@ class engineObj():
             log.info("Creating openFOAM symlink to STL")
             #old method used ROIGridRes, but this can sometimes create non-watertight mesh
             #new method uses standard FreeCAD mesher (not mefisto) to make better volume mesh
+            #standard meshing algorithm
             PFC.OFpart = PFC.name + "___" + "standard"
-            triSurfaceLocation = partDir+'/constant/triSurface/' + PFC.OFpart +"mm.stl"
+            triSurfaceLocation = partDir+'/constant/triSurface/' + PFC.OFpart +".stl"
 
             if self.CAD.STLpath[-1] == '/':
-                stlfile = self.CAD.STLpath + PFC.OFpart +"mm.stl"
+                stlfile = self.CAD.STLpath + PFC.OFpart +".stl"
             else:
-                stlfile = self.CAD.STLpath +'/'+ PFC.OFpart +"mm.stl"
+                stlfile = self.CAD.STLpath +'/'+ PFC.OFpart +".stl"
 
             #if the standard mesh for this part doesn't exist, create it using freecad
             #in the HEAT CAD module
@@ -2481,7 +2464,7 @@ class engineObj():
 #                OFbinDir = OFplatformDir + '/bin'
 #                OFlibDir = OFplatformDir + '/lib'
 #                #make openfoam platform directory
-#                os.mkdirs(OFplatformDir, exist_ok=True)
+#                tools.makeDir(OFplatformDir, clobberFlag=False, mode=self.chmod, GID=self.GID)
 #                #symlink AppDir/usr/bin to openfoam bin (same for lib)
 #                try:
 #                    os.symlink('/usr/bin', OFbinDir)
@@ -2541,7 +2524,7 @@ class engineObj():
                 HFtStep = partDir+'/{:f}'.format(OFt).rstrip('0').rstrip('.')+'/HF'
                 try:
                     #shutil.copytree(t0new,timeDir
-                    os.mkdir(timeDir)
+                    tools.makeDir(timeDir, clobberFlag=False, mode=self.chmod, GID=self.GID)
                     #shutil.copy(HFt0, HFtStep)
                     shutil.copy(HFt0, timeDir)
 
@@ -2605,11 +2588,8 @@ class engineObj():
             #    timeDir = partDir + '/{:f}'.format(OFt).rstrip('0').rstrip('.')
             #    #make the allFoam timestep directory for this timestep
             #    allFoamTimeDir = self.OF.allFoamsDir + '/{:f}'.format(OFt).rstrip('0').rstrip('.')
-            #    try:
-            #        os.mkdir(allFoamTimeDir)
-            #        #copy fields to folder?
-            #    except:
-            #        pass
+            #    tools.makeDir(allFoamTimeDir, clobberFlag=False, mode=self.chmod, GID=self.GID)
+
 
         print("openFOAM run completed.")
         log.info("openFOAM run completed.")
@@ -2653,11 +2633,8 @@ class engineObj():
             plotlyDir = self.MHD.shotPath + 'plotly'
         else:
             plotlyDir = self.MHD.shotPath + '/plotly'
-        try:
-            os.mkdir(plotlyDir)
-        except:
-            print("Could not make plotly directory")
-            log.info("Could not make plotly directory")
+
+        tools.makeDir(plotlyDir, clobberFlag=False, mode=self.chmod, GID=self.GID)
 
         plotPath = plotlyDir + '/OFminmax.html'
         fig.write_html(plotPath)
@@ -2680,11 +2657,8 @@ class engineObj():
             plotlyDir = self.MHD.shotPath + 'plotly'
         else:
             plotlyDir = self.MHD.shotPath + '/plotly'
-        try:
-            os.mkdir(plotlyDir)
-        except:
-            print("Could not make plotly directory")
-            log.info("Could not make plotly directory")
+
+        tools.makeDir(plotlyDir, clobberFlag=False, mode=self.chmod, GID=self.GID)
 
         plotPath = plotlyDir + '/HFdist.html'
         fig.write_html(plotPath)
@@ -2741,11 +2715,8 @@ class engineObj():
             plotlyDir = self.MHD.shotPath + 'plotly'
         else:
             plotlyDir = self.MHD.shotPath + '/plotly'
-        try:
-            os.mkdir(plotlyDir)
-        except:
-            print("Could not make plotly directory")
-            log.info("Could not make plotly directory")
+
+        tools.makeDir(plotlyDir, clobberFlag=False, mode=self.chmod, GID=self.GID)
 
         plotPath = plotlyDir + '/Tprobes.html'
         fig.write_html(plotPath)

@@ -54,6 +54,7 @@ cp -n requirements.txt dockerDir/
 cp -n buildDocker dockerDir/
 cp -n docker-compose.yml dockerDir/
 cp -n Dockerfile dockerDir/
+cp -n runDockerCompose dockerDir/
 
 #copy docker files to HEAT rootDir for uploading to github
 #this clobbers old files
@@ -63,6 +64,7 @@ cp requirements.txt /home/tom/source/HEAT/github/docker/
 cp buildDocker /home/tom/source/HEAT/github/docker/
 cp docker-compose.yml /home/tom/source/HEAT/github/docker/
 cp Dockerfile /home/tom/source/HEAT/github/docker/
+cp runDockerCompose /home/tom/source/HEAT/github/docker/
 
 #run docker build command
 echo "Building docker image..."

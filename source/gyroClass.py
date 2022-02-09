@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 
 class GYRO:
 
-    def __init__(self, rootDir, dataPath):
+    def __init__(self, rootDir, dataPath, chmod=0o774, GID=-1):
         """
         rootDir is root location of python modules (where dashGUI.py lives)
         dataPath is the location where we write all output to
@@ -24,6 +24,8 @@ class GYRO:
         tools.rootDir = self.rootDir
         self.dataPath = dataPath
         tools.dataPath = self.dataPath
+        self.chmod = chmod
+        self.GID = GID
 
         return
 

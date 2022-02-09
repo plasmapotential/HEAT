@@ -155,6 +155,10 @@ os.environ["rootDir"] = rootDir
 os.environ["dataPath"] = dataPath
 os.environ["OFbashrc"] = OFbashrc
 os.environ["FreeCADPath"] = FreeCADPath
+os.environ["HEATchmod"] = '0o774' #chmod in base 8 (octal)
+
+#clear uname mask for docker saving
+os.umask(0)
 
 #===============================================================================
 

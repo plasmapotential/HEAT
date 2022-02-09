@@ -47,7 +47,7 @@ else
 fi
 
 echo "Running HEAT python GUI"
-$APPDIR/usr/bin/python3 $APPDIR/usr/src/dashGUI.py $ADDRESS $PORT
+$APPDIR/usr/bin/python3 $APPDIR/usr/src/launchHEAT.py --m g --a $ADDRESS --p $PORT
 
 #USE THIS VERSION IF YOU WANT MULTIPLE OPTIONS:
 #

@@ -1,0 +1,19 @@
+#!/bin/bash
+#run docker on linux
+#check for docker group so that it can be passed into container.
+#this allows files generated in the container to be accessed outside container.
+#otherwise, files will be saved as root and may not be accessible to
+#users not in the docker group.
+#
+#check for docker group and load into ${dockerGID}
+if [ $(getent group docker) ]; then
+  echo "docker group exists. setting dockerGID env var..."
+  export dockerGID="$(getent group docker | cut -d: -f3)"
+else
+  echo "'docker' group does not exist."
+  echo "If you continue HEAT files will be saved under root group!"
+  echo "It is recommended (but not required) that you create group"
+  echo "'docker' and add yourself to it before running HEAT."
+fi
+#run docker compose
+docker-compose up

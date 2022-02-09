@@ -18,7 +18,7 @@ services:
       #user should not edit container paths
       #
       # HEAT data directory on this machine (if exists)
-      - ${HOME}:/root/HEAT
+      - ${HOME}/HEAT:/root/HEAT
 #      # HEAT source code from github
 #      - /home/tom/source/HEAT/github/source:/root/source/HEAT
 #      # ORNL EFIT class from github (if you have access)
@@ -32,10 +32,21 @@ services:
 #      #swak4foam bins / libs
 #      - /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/bin:/root/opt/swak4foam/bin
 #      - /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/lib:/root/opt/swak4foam/lib
+      # Batch mode directory
+      - /home/tom/HEATtest/terminal:/root/terminal
     stdin_open: true # docker run -i
     tty: true        # docker run -t
+    #if you want to set env vars, do it here:
+    environment:
+    - dockerGID=$dockerGID
+
+
 
 #NOTES:
+#to run HEAT in batch mode, first bind mount the /root/terminal directory to your
+#local directory with the batchFile, then run:
+# python3 launchHEAT.py --m t --f /root/terminal/batchFile.dat
+#
 #to run an interactive shell use this command:
 # docker-compose run HEAT /bin/bash
 #
