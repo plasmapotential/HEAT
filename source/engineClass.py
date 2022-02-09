@@ -2479,7 +2479,7 @@ class engineObj():
             print("Building openFOAM templates and shell scripts")
             log.info("Building openFOAM templates and shell scripts")
             templateVarFile = partDir + '/system/templateVariables'
-            STLpart = PFC.OFpart +"mm.stl"
+            STLpart = PFC.OFpart +".stl"
             self.OF.writeOFtemplateVarFile(templateVarFile, STLpart)
             self.OF.writeShellScript(self.logFile)
 
