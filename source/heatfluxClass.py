@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 
 class heatFlux:
 
-    def __init__(self, rootDir, dataPath, chmod=0o774, GID=-1):
+    def __init__(self, rootDir, dataPath, chmod=0o774, UID=-1, GID=-1):
         """
         rootDir is root location of python modules (where dashGUI.py lives)
         dataPath is the location where we write all output to
@@ -34,6 +34,7 @@ class heatFlux:
         tools.dataPath = self.dataPath
         self.chmod = chmod
         self.GID = GID
+        self.UID = UID
         return
 
     def allowed_class_vars(self):
@@ -921,7 +922,7 @@ class heatFlux:
         pointFile = openFoamDir + '/constant/boundaryData/STLpatch/points'
         hfFile = openFoamDir + '/constant/boundaryData/STLpatch/{:f}'.format(timestep).rstrip('0').rstrip('.') + '/HF'
         timeDir = openFoamDir + '/constant/boundaryData/STLpatch/{:f}'.format(timestep).rstrip('0').rstrip('.')
-        tools.makeDir(timeDir, clobberFlag=False, mode=self.chmod, GID=self.GID)
+        tools.makeDir(timeDir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
 
         with open(pointFile, 'w') as f:
             f.write('{:d}\n'.format(len(centers[:,0])))

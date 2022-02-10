@@ -835,7 +835,7 @@ class tools:
         return test
 
 
-    def buildDirectories(self, PFCnames, timesteps, dataPath, clobberFlag=True, chmod=0o774, GID=-1):
+    def buildDirectories(self, PFCnames, timesteps, dataPath, clobberFlag=True, chmod=0o774, UID=-1, GID=-1):
         """
         builds a HEAT tree from timesteps and PFC part names
         """
@@ -847,20 +847,25 @@ class tools:
                 timeDir = dataPath + '{:06d}/'.format(t)
 
             #don't overwrite time directories, just PFC directories
-            self.makeDir(timeDir, clobberFlag=False, mode=chmod, GID=GID)
+            self.makeDir(timeDir, clobberFlag=False, mode=chmod, UID=UID, GID=GID)
 
             #build directory for each PFC partname
             for name in PFCnames:
                 pfcDir = timeDir + name
                 #overwrite PFC directories
-                self.makeDir(pfcDir, clobberFlag=True, mode=chmod, GID=GID)
+                self.makeDir(pfcDir, clobberFlag=True, mode=chmod, UID=UID, GID=GID)
+            #set tree permissions
+            self.recursivePermissions(timeDir, UID, GID, chmod)
         return
 
-    def makeDir(self, path, clobberFlag=True, mode=None, GID=None):
+    def makeDir(self, path, clobberFlag=True, mode=None, UID=None, GID=None):
         """
         builds a directory with clobber checking.  for general use.
         user can pass an octal Linux permissions mode, and
         group ID #
+
+        note: if this creates nested dirs only the path will have correct permissions!
+              all dirs created above path will be 0o777 and $USER:$USER
         """
         #Make directory
         try:
@@ -884,14 +889,36 @@ class tools:
                 print ("Error: %s - %s." % (e.filename, e.strerror))
 
         #change ownership
-        if GID != None:
-            try:
-                os.chown(path, -1, GID)
-            except OSError as e:
-                print("Could not change directory ownership")
-                print ("Error: %s - %s." % (e.filename, e.strerror))
+        if GID == None:
+            GID = -1
+        if UID == None:
+            UID == -1
+        try:
+            os.chown(path, UID, GID)
+        except OSError as e:
+            print("Could not change directory ownership")
+            print ("Error: %s - %s." % (e.filename, e.strerror))
+
         return
 
+    def recursivePermissions(self, path, UID, GID, chmod):
+        """
+        recursively set permissions in a dir
+        is identical to bash commands:
+        chown -R <UID>:<GID> path
+        chmod -R <chmod> path
+
+        UID is user id
+        GID is group id
+        chmod is permissions in base 10 (or if in base 8 preface with 0o)
+        """
+        for dirpath, dirnames, filenames in os.walk(path):
+            os.chown(dirpath, UID, GID)
+            os.chmod(dirpath, chmod)
+            for filename in filenames:
+                os.chown(os.path.join(dirpath, filename), UID, GID)
+                os.chmod(os.path.join(dirpath, filename), chmod)
+        return
 
     def is_number(self, s):
         """

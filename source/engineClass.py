@@ -34,10 +34,11 @@ log = logging.getLogger(__name__)
 tools = toolsClass.tools()
 
 class engineObj():
-    def __init__(self, logFile, rootDir, dataPath, OFbashrc, chmod, GID):
+    def __init__(self, logFile, rootDir, dataPath, OFbashrc, chmod, UID, GID):
         #file read/write/execute permissions
         self.chmod = chmod
         self.GID = GID
+        self.UID = UID
         #where HEAT log is written
         self.logFile = logFile
         #where python source code is located (dashGUI.py)
@@ -64,7 +65,7 @@ class engineObj():
         tempDir = dataPath + '/tmpDir/'
         self.tmpDir = tempDir
         self.MHD.tmpDir = tempDir
-        tools.makeDir(tempDir, clobberFlag=True, mode=self.chmod, GID=self.GID)
+        tools.makeDir(tempDir, clobberFlag=True, mode=self.chmod, UID=self.UID, GID=self.GID)
         return
 
     def machineSelect(self, MachFlag, machineList):
@@ -83,11 +84,11 @@ class engineObj():
         """
         Create objects that we can reference later on
         """
-        self.MHD = MHDClass.MHD(self.rootDir, self.dataPath, self.chmod, self.GID)
-        self.CAD = CADClass.CAD(self.rootDir, self.dataPath, self.chmod, self.GID)
-        self.HF = heatfluxClass.heatFlux(self.rootDir, self.dataPath, self.chmod, self.GID)
-        self.OF = openFOAMclass.OpenFOAM(self.rootDir, self.dataPath, self.chmod, self.GID)
-        self.GYRO = gyroClass.GYRO(self.rootDir, self.dataPath, self.chmod, self.GID)
+        self.MHD = MHDClass.MHD(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
+        self.CAD = CADClass.CAD(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
+        self.HF = heatfluxClass.heatFlux(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
+        self.OF = openFOAMclass.OpenFOAM(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
+        self.GYRO = gyroClass.GYRO(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
 
         #set up class variables for each object
         self.MHD.allowed_class_vars()
@@ -110,6 +111,7 @@ class engineObj():
             log.info('Loading NSTX-U Input Filestream')
             self.infile = self.rootDir + '/inputs/NSTXU/NSTXU_input.csv'
             self.pfcFile = self.rootDir + '/inputs/NSTXU/NSTXUpfcs.csv'
+            self.CAD.machPath = self.dataPath + '/NSTX'
             self.OF.meshDir = self.dataPath + '/NSTX/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/NSTX/STLs/'
             self.CAD.STPpath = self.dataPath + '/NSTX/STPs/'
@@ -119,6 +121,7 @@ class engineObj():
             log.info('Loading ST40 Input Filestream')
             self.infile = self.rootDir + '/inputs/ST40/ST40_input.csv'
             self.pfcFile = self.rootDir + '/inputs/ST40/ST40pfcs.csv'
+            self.CAD.machPath = self.dataPath + '/ST40'
             self.OF.meshDir = self.dataPath + '/ST40/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/ST40/STLs/'
             self.CAD.STPpath = self.dataPath + '/ST40/STPs/'
@@ -128,6 +131,7 @@ class engineObj():
             log.info('Loading DIII-D Input Filestream')
             self.infile = self.rootDir + '/inputs/D3D/D3D_input.csv'
             self.pfcFile = self.rootDir + '/inputs/D3D/D3Dpfcs.csv'
+            self.CAD.machPath = self.dataPath + '/D3D'
             self.OF.meshDir = self.dataPath + '/D3D/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/D3D/STLs/'
             self.CAD.STPpath = self.dataPath + '/D3D/STPs/'
@@ -137,6 +141,7 @@ class engineObj():
             log.info('Loading STEP Input Filestream')
             self.infile = self.rootDir + '/inputs/STEP/STEP_input.csv'
             self.pfcFile = self.rootDir + '/inputs/STEP/STEPpfcs.csv'
+            self.CAD.machPath = self.dataPath + '/STEP'
             self.OF.meshDir = self.dataPath + '/STEP/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/STEP/STLs/'
             self.CAD.STPpath = self.dataPath + '/STEP/STPs/'
@@ -146,6 +151,7 @@ class engineObj():
             log.info('Loading SPARC Input Filestream')
             self.infile = self.rootDir + '/inputs/SPARC/SPARC_input.csv'
             self.pfcFile = self.rootDir + '/inputs/SPARC/SPARCpfcs.csv'
+            self.CAD.machPath = self.dataPath + '/SPARC'
             self.OF.meshDir = self.dataPath + '/SPARC/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/SPARC/STLs/'
             self.CAD.STPpath = self.dataPath + '/SPARC/STPs/'
@@ -155,6 +161,7 @@ class engineObj():
             log.info('Loading WEST Input Filestream')
             self.infile = self.rootDir + '/inputs/WEST/WEST_input.csv'
             self.pfcFile = self.rootDir + '/inputs/WEST/WESTpfcs.csv'
+            self.CAD.machPath = self.dataPath + '/WEST'
             self.OF.meshDir = self.dataPath + '/WEST/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/WEST/STLs/'
             self.CAD.STPpath = self.dataPath + '/WEST/STPs/'
@@ -164,6 +171,7 @@ class engineObj():
             log.info('Loading K-STAR Input Filestream')
             self.infile = self.rootDir + '/inputs/KSTAR/KSTAR_input.csv'
             self.pfcFile = self.rootDir + '/inputs/KSTAR/KSTARpfcs.csv'
+            self.CAD.machPath = self.dataPath + '/KSTAR'
             self.OF.meshDir = self.dataPath + '/KSTAR/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/KSTAR/STLs/'
             self.CAD.STPpath = self.dataPath + '/KSTAR/STPs/'
@@ -173,6 +181,7 @@ class engineObj():
             log.info("INVALID MACHINE SELECTION!  Defaulting to NSTX-U!")
             self.infile = self.rootDir + '/inputs/NSTXU/NSTXU_input.csv'
             self.pfcFile = self.rootDir + '/inputs/NSTXU/NSTXUpfcs.csv'
+            self.CAD.machPath = self.dataPath + '/NSTX'
             self.OF.meshDir = self.dataPath + '/NSTX/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/NSTX/STLs/'
             self.CAD.STPpath = self.dataPath + '/NSTX/STPs/'
@@ -636,9 +645,12 @@ class engineObj():
             tools.initializeInput(self.CAD, infile=self.infile)
         self.CAD.rootDir = self.rootDir #set HEAT rootDir
 
+        #make machine specific CAD path with correct permissions
+        tools.makeDir(self.CAD.machPath, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
+
         if STPfile is not None:
             #make STP path if it doesnt exist
-            tools.makeDir(self.CAD.STPpath, clobberFlag=False, mode=self.chmod, GID=self.GID)
+            tools.makeDir(self.CAD.STPpath, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
             newSTPpath = self.CAD.STPpath + STPfile
             #check to see if this STP file exists and write data to the file
             if os.path.isfile(newSTPpath) == False:
@@ -648,6 +660,8 @@ class engineObj():
                 atime = os.stat(newSTPpath).st_atime
                 os.utime(newSTPpath, (atime, ts))
                 self.CAD.overWriteMask = True #we need to also overwrite meshes
+                os.chmod(newSTPpath, self.chmod)
+                os.chown(newSTPpath, self.UID, self.GID)
             else:
                 #if file was modified, overwrite
                 if ts != os.stat(newSTPpath).st_mtime:
@@ -657,6 +671,8 @@ class engineObj():
                     atime = os.stat(newSTPpath).st_atime
                     os.utime(newSTPpath, (atime, ts))
                     self.CAD.overWriteMask = True #we need to also overwrite meshes
+                    os.chmod(newSTPpath, self.chmod)
+                    os.chown(newSTPpath, self.UID, self.GID)
                 else:
                     self.CAD.overWriteMask = False #meshes are already up to date
                     print("STP file is already in the HEAT database.  Not overwriting...")
@@ -670,7 +686,7 @@ class engineObj():
         """
         Loads CAD file for terminal users
         """
-        tools.makeDir(self.CAD.STPpath, clobberFlag=False, mode=self.chmod, GID=self.GID)
+        tools.makeDir(self.CAD.STPpath, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
         #get file name
         stpName = os.path.basename(STPfile)
         #time last modified
@@ -695,8 +711,12 @@ class engineObj():
             if mtime_orig != mtime_new:
                 print("File was modified since last HEAT upload.  Overwriting...")
                 shutil.copyfile(STPfile, newSTPpath)
+                print(atime_orig)
+                print(mtime_orig)
                 os.utime(newSTPpath, (atime_orig, mtime_orig))
                 self.CAD.overWriteMask = True #we need to also overwrite meshes
+                os.chmod(newSTPpath, self.chmod)
+                os.chown(newSTPpath, self.UID, self.GID)
             else:
                 self.CAD.overWriteMask = False #meshes are already up to date
                 print("STP file is already in the HEAT database.  Not overwriting...")
@@ -777,10 +797,13 @@ class engineObj():
 
         #Build HEAT file tree
         tools.buildDirectories(self.CAD.ROIList,
-                                         self.MHD.timesteps,
-                                         self.MHD.shotPath,
-                                         clobberFlag=True
-                                         )
+                               self.MHD.timesteps,
+                               self.MHD.shotPath,
+                               clobberFlag=True,
+                               chmod=self.chmod,
+                               UID=self.UID,
+                               GID=self.GID
+                              )
 
         #assign tag if PFC is run in multiple directions (multiple lines in XXXpfc.csv)
         for PFC in self.PFCs:
@@ -1504,6 +1527,9 @@ class engineObj():
             self.combineTimeSteps(runList, t)
 
 
+        #set tree permissions
+        tools.recursivePermissions(self.MHD.shotPath, self.UID, self.GID, self.chmod)
+
         print("Total Time Elapsed: {:f}".format(time.time() - t0))
         log.info("Total Time Elapsed: {:f}".format(time.time() - t0))
         print("\nCompleted HEAT run\n")
@@ -1971,10 +1997,14 @@ class engineObj():
         save composite csv from each timestep into a single directory for
         making paraview movies
         """
-        movieDir = self.MHD.shotPath + '/paraview/'
-        tPath = self.MHD.shotPath + '/' + '{:06d}/'.format(t)
+        if self.MHD.shotPath[-1] == '/':
+            movieDir = self.MHD.shotPath + 'paraview/'
+            tPath = self.MHD.shotPath + '{:06d}/'.format(t)
+        else:
+            movieDir = self.MHD.shotPath + '/paraview/'
+            tPath = self.MHD.shotPath + '/' + '{:06d}/'.format(t)
         #first try to make new directory
-        tools.makeDir(movieDir, clobberFlag=False, mode=self.chmod, GID=self.GID)
+        tools.makeDir(movieDir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
         if 'hfOpt' in runList:
             src = tPath + 'HF_optical_all.csv'
             dest = movieDir + 'hfOptical_{:06d}.csv'.format(t)
@@ -2013,6 +2043,9 @@ class engineObj():
             src = tPath + 'shadowMask_gyro_all.csv'
             dest = movieDir + 'shadowMask_gyro_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
+
+        #set tree permissions
+        tools.recursivePermissions(movieDir, self.UID, self.GID, self.chmod)
 
         return
 
@@ -2291,10 +2324,10 @@ class engineObj():
             self.OF.caseDir = self.MHD.shotPath + 'openFoam/heatFoam'
         else:
             self.OF.caseDir = self.MHD.shotPath + '/openFoam/heatFoam'
-        tools.makeDir(self.OF.caseDir, clobberFlag=True, mode=self.chmod, GID=self.GID)
+        tools.makeDir(self.OF.caseDir, clobberFlag=True, mode=self.chmod, UID=self.UID, GID=self.GID)
         #set up directory for all .foam files
         #self.OF.allFoamsDir = self.OF.caseDir + '/allFoams'
-        #tools.makeDir(self.OF.allFoamsDir, clobberFlag=False, mode=self.chmod, GID=self.GID)
+        #tools.makeDir(self.OF.allFoamsDir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
         #set up OF parts for each PFC part
         for PFC in self.PFCs:
             #check if PFC is a gyroSource Plane
@@ -2313,7 +2346,7 @@ class engineObj():
             self.OF.partDir = partDir
             self.OF.partName = PFC.name
 
-            #tools.makeDir(partDir, clobberFlag=True, mode=self.chmod, GID=self.GID)
+            #tools.makeDir(partDir, clobberFlag=True, mode=self.chmod, UID=self.UID, GID=self.GID)
             #copy heatFoam template directory to this location
             try:
                 shutil.copytree(self.OF.templateCase, partDir)
@@ -2464,7 +2497,7 @@ class engineObj():
 #                OFbinDir = OFplatformDir + '/bin'
 #                OFlibDir = OFplatformDir + '/lib'
 #                #make openfoam platform directory
-#                tools.makeDir(OFplatformDir, clobberFlag=False, mode=self.chmod, GID=self.GID)
+#                tools.makeDir(OFplatformDir, clobberFlag=False, mode=self.chmod, self.UID,self.GID)
 #                #symlink AppDir/usr/bin to openfoam bin (same for lib)
 #                try:
 #                    os.symlink('/usr/bin', OFbinDir)
@@ -2524,7 +2557,7 @@ class engineObj():
                 HFtStep = partDir+'/{:f}'.format(OFt).rstrip('0').rstrip('.')+'/HF'
                 try:
                     #shutil.copytree(t0new,timeDir
-                    tools.makeDir(timeDir, clobberFlag=False, mode=self.chmod, GID=self.GID)
+                    tools.makeDir(timeDir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
                     #shutil.copy(HFt0, HFtStep)
                     shutil.copy(HFt0, timeDir)
 
@@ -2588,7 +2621,7 @@ class engineObj():
             #    timeDir = partDir + '/{:f}'.format(OFt).rstrip('0').rstrip('.')
             #    #make the allFoam timestep directory for this timestep
             #    allFoamTimeDir = self.OF.allFoamsDir + '/{:f}'.format(OFt).rstrip('0').rstrip('.')
-            #    tools.makeDir(allFoamTimeDir, clobberFlag=False, mode=self.chmod, GID=self.GID)
+            #    tools.makeDir(allFoamTimeDir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
 
 
         print("openFOAM run completed.")
@@ -2634,10 +2667,14 @@ class engineObj():
         else:
             plotlyDir = self.MHD.shotPath + '/plotly'
 
-        tools.makeDir(plotlyDir, clobberFlag=False, mode=self.chmod, GID=self.GID)
+        tools.makeDir(plotlyDir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
 
         plotPath = plotlyDir + '/OFminmax.html'
         fig.write_html(plotPath)
+
+        #set tree permissions
+        tools.recursivePermissions(plotlyDir, self.UID, self.GID, self.chmod)
+
         return fig
 
     def getHFdistPlots(self):
@@ -2658,10 +2695,13 @@ class engineObj():
         else:
             plotlyDir = self.MHD.shotPath + '/plotly'
 
-        tools.makeDir(plotlyDir, clobberFlag=False, mode=self.chmod, GID=self.GID)
+        tools.makeDir(plotlyDir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
 
         plotPath = plotlyDir + '/HFdist.html'
         fig.write_html(plotPath)
+
+        #set tree permissions
+        tools.recursivePermissions(plotlyDir, self.UID, self.GID, self.chmod)
 
         return fig
 
@@ -2716,10 +2756,14 @@ class engineObj():
         else:
             plotlyDir = self.MHD.shotPath + '/plotly'
 
-        tools.makeDir(plotlyDir, clobberFlag=False, mode=self.chmod, GID=self.GID)
+        tools.makeDir(plotlyDir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
 
         plotPath = plotlyDir + '/Tprobes.html'
         fig.write_html(plotPath)
+
+        #set tree permissions
+        tools.recursivePermissions(plotlyDir, self.UID, self.GID, self.chmod)
+        
         return fig
 
     def gyroPhasePlot(self):

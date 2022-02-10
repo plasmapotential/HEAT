@@ -41,6 +41,15 @@ try:
     GID = int(os.environ["dockerGID"]) #group ID
 except:
     GID = -1
+try:
+    UID = int(os.environ["dockerUID"]) #user ID
+except:
+    UID = -1
+
+
+print("CHMOD: " + (oct(chmod)))
+print("UID: {:d}".format(UID))
+print("GID: {:d}".format(GID))
 
 #Import HEAT engine class
 from engineClass import engineObj
@@ -50,12 +59,13 @@ class TUI():
         """
         intialize terminal user interface (TUI) object
         """
-        self.ENG = engineObj(logFile, rootDir, dataPath, OFbashrc, chmod, GID)
+        self.ENG = engineObj(logFile, rootDir, dataPath, OFbashrc, chmod, UID, GID)
         self.ENG.NCPUs = multiprocessing.cpu_count() - 2 #reserve 2 cores for overhead
         self.chmod = chmod
         self.GID = GID
+        self.UID = UID
         #if data directory doesn't exist, create it
-        tools.makeDir(dataPath, clobberFlag=False, mode=self.chmod, GID=self.GID)
+        tools.makeDir(dataPath, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
         return
 
 
@@ -188,7 +198,7 @@ class TUI():
         self.ENG.MHD.shotPath = self.shotPath
 
         #make tree branch for this shot
-        tools.makeDir(self.shotPath, clobberFlag=False, mode=self.chmod, GID=self.GID)
+        tools.makeDir(self.shotPath, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
 
         return
 

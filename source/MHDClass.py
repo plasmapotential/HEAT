@@ -68,7 +68,7 @@ def setupForTerminalUse(gFile=None):
 
 class MHD:
 
-    def __init__(self, rootDir, dataPath, chmod=0o774, GID=-1):
+    def __init__(self, rootDir, dataPath, chmod=0o774, UID=-1, GID=-1):
         """
         rootDir is root location of python modules (where dashGUI.py lives)
         dataPath is the location where we write all output to
@@ -78,6 +78,7 @@ class MHD:
         self.dataPath = dataPath
         self.chmod = chmod
         self.GID = GID
+        self.UID = UID
         tools.dataPath = self.dataPath
         return
 
@@ -147,7 +148,8 @@ class MHD:
                                                   self.shotPath,
                                                   clobber=True,
                                                   chmod=self.chmod,
-                                                  GID=self.GID
+                                                  GID=self.GID,
+                                                  UID=self.UID
                                                   )
         #load from file in GUI or TUI
         else:
@@ -669,14 +671,14 @@ class MHD:
 
         name = 'g{:06d}.{:05d}'.format(shot,time)
         #make tree for this shot
-        tools.makeDir(self.shotPath, clobberFlag=False, mode=self.chmod, GID=self.GID)
+        tools.makeDir(self.shotPath, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
         #make tree for this timestep
         if self.shotPath[-1] != '/': self.shotPath += '/'
         timeDir = self.shotPath + '{:06d}/'.format(time)
         newgfile = timeDir + name
 
         #clobber and make time directory
-        tools.makeDir(timeDir, clobberFlag=clobberflag, mode=self.chmod, GID=self.GID)
+        tools.makeDir(timeDir, clobberFlag=clobberflag, mode=self.chmod, UID=self.UID, GID=self.GID)
         shutil.copyfile(oldgfile, newgfile)
         return time
 
@@ -890,7 +892,7 @@ class MHD:
 
 
     def GEQDSKFromMDS(machine, shot, tree='efit01', tmin=None, tmax=None,
-                          rootDir=None, clobber=True, chmod=0o774, GID=-1 ):
+                          rootDir=None, clobber=True, chmod=0o774, UID=-1, GID=-1 ):
         """
         Function for grabbing multiple gfiles associated with a single shot
         machine: string. either 'nstx' or 'd3d' or 'st40'
@@ -933,14 +935,14 @@ class MHD:
         if rootDir==None: dirName = machine + '_{:06d}'.format(shot)
         else: dirName = rootDir
 
-        tools.makeDir(dirName, clobberFlag=True, mode=self.chmod, GID=self.GID)
+        tools.makeDir(dirName, clobberFlag=True, mode=self.chmod, UID=self.UID, GID=self.GID)
 
         #Pull gfiles and write into dirName/subdirectory where subdirectory
         #is exclusively for that timestep
         print('Pulling all gfiles between {:5d} and {:5d} [ms]'.format(int(tmin),int(tmax)))
         for t in ts:
             t_path = dirName + '/{:06d}'.format(t)
-            tools.makeDir(t_path, clobberFlag=True, mode=self.chmod, GID=self.GID)
+            tools.makeDir(t_path, clobberFlag=True, mode=self.chmod, UID=self.UID, GID=self.GID)
             self.MDSplusPull(shot,t,tree=tree,Server=Server,gpath=t_path)
 
         return ts
@@ -1072,7 +1074,7 @@ class MHD:
                 write_array(g['wall'].flatten(), f)
                 f.write(str(KVTOR) + ' ' + format(RVTOR, ' .9E') + ' ' + str(NMASS) + '\n')
                 write_array(RHOVN, f)
-        os.chown(file, -1, self.GID)
+        os.chown(file, self.UID, self.GID)
         os.chmod(file, self.chmod)
         return time
 

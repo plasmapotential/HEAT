@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 tools = toolsClass.tools()
 
 class OpenFOAM():
-    def __init__(self, rootDir, dataPath, chmod=0o774, GID=-1):
+    def __init__(self, rootDir, dataPath, chmod=0o774, UID=-1, GID=-1):
         """
         rootDir is root location of python modules (where dashGUI.py lives)
         dataPath is the location where we write all output to
@@ -28,6 +28,7 @@ class OpenFOAM():
         tools.dataPath = self.dataPath
         self.chmod = chmod
         self.GID = GID
+        self.UID = UID
         #self.buildheatFoam()
         return
 
@@ -423,8 +424,10 @@ class OpenFOAM():
             print("Execution failed:", e, file=sys.stderr)
 
         #Now copy this mesh to the 3D meshes folder for future use
-        tools.makeDir(newFile, clobberFlag=False, mode=self.chmod, GID=self.GID)
+        #tools.makeDir(newFile, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
         shutil.copytree(newFile, file)
+        #set tree permissions
+        tools.recursivePermissions(self.meshDir, self.UID, self.GID, self.chmod)
 # This method left here for reference:
 #            from PyFoam.Execution.BasicRunner import BasicRunner
 #            solvers = ['blockMesh','snappyHexMesh','topoSet','createPatch']
@@ -473,6 +476,8 @@ class OpenFOAM():
         from pathlib import Path
         Path(self.partDir+self.partName+'.foam').touch()
 
+        #set tree permissions
+        tools.recursivePermissions(self.partDir, self.UID, self.GID, self.chmod)
         return
 
     def runTprobe(self,x,y,z, partDir):

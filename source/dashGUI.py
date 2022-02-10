@@ -76,6 +76,10 @@ try:
     GID = int(os.environ["dockerGID"]) #group ID
 except:
     GID = -1
+try:
+    UID = int(os.environ["dockerUID"]) #user ID
+except:
+    UID = -1
 
 #Import HEAT engine
 from engineClass import engineObj
@@ -90,7 +94,7 @@ app = dash.Dash(server=server, meta_tags=[{"name": "viewport", "content": "width
 #Eventually need to fix this so that we are not using a global variable
 #dash can acces Flask Cache so we should cache data by userID or something
 #for R&D this works
-gui = engineObj(logFile, rootDir, dataPath, OFbashrc, chmod, GID)
+gui = engineObj(logFile, rootDir, dataPath, OFbashrc, chmod, UID, GID)
 gui.UImode = 'g' #graphical mode
 
 
@@ -641,7 +645,7 @@ def loadMHD(n_clicks,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask,data
         raise PreventUpdate
 
     #if data directory doesn't exist, create it
-    tools.makeDir(dataPath, clobberFlag=False, mode=chmod, GID=GID)
+    tools.makeDir(dataPath, clobberFlag=False, mode=chmod, UID=UID, GID=GID)
 
     if plasma3Dmask == 'plasma3D': plasma3Dmask=1
     else:  plasma3Dmask=0
