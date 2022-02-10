@@ -398,7 +398,6 @@ class OpenFOAM():
         """
         creates new FVM mesh and copies into a HEAT tree
         """
-        from subprocess import run
         #Copy the current environment
         current_env = os.environ.copy()
         #point to correct path for bash (varies depending upon runMode)
@@ -414,7 +413,7 @@ class OpenFOAM():
         #run blockMesh, snappyHexMesh
         meshCMD = self.partDir+self.cmd3Dmesh
         try:
-            p = run([meshCMD], env=current_env, cwd=self.partDir, shell=True, executable=bashExec)
+            p = subprocess.run([meshCMD], env=current_env, cwd=self.partDir, shell=True, executable=bashExec)
             retcode = p.returncode
             if retcode < 0:
                 print("OF mesh child was terminated by signal", -retcode, file=sys.stderr)
@@ -445,8 +444,6 @@ class OpenFOAM():
         log.info('Running Thermal Analysis')
         print('See HEAT LogFile Tab for Status')
         log.info('See HEAT LogFile Tab for Status')
-
-        from subprocess import run
         #Copy the current environment
         current_env = os.environ.copy()
         #point to correct path for bash (varies depending upon runMode)
@@ -463,7 +460,7 @@ class OpenFOAM():
         #run topoSet, createPatch, heatFoam, paraFoam -touchAll
         thermalCMD = self.partDir+self.cmdThermal
         try:
-            p = run([thermalCMD], env=current_env, cwd=self.partDir, shell=True, executable=bashExec)
+            p = subprocess.run([thermalCMD], env=current_env, cwd=self.partDir, shell=True, executable=bashExec)
             retcode = p.returncode
             if retcode < 0:
                 print("thermal analysis child was terminated by signal", -retcode, file=sys.stderr)
