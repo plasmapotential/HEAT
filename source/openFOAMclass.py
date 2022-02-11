@@ -536,11 +536,15 @@ class OpenFOAM():
                 with open(outfile, 'w') as fout:
                     for line in fin:
                         fout.write(line.replace('\t',','))
+            #outfile permissions
+            os.chown(outfile,self.UID,self.GID)
+            os.chmod(outfile,self.chmod)
             #read data file
             data = pd.read_csv(outfile, header=1)
             data.columns = data.columns.str.strip()
             data = data.sort_values('field')
             data['field'] = data['field'].str.strip()
+
 
         else:
             print("minMaxTnoTab.dat does not exist!  This is probably because openFOAM failed silently.")

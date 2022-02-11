@@ -2321,10 +2321,13 @@ class engineObj():
         log.info('Setting Up OF run')
         #set up base OF directory for this discharge
         if self.MHD.shotPath[-1]=='/':
+            self.OF.OFDir = self.MHD.shotPath + 'openFoam'
             self.OF.caseDir = self.MHD.shotPath + 'openFoam/heatFoam'
         else:
+            self.OF.OFDir = self.MHD.shotPath + '/openFoam'
             self.OF.caseDir = self.MHD.shotPath + '/openFoam/heatFoam'
         tools.makeDir(self.OF.caseDir, clobberFlag=True, mode=self.chmod, UID=self.UID, GID=self.GID)
+
         #set up directory for all .foam files
         #self.OF.allFoamsDir = self.OF.caseDir + '/allFoams'
         #tools.makeDir(self.OF.allFoamsDir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
@@ -2610,7 +2613,6 @@ class engineObj():
             print("thermal analysis complete...")
             log.info("thermal analysis complete...")
 
-
             #THIS DOES NOT WORK.  FUTURE WORK TO CREATE SINGLE .foam FILE
             ##build single .foam directory structure
             #print("Building allFoams directory")
@@ -2623,7 +2625,8 @@ class engineObj():
             #    allFoamTimeDir = self.OF.allFoamsDir + '/{:f}'.format(OFt).rstrip('0').rstrip('.')
             #    tools.makeDir(allFoamTimeDir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
 
-
+        #set tree permissions
+        tools.recursivePermissions(self.OF.OFDir, self.UID, self.GID, self.chmod)
         print("openFOAM run completed.")
         log.info("openFOAM run completed.")
         return
@@ -2763,7 +2766,7 @@ class engineObj():
 
         #set tree permissions
         tools.recursivePermissions(plotlyDir, self.UID, self.GID, self.chmod)
-        
+
         return fig
 
     def gyroPhasePlot(self):
