@@ -2,30 +2,43 @@
 
 #this script should only be called by the appImage when running HEAT in
 #appImage mode.  User does not run this script (appImage does in AppRun)
-#It handles the different options and runs HEAT, paraview, or freecad
-# depending upon user input parameter, do different functions
+#It handles the different options and runs HEAT
+# depending upon user input parameters, does different functions
 echo "Sourcing OF environment variables"
 echo "Depending upon OS, this may take several seconds or several minutes"
-. $APPDIR/usr/opt/openfoam/etc/bashrc
+. $APPDIR/opt/openfoam/etc/bashrc
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         #run HEAT GUI at this IP address:port
-        -a|--address)
+        -a|--a|--address)
         ADDRESS="$2"
         shift
         shift
         ;;
-        -p|--port)
+        -p|--p|--port)
         PORT="$2"
+        shift
+        shift
+        ;;
+        -m|--m|--mode)
+        MODE="$2"
+        shift
+        shift
+        ;;
+        -f|--f|--file)
+        FILE="$2"
         shift
         shift
         ;;
         *) echo "Unknown parameter passed: $1";
            echo "format is: -<option> <variable>";
            echo "options are:";
-           echo "-a | --address";
-           echo "-p | --port";
+           echo "-m | --mode  variable: t or g (terminal or gui)";
+           echo "-f | --batchFile  variable: path to batchFile";
+           echo "-a | --address  variable:  IP address ";
+           echo "-p | --port  variable: port #";
+           echo "Using GUI mode";
            echo "Using default address / port";
            break;
            ;;
@@ -46,8 +59,22 @@ else
   echo "PORT = ${PORT}"
 fi
 
+if [ -z $MODE ]; then
+  export MODE='g'
+  echo "MODE = ${MODE}"
+else
+  echo "MODE = ${MODE}"
+fi
+
+if [ -z $FILE ]; then
+  export FILE='None'
+  echo "FILE = ${FILE}"
+else
+  echo "FILE = ${FILE}"
+fi
+
 echo "Running HEAT python GUI"
-$APPDIR/usr/bin/python3 $APPDIR/usr/src/launchHEAT.py --m g --a $ADDRESS --p $PORT
+$APPDIR/usr/bin/python3 $APPDIR/usr/src/launchHEAT.py --m $MODE --f $FILE --a $ADDRESS --p $PORT
 
 #USE THIS VERSION IF YOU WANT MULTIPLE OPTIONS:
 #

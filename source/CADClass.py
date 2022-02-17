@@ -6,7 +6,7 @@
 import sys
 import os
 
-#this happens in dashGUI.py now
+#this happens in launchHEAT.py now
 #FREECADPATH = '/opt/freecad/appImage/squashfs-root/usr/lib'
 #oldpath = sys.path
 #sys.path.append(FREECADPATH)
@@ -206,7 +206,6 @@ class CAD:
         """
         if resolution == None:  resolution=self.gridRes
         for partnum in self.intersectList:
-
             #standard meshing algorithm
             if type(resolution) == str:
                 name = self.STLpath + partnum + "___"+resolution+".stl".format(resolution)
@@ -314,7 +313,7 @@ class CAD:
                 if part == self.CADparts[i].Label:
                     count += 1
                     parts.append(self.CADparts[i])
-                    meshes.append(self.part2mesh(self.CADparts[i])[0])
+                    meshes.append(self.part2meshStandard(self.CADparts[i])[0])
 
             if count == 0:
                 print("Part "+part+" not found in CAD.  Cannot Mesh!")
@@ -495,11 +494,11 @@ class CAD:
             #mefisto meshing algorithm
             else:
                 filename = path + label[i] + "___{:.2f}mm.stl".format(float(resolution[i]))
-            print("Writing mesh file: " + filename)
-            log.info("Writing mesh file: " + filename)
             if os.path.exists(filename) and self.overWriteMask == False:
-                pass
+                print("Not clobbering mesh file...")
             else:
+                print("Writing mesh file: " + filename)
+                log.info("Writing mesh file: " + filename)
                 mesh[i].write(filename)
                 os.chmod(filename, self.chmod)
                 os.chown(filename, self.UID, self.GID)

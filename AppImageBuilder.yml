@@ -205,7 +205,7 @@ AppDir:
       LD_LIBRARY_PATH: '${APPDIR}/lib:${APPDIR}/lib/x86_64-linux-gnu:${APPDIR}/usr/lib:${APPDIR}/opt/libc/lib:${APPDIR}/opt/libc/lib/x86_64-linux-gnu:${APPDIR}/usr/lib/x86_64-linux-gnu:${APPDIR}/lib:${APPDIR}/usr/lib/x86_64-linux-gnu/netgen:${APPDIR}/opt/mafot/lib:${APPDIR}/opt/openfoam/lib:${APPDIR}/opt/paraview/lib:${APPDIR}/opt/swak4foam/lib'
       # Set python home
       # See https://docs.python.org/3/using/cmdline.html#envvar-PYTHONHOME
-      PYTHONHOME: '${APPDIR}/usr'
+      #PYTHONHOME: '${APPDIR}/usr'
       # Path to the site-packages dir or other modules dirs
       # See https://docs.python.org/3/using/cmdline.html#envvar-PYTHONPATH
       #for paraview 5.8 and 5.9:
@@ -216,7 +216,7 @@ AppDir:
       # Set runMode to appImage
       runMode: 'appImage'
       # Set paraview env var
-      pvpythonCMD: '${APPDIR}/opt/paraview/pvpython'
+      pvpythonCMD: '${APPDIR}/opt/paraview/bin/pvpython'
       PVPath: '${APPDIR}/opt/paraview/lib/python3/dist-packages/paraview'
       PVbin: '${APPDIR}/opt/paraview/bin/paraview'
       # Set FreeCAD env var
