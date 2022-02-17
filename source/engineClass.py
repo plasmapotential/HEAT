@@ -1428,11 +1428,8 @@ class engineObj():
                 tGyro = time.time()
                 #load GYRO settings for this timestep if applicable (terminal mode)
                 try:
-                    print("T!")
                     self.loadGYROParams(infile=self.inputFileList[tIdx])
-                    print("T))))")
                 except:
-                    print("T()")
                     pass
 
                 self.getGyroMeshes()

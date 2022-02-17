@@ -103,6 +103,8 @@ class MHD:
                             'tmax',
                             'nTrace',
                             'dataPath',
+                            'torFilt',
+                            'psiFilt'
                             ]
 
         return
@@ -122,11 +124,25 @@ class MHD:
         #         'MapDirection',
         #         'MapDirectionStruct',
         #        ]
+        bools = ['torFilt', 'psiFilt']
 
         for var in integers:
             if (getattr(self, var) is not None) and (~np.isnan(float(getattr(self, var)))):
                 try:
                     setattr(self, var, int(getattr(self, var)))
+                except:
+                    print("Error with input file var "+var+".  Perhaps you have invalid input values?")
+                    log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
+
+        trueStrings = ["T", "True", "t", "true", "TRUE", "y", "yes", "Yes", "YES", True]
+        falseStrings =["F", "False", "f", "false", "FALSE", "n", "no", "No", "NO", False]
+        for var in bools:
+            if (getattr(self, var) is not None):
+                try:
+                    if getattr(self, var) in trueStrings:
+                        setattr(self, var, True)
+                    else:
+                        setattr(self, var, False)
                 except:
                     print("Error with input file var "+var+".  Perhaps you have invalid input values?")
                     log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")

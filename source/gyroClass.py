@@ -486,12 +486,8 @@ class GYRO:
                 pMax = psiMax
 
             #target faces outside of this toroidal slice
-            test0 = np.logical_and(psiP1 < pMin,
-                                   psiP2 < pMin,
-                                   psiP3 < pMin)
-            test1 = np.logical_and(psiP1 > pMax,
-                                   psiP2 > pMax,
-                                   psiP3 > pMax)
+            test0 = np.logical_and(np.logical_and(psiP1 < pMin, psiP2 < pMin), psiP3 < pMin)
+            test1 = np.logical_and(np.logical_and(psiP1 > pMax, psiP2 > pMax), psiP3 > pMax)
             test = np.logical_or(test0,test1)
             usePsi = np.where(test == False)[0]
 
@@ -524,12 +520,8 @@ class GYRO:
 
 
             #target faces outside of this toroidal slice
-            test0 = np.logical_and(phiP1 < pMin,
-                                   phiP2 < pMin,
-                                   phiP3 < pMin)
-            test1 = np.logical_and(phiP1 > pMax,
-                                   phiP2 > pMax,
-                                   phiP3 > pMax)
+            test0 = np.logical_and(np.logical_and(phiP1 < pMin, phiP2 < pMin), phiP3 < pMin)
+            test1 = np.logical_and(np.logical_and(phiP1 > pMax, phiP2 > pMax), phiP3 > pMax)
             test = np.logical_or(test0,test1)
             usePhi = np.where(test == False)[0]
 

@@ -13,6 +13,8 @@ tmax, 3200
 nTrace, 10
 dataPath, /home/tom/data/HEAT/
 plasma3Dmask, 0 #1=true, 0=false
+torFilt, True
+psiFilt, True
 #==============================================================
 #                HF Variables
 #==============================================================

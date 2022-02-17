@@ -158,8 +158,14 @@ class TUI():
                 #per tag
                 self.loadPFCs(PFCfiles[0])
 
-                #use toroidal filtering by default
-                self.ENG.loadAccFilters(['torFilt'])
+                #read filters from input file and set accordingly
+                filters = []
+                print(self.ENG.MHD.torFilt)
+                if self.ENG.MHD.torFilt == True:
+                    filters.append('torFilt')
+                if self.ENG.MHD.psiFilt == True:
+                    filters.append('psiFilt')
+                self.ENG.loadAccFilters(filters)
 
                 #run HEAT
                 #note: current version of HEAT only supports single runList

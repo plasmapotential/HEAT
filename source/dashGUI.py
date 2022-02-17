@@ -1979,7 +1979,7 @@ def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
             'Number of samples in velocity phase space':N_vPhase,
             'Number of samples from Maxwellian velocity distribution':N_vSlice,
             'Fraction of power carried by ions':ionFrac,
-            'Source for gyro orbit power':gyroSource,
+            'Source for gyro orbit power':':'.join(gyroSource),
             }
 
     return [html.Label("Loaded Gyro Orbit Data into HEAT", style={'color':'#f5d142'}),

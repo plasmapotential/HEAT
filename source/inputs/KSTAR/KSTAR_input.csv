@@ -7,12 +7,14 @@ gridRes, standard
 #==============================================================
 #                MHD Variables
 #==============================================================
-shot, 204118
+shot, 1
 tmin, 0
 tmax, 5000
-nTrace, 3
+nTrace, 10
 dataPath, /home/tom/data/HEAT/
 plasma3Dmask, 0 #1=true, 0=false
+torFilt, True
+psiFilt, True
 #==============================================================
 #                Optical HF Variables
 #==============================================================
