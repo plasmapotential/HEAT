@@ -64,6 +64,7 @@ To start HEAT using the graphical user interface, perform the following steps:
 
   1) Navigate to the HEAT source code docker directory, <sourcePath>/docker
   2) Once in the docker directory, make sure the last 4 lines appear as follows::
+
       #run docker compose
       docker-compose up
       #run docker compose interactively (for terminal mode)
@@ -99,10 +100,8 @@ To start HEAT using the terminal user interface, perform the following steps:
           - <batchModePath>:/root/terminal
      where <batchModePath> is the directory where your batchFile lives.
 
-  3) In the docker directory, make sure the last 4 lines appear as follows::
-      \#run docker compose
-      \#docker-compose up
-      \#run docker compose interactively (for terminal mode)
+  3) In the docker directory, make sure the last line appears as follows::
+
       docker-compose run HEAT /bin/bash
   4) Run docker compose from within the docker directory::
 
