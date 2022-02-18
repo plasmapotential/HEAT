@@ -20,7 +20,7 @@ appImage from github (`<https://github.com/plasmapotential/HEAT>`_).  For
 visualizing HEAT output, the user should have a local copy of ParaVIEW (preferably 5.8+).
 
 To download the appImage
-^^^^^^^^^^^^^^^^^^^^^^^^
+========================
 Commands for installing HEAT are given below.  A video installation tutorial is provided below the commands.
 
 In linux terminal run the following command from a directory of your choosing, with the <tag>
@@ -49,8 +49,36 @@ HEAT Installation Video:
         </div>
 
 
+Installing the docker container
+-------------------------------
+
+To run the HEAT docker container, the user will need docker and docker-compose
+installed on the local machine.
+
+To download docker and docker-compose
+=====================================
+First download docker (docker engine)
+ - (`<https://docs.docker.com/engine/install/>`_)
+
+Next, set the user up for running docker.  This includes adding the user to the
+docker group (example link below for Linux)
+ - (`<https://docs.docker.com/engine/install/linux-postinstall/>`_)
+
+Install docker-compose, which is necessary to configure the HEAT environment
+  - (`<https://docs.docker.com/compose/install/>`_)
+
+Download HEAT docker container
+==============================
+Now that docker is installed, you will need to pull the HEAT docker container
+from docker hub.  The HEAT docker hub page is located here:
+ - (`<https://hub.docker.com/r/plasmapotential/heat>`_)
+
+To pull from docker hub, execute the following command
+    docker pull plasmapotential/heat
+
+
 To download test HEAT case
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------
 After downloading, you can test your HEAT installation by using a test case I
 have prepared.  The test case can be downloaded and extracted by using the following commands
 (again replacing <tag> with latest version ie vX.X.X)::
@@ -66,33 +94,3 @@ Test Case Installation Video:
         <div style="position: relative; padding-bottom: 2%; height: 0; overflow: hidden; max-width: 100%; height: auto;">
             <iframe width="560" height="315" src="https://www.youtube.com/embed/SQXY8lI4s-o" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
         </div>
-
-
-
-
-Installing the docker container
--------------------------------
-
-To run the HEAT docker container, the user will need docker and docker-compose
-installed on the local machine.
-
-To download docker and docker-compose
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-First download docker (docker engine)
- - (`<https://docs.docker.com/engine/install/>`_)
-
-Next, set the user up for running docker.  This includes adding the user to the
-docker group (example link below for Linux)
- - (`<https://docs.docker.com/engine/install/linux-postinstall/>`_)
-
- Install docker-compose, which is necessary to configure the HEAT environment
-  - (`<https://docs.docker.com/compose/install/>`_)
-
-Download HEAT docker container
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Now that docker is installed, you will need to pull the HEAT docker container
-from docker hub.  The HEAT docker hub page is located here:
- - (`<https://hub.docker.com/r/plasmapotential/heat>`_)
-
-To pull from docker hub, execute the following command
-    docker pull plasmapotential/heat
