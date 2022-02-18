@@ -13,14 +13,15 @@ the docker container.
 
 
 Installing the appImage
------------------------
+=======================
 
 HEAT appImage installation is relatively simple, and consists of downloading the latest HEAT
 appImage from github (`<https://github.com/plasmapotential/HEAT>`_).  For
 visualizing HEAT output, the user should have a local copy of ParaVIEW (preferably 5.8+).
 
 To download the appImage
-========================
+------------------------
+
 Commands for installing HEAT are given below.  A video installation tutorial is provided below the commands.
 
 In linux terminal run the following command from a directory of your choosing, with the <tag>
@@ -50,13 +51,14 @@ HEAT Installation Video:
 
 
 Installing the docker container
--------------------------------
+===============================
 
 To run the HEAT docker container, the user will need docker and docker-compose
 installed on the local machine.
 
 To download docker and docker-compose
-=====================================
+-------------------------------------
+
 First download docker (docker engine)
  - (`<https://docs.docker.com/engine/install/>`_)
 
@@ -68,7 +70,8 @@ Install docker-compose, which is necessary to configure the HEAT environment
   - (`<https://docs.docker.com/compose/install/>`_)
 
 Download HEAT docker container
-==============================
+------------------------------
+
 Now that docker is installed, you will need to pull the HEAT docker container
 from docker hub.  The HEAT docker hub page is located here:
  - (`<https://hub.docker.com/r/plasmapotential/heat>`_)
@@ -78,7 +81,7 @@ To pull from docker hub, execute the following command
 
 
 To download test HEAT case
---------------------------
+==========================
 After downloading, you can test your HEAT installation by using a test case I
 have prepared.  The test case can be downloaded and extracted by using the following commands
 (again replacing <tag> with latest version ie vX.X.X)::
