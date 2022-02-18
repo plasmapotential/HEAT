@@ -5,6 +5,7 @@ H.E.A.T. Documentation
 Contents
 --------
 .. toctree::
+
   install
 
 
