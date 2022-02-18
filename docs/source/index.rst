@@ -14,41 +14,36 @@ General Information
 -------------------
 
 The Heat flux Engineering Analysis Toolkit (HEAT) is a suite of tools for predicting the heat flux
-incident upon PFCs in tokamaks, and the associated temperature distribution throughout the PFCs.
+incident upon PFCs in tokamaks, and the associated PFC state (ie temperature).
 The toolkit connects CAD, FVM, MHD, Plasma Physics, Visualization, HPC, and more, in one streamlined package.
 The objective is to enable engineers and physicists to quickly ascertain heat loads given specific magnetic
 configurations and geometric configurations.
 
-In its current form, HEAT can predict 3D heat loads from 2D plasmas for limited and diverted discharges.
-It can calculate time varying heat loads and temperature profiles.  HEAT can also be used to perform
-field line traces.  In the coming year, the following modules are scheduled to be added to HEAT:
-  * Gyro orbit effects
-  * 3D plasmas
-  * Radiated power (detachment) scenarios
-  * ELMs
+Some examples of what HEAT can predict:
+ - 3D heat loads from 2D plasmas for limited and diverted discharges
+ - Heat fluxes from the optical and ion gyro orbit approximations
+ - Time varying heat loads and temperature profiles
+ - Magnetic field line traces
+ - Many other quantities
 
-There were three objectives taken into consideration when designing HEAT:
-  1) pre-shot estimation of heat loads and temperature
-  2) post-shot confirmation of heat loads and associated physics models
-  3) design optimization
+The following physics modules are scheduled to be added to HEAT soon:
+1) Photon tracing, ie radiated power using CHERAB
+2) 3D plasmas using M3DC1
 
-HEAT has been compiled into an appImage.  For appImage documentation see `<https://appimage.org/>`_ .
-The appImage allows HEAT to be deployed as a single file, for use across linux distros.
-The user sets the appImage to executable, then runs it as if it were a binary file.
-The appImage is available under 'releases' on github and has been tested on Ubuntu18.04, Ubuntu20.04,
-Centos7, Centos8.  The appImage release is still in beta version, so there are likely still bugs.
-Bugs can be submitted to the github repo.  See Installation section for more info on running
-HEAT with the appImage.
+A HEAT paper has been published by the journal Fusion Science and Technology under
+open access and can be found here: https://doi.org/10.1080/15361055.2021.1951532
 
-Running HEAT requires the following (recommended version in parentheses):
-  * Linux machine (Ubuntu18-20,Centos7-8)
-  * Web Browser (Google Chrome)
+For users who want to run HEAT, there are two options:
+ - An appImage for running with a single executable on Linux
+ - A docker container, which also allows HEAT development
+
 
 To visualize HEAT results, the user will need an installation of ParaVIEW.
 There has been some work to include paraview into the HEAT html interface using
-paraviewweb, but this is NOT included in the appImage.  More information on
+paraviewweb, but this is NOT included in the releases.  More information on
 ParaVIEW can be found at `<https://www.paraview.org/>`_ and ParaVIEW can be
-downloaded here `<https://www.paraview.org/download/>`_.
+downloaded here `<https://www.paraview.org/download/>`_.  Download version
+for your operating system and follow instructions to run.
 
 
 .. toctree::
@@ -59,11 +54,6 @@ downloaded here `<https://www.paraview.org/download/>`_.
    contact
 
 
-
-
-
-Installation
-------------
 
 
 Tutorials
