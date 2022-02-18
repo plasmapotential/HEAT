@@ -14,9 +14,10 @@ the docker container.
 The links below provide access to tutorials both methods.
 
 .. toctree::
+   :maxdepth: 1
 
-  appimage
-  docker
+   appimage
+   docker
 
 To download test HEAT case
 ==========================

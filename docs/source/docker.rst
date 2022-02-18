@@ -29,5 +29,6 @@ Now that docker is installed, you will need to pull the HEAT docker container
 from docker hub.  The HEAT docker hub page is located here:
  - (`<https://hub.docker.com/r/plasmapotential/heat>`_)
 
-To pull from docker hub, execute the following command
+To pull from docker hub, execute the following command::
+
     docker pull plasmapotential/heat

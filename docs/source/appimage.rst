@@ -19,7 +19,7 @@ modified to reflect the latest version::
 
     wget https://github.com/plasmapotential/HEAT/releases/download/<tag>/HEAT_AppImage-<tag>-x86_64.AppImage
 
-For example, to download <tag> = v2.0.0, the command would appear as follows:
+For example, to download <tag> = v2.0.0, the command would appear as follows::
 
     wget https://github.com/plasmapotential/HEAT/releases/download/v2.0.0/HEAT_AppImage-v2.0.0-x86_64.AppImage
 
@@ -49,8 +49,31 @@ In HEAT v2+ here are two ways a user can run HEAT:
 Starting HEAT from both interfaces is covered in the following sections.
 
 
-Running HEAT in GUI mode
+Start HEAT in GUI mode
 ------------------------
+After downloading appImage and making it executable, run the appImage to start the HEAT server,
+where <tag> is replaced with the version you have (ie v2.0.0):
+
+    ./HEAT_AppImage-<tag>-x86_64.AppImage
+
+By default, this will start HEAT and launch a Flask server on the localhost at port 8050.
+To access the GUI, open a web browser and navigate to 127.0.0.1:8050::
+
+    google-chrome 127.0.0.1:8050
+
+You should now see the HEAT user interface.  See the tutorial using the test
+case for information on how to run HEAT from the GUI.
+Test Case Tutorial:
+:doc:`testCase`
+
 
 Running HEAT in TUI mode
 ------------------------
+After downloading the appImage and making it executable, you can run in TUI mode
+by following these steps:
+
+  1) Create a batch mode directory, as described in the test case tutorials :doc:`testCase`
+  2) Run the following command from the terminal, replacing the path to the
+     batchFile as appropriate:
+
+      ./HEAT_AppImage-v2.0.0-x86_64.AppImage -m t -f /path/to/batchFile.dat
