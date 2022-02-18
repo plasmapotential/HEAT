@@ -23,7 +23,7 @@ For users who want to run HEAT, there are two options:
  - An appImage for running with a single executable on Linux
  - A docker container, which also allows HEAT development
 
-The appImage is available under the Releases tab on this github page.  The docker container is available via docker hub.
+The appImage is available under the Releases tab on this github page.  The docker container is available via docker hub.  See the tutorials link below for more information on installation.
 
 The developer is Tom Looby, a Postdoctoral Researcher at Oak Ridge National Laboratory.  The project began during Tom's PhD.  
 
