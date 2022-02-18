@@ -100,9 +100,9 @@ To start HEAT using the terminal user interface, perform the following steps:
      where <batchModePath> is the directory where your batchFile lives.
 
   3) In the docker directory, make sure the last 4 lines appear as follows::
-      #run docker compose
-      #docker-compose up
-      #run docker compose interactively (for terminal mode)
+      \#run docker compose
+      \#docker-compose up
+      \#run docker compose interactively (for terminal mode)
       docker-compose run HEAT /bin/bash
   4) Run docker compose from within the docker directory::
 
@@ -116,4 +116,3 @@ To start HEAT using the terminal user interface, perform the following steps:
      was binded into the container in step 2)::
 
       python3 launchHEAT.py --m t --f /root/terminal/batchFile.dat
-      
