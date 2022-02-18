@@ -74,6 +74,6 @@ by following these steps:
 
   1) Create a batch mode directory, as described in the test case tutorials :doc:`testCase`
   2) Run the following command from the terminal, replacing the path to the
-     batchFile as appropriate:
+     batchFile as appropriate::
 
       ./HEAT_AppImage-v2.0.0-x86_64.AppImage -m t -f /path/to/batchFile.dat
