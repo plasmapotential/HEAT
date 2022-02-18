@@ -8,7 +8,8 @@ Contents
    :maxdepth: 1
 
    install
-   tutorial
+   GUItutorial
+   TUItutorial
 
 
 
