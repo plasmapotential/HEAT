@@ -1,5 +1,6 @@
 HEAT via the appImage
 =====================
+
 This page provides information on downloading and running HEAT from the appImage.
 
 Installing the appImage

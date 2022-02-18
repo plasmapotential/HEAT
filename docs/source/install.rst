@@ -1,4 +1,4 @@
-INSTALLATION
+Installation
 ============
 
 There are two ways to run HEAT as a third party user.  The first method is via

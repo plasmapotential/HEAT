@@ -17,7 +17,7 @@ The following physics modules are scheduled to be added to HEAT soon:
 1) Photon tracing, ie radiated power using CHERAB
 2) 3D plasmas using M3DC1
 
-A HEAT paper has been published by the journal Fusion Science and Technology under open access and can be found here: https://doi.org/10.1080/15361055.2021.1951532
+To cite HEAT, you can use a paper published by the journal Fusion Science and Technology under open access.  The paper can be found here: https://doi.org/10.1080/15361055.2021.1951532
 
 For users who want to run HEAT, there are two options:
  - An appImage for running with a single executable on Linux
