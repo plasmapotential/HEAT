@@ -40,8 +40,8 @@ HEAT Installation Video:
         </div>
 
 
-Running HEAT from the appImage
-=================================
+Starting HEAT from the appImage
+===============================
 In HEAT v2+ here are two ways a user can run HEAT:
  - In an html5 based Graphical User Interface (GUI)
  - From a Terminal User Interface (TUI)
@@ -67,7 +67,7 @@ Test Case Tutorial:
 :doc:`testCase`
 
 
-Running HEAT in TUI mode
+Start HEAT in TUI mode
 ------------------------
 After downloading the appImage and making it executable, you can run in TUI mode
 by following these steps:

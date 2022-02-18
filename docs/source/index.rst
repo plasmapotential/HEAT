@@ -5,8 +5,9 @@ H.E.A.T. Documentation
 Contents
 --------
 .. toctree::
+   :maxdepth: 1
 
-  install
+   install
 
 
 
