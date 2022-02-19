@@ -4,13 +4,13 @@ This page provides information on downloading and running HEAT from the docker
 container.
 
 Installing the docker container
-===============================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 To run the HEAT docker container, the user will need docker and docker-compose
 installed on the local machine.
 
 To download docker and docker-compose
--------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 First download docker (docker engine)
  - (`<https://docs.docker.com/engine/install/>`_)
@@ -23,7 +23,7 @@ Install docker-compose, which is necessary to configure the HEAT environment
   - (`<https://docs.docker.com/compose/install/>`_)
 
 Download HEAT docker container
-------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Now that docker is installed, you will need to pull the HEAT docker container
 from docker hub.  The HEAT docker hub page is located here:
@@ -34,7 +34,7 @@ To pull from docker hub, execute the following command::
     docker pull plasmapotential/heat
 
 Download HEAT source code from github
--------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 To run HEAT using docker, you will need to have several files from the HEAT
 github page that set up the docker environment.  The easiest way to download the
@@ -49,17 +49,26 @@ docker directory, <sourcePath>/docker
 
 
 Starting HEAT from docker
-=========================
+^^^^^^^^^^^^^^^^^^^^^^^^^
 In HEAT v2+ here are two ways a user can run HEAT:
  - In an html5 based Graphical User Interface (GUI)
  - From a Terminal User Interface (TUI)
 
 Starting HEAT from both interfaces is covered in the following sections.  For
 both modes, the user needs docker, docker-compose, and the HEAT source code
-installed.
+installed.  Additionally, the following video provides an introduction to using
+HEAT from the docker container:
+
+
+    .. raw:: html
+
+        <div style="position: relative; padding-bottom: 2%; height: 0; overflow: hidden; max-width: 100%; height: auto;">
+            <iframe width="560" height="315" src="https://www.youtube.com/embed/a1i_66ky_xQ" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+        </div>
+
 
 Start HEAT in GUI mode
-------------------------
+^^^^^^^^^^^^^^^^^^^^^^
 To start HEAT using the graphical user interface, perform the following steps:
 
   1) Navigate to the HEAT source code docker directory, <sourcePath>/docker
@@ -73,7 +82,7 @@ To start HEAT using the graphical user interface, perform the following steps:
       docker-compose up
 
 Start HEAT in TUI mode
-------------------------
+^^^^^^^^^^^^^^^^^^^^^^
 To start HEAT using the terminal user interface, perform the following steps:
 
   1) Navigate to the HEAT source code docker directory, <sourcePath>/docker

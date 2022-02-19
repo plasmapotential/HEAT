@@ -14,7 +14,7 @@ the docker container.
 The links below provide access to tutorials both methods.
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 0
 
    appimage
    docker
