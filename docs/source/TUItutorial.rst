@@ -1,10 +1,10 @@
 TUI Tutorial
 ============
 The tutorials provided below are meant to guide a user through a typical HEAT
-workflow in the GUI.  For your own HEAT runs, you will need to get GEQDSK and
+workflow in the TUI.  For your own HEAT runs, you will need to get GEQDSK and
 CAD files, and then create PFC files and Input files.  The tutorials below
 will provide a reference using the test case provided on github.  The install
-page provide information on downloading the test case.
+page provides information on downloading the test case.
 
 Running an optical heat flux simulation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
