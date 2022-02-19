@@ -1,5 +1,5 @@
 HEAT via the docker container
-=============================
+#############################
 This page provides information on downloading and running HEAT from the docker
 container.
 

@@ -1,5 +1,5 @@
 Installation
-============
+############
 
 There are two ways to run HEAT as a third party user.  The first method is via
 an appimage, which is basically a Linux executable.  The second method is via
@@ -20,7 +20,7 @@ The links below provide access to tutorials both methods.
    docker
 
 To download test HEAT case
-==========================
+**************************
 After downloading, you can test your HEAT installation by using a test case I
 have prepared.  The test case can be downloaded and extracted by using the following commands
 (again replacing <tag> with latest version ie vX.X.X)::
