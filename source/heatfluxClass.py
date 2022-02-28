@@ -399,7 +399,7 @@ class heatFlux:
 
         #Multiple exponential profile (Brunner Profile)
         if self.hfMode=='multiExp' or self.hfMode=='limiter':
-            q[use] = self.multiExp_profile_fluxspace(PFC, R_omp, Bp_omp, psi, self.mode)
+            q[use] = self.multiExp_profile_fluxspace(PFC, R_omp, Bp_omp, psi, self.hfMode)
 
         #Eich Profile
         else:
