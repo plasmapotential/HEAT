@@ -442,8 +442,8 @@ class CAD:
         and default angular deviation is 0.523599rad (30deg)
         """
         if fineRes==True:
-            surfDev = 100.0
-            angDev = 0.523599
+            surfDev =0.01
+            angDev = 0.25
         #Check if this is a single file or list and make it a list
         if type(part) != list:
             part = [part]
