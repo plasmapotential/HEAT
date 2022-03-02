@@ -429,7 +429,7 @@ class CAD:
         log.info("Converted parts to mesh objects at resolution: {:f}".format(resolution))
         return meshes
 
-    def part2meshStandard(self, part, surfDev=0.1, angDev=0.523599, fineRes=False):
+    def part2meshStandard(self, part, surfDev=0.1, angDev=0.523599, fineRes=True):
         """
         Converts CAD object to mesh object, and adds mesh object to CAD document
         if part is a list of objects, returns a list of meshes.
@@ -442,8 +442,8 @@ class CAD:
         and default angular deviation is 0.523599rad (30deg)
         """
         if fineRes==True:
-            surfDev =0.01
-            angDev = 0.25
+            surfDev =0.05
+            angDev = 0.523599
         #Check if this is a single file or list and make it a list
         if type(part) != list:
             part = [part]
