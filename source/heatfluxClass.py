@@ -17,7 +17,6 @@ from scipy.integrate import simps
 
 import multiprocessing
 
-
 import logging
 log = logging.getLogger(__name__)
 
@@ -96,7 +95,9 @@ class heatFlux:
         self.fracLO = float(self.fracLO)
         return
 
-
+#===============================================================================
+#                   Empirical Regressions
+#===============================================================================
     def getRegressionParams(self, ep):
         """
         loads regression parameters into variable (ie lqCN, S)
@@ -111,141 +112,6 @@ class heatFlux:
             self.getSpreadingFromEQ(ep, self.fG)
         return
 
-    def getHFtableData(self, ep=None):
-        """
-        create a dictionary of HF parameters that are displayed in the DASH gui
-        and saves them into class variable self.HFdataDict
-
-        ep is equilibrium object
-        """
-        HFdict = {}
-
-        if self.hfMode == 'limiter':
-            HFdict['Heat Flux Mode'] = 'Limiter'
-            if self.lqCNmode == 'eich':
-                HFdict["\u03BB Near Mode"] = 'Eich Regression #15'
-                HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqEich
-            else:
-                HFdict["\u03BB Near Mode"] = 'User Defined'
-                HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqCN
-            HFdict["Common Region Far Heat Flux Width (\u03BBq CF) [mm]"] = self.lqCF
-            HFdict["Common Region Near Power Fraction"] = self.fracCN
-            HFdict["Common Region Near Power Fraction"] = self.fracCF
-
-
-        elif self.hfMode == 'multiExp':
-            HFdict['Heat Flux Mode'] = 'Multiple (4) Exponentials'
-            if self.lqCNmode == 'eich':
-                HFdict["\u03BB Near Mode"] = 'Eich Regression #15'
-                HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqEich
-            else:
-                HFdict["\u03BB Near Mode"] = 'User Defined'
-                HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqCN
-            HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqCN
-            HFdict["Common Region Far Heat Flux Width (\u03BBq CF) [mm]"] = self.lqCF
-            HFdict["Private Region Near Heat Flux Width (\u03BBq PN) [mm]"] = self.lqPN
-            HFdict["Private Region Far Heat Flux Width (\u03BBq PF) [mm]"] = self.lqPF
-            HFdict["Common Region Near Power Fraction"] = self.fracCN
-            HFdict["Common Region Far Power Fraction"] = self.fracCF
-            HFdict["Private Region Near Power Fraction"] = self.fracPN
-            HFdict["Private Region Far Power Fraction"] = self.fracPF
-
-        elif self.hfMode == 'eich':
-            HFdict['Heat Flux Mode'] = 'Gaussian Spreading'
-            if self.lqCNmode == 'eich':
-                HFdict["\u03BB Mode"] = 'Eich Regression #15'
-            else:
-                HFdict["\u03BB Mode"] = 'User Defined'
-            HFdict["Heat Flux Width (\u03BBq) [mm]"] = self.lqEich
-
-            if self.SMode == 'makowski':
-                HFdict['Greenwald Density Fraction'] = self.fG
-                HFdict['Spreading (S) Mode'] = 'Makowski Figure 6'
-            else:
-                HFdict['Spreading (S) Mode'] = 'User Defined'
-                HFdict['Greenwald Density Fraction'] = 'Only used for Makowski S Mode'
-            HFdict['S [mm]'] = self.S
-            HFdict['Background Heat Flux'] = self.qBG
-
-        HFdict["Power Crossing Separatrix (Psol) [MW]"] = self.Psol
-        HFdict["Upper Inner Divertor Power Fraction"] = self.fracUI
-        HFdict["Upper Outer Divertor Power Fraction"] = self.fracUO
-        HFdict["Lower Inner Divertor Power Fraction"] = self.fracLI
-        HFdict["Lower Outer Divertor Power Fraction"] = self.fracLO
-        return HFdict
-
-
-
-    def readMAFOTLaminarOutput(self,PFC,file):
-        """
-        Reads output from MAFOT laminar into PFC object
-        """
-        print('Reading laminar output')
-        log.info('Reading laminar output')
-        data = np.genfromtxt(file,comments='#')
-        use = np.where(PFC.shadowed_mask != 1)[0]
-        xyz = PFC.centers[use]
-        r,z,phi = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
-        r = np.round(r,10) #number of decimal places in MAFOT output file
-
-        #Sometimes the MAFOT calculation returns an error and it discards the
-        #launch point instead of writing to the output file.  This results
-        #in less points coming out of MAFOT than we put in.  So we amend this
-        #by checking to make sure the points coming out are assigned to the correct
-        #location in the mesh centers.
-        #Could be parallelized in future
-
-        #Create shared variables so that all multiprocessing cores can access
-        #same variables without needless data transmission
-        tools.lamData = data
-        tools.lamR = r
-
-        #Prepare intersectionTest across multiple cores
-        t0 = time.time()
-        Ncores = multiprocessing.cpu_count() -2 #reserve 2 cores for overhead
-        print('Initializing parallel MAFOT laminar check across {:d} cores'.format(Ncores))
-        log.info('Initializing parallel MAFOT laminar check across {:d} cores'.format(Ncores))
-        print('Spawning tasks to workers')
-        log.info('Spawning tasks to workers')
-        pool = multiprocessing.Pool(Ncores)
-        indexes = np.asarray(pool.map(tools.readLaminarParallel, np.arange(len(r))))
-        pool.close()
-
-        PFC.psimin = data[indexes,4]
-        PFC.conLength = data[indexes,3]
-
-        #R = data[:,0]
-        #Z = data[:,1]
-        #phi = np.radians(data[:,9])
-        #x,y,z = tools.cyl2xyz(R,Z,phi)
-        #PFC.centersLam = np.concatenate((x,y,z)).reshape((-1, 3), order='F')
-        print('Laminar output read')
-        print('Requested {:d} traces from MAFOT'.format(len(r)))
-        print('MAFOT returned {:d} traces'.format(len(data[:,0])))
-        log.info('Laminar output read')
-        log.info('Requested {:d} traces from MAFOT'.format(len(r)))
-        log.info('MAFOT returned {:d} traces'.format(len(data[:,0])))
-
-        return
-
-    def map_R_psi(self, psi, PFC):
-        """
-        Map normalized poloidal flux psi to R at midplane (Z = 0)
-        psi is flat array
-        return R(psi)
-        """
-        R = np.linspace(PFC.ep.g['RmAxis'], PFC.ep.g['R1'] + PFC.ep.g['Xdim'], 100)
-        Z = np.zeros(len(R))
-        p = PFC.ep.psiFunc.ev(R,Z)
-
-        #In case of monotonically decreasing psi, sort R, p so that p is
-        #monotonically increasing
-        points = zip(R, p)
-        points = sorted(points, key=lambda point: point[1]) # Sort list of tuples by p-value (psi)
-        R, p = zip(*points)
-
-        f = scinter.UnivariateSpline(p, R, s = 0, ext = 'const')	# psi outside of spline domain return the boundary value
-        return f(psi)
 
     def getEichFromEQ(self, ep, verbose=False):
         """
@@ -256,6 +122,8 @@ class heatFlux:
         doi: 10.1088/0029-5515/53/9/093031.
 
         Uses regression #15
+
+        in HEAT this lambda q is called 'lqCN' or 'lqEich'
         """
         #assuming plasma is centered in machine here
         zMin = ep.g['ZmAxis'] - 0.25
@@ -347,146 +215,36 @@ class heatFlux:
         log.info('Found Gaussian spreading value of: {:f} mm'.format(self.S))
         return
 
-    def getHoraceckFromEQ(self, ep, fG=None):
+    def getHoraceckFromEQ(self, ep, Pinj):
         """
-        finds Horaceck scaling for far SOL heat flux width
+        finds Horaceck scaling for far (also called main) SOL heat flux width,
+        which in HEAT is 'lqCF'
+
+        This scaling is primarily for limited plasmas, and is based on the paper:
+        J Horacek et al 2016 Plasma Phys. Control. Fusion 58 074005
+        doi: 10.1088/0741-3335/58/7/074005
+
+        Here we use Horacek's engineering parameter regression, rather than
+        the more obscure dimensionless parameter scalings.  The engineering
+        parameter scaling corresponds to figure 6a in the paper, or the
+        4th line in table 4
+
+        This function works only for axisymmetric plasmas.  To find the plasma
+        volume, we use the Surveyor's Area Formula (also called shoelace formula),
+        which is described in this paper (and on wikipedia):
+        B. Braden, The College Mathematics Journal Vol. 17, No. 4 (Sep., 1986),
+        pp. 326-337
+        doi: https://doi.org/10.1080/07468342.1986.11972974
         """
-        print('Horaceck Scaling Not Implemented yet!!!!')
-        log.info('Horaceck Scaling Not Implemented yet!!!!')
+        #find the plasma volume from the equilibrium
+
+
+
         return
 
-
-
-    def getHFprofile(self, PFC):
-        """
-        Calculates heat flux profile from psi.  Default is an Eich profile.
-
-        mode can be 'eich', 'multiExp', 'limiter'
-
-        """
-        psi = PFC.psimin
-        R_omp = self.map_R_psi(psi,PFC)
-        Z_omp = np.zeros(R_omp.shape)
-        # Evaluate B at midplane
-        Bp_omp = PFC.ep.BpFunc.ev(R_omp,Z_omp)
-        Bt_omp = PFC.ep.BtFunc.ev(R_omp,Z_omp)
-        B_omp = np.sqrt(Bp_omp**2 + Bt_omp**2)
-        xyz = PFC.centers
-        R_div,Z_div,phi_div = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
-        print('phi_divMin = {:f}'.format(phi_div.min()))
-        print('phi_divMax = {:f}'.format(phi_div.max()))
-        # Evaluate B at Target Plate neglecting shadowed points
-        Bp_div = PFC.ep.BpFunc.ev(R_div,Z_div)
-        Bt_div = PFC.ep.BtFunc.ev(R_div,Z_div)
-        B_div = np.sqrt(Bp_div**2 + Bt_div**2)
-        #Calculate psi using gfile for scaling coefficient
-        psi_EQ = PFC.ep.psiFunc.ev(R_div,Z_div)
-        #Calculate poloidal flux expansion
-        #fx = R_div*Bp_div / (R_omp*Bp_omp)
-        q = np.zeros(PFC.centers[:,0].shape)
-        use = np.where(PFC.shadowed_mask == 0)[0]
-
-        #handle various heat flux regressions if user selected that in GUI
-        if self.lqCNmode == 'eich' or self.lqCNmode == None:
-            self.getEichFromEQ(PFC.ep)
-            self.lqCN = self.lqEich
-
-        if self.SMode == 'makowski' or self.SMode == None:
-            self.getSpreadingFromEQ(PFC.ep, self.fG)
-
-        if self.lqCFmode == 'horaceck' or self.lqCFmode == None:
-            self.getHoraceckFromEQ(PFC.ep)
-
-        #Multiple exponential profile (Brunner Profile)
-        if self.hfMode=='multiExp' or self.hfMode=='limiter':
-            q[use] = self.multiExp_profile_fluxspace(PFC, R_omp, Bp_omp, psi, self.hfMode)
-
-        #Eich Profile
-        else:
-            q0 = self.scaleHF_fluxspace(PFC,self.lqEich,self.S,self.Psol)
-            q[use] = self.eich_profile_fluxspace(PFC, self.lqEich, self.S, R_omp, Bp_omp, psi)
-            q *= q0
-            q += self.qBG
-
-        #Scale by fraction of power going to this PFC's divertor
-        PFC.powerFrac = self.getDivertorPowerFraction(PFC.DivCode)
-        q *= PFC.powerFrac
-        print("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
-        log.info("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
-
-        return q
-
-    def getDivertorPowerFraction(self, DivCode):
-        """
-        assigns a fraction to each PFC object, for power sharing between divertors
-
-        DivCode is a code name taken from PFC input file.  based upon
-        the code name, the total scrape off layer power is multiplied by a
-        fraction to account for sharing between multiple divertors.
-
-        Note that the Eich function uses the total scrape off layer power (Psol),
-        not the fractional components assigned to divertors.
-
-        Right now this function (and the GUI) allow for 4 divertors.  This could
-        be adapted in the future for snowflakes divertors / other advanced divs
-
-        This function would also be where you put a function to calculate power
-        sharing based upon dRsep and lambdaq
-
-        """
-        if DivCode == 'UI':
-            frac = self.fracUI
-        elif DivCode == 'UO':
-            frac = self.fracUO
-        elif DivCode == 'LI':
-            frac = self.fracLI
-        elif DivCode == 'LO':
-            frac = self.fracLO
-        else:
-            frac = 1.0
-        return frac
-
-    def scaleHF_fluxspace(self, PFC, lqEich, S, P):
-        """
-        scales HF using Eich profile
-
-        Get scale factor q||0 (q0) for heat flux via power balance:
-        (input MW = output MW)
-        Ignores wall psi and just creates a profile at OMP
-        Creates a dense (1000pts) grid at the midplane to get higher resolution
-        integral.  Integrates q_hat / B_omp with respect to psi.
-        q||0 = P_div / ( 2*pi* integral(q_hat / B_omp)dPsi )
-
-        return q0
-        """
-        # Get R and Z vectors at the midplane
-        R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
-        R_omp_min = R_omp_sol - 5.0*lqEich*(1e-3) #in meters now
-        R_omp_max = R_omp_sol + 20.0*lqEich*(1e-3) #in meters now
-        R_omp = np.linspace(R_omp_min, R_omp_max, 1000)
-        Z_omp = np.zeros(R_omp.shape)
-        #Calculate flux at midplane using gfile
-        psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
-        psi = psiN * (PFC.ep.g['psiSep']-PFC.ep.g['psiAxis']) + PFC.ep.g['psiAxis']
-        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
-        s_hat = psiN - PFC.psiMinLCFS
-        # Evaluate B at outboard midplane
-        Bp_omp = PFC.ep.BpFunc.ev(R_omp,Z_omp)
-        Bt_omp = PFC.ep.BtFunc.ev(R_omp,Z_omp)
-        B_omp = np.sqrt(Bp_omp**2 + Bt_omp**2)
-
-        #Get q|| profile then integrate in Psi
-        #Eich profile
-        q_hat = self.eich_profile_fluxspace(PFC, lqEich, S, R_omp, Bp_omp, psiN)
-        P0 = 2*np.pi * simps(q_hat / B_omp, psi)
-        if P0 < 0: P0 = -P0
-        #Scale to input power
-        q0 = P/P0
-        return q0
-
-
-
-    #================== Eich Profile ============================
+#===============================================================================
+#                   Heat flux profiles
+#===============================================================================
     def eich_profile_fluxspace(self, PFC, lq, S, R, Bp, psiN):
         """
         Based on the paper: T.Eich et al.,PRL 107, 215001 (2011)
@@ -525,7 +283,7 @@ class heatFlux:
         q1[inf_locations] = 0.0
         return q1
 
-    #================== Multiple Exponential Profile ============================
+
     def multiExp_profile_fluxspace(self, PFC, R, Bp, psiN, mode):
         """
         Multiple (4) exponential scaling for divertor plasmas is based upon
@@ -615,62 +373,6 @@ class heatFlux:
         q[inf_locations] = 0.0
         return q
 
-    def findScalingCoeffsLimiter(self, PFC, lqCN, lqCF):
-        """
-        finds scaling coefficient for limiter heat flux profiles
-        q0 = qn + qf = q0(fracNC + fracFC)
-        where q0 is the peak HF
-
-        fracNC is fraction of power sharing between near exponential in common flux region
-        fracFC is fraction of power sharing between far exponential in common flux region
-        """
-        # Get R and Z vectors at the midplane
-#        R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
-        R_omp_sol = self.map_R_psi(1.0,PFC)
-        R_omp_min = R_omp_sol #this is a limited discharge so Rmin = Rlcfs
-        R_omp_max = R_omp_sol + 20.0*(lqCN + lqCF)
-        R_omp = np.linspace(R_omp_min, R_omp_max, 1000)
-        Z_omp = np.zeros(R_omp.shape)
-
-        # Evaluate B at outboard midplane
-        Bp_omp = PFC.ep.BpFunc.ev(R_omp,Z_omp)
-        Bt_omp = PFC.ep.BtFunc.ev(R_omp,Z_omp)
-        B_omp = np.sqrt(Bp_omp**2 + Bt_omp**2)
-
-        #Find coordinate transformation vector at midplane
-        psiaxis = PFC.ep.g['psiAxis']
-        psiedge = PFC.ep.g['psiSep']
-        deltaPsi = np.abs(psiedge - psiaxis)
-        gradPsi = Bp_omp*R_omp
-        xfm = gradPsi / deltaPsi
-
-        # transform hf width into flux space
-        lqCN_hat = lqCN*xfm
-        lqCF_hat = lqCF*xfm
-
-        #Calculate flux at midplane using gfile
-        psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
-        psi = psiN*(psiedge - psiaxis) + psiaxis
-        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
-        s_hat = psiN - PFC.psiMinLCFS
-
-        print('psiMinLCFS: {:f}'.format(PFC.psiMinLCFS))
-#        print('un-normalized psiMinLCFS: {:f}'.format(PFC.ep.psiFunc_noN.ev(R_omp_sol,0.0)))
-        print('Minimum s_hat: {:f}'.format(s_hat.min()))
-
-
-        #integral in flux space
-        qCN_hat = np.exp(-s_hat / lqCN_hat)
-        qCF_hat = np.exp(-s_hat / lqCF_hat)
-        intCN = simps(qCN_hat / B_omp, psi)
-        intCF = simps(qCF_hat / B_omp, psi)
-
-        q0 = (self.Psol/(2*np.pi)) / (intCN*self.fracCN + intCF*self.fracCF)
-
-        print(q0)
-
-        return q0
-
     def findScalingCoeffsMultiExp(self, PFC, lqCN, lqCF, lqPN, lqPF):
         """
         finds scaling coefficient for limiter heat flux profiles
@@ -748,6 +450,211 @@ class heatFlux:
         return q0
 
 
+    def findScalingCoeffsLimiter(self, PFC, lqCN, lqCF):
+        """
+        finds scaling coefficient for limiter heat flux profiles
+        q0 = qn + qf = q0(fracNC + fracFC)
+        where q0 is the peak HF
+
+        fracNC is fraction of power sharing between near exponential in common flux region
+        fracFC is fraction of power sharing between far exponential in common flux region
+        """
+        # Get R and Z vectors at the midplane
+#        R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
+        R_omp_sol = self.map_R_psi(1.0,PFC)
+        R_omp_min = R_omp_sol #this is a limited discharge so Rmin = Rlcfs
+        R_omp_max = R_omp_sol + 20.0*(lqCN + lqCF)
+        R_omp = np.linspace(R_omp_min, R_omp_max, 1000)
+        Z_omp = np.zeros(R_omp.shape)
+
+        # Evaluate B at outboard midplane
+        Bp_omp = PFC.ep.BpFunc.ev(R_omp,Z_omp)
+        Bt_omp = PFC.ep.BtFunc.ev(R_omp,Z_omp)
+        B_omp = np.sqrt(Bp_omp**2 + Bt_omp**2)
+
+        #Find coordinate transformation vector at midplane
+        psiaxis = PFC.ep.g['psiAxis']
+        psiedge = PFC.ep.g['psiSep']
+        deltaPsi = np.abs(psiedge - psiaxis)
+        gradPsi = Bp_omp*R_omp
+        xfm = gradPsi / deltaPsi
+
+        # transform hf width into flux space
+        lqCN_hat = lqCN*xfm
+        lqCF_hat = lqCF*xfm
+
+        #Calculate flux at midplane using gfile
+        psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
+        psi = psiN*(psiedge - psiaxis) + psiaxis
+        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
+        s_hat = psiN - PFC.psiMinLCFS
+
+        print('psiMinLCFS: {:f}'.format(PFC.psiMinLCFS))
+#        print('un-normalized psiMinLCFS: {:f}'.format(PFC.ep.psiFunc_noN.ev(R_omp_sol,0.0)))
+        print('Minimum s_hat: {:f}'.format(s_hat.min()))
+
+
+        #integral in flux space
+        qCN_hat = np.exp(-s_hat / lqCN_hat)
+        qCF_hat = np.exp(-s_hat / lqCF_hat)
+        intCN = simps(qCN_hat / B_omp, psi)
+        intCF = simps(qCF_hat / B_omp, psi)
+
+        q0 = (self.Psol/(2*np.pi)) / (intCN*self.fracCN + intCF*self.fracCF)
+
+        print(q0)
+
+        return q0
+
+    def getDivertorPowerFraction(self, DivCode):
+        """
+        assigns a fraction to each PFC object, for power sharing between divertors
+
+        DivCode is a code name taken from PFC input file.  based upon
+        the code name, the total scrape off layer power is multiplied by a
+        fraction to account for sharing between multiple divertors.
+
+        Note that the Eich function uses the total scrape off layer power (Psol),
+        not the fractional components assigned to divertors.
+
+        Right now this function (and the GUI) allow for 4 divertors.  This could
+        be adapted in the future for snowflakes divertors / other advanced divs
+
+        This function would also be where you put a function to calculate power
+        sharing based upon dRsep and lambdaq
+
+        """
+        if DivCode == 'UI':
+            frac = self.fracUI
+        elif DivCode == 'UO':
+            frac = self.fracUO
+        elif DivCode == 'LI':
+            frac = self.fracLI
+        elif DivCode == 'LO':
+            frac = self.fracLO
+        else:
+            frac = 1.0
+        return frac
+
+#===============================================================================
+#                   Heat flux functions and helper functions
+#===============================================================================
+    def map_R_psi(self, psi, PFC):
+        """
+        Map normalized poloidal flux psi to R at midplane (Z = 0)
+        psi is flat array
+        return R(psi)
+        """
+        R = np.linspace(PFC.ep.g['RmAxis'], PFC.ep.g['R1'] + PFC.ep.g['Xdim'], 100)
+        Z = np.zeros(len(R))
+        p = PFC.ep.psiFunc.ev(R,Z)
+
+        #In case of monotonically decreasing psi, sort R, p so that p is
+        #monotonically increasing
+        points = zip(R, p)
+        points = sorted(points, key=lambda point: point[1]) # Sort list of tuples by p-value (psi)
+        R, p = zip(*points)
+
+        f = scinter.UnivariateSpline(p, R, s = 0, ext = 'const')	# psi outside of spline domain return the boundary value
+        return f(psi)
+
+    def getHFprofile(self, PFC):
+        """
+        Calculates heat flux profile from psi.  Default is an Eich profile.
+
+        mode can be 'eich', 'multiExp', 'limiter'
+
+        """
+        psi = PFC.psimin
+        R_omp = self.map_R_psi(psi,PFC)
+        Z_omp = np.zeros(R_omp.shape)
+        # Evaluate B at midplane
+        Bp_omp = PFC.ep.BpFunc.ev(R_omp,Z_omp)
+        Bt_omp = PFC.ep.BtFunc.ev(R_omp,Z_omp)
+        B_omp = np.sqrt(Bp_omp**2 + Bt_omp**2)
+        xyz = PFC.centers
+        R_div,Z_div,phi_div = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
+        print('phi_divMin = {:f}'.format(phi_div.min()))
+        print('phi_divMax = {:f}'.format(phi_div.max()))
+        # Evaluate B at Target Plate neglecting shadowed points
+        Bp_div = PFC.ep.BpFunc.ev(R_div,Z_div)
+        Bt_div = PFC.ep.BtFunc.ev(R_div,Z_div)
+        B_div = np.sqrt(Bp_div**2 + Bt_div**2)
+        #Calculate psi using gfile for scaling coefficient
+        psi_EQ = PFC.ep.psiFunc.ev(R_div,Z_div)
+        #Calculate poloidal flux expansion
+        #fx = R_div*Bp_div / (R_omp*Bp_omp)
+        q = np.zeros(PFC.centers[:,0].shape)
+        use = np.where(PFC.shadowed_mask == 0)[0]
+
+        #handle various heat flux regressions if user selected that in GUI
+        if self.lqCNmode == 'eich' or self.lqCNmode == None:
+            self.getEichFromEQ(PFC.ep)
+            self.lqCN = self.lqEich
+
+        if self.SMode == 'makowski' or self.SMode == None:
+            self.getSpreadingFromEQ(PFC.ep, self.fG)
+
+        if self.lqCFmode == 'horaceck' or self.lqCFmode == None:
+            self.getHoraceckFromEQ(PFC.ep)
+
+        #Multiple exponential profile (Brunner Profile)
+        if self.hfMode=='multiExp' or self.hfMode=='limiter':
+            q[use] = self.multiExp_profile_fluxspace(PFC, R_omp, Bp_omp, psi, self.hfMode)
+
+        #Eich Profile
+        else:
+            q0 = self.scaleHF_fluxspace(PFC,self.lqEich,self.S,self.Psol)
+            q[use] = self.eich_profile_fluxspace(PFC, self.lqEich, self.S, R_omp, Bp_omp, psi)
+            q *= q0
+            q += self.qBG
+
+        #Scale by fraction of power going to this PFC's divertor
+        PFC.powerFrac = self.getDivertorPowerFraction(PFC.DivCode)
+        q *= PFC.powerFrac
+        print("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
+        log.info("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
+
+        return q
+
+
+    def scaleHF_fluxspace(self, PFC, lqEich, S, P):
+        """
+        scales HF using Eich profile
+
+        Get scale factor q||0 (q0) for heat flux via power balance:
+        (input MW = output MW)
+        Ignores wall psi and just creates a profile at OMP
+        Creates a dense (1000pts) grid at the midplane to get higher resolution
+        integral.  Integrates q_hat / B_omp with respect to psi.
+        q||0 = P_div / ( 2*pi* integral(q_hat / B_omp)dPsi )
+
+        return q0
+        """
+        # Get R and Z vectors at the midplane
+        R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
+        R_omp_min = R_omp_sol - 5.0*lqEich*(1e-3) #in meters now
+        R_omp_max = R_omp_sol + 20.0*lqEich*(1e-3) #in meters now
+        R_omp = np.linspace(R_omp_min, R_omp_max, 1000)
+        Z_omp = np.zeros(R_omp.shape)
+        #Calculate flux at midplane using gfile
+        psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
+        psi = psiN * (PFC.ep.g['psiSep']-PFC.ep.g['psiAxis']) + PFC.ep.g['psiAxis']
+        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
+        s_hat = psiN - PFC.psiMinLCFS
+        # Evaluate B at outboard midplane
+        Bp_omp = PFC.ep.BpFunc.ev(R_omp,Z_omp)
+        Bt_omp = PFC.ep.BtFunc.ev(R_omp,Z_omp)
+        B_omp = np.sqrt(Bp_omp**2 + Bt_omp**2)
+
+        #Get q|| profile then integrate in Psi
+        #Eich profile
+        q_hat = self.eich_profile_fluxspace(PFC, lqEich, S, R_omp, Bp_omp, psiN)
+        P0 = 2*np.pi * simps(q_hat / B_omp, psi)
+        if P0 < 0: P0 = -P0
+        #Scale to input power
+        q0 = P/P0
+        return q0
 
     def HFincidentAngle(self,PFC, MHD):
         """
@@ -759,6 +666,7 @@ class heatFlux:
         BNorms = MHD.Bfield_pointcloud(PFC.ep, r, z, phi, PFC.powerDir, normal=True)
         PFC.bdotn = np.multiply(PFC.norms, BNorms).sum(1)
         return
+
 
     def q_div(self, PFC, MHD, q):
         """
@@ -818,6 +726,155 @@ class heatFlux:
         #plt.legend()
         #plt.show()
         return np.abs(q_div)
+
+
+    def power_sum_mesh(self, PFC, mode='optical', scale2circ = True, verbose=False):
+        """
+        Calculate power by summing over each mesh element.
+        Scale to fraction of machine we are analyzing: deltaPhi/2pi
+
+        if mode is optical, then uses optical approximation (qDiv)
+        if mode is gyro, then uses gyro orbit calculation (qGyro)
+
+        scale2circ is a boolean.  If true, scales power by the toroidal
+        slice width.  If false, returns without scaling
+        """
+#        xyz = PFC.centers
+#        R,Z,phi = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
+#        deltaPhi = phi.max() - phi.min()
+        deltaPhi = PFC.phiMax - PFC.phiMin
+        if verbose==True:
+            print('phiMin = {:f}'.format(PFC.phiMin))
+            print('phiMax = {:f}'.format(PFC.phiMax))
+            log.info('phiMin = {:f}'.format(PFC.phiMin))
+            log.info('phiMax = {:f}'.format(PFC.phiMax))
+
+        if mode=='gyro':
+            #sum = np.sum(PFC.qGyro * PFC.areas )
+            sum = np.sum(PFC.Pgyro)
+        else:
+            sum = np.sum(PFC.qDiv * PFC.areas )
+
+        if scale2circ == True:
+            sum = sum * 2 * np.pi / deltaPhi
+
+        return sum
+
+    def gyroHF(self, GYRO, PFC):
+        """
+        redistributes power calculated using the optical approximation according
+        to gyro orbits
+
+        input is an a gyroClass object.  by the time this function is called
+        you should have already calculated the intersectRecord using the
+        GYROclass
+        """
+        print("Calculating gyro orbit heat loads")
+        log.info("Calculating gyro orbit heat loads")
+        #get divertor HF
+        qDiv = PFC.qDiv[PFC.PFC_GYROmap] / self.elecFrac
+        Pdiv = qDiv * PFC.areas[PFC.PFC_GYROmap]
+        #Get fractional multipliers for each helical trace
+        gyroFrac = 1.0/GYRO.N_gyroPhase
+        vPhaseFrac = 1.0/GYRO.N_vPhase
+#        #energy: note these units are bad, but get divided out
+#        #old method (only converges for high resolution cases)
+#        #energies = 1.0/2.0 * GYRO.mass_eV * GYRO.vSlices**2
+#        energyTotal = GYRO.energySlices.sum(axis=1)
+#        vSliceFrac = np.zeros((len(q),GYRO.N_vSlice))
+#
+#        for vSlice in range(GYRO.N_vSlice):
+#            vSliceFrac[:,vSlice] = GYRO.energySlices[:,vSlice] / energyTotal
+        vSliceFrac = GYRO.energyFracs
+        #qMatrix = np.zeros((GYRO.N_gyroPhase,GYRO.N_vPhase,GYRO.N_vSlice,len(q)))
+        Pgyro = np.zeros((GYRO.Nt))
+        PNaN = 0.0
+        sum=0
+        sum1=0
+        #loop through intersect record and redistribute power using multipliers
+        for gyroPhase in range(GYRO.N_gyroPhase):
+            for vPhase in range(GYRO.N_vPhase):
+                for vSlice in range(GYRO.N_vSlice):
+                    idx = GYRO.intersectRecord[gyroPhase,vPhase,vSlice,PFC.CADHOT_GYROmap]
+                    isNanFrom = np.where(np.isnan(idx)==True)[0] #include NaNs (NaNs = no intersection) index we map from
+                    notNanFrom = np.where(np.isnan(idx)==False)[0] #dont include NaNs (NaNs = no intersection) index we map from
+                    notNanTo = idx[~np.isnan(idx)] #indices we map power to
+                    notNanTo = notNanTo.astype(int) #cast as integer
+                    isNanTo = idx[np.isnan(idx)] #indices we map power to
+                    isNanTo = isNanTo.astype(int) #cast as integer
+
+                    if len(notNanFrom)>0:
+                        #multiple Froms can light up the same To, so we loop
+                        for i in range(len(notNanFrom)):
+                            Pgyro[notNanTo[i]] += Pdiv[notNanFrom[i]]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[notNanFrom[i],vSlice]
+
+                    if len(isNanFrom)>0:
+                        PNaN += np.sum(Pdiv[isNanFrom]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[isNanFrom,vSlice])
+
+        #print("\nTEST2")
+        #print(GYRO.intersectRecord[0,0,0,1711])
+        #print(Pgyro[1711])
+
+        GYRO.gyroPowMatrix += Pgyro
+        GYRO.gyroNanPower += PNaN
+        return
+
+
+#===============================================================================
+#                   I/O operations
+#===============================================================================
+    def readMAFOTLaminarOutput(self,PFC,file):
+        """
+        Reads output from MAFOT laminar into PFC object
+        """
+        print('Reading laminar output')
+        log.info('Reading laminar output')
+        data = np.genfromtxt(file,comments='#')
+        use = np.where(PFC.shadowed_mask != 1)[0]
+        xyz = PFC.centers[use]
+        r,z,phi = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
+        r = np.round(r,10) #number of decimal places in MAFOT output file
+
+        #Sometimes the MAFOT calculation returns an error and it discards the
+        #launch point instead of writing to the output file.  This results
+        #in less points coming out of MAFOT than we put in.  So we amend this
+        #by checking to make sure the points coming out are assigned to the correct
+        #location in the mesh centers.
+        #Could be parallelized in future
+
+        #Create shared variables so that all multiprocessing cores can access
+        #same variables without needless data transmission
+        tools.lamData = data
+        tools.lamR = r
+
+        #Prepare intersectionTest across multiple cores
+        t0 = time.time()
+        Ncores = multiprocessing.cpu_count() -2 #reserve 2 cores for overhead
+        print('Initializing parallel MAFOT laminar check across {:d} cores'.format(Ncores))
+        log.info('Initializing parallel MAFOT laminar check across {:d} cores'.format(Ncores))
+        print('Spawning tasks to workers')
+        log.info('Spawning tasks to workers')
+        pool = multiprocessing.Pool(Ncores)
+        indexes = np.asarray(pool.map(tools.readLaminarParallel, np.arange(len(r))))
+        pool.close()
+
+        PFC.psimin = data[indexes,4]
+        PFC.conLength = data[indexes,3]
+
+        #R = data[:,0]
+        #Z = data[:,1]
+        #phi = np.radians(data[:,9])
+        #x,y,z = tools.cyl2xyz(R,Z,phi)
+        #PFC.centersLam = np.concatenate((x,y,z)).reshape((-1, 3), order='F')
+        print('Laminar output read')
+        print('Requested {:d} traces from MAFOT'.format(len(r)))
+        print('MAFOT returned {:d} traces'.format(len(data[:,0])))
+        log.info('Laminar output read')
+        log.info('Requested {:d} traces from MAFOT'.format(len(r)))
+        log.info('MAFOT returned {:d} traces'.format(len(data[:,0])))
+
+        return
+
 
     def write_heatflux_pointcloud(self,centers,hf,dataPath,tag=None,mode='optical'):
         print("Creating Heat Flux Point Cloud")
@@ -941,8 +998,6 @@ class heatFlux:
         print("Wrote Heat Flux Boundary for OpenFoam")
         log.info("Wrote Heat Flux Boundary for OpenFoam")
 
-
-
     def PointCloudfromStructOutput(self,file):
         """
         Makes a point cloud from MAFOT structure output initial points
@@ -955,95 +1010,68 @@ class heatFlux:
         pc[:,2] = xyz[::2,2]*1000
         head = """X,Y,Z"""
         np.savetxt(file, pc, delimiter=',',fmt='%.10f', header=head)
-
-
-    def power_sum_mesh(self, PFC, mode='optical', scale2circ = True, verbose=False):
-        """
-        Calculate power by summing over each mesh element.
-        Scale to fraction of machine we are analyzing: deltaPhi/2pi
-
-        if mode is optical, then uses optical approximation (qDiv)
-        if mode is gyro, then uses gyro orbit calculation (qGyro)
-
-        scale2circ is a boolean.  If true, scales power by the toroidal
-        slice width.  If false, returns without scaling
-        """
-#        xyz = PFC.centers
-#        R,Z,phi = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
-#        deltaPhi = phi.max() - phi.min()
-        deltaPhi = PFC.phiMax - PFC.phiMin
-        if verbose==True:
-            print('phiMin = {:f}'.format(PFC.phiMin))
-            print('phiMax = {:f}'.format(PFC.phiMax))
-            log.info('phiMin = {:f}'.format(PFC.phiMin))
-            log.info('phiMax = {:f}'.format(PFC.phiMax))
-
-        if mode=='gyro':
-            #sum = np.sum(PFC.qGyro * PFC.areas )
-            sum = np.sum(PFC.Pgyro)
-        else:
-            sum = np.sum(PFC.qDiv * PFC.areas )
-
-        if scale2circ == True:
-            sum = sum * 2 * np.pi / deltaPhi
-
-        return sum
-
-    def gyroHF(self, GYRO, PFC):
-        """
-        redistributes power calculated using the optical approximation according
-        to gyro orbits
-
-        input is an a gyroClass object.  by the time this function is called
-        you should have already calculated the intersectRecord using the
-        GYROclass
-        """
-        print("Calculating gyro orbit heat loads")
-        log.info("Calculating gyro orbit heat loads")
-        #get divertor HF
-        qDiv = PFC.qDiv[PFC.PFC_GYROmap] / self.elecFrac
-        Pdiv = qDiv * PFC.areas[PFC.PFC_GYROmap]
-        #Get fractional multipliers for each helical trace
-        gyroFrac = 1.0/GYRO.N_gyroPhase
-        vPhaseFrac = 1.0/GYRO.N_vPhase
-#        #energy: note these units are bad, but get divided out
-#        #old method (only converges for high resolution cases)
-#        #energies = 1.0/2.0 * GYRO.mass_eV * GYRO.vSlices**2
-#        energyTotal = GYRO.energySlices.sum(axis=1)
-#        vSliceFrac = np.zeros((len(q),GYRO.N_vSlice))
-#
-#        for vSlice in range(GYRO.N_vSlice):
-#            vSliceFrac[:,vSlice] = GYRO.energySlices[:,vSlice] / energyTotal
-        vSliceFrac = GYRO.energyFracs
-        #qMatrix = np.zeros((GYRO.N_gyroPhase,GYRO.N_vPhase,GYRO.N_vSlice,len(q)))
-        Pgyro = np.zeros((GYRO.Nt))
-        PNaN = 0.0
-        sum=0
-        sum1=0
-        #loop through intersect record and redistribute power using multipliers
-        for gyroPhase in range(GYRO.N_gyroPhase):
-            for vPhase in range(GYRO.N_vPhase):
-                for vSlice in range(GYRO.N_vSlice):
-                    idx = GYRO.intersectRecord[gyroPhase,vPhase,vSlice,PFC.CADHOT_GYROmap]
-                    isNanFrom = np.where(np.isnan(idx)==True)[0] #include NaNs (NaNs = no intersection) index we map from
-                    notNanFrom = np.where(np.isnan(idx)==False)[0] #dont include NaNs (NaNs = no intersection) index we map from
-                    notNanTo = idx[~np.isnan(idx)] #indices we map power to
-                    notNanTo = notNanTo.astype(int) #cast as integer
-                    isNanTo = idx[np.isnan(idx)] #indices we map power to
-                    isNanTo = isNanTo.astype(int) #cast as integer
-
-                    if len(notNanFrom)>0:
-                        #multiple Froms can light up the same To, so we loop
-                        for i in range(len(notNanFrom)):
-                            Pgyro[notNanTo[i]] += Pdiv[notNanFrom[i]]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[notNanFrom[i],vSlice]
-
-                    if len(isNanFrom)>0:
-                        PNaN += np.sum(Pdiv[isNanFrom]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[isNanFrom,vSlice])
-
-        #print("\nTEST2")
-        #print(GYRO.intersectRecord[0,0,0,1711])
-        #print(Pgyro[1711])
-
-        GYRO.gyroPowMatrix += Pgyro
-        GYRO.gyroNanPower += PNaN
         return
+
+
+    def getHFtableData(self, ep=None):
+        """
+        create a dictionary of HF parameters that are displayed in the DASH gui
+        and saves them into class variable self.HFdataDict
+
+        ep is equilibrium object
+        """
+        HFdict = {}
+
+        if self.hfMode == 'limiter':
+            HFdict['Heat Flux Mode'] = 'Limiter'
+            if self.lqCNmode == 'eich':
+                HFdict["\u03BB Near Mode"] = 'Eich Regression #15'
+                HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqEich
+            else:
+                HFdict["\u03BB Near Mode"] = 'User Defined'
+                HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqCN
+            HFdict["Common Region Far Heat Flux Width (\u03BBq CF) [mm]"] = self.lqCF
+            HFdict["Common Region Near Power Fraction"] = self.fracCN
+            HFdict["Common Region Near Power Fraction"] = self.fracCF
+
+
+        elif self.hfMode == 'multiExp':
+            HFdict['Heat Flux Mode'] = 'Multiple (4) Exponentials'
+            if self.lqCNmode == 'eich':
+                HFdict["\u03BB Near Mode"] = 'Eich Regression #15'
+                HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqEich
+            else:
+                HFdict["\u03BB Near Mode"] = 'User Defined'
+                HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqCN
+            HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqCN
+            HFdict["Common Region Far Heat Flux Width (\u03BBq CF) [mm]"] = self.lqCF
+            HFdict["Private Region Near Heat Flux Width (\u03BBq PN) [mm]"] = self.lqPN
+            HFdict["Private Region Far Heat Flux Width (\u03BBq PF) [mm]"] = self.lqPF
+            HFdict["Common Region Near Power Fraction"] = self.fracCN
+            HFdict["Common Region Far Power Fraction"] = self.fracCF
+            HFdict["Private Region Near Power Fraction"] = self.fracPN
+            HFdict["Private Region Far Power Fraction"] = self.fracPF
+
+        elif self.hfMode == 'eich':
+            HFdict['Heat Flux Mode'] = 'Gaussian Spreading'
+            if self.lqCNmode == 'eich':
+                HFdict["\u03BB Mode"] = 'Eich Regression #15'
+            else:
+                HFdict["\u03BB Mode"] = 'User Defined'
+            HFdict["Heat Flux Width (\u03BBq) [mm]"] = self.lqEich
+
+            if self.SMode == 'makowski':
+                HFdict['Greenwald Density Fraction'] = self.fG
+                HFdict['Spreading (S) Mode'] = 'Makowski Figure 6'
+            else:
+                HFdict['Spreading (S) Mode'] = 'User Defined'
+                HFdict['Greenwald Density Fraction'] = 'Only used for Makowski S Mode'
+            HFdict['S [mm]'] = self.S
+            HFdict['Background Heat Flux'] = self.qBG
+
+        HFdict["Power Crossing Separatrix (Psol) [MW]"] = self.Psol
+        HFdict["Upper Inner Divertor Power Fraction"] = self.fracUI
+        HFdict["Upper Outer Divertor Power Fraction"] = self.fracUO
+        HFdict["Lower Inner Divertor Power Fraction"] = self.fracLI
+        HFdict["Lower Outer Divertor Power Fraction"] = self.fracLO
+        return HFdict
