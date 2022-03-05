@@ -429,7 +429,7 @@ class CAD:
         log.info("Converted parts to mesh objects at resolution: {:f}".format(resolution))
         return meshes
 
-    def part2meshStandard(self, part, surfDev=0.1, angDev=0.523599, fineRes=True):
+    def part2meshStandard(self, part, surfDev=0.1, angDev=0.523599, fineRes=False):
         """
         Converts CAD object to mesh object, and adds mesh object to CAD document
         if part is a list of objects, returns a list of meshes.
