@@ -67,7 +67,8 @@ class heatFlux:
                             'fracUO',
                             'fracLI',
                             'fracLO',
-                            'Psol',
+                            'Pinj',
+                            'coreRadFrac',
                             'qBG',
                             'fG'
                             ]
@@ -79,7 +80,7 @@ class heatFlux:
         """
         self.lqEich = float(self.lqCN)
         self.S = float(self.S)
-        self.Psol = float(self.Psol)
+        self.Pinj = float(self.Pinj)
         self.qBG = float(self.qBG)
         self.lqPN = float(self.lqPN)
         self.lqPF = float(self.lqPF)
@@ -107,6 +108,9 @@ class heatFlux:
         if self.lqCNmode == 'eich':
             self.getEichFromEQ(ep)
             self.lqCN = self.lqEich
+
+        if self.lqCFmode == 'horacek':
+            self.getHoracekFromEQ(ep)
 
         if self.SMode == 'makowski':
             self.getSpreadingFromEQ(ep, self.fG)
@@ -215,9 +219,9 @@ class heatFlux:
         log.info('Found Gaussian spreading value of: {:f} mm'.format(self.S))
         return
 
-    def getHoraceckFromEQ(self, ep, Pinj):
+    def getHoracekFromEQ(self, ep):
         """
-        finds Horaceck scaling for far (also called main) SOL heat flux width,
+        finds Horacek scaling for far (also called main) SOL heat flux width,
         which in HEAT is 'lqCF'
 
         This scaling is primarily for limited plasmas, and is based on the paper:
@@ -235,11 +239,48 @@ class heatFlux:
         B. Braden, The College Mathematics Journal Vol. 17, No. 4 (Sep., 1986),
         pp. 326-337
         doi: https://doi.org/10.1080/07468342.1986.11972974
+
+        Pinj should be power injected into tokamak in [W]
         """
+        #check if power is in MW or W (assumes Pinj > 500W)
+        if self.Pinj < 500:
+            Pinj = self.Pinj * 1e6
+        else:
+            Pinj = self.Pinj
+
         #find the plasma volume from the equilibrium
+        Rlim = ep.g['lcfs'][:,0]
+        Zlim = ep.g['lcfs'][:,1]
 
+        #calculate cross sectional area using shoelace formula
+        i=np.arange(len(Rlim))
+        crossSecArea=np.abs(np.sum(Rlim[i-1]*Zlim[i]-Rlim[i]*Zlim[i-1])*0.5)
 
+        #calculate (approximate) volume inside separatrix [m^3]
+        #assumes RmAxis is close to R of center of mass of crossSecArea
+        vol = crossSecArea * 2 * np.pi * ep.g['RmAxis']
 
+        #assuming plasma is centered in machine here
+        zMin = ep.g['ZmAxis'] - 0.25
+        zMax = ep.g['ZmAxis'] + 0.25
+        zLCFS = ep.g['lcfs'][:,1]
+        rLCFS = ep.g['lcfs'][:,0]
+        #this prevents us from getting locations not at midplane
+        idx = np.where(np.logical_and(zLCFS>zMin,zLCFS<zMax))
+        Rmax = ep.g['lcfs'][:,0][idx].max()
+        Rmin = ep.g['lcfs'][:,0][idx].min()
+        # geometric quantities
+        Rgeo = (Rmax + Rmin) / 2.0
+        a = (Rmax - Rmin) / 2.0
+        aspect = a/Rgeo
+
+        #maximum z point and elongation
+        idx2 = np.where(np.logical_and(rLCFS>Rmin,rLCFS<Rmax))
+        b = ep.g['lcfs'][:,1][idx].max() #assumes equatorial plane is z=0
+        k = b / a
+
+        #lambda q from Horacek engineering scaling figure 6a
+        self.lqCF = 10 * (Pinj / vol)**(-0.38) * aspect**(1.3) * k**(-1.3) * 1e3 #in mm
         return
 
 #===============================================================================
@@ -463,7 +504,11 @@ class heatFlux:
 #        R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
         R_omp_sol = self.map_R_psi(1.0,PFC)
         R_omp_min = R_omp_sol #this is a limited discharge so Rmin = Rlcfs
-        R_omp_max = R_omp_sol + 20.0*(lqCN + lqCF)
+        if lqCN > lqCF:
+            lqMax = lqCN
+        else:
+            lqMax = lqCF
+        R_omp_max = R_omp_sol + 20.0*lqMax
         R_omp = np.linspace(R_omp_min, R_omp_max, 1000)
         Z_omp = np.zeros(R_omp.shape)
 
@@ -483,11 +528,13 @@ class heatFlux:
         lqCN_hat = lqCN*xfm
         lqCF_hat = lqCF*xfm
 
+
         #Calculate flux at midplane using gfile
         psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
         psi = psiN*(psiedge - psiaxis) + psiaxis
         PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
         s_hat = psiN - PFC.psiMinLCFS
+
 
         print('psiMinLCFS: {:f}'.format(PFC.psiMinLCFS))
 #        print('un-normalized psiMinLCFS: {:f}'.format(PFC.ep.psiFunc_noN.ev(R_omp_sol,0.0)))
@@ -497,6 +544,7 @@ class heatFlux:
         #integral in flux space
         qCN_hat = np.exp(-s_hat / lqCN_hat)
         qCF_hat = np.exp(-s_hat / lqCF_hat)
+        #note: simps integration will fail if x variable (psi) is not monotonic
         intCN = simps(qCN_hat / B_omp, psi)
         intCF = simps(qCF_hat / B_omp, psi)
 
@@ -595,8 +643,8 @@ class heatFlux:
         if self.SMode == 'makowski' or self.SMode == None:
             self.getSpreadingFromEQ(PFC.ep, self.fG)
 
-        if self.lqCFmode == 'horaceck' or self.lqCFmode == None:
-            self.getHoraceckFromEQ(PFC.ep)
+        if self.lqCFmode == 'horacek' or self.lqCFmode == None:
+            self.getHoracekFromEQ(PFC.ep)
 
         #Multiple exponential profile (Brunner Profile)
         if self.hfMode=='multiExp' or self.hfMode=='limiter':
@@ -1030,9 +1078,15 @@ class heatFlux:
             else:
                 HFdict["\u03BB Near Mode"] = 'User Defined'
                 HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqCN
-            HFdict["Common Region Far Heat Flux Width (\u03BBq CF) [mm]"] = self.lqCF
+            if self.lqCFmode == 'horacek':
+                HFdict["\u03BB Far Mode"] = 'Horacek Figure 6a'
+                HFdict["Common Region Far Heat Flux Width (\u03BBq CF) [mm]"] = self.lqCF
+            else:
+                HFdict["\u03BB Near Mode"] = 'User Defined'
+                HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqCF
+
             HFdict["Common Region Near Power Fraction"] = self.fracCN
-            HFdict["Common Region Near Power Fraction"] = self.fracCF
+            HFdict["Common Region Far Power Fraction"] = self.fracCF
 
 
         elif self.hfMode == 'multiExp':
@@ -1069,6 +1123,8 @@ class heatFlux:
             HFdict['S [mm]'] = self.S
             HFdict['Background Heat Flux'] = self.qBG
 
+        HFdict["Power Injected (Pinj) [MW]"] = self.Pinj
+        HFdict["Radiated Fraction of Injected Power"] = self.coreRadFrac
         HFdict["Power Crossing Separatrix (Psol) [MW]"] = self.Psol
         HFdict["Upper Inner Divertor Power Fraction"] = self.fracUI
         HFdict["Upper Outer Divertor Power Fraction"] = self.fracUO

@@ -416,7 +416,8 @@ def inputDragDrop(file, contents, MachFlag):
                State('fracCF', 'value'),
                State('fracPN', 'value'),
                State('fracPF', 'value'),
-               State('Psol', 'value'),
+               State('Pinj', 'value'),
+               State('coreRadFrac', 'value'),
                State('fracUI', 'value'),
                State('fracUO', 'value'),
                State('fracLI', 'value'),
@@ -461,7 +462,8 @@ def saveGUIinputs(  n_clicks,
                     fracCF,
                     fracPN,
                     fracPF,
-                    Psol,
+                    Pinj,
+                    coreRadFrac,
                     fracUI,
                     fracUO,
                     fracLI,
@@ -512,7 +514,8 @@ def saveGUIinputs(  n_clicks,
     data['fracCF'] = fracCF
     data['fracPN'] = fracPN
     data['fracPF'] = fracPF
-    data['Psol'] = Psol
+    data['Pinj'] = Pinj
+    data['coreRadFrac'] = coreRadFrac
     data['fracUI'] = fracUI
     data['fracUO'] = fracUO
     data['fracLI'] = fracLI
@@ -988,8 +991,10 @@ def PsolInput(hidden=False):
     return html.Div(
              className=className,
              children=[
-                    html.Label("Power Crossing Separatrix [MW]"),
-                    dcc.Input(id="Psol", className="textInput"),
+                    html.Label("Power Injected [MW]"),
+                    dcc.Input(id="Pinj", className="textInput"),
+                    html.Label("Radiated Fraction of Injected Power"),
+                    dcc.Input(id="coreRadFrac", className="textInput"),
                     row2,
                     row3
                     ],
@@ -1050,7 +1055,7 @@ def eichParameters(className):
                 className="SelectorBoxInput",
                 style={'backgroundColor': 'transparent', 'color':'transparent'},
                 options=[
-                    {'label': 'From Eich Scaling', 'value': 'eich'},
+                    {'label': 'Eich #15', 'value': 'eich'},
                     {'label': 'User Defined', 'value': 'user'}
                     ],
                 value='eich',
@@ -1139,7 +1144,7 @@ def multiExpParameters(className):
                     className="SelectorBoxInput",
                     style={'backgroundColor': 'transparent', 'color':'transparent'},
                     options=[
-                        {'label': 'From Eich Scaling', 'value': 'eich'},
+                        {'label': 'Eich #15', 'value': 'eich'},
                         #{'label': 'From Brunner Scaling', 'value': 'brunner'},
                         {'label': 'User Defined', 'value': 'user'}
                         ],
@@ -1300,7 +1305,7 @@ def limiterParameters(className):
                     className="SelectorBoxInput",
                     style={'backgroundColor': 'transparent', 'color':'transparent'},
                     options=[
-                        {'label': 'From Eich Scaling', 'value': 'eich'},
+                        {'label': 'Eich #15', 'value': 'eich'},
                         {'label': 'User Defined', 'value': 'user'}
                         ],
                     value='eich',
@@ -1315,7 +1320,7 @@ def limiterParameters(className):
                     className="SelectorBoxInput",
                     style={'backgroundColor': 'transparent', 'color':'transparent'},
                     options=[
-                        #{'label': 'From Horaceck Scaling', 'value': 'horaceck'},
+                        {'label': 'Horacek Fig. 6a', 'value': 'horacek'},
                         {'label': 'User Defined', 'value': 'user'}
                         ],
                     value='user',
@@ -1451,7 +1456,8 @@ def commonRegionParameters():
                State('limfracCN', 'value'),
                State('limfracCF', 'value'),
                State('qBG', 'value'),
-               State('Psol', 'value'),
+               State('Pinj', 'value'),
+               State('coreRadFrac', 'value'),
                State('fG', 'value'),
                ])
 def loadHF(n_clicks,hfMode,MachFlag,
@@ -1462,7 +1468,7 @@ def loadHF(n_clicks,hfMode,MachFlag,
             eichlqCNMode,SMode,
             multiExplqCNMode,multiExplqCFMode,multiExplqPNMode,multiExplqPFMode,
             limiterlqCNMode,limiterlqCFMode,limlqCN,limlqCF,limfracCN,limfracCF,
-            qBG,Psol,fG):
+            qBG,Pinj,coreRadFrac,fG):
     if MachFlag is None:
         raise PreventUpdate
     else:
@@ -1511,7 +1517,7 @@ def loadHF(n_clicks,hfMode,MachFlag,
                         fracCN,fracCF,fracPN,fracPF,
                         fracUI,fracUO,fracLI,fracLO,
                         lqCNmode,lqCFmode,lqPNmode,lqPFmode,SMode,
-                        qBG,Psol,fG)
+                        qBG,Pinj,coreRadFrac,fG)
 
 
         #Update output tab table
@@ -3374,7 +3380,8 @@ Session storage callbacks and functions
                Output('fracCF', 'value'),
                Output('fracPN', 'value'),
                Output('fracPF', 'value'),
-               Output('Psol', 'value'),
+               Output('Pinj', 'value'),
+               Output('coreRadFrac', 'value'),
                Output('fracUI', 'value'),
                Output('fracUO', 'value'),
                Output('fracLI', 'value'),
@@ -3457,7 +3464,8 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('fracCF', ''),
             data.get('fracPN', ''),
             data.get('fracPF', ''),
-            data.get('Psol', ''),
+            data.get('Pinj', ''),
+            data.get('coreRadFrac', ''),
             data.get('fracUI', ''),
             data.get('fracUO', ''),
             data.get('fracLI', ''),

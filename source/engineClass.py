@@ -837,7 +837,7 @@ class engineObj():
                     fracCN,fracCF,fracPN,fracPF,
                     fracUI,fracUO,fracLI,fracLO,
                     lqCNmode,lqCFmode,lqPNmode,lqPFmode,SMode,
-                    qBG,Psol,fG):
+                    qBG,Pinj,coreRadFrac,fG):
         """
         get heat flux inputs from gui or input file
         """
@@ -847,7 +847,8 @@ class engineObj():
         self.HF.lqPN = float(lqPN)
         self.HF.lqPF = float(lqPF)
         self.HF.S = float(S)
-        self.HF.Psol = float(Psol)
+        self.HF.Pinj = float(Pinj)
+        self.HF.coreRadFrac = float(coreRadFrac)
         self.HF.qBG = float(qBG)
         self.HF.fracCN = float(fracCN)
         self.HF.fracCF = float(fracCF)
@@ -869,9 +870,15 @@ class engineObj():
         self.HF.lqPFmode = lqPFmode
         self.HF.SMode = SMode
         self.HF.fG = float(fG)
+        #fraction of power conducted to PFC surfaces
+        self.HF.Psol = (1-self.HF.coreRadFrac)*self.HF.Pinj
 
         print("HF Mode = "+hfMode)
         log.info("Hf Mode = "+hfMode)
+        print("Pinj = {:f}".format(self.HF.Pinj))
+        log.info("Pinj = {:f}".format(self.HF.Pinj))
+        print("Fraction of Pinj Radiated from Core = {:f}".format(self.HF.coreRadFrac))
+        log.info("Fraction of Pinj Radiated from Core = {:f}".format(self.HF.coreRadFrac))
         print("Psol = {:f}".format(self.HF.Psol))
         log.info("Psol = {:f}".format(self.HF.Psol))
         print("Upper Inner Div Power Fraction: {:f}".format(self.HF.fracUI))
@@ -895,7 +902,18 @@ class engineObj():
                 log.info("You need to load MHD to load Eich profiles")
                 self.HF.HFdataDict = {}
                 raise ValueError("MHD EQ must be loaded before HF Settings to calculate Eich lq")
-            elif self.HF.SMode == 'makowski':
+            else:
+                self.HF.HFdataDict = self.HF.getHFtableData(ep=None)
+
+            if self.HF.lqCF == 'horacek':
+                print("You need to load MHD to load Horacek profiles")
+                log.info("You need to load MHD to load Horacek profiles")
+                self.HF.HFdataDict = {}
+                raise ValueError("MHD EQ must be loaded before HF Settings to calculate Horacek lqCF")
+            else:
+                self.HF.HFdataDict = self.HF.getHFtableData(ep=None)
+
+            if self.HF.SMode == 'makowski':
                 print("You need to load MHD to load Makowski profiles")
                 log.info("You need to load MHD to load Makowski profiles")
                 self.HF.HFdataDict = {}
@@ -972,7 +990,8 @@ class engineObj():
                          self.HF.lqPFmode,
                          self.HF.SMode,
                          self.HF.qBG,
-                         self.HF.Psol,
+                         self.HF.Pinj,
+                         self.HF.coreRadFrac,
                          self.HF.fG)
         return
 
@@ -2103,7 +2122,8 @@ class engineObj():
                     'fracCF': None,
                     'fracPN': None,
                     'fracPF': None,
-                    'Psol': None,
+                    'Pinj': None,
+                    'coreRadFrac' : None,
                     'fracUI': None,
                     'fracUO': None,
                     'fracLI': None,
@@ -2163,7 +2183,8 @@ class engineObj():
                     'limfracCF': self.HF.fracCF,
                     'fracPN': self.HF.fracPN,
                     'fracPF': self.HF.fracPF,
-                    'Psol': self.HF.Psol,
+                    'Pinj': self.HF.Pinj,
+                    'coreRadFrac' : self.HF.coreRadFrac,
                     'fracUI':self.HF.fracUI,
                     'fracUO':self.HF.fracUO,
                     'fracLI':self.HF.fracLI,
