@@ -1055,10 +1055,11 @@ def eichParameters(className):
                 className="SelectorBoxInput",
                 style={'backgroundColor': 'transparent', 'color':'transparent'},
                 options=[
-                    {'label': 'Eich #15', 'value': 'eich'},
+                    {'label': 'Eich #15', 'value': 'eich15'},
+                    {'label': 'Eich #14', 'value': 'eich14'},
                     {'label': 'User Defined', 'value': 'user'}
                     ],
-                value='eich',
+                value=None,
                 ),
                 ],
             ),
@@ -1144,7 +1145,7 @@ def multiExpParameters(className):
                     className="SelectorBoxInput",
                     style={'backgroundColor': 'transparent', 'color':'transparent'},
                     options=[
-                        {'label': 'Eich #15', 'value': 'eich'},
+                        {'label': 'Eich #15', 'value': 'eich15'},
                         #{'label': 'From Brunner Scaling', 'value': 'brunner'},
                         {'label': 'User Defined', 'value': 'user'}
                         ],
@@ -1305,10 +1306,10 @@ def limiterParameters(className):
                     className="SelectorBoxInput",
                     style={'backgroundColor': 'transparent', 'color':'transparent'},
                     options=[
-                        {'label': 'Eich #15', 'value': 'eich'},
+                        {'label': 'Eich #15', 'value': 'eich15'},
                         {'label': 'User Defined', 'value': 'user'}
                         ],
-                    value='eich',
+                    value='eich15',
                     )
                 ]),
             html.Div(

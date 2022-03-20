@@ -105,8 +105,12 @@ class heatFlux:
 
         requires an equilibrium object, ep
         """
-        if self.lqCNmode == 'eich':
-            self.getEichFromEQ(ep)
+        if self.lqCNmode == 'eich15':
+            self.getEich15FromEQ(ep)
+            self.lqCN = self.lqEich
+
+        if self.lqCNmode == 'eich14':
+            self.getEich14FromEQ(ep)
             self.lqCN = self.lqEich
 
         if self.lqCFmode == 'horacek':
@@ -116,8 +120,7 @@ class heatFlux:
             self.getSpreadingFromEQ(ep, self.fG)
         return
 
-
-    def getEichFromEQ(self, ep, verbose=False):
+    def getEich15FromEQ(self, ep, verbose=False):
         """
         finds lqEich from equilibrium object using regression from
         Eich's paper:
@@ -160,6 +163,97 @@ class heatFlux:
             print("Toroidal Field at axis: {:f}".format(Bt))
         print("Found heat flux width value of: {:f} mm".format(self.lqEich))
         log.info("Found heat flux width value of: {:f} mm".format(self.lqEich))
+        return
+
+    def getEich14FromEQ(self, ep, verbose=False):
+        """
+        finds lqEich from equilibrium object using regression from
+        Eich's paper:
+
+        T. Eich et al., Nucl. Fusion, vol. 53, no. 9, p. 093031, Sep. 2013,
+        doi: 10.1088/0029-5515/53/9/093031.
+
+        Uses regression #14
+
+        in HEAT this lambda q is called 'lqCN' or 'lqEich'
+        """
+        #assuming plasma is centered in machine here
+        zMin = ep.g['ZmAxis'] - 0.25
+        zMax = ep.g['ZmAxis'] + 0.25
+        zLCFS = ep.g['lcfs'][:,1]
+        #this prevents us from getting locations not at midplane
+        idx = np.where(np.logical_and(zLCFS>zMin,zLCFS<zMax))
+        Rmax = ep.g['lcfs'][:,0][idx].max()
+
+        #Regression 15
+        C = 0.63
+        Cb = -1.19
+        # Evaluate Bp at outboard midplane
+        Z_omp_sol = 0.0
+        Bp = abs(ep.BpFunc.ev(Rmax,Z_omp_sol))
+        #Evaluate lq
+        self.lqEich = C * Bp**Cb # in mm
+        if verbose==True:
+            print("Poloidal Field at midplane: {:f}".format(Bp))
+        print("Found heat flux width value of: {:f} mm".format(self.lqEich))
+        log.info("Found heat flux width value of: {:f} mm".format(self.lqEich))
+        return
+
+    def getSpreadingFromEQ(self, ep, fG):
+        """
+        finds gaussian spreading associated with thermal diffusion, also known
+        as S.  In Eich profile, exponential is convoluted with gaussian to
+        represent thermal diffusion into private flux region.  User must supply
+        Greenwald Density Fraction, fG
+
+        We follow the S regression from Makowski (figure 6):
+        M. Makowski, et al.  Physics of Plasmas 19, 056122 (2012)
+
+        User supplies Greenwald density fraction, as defined in:
+        M. Greenwald, Plasma Phys. Control. Fusion, vol. 44, no. 8, pp. R27–R53, Aug. 2002,
+        doi: 10.1088/0741-3335/44/8/201
+        where fG = n/nG. n is density and nG is Greenwald density
+
+        If user doesn't supply fG, a ratio of 0.6 is taken, corresponding to the
+        middle of the Makowski fG regression scan for NSTX
+
+        """
+        #default value for Greenwald fraction (mid of NSTX scan in Makowski)
+        if fG == None:
+            fG = 0.6
+        #Plasma current [MA]
+        Ip = np.abs(ep.g['Ip'] / 1e6) #abs to avoid complex numbers
+        # Evaluate Bt at axis [T]
+        Zaxis = ep.g['ZmAxis']
+        Raxis = ep.g['RmAxis']
+        Bt = abs(ep.BtFunc.ev(Raxis,Zaxis))
+        #assuming plasma is centered in machine here
+        zMin = ep.g['ZmAxis'] - 0.25
+        zMax = ep.g['ZmAxis'] + 0.25
+        zWall = np.linspace(zMin, zMax, 1000)
+        zLCFS = ep.g['lcfs'][:,1]
+        #this prevents us from getting locations not around plasma center
+        idx = np.where(np.logical_and(zLCFS>zMin,zLCFS<zMax))
+        Rmax = ep.g['lcfs'][:,0][idx].max()
+        Rmin = ep.g['lcfs'][:,0][idx].min()
+        # minor radius
+        a = (Rmax - Rmin) / 2.0
+
+        #per regression in Makowski figure 6:
+        C = 3.01 # +/- 0.62
+        Ci = -1.31 # +/- 0.15
+        Cb = -0.29 # +/- 0.06
+        Ca = -0.33 # +/- 0.1
+        Cf = 1.03 # +/-0.29
+        #print("MAKOWSKI PARAMETERS:")
+        #print('Ip [MA] = {:f}'.format(Ip))
+        #print('Bt [T] = {:f}'.format(Bt))
+        #print('Rminor [m] = {:f}'.format(a))
+        #print('Greenwald Fraction = {:f}'.format(fG))
+
+        self.S = C * Ip**Ci * Bt**Cb * a**Ca * fG**Cf
+        print('Found Gaussian spreading value of: {:f} mm'.format(self.S))
+        log.info('Found Gaussian spreading value of: {:f} mm'.format(self.S))
         return
 
     def getSpreadingFromEQ(self, ep, fG):
@@ -636,8 +730,12 @@ class heatFlux:
         use = np.where(PFC.shadowed_mask == 0)[0]
 
         #handle various heat flux regressions if user selected that in GUI
-        if self.lqCNmode == 'eich' or self.lqCNmode == None:
-            self.getEichFromEQ(PFC.ep)
+        if self.lqCNmode == 'eich15' or self.lqCNmode == None:
+            self.getEich15FromEQ(PFC.ep)
+            self.lqCN = self.lqEich
+
+        if self.lqCNmode == 'eich14' or self.lqCNmode == None:
+            self.getEich14FromEQ(PFC.ep)
             self.lqCN = self.lqEich
 
         if self.SMode == 'makowski' or self.SMode == None:
@@ -1072,8 +1170,11 @@ class heatFlux:
 
         if self.hfMode == 'limiter':
             HFdict['Heat Flux Mode'] = 'Limiter'
-            if self.lqCNmode == 'eich':
+            if self.lqCNmode == 'eich15':
                 HFdict["\u03BB Near Mode"] = 'Eich Regression #15'
+                HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqEich
+            elif self.lqCNmode == 'eich14':
+                HFdict["\u03BB Near Mode"] = 'Eich Regression #14'
                 HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqEich
             else:
                 HFdict["\u03BB Near Mode"] = 'User Defined'
@@ -1091,8 +1192,11 @@ class heatFlux:
 
         elif self.hfMode == 'multiExp':
             HFdict['Heat Flux Mode'] = 'Multiple (4) Exponentials'
-            if self.lqCNmode == 'eich':
+            if self.lqCNmode == 'eich15':
                 HFdict["\u03BB Near Mode"] = 'Eich Regression #15'
+                HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqEich
+            elif self.lqCNmode == 'eich14':
+                HFdict["\u03BB Near Mode"] = 'Eich Regression #14'
                 HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqEich
             else:
                 HFdict["\u03BB Near Mode"] = 'User Defined'
@@ -1108,8 +1212,10 @@ class heatFlux:
 
         elif self.hfMode == 'eich':
             HFdict['Heat Flux Mode'] = 'Gaussian Spreading'
-            if self.lqCNmode == 'eich':
+            if self.lqCNmode == 'eich15':
                 HFdict["\u03BB Mode"] = 'Eich Regression #15'
+            if self.lqCNmode == 'eich14':
+                HFdict["\u03BB Mode"] = 'Eich Regression #14'
             else:
                 HFdict["\u03BB Mode"] = 'User Defined'
             HFdict["Heat Flux Width (\u03BBq) [mm]"] = self.lqEich
