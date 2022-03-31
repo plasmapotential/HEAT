@@ -16,180 +16,190 @@ import sys
 import subprocess
 import argparse
 
-try:
-    runMode = os.environ["runMode"]
-except:
-    runMode = 'local'
 
-#default HEAT output directory
-homeDir = os.environ["HOME"]
-dataPath = homeDir + '/HEAT/data'
+def loadEnviron():
+    """
+    loads the HEAT environment
+    """
+    try:
+        runMode = os.environ["runMode"]
+    except:
+        runMode = 'local'
+        os.environ["runMode"] = runMode
 
-#=== Set up paths and environment vars
-### appImage
-if runMode == 'appImage':
-    print("Running in appImage mode")
+    #default HEAT output directory
+    homeDir = os.environ["HOME"]
+    dataPath = homeDir + '/HEAT/data'
 
-    ### USER ROOT HEATDIR
-    AppDir = os.environ["APPDIR"]
-    #Root HEAT source code directory
-    rootDir = AppDir + '/usr/src'
+    #=== Set up paths and environment vars
+    ### appImage
+    if runMode == 'appImage':
+        print("Running in appImage mode")
 
-    ### PARAVIEW
-    #Include the location of the paraview binaries
-    #Specifically we need the python libs and pvpython
-    PVPath = os.environ["PVPath"]
-    pvpythonCMD = os.environ["pvpythonCMD"]
+        ### USER ROOT HEATDIR
+        AppDir = os.environ["APPDIR"]
+        #Root HEAT source code directory
+        rootDir = AppDir + '/usr/src'
 
-    ### OPENFOAM
-    #openFOAM bashrc location v1912
-    #OFbashrc = AppDir + '/usr/opt/openfoam/openfoam1912/etc/bashrc'
-    #OFdir = AppDir+'/usr/opt/openfoam/openfoam1912'
-    #openFOAM bashrc location v2106
-    OFbashrc = AppDir + '/opt/openfoam/etc/bashrc'
-    OFdir = AppDir+'/opt/openfoam'
-    #python site packages where PyFoam resides
-    pyFoamPath = AppDir + '/lib/python3.8/site-packages'
+        ### PARAVIEW
+        #Include the location of the paraview binaries
+        #Specifically we need the python libs and pvpython
+        PVPath = os.environ["PVPath"]
+        pvpythonCMD = os.environ["pvpythonCMD"]
 
-    ### FREECAD
-    #default freecad path
-    #FreeCADPath = AppDir + '/opt/freecad/squashfs-root/usr/lib'
-    FreeCADPath = AppDir + '/usr/lib/freecad-python3/lib'
+        ### OPENFOAM
+        #openFOAM bashrc location v1912
+        #OFbashrc = AppDir + '/usr/opt/openfoam/openfoam1912/etc/bashrc'
+        #OFdir = AppDir+'/usr/opt/openfoam/openfoam1912'
+        #openFOAM bashrc location v2106
+        OFbashrc = AppDir + '/opt/openfoam/etc/bashrc'
+        OFdir = AppDir+'/opt/openfoam'
+        #python site packages where PyFoam resides
+        pyFoamPath = AppDir + '/lib/python3.8/site-packages'
 
-    ### ORNL EFIT MODULE
-    #default source code location (EFIT class should be here)
-    EFITPath = AppDir + '/usr/src'
+        ### FREECAD
+        #default freecad path
+        #FreeCADPath = AppDir + '/opt/freecad/squashfs-root/usr/lib'
+        FreeCADPath = AppDir + '/usr/lib/freecad-python3/lib'
 
-###  Docker container
-elif runMode == 'docker':
-    print("Running in Docker mode")
+        ### ORNL EFIT MODULE
+        #default source code location (EFIT class should be here)
+        EFITPath = AppDir + '/usr/src'
 
-    ### USER ROOT HEATDIR
-    #Root HEAT source code directory
-    rootDir = homeDir + '/source/HEAT'
-    #default AppDir for when running in docker mode
-    AppDir = os.environ["APPDIR"]
+        ###  Docker container
+    elif runMode == 'docker':
+        print("Running in Docker mode")
 
-    ### PARAVIEW
-    #Include the location of the paraview binaries.
-    #Specifically we need the python libs and pvpython
-    PVPath = homeDir + '/lib/python3.8/site-packages'
-    pvpythonCMD = homeDir + '/opt/paraview/bin/pvpython'
+        ### USER ROOT HEATDIR
+        #Root HEAT source code directory
+        rootDir = homeDir + '/source/HEAT'
+        #default AppDir for when running in docker mode
+        AppDir = os.environ["APPDIR"]
 
-    ### FREECAD
-    #docker ubuntu repo freecad path
-    FreeCADPath = '/usr/lib/freecad-python3/lib'
+        ### PARAVIEW
+        #Include the location of the paraview binaries.
+        #Specifically we need the python libs and pvpython
+        PVPath = homeDir + '/lib/python3.8/site-packages'
+        pvpythonCMD = homeDir + '/opt/paraview/bin/pvpython'
 
-    ### ORNL EFIT CLASS
-    #default source code location (EFIT class should be here)
-    EFITPath = homeDir + '/source'
+        ### FREECAD
+        #docker ubuntu repo freecad path
+        FreeCADPath = '/usr/lib/freecad-python3/lib'
 
-    ### OPENFOAM
-    #default openFOAM source path v1912
-    #OFbashrc = '/opt/openfoam/openfoam-OpenFOAM-v1912/etc/bashrc'
-    #default openFOAM source path v2106
-    OFbashrc = AppDir + '/opt/openfoam/etc/bashrc'
-    #python site packages where PyFoam resides
-    pyFoamPath = homeDir + '/.local/lib/python3.8/site-packages'
-    #pyFoam python scripts
-    pyFoamPath = '/'
+        ### ORNL EFIT CLASS
+        #default source code location (EFIT class should be here)
+        EFITPath = homeDir + '/source'
 
-    #ENV VARS
-    #create necessary environment variables when outside appImage
-    os.environ["PVPath"] = PVPath
-    os.environ["pvpythonCMD"] = pvpythonCMD
+        ### OPENFOAM
+        #default openFOAM source path v1912
+        #OFbashrc = '/opt/openfoam/openfoam-OpenFOAM-v1912/etc/bashrc'
+        #default openFOAM source path v2106
+        OFbashrc = AppDir + '/opt/openfoam/etc/bashrc'
+        #python site packages where PyFoam resides
+        pyFoamPath = homeDir + '/.local/lib/python3.8/site-packages'
+        #pyFoam python scripts
+        pyFoamPath = '/'
 
-#local development mode
-else:
-    ###  If developing you will need to edit these manually!
-    print("Running in local developer mode")
-    print("You will need a manually compiled environment")
-    ### USER ROOT HEATDIR
-    #Root HEAT source code directory
-    rootDir = homeDir + '/source/HEAT/github/source'
+        #ENV VARS
+        #create necessary environment variables when outside appImage
+        os.environ["PVPath"] = PVPath
+        os.environ["pvpythonCMD"] = pvpythonCMD
 
-    ### PARAVIEW
-    #Include the location of the paraview binaries.
-    #Specifically we need the python libs and pvpython
-    PVPath = '/opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/lib/python3.8/site-packages'
-    pvpythonCMD = '/opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/bin/pvpython'
+        #local development mode
+    else:
+        ###  If developing you will need to edit these manually!
+        print("Running in local developer mode")
+        print("You will need a manually compiled environment")
+        ### USER ROOT HEATDIR
+        #Root HEAT source code directory
+        rootDir = homeDir + '/source/HEAT/github/source'
 
-    ### FREECAD
-    #downloaded appImage freecad path
-    FreeCADPath = '/opt/freecad/squashfs-root/usr/lib'
-    # for ubuntu repo build
-    #FreeCADPath = '/usr/lib/freecad-python3/lib'
-    #FreeCADPath = '/usr/lib/freecad/lib'
-    # for daily builds
-    #FreeCADPath = '/usr/lib/freecad-daily-python3/lib'
+        ### PARAVIEW
+        #Include the location of the paraview binaries.
+        #Specifically we need the python libs and pvpython
+        PVPath = '/opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/lib/python3.8/site-packages'
+        pvpythonCMD = '/opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/bin/pvpython'
 
-    ### ORNL EFIT CLASS
-    #default source code location (EFIT class should be here)
-    EFITPath = homeDir + '/source'
+        ### FREECAD
+        #downloaded appImage freecad path
+        FreeCADPath = '/opt/freecad/squashfs-root/usr/lib'
+        # for ubuntu repo build
+        #FreeCADPath = '/usr/lib/freecad-python3/lib'
+        #FreeCADPath = '/usr/lib/freecad/lib'
+        # for daily builds
+        #FreeCADPath = '/usr/lib/freecad-daily-python3/lib'
 
-    ### OPENFOAM
-    #default openFOAM source path v1912
-    #OFbashrc = '/opt/openfoam/openfoam-OpenFOAM-v1912/etc/bashrc'
-    #default openFOAM source path v2106
-    OFbashrc = '/opt/openfoam/OpenFOAM-v2106/etc/bashrc'
-    #python site packages where PyFoam resides
-    pyFoamPath = homeDir + '/.local/lib/python3.8/site-packages'
-    #pyFoam python scripts
-    pyFoamPath = '/'
+        ### ORNL EFIT CLASS
+        #default source code location (EFIT class should be here)
+        EFITPath = homeDir + '/source'
 
-    #ENV VARS
-    #default AppDir for when running in dev mode
-    AppDir = 'not in appImage mode'
-    #create necessary environment variables when outside appImage
-    os.environ["PVPath"] = PVPath
-    os.environ["pvpythonCMD"] = pvpythonCMD
+        ### OPENFOAM
+        #default openFOAM source path v1912
+        #OFbashrc = '/opt/openfoam/openfoam-OpenFOAM-v1912/etc/bashrc'
+        #default openFOAM source path v2106
+        OFbashrc = '/opt/openfoam/OpenFOAM-v2106/etc/bashrc'
+        #python site packages where PyFoam resides
+        pyFoamPath = homeDir + '/.local/lib/python3.8/site-packages'
+        #pyFoam python scripts
+        pyFoamPath = '/'
 
-#default logfile location
-logFile = dataPath + '/HEATlog.txt'
-#list of tokamak flags that are options in HEAT (if adding new tokamak add flag to list)
-machineList = ['d3d','nstx','st40','step','sparc','west','kstar']
+        #ENV VARS
+        #default AppDir for when running in dev mode
+        AppDir = 'not in appImage mode'
+        #create necessary environment variables when outside appImage
+        os.environ["PVPath"] = PVPath
+        os.environ["pvpythonCMD"] = pvpythonCMD
 
-#Now set the relevant environment variables
-os.environ["logFile"] = logFile
-os.environ["rootDir"] = rootDir
-os.environ["dataPath"] = dataPath
-os.environ["OFbashrc"] = OFbashrc
-os.environ["FreeCADPath"] = FreeCADPath
-os.environ["HEATchmod"] = '0o774' #chmod in base 8 (octal)
+    #default logfile location
+    logFile = dataPath + '/HEATlog.txt'
 
-#clear uname mask for docker saving
-os.umask(0)
+    #Now set the relevant environment variables
+    os.environ["logFile"] = logFile
+    os.environ["rootDir"] = rootDir
+    os.environ["dataPath"] = dataPath
+    os.environ["OFbashrc"] = OFbashrc
+    os.environ["FreeCADPath"] = FreeCADPath
+    os.environ["HEATchmod"] = '0o774' #chmod in base 8 (octal)
 
-#===============================================================================
+    #clear uname mask for docker saving
+    os.umask(0)
 
-#=======UPDATE PATHS============================================================
-#orca installation location (for saving EQ plots)
-#pio.orca.config.executable='/usr/bin/orca'
-#append EFIT to python path
-sys.path.append(EFITPath)
-#append FreeCAD to python path
-sys.path.append(FreeCADPath)
-#append paraview to python path
-sys.path.append(PVPath)
-#append pyFoam site-packages location to python path
-sys.path.append(pyFoamPath)
-#append pvpython to binary path
-oldEnv = os.environ["PATH"]
-#os.environ["PATH"] = oldEnv + ':' + pvpythonCMD
-#===============================================================================
+    #===========================================================================
 
-#Create log files that will be displayed in the HTML GUI
-from pathlib import Path
-if not os.path.exists(dataPath):
-    os.makedirs(dataPath)
-Path(logFile).touch()
-import logging
-logFlask = logging.getLogger('werkzeug')
-logFlask.disabled = True
-logging.basicConfig(filename=logFile, filemode="w", level=logging.INFO, format='%(message)s')
-log = logging.getLogger(__name__)
+    #=======UPDATE PATHS========================================================
+    #orca installation location (for saving EQ plots)
+    #pio.orca.config.executable='/usr/bin/orca'
+    #append EFIT to python path
+    sys.path.append(EFITPath)
+    #append FreeCAD to python path
+    sys.path.append(FreeCADPath)
+    #append paraview to python path
+    sys.path.append(PVPath)
+    #append pyFoam site-packages location to python path
+    sys.path.append(pyFoamPath)
+    #append pvpython to binary path
+    oldEnv = os.environ["PATH"]
+    #os.environ["PATH"] = oldEnv + ':' + pvpythonCMD
+    #===============================================================================
 
+    #Create dataPath
+    if not os.path.exists(dataPath):
+        os.makedirs(dataPath)
+    return
 
+def getLogger():
+    """
+    starts logFile logging
+    """
+    logFile = os.environ["logFile"]
+    from pathlib import Path
+    Path(logFile).touch()
+    import logging
+    logFlask = logging.getLogger('werkzeug')
+    logFlask.disabled = True
+    logging.basicConfig(filename=logFile, filemode="w", level=logging.INFO, format='%(message)s')
+    log = logging.getLogger(__name__)
+    return log
 
 #=======HEAT Launch Point=======================================================
 def launchHEAT(args):
@@ -198,6 +208,8 @@ def launchHEAT(args):
     port = vars(args)['p']
     batchFile = vars(args)['f']
     batchTemplate = vars(args)['sB']
+
+    runMode = os.environ["runMode"]
 
     #run HEAT in terminal mode
     if mode=='t':
@@ -228,6 +240,8 @@ def launchHEAT(args):
         print('\nRunning HEAT via Graphical User Interface (GUI)...\n')
         log.info('\nRunning HEAT via Graphical User Interface (GUI)...\n')
         import dashGUI
+        #list of tokamak flags that are options in HEAT (if adding new tokamak add flag to list)
+        machineList = ['d3d','nstx','st40','step','sparc','west','kstar']
         dashGUI.machineList = machineList
         #use default IPv4 address and port unless user provided one
         if address == None:
@@ -253,6 +267,7 @@ def launchHEAT(args):
                             use_reloader=False, #this can be used in local developer mode only
                             dev_tools_hot_reload = False, #this can be used in local developer mode only
                             )
+    return
 
 
 if __name__ == '__main__':
@@ -268,6 +283,12 @@ if __name__ == '__main__':
     parser.add_argument('--sB', type=str, help='Save Batch File', required=False)
 
     args = parser.parse_args()
+
+    #initialize environment
+    loadEnviron()
+
+    #initialize logs
+    log = getLogger()
 
     #launch HEAT
     launchHEAT(args)

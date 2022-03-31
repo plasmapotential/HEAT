@@ -355,10 +355,11 @@ class CAD:
         file    filename to save into
         """
         try:
-            ImportGui.export(objs, file)
+            Import.export(objs, file)
             print("Saved new STEP file: " + file)
-        except:
+        except OSError as e:
             print("Error saving STEP file.  Aborting.")
+            print(e)
         return
 
 
@@ -911,3 +912,32 @@ class CAD:
                 if target.Label == str(name):
                     intersect[j] = 1
         return intersect
+
+    def extrudeFace(self, partName):
+        """
+        extrude a part object face
+
+        To get subshape:
+        >>> shp = obj.Shape
+        >>> sub = obj.getSubObject("Face4")
+        """
+        import Draft
+        import BOPTools.JoinFeatures
+        for i,part in enumerate(self.CADparts):
+            if part.Label == partName:
+                vector = FreeCAD.Vector(0,10,0)
+                newPart = Draft.extrude(part, vector, solid=True)
+                newPart.Label = part.Label + "Extrusion"
+                j = BOPTools.JoinFeatures.makeConnect(name= 'Connect')
+                print(part)
+                print(newPart)
+                j.Objects = [part, newPart]
+                j.Proxy.execute(j)
+                j.purgeTouched()
+
+                #newPart.Placement = part.getGlobalPlacement()
+                self.CADparts.append(newPart)
+                self.CADobjs.append(newPart)
+
+
+        return
