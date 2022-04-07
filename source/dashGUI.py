@@ -33,18 +33,22 @@ import io
 import json
 import numpy as np
 import pandas as pd
-import parser
+#unsafe, removed 20220406
+#import parser
 import time
 import copy
 import dash
-import dash_html_components as html
-import dash_core_components as dcc
+#import dash_html_components as html
+from dash import html
+#import dash_core_components as dcc
+from dash import dcc
 from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 import visdcc
 from flask import Flask, send_from_directory
 import plotly.io as pio
-import dash_table
+#import dash_table
+from dash import dash_table
 import EFIT.equilParams_class as EP
 import toolsClass
 tools = toolsClass.tools()
@@ -89,7 +93,7 @@ server = Flask(__name__)
 #Create our own server for downloading files
 
 app = dash.Dash(server=server, meta_tags=[{"name": "viewport", "content": "width=device-width"}],
-                prevent_initial_callbacks=False)
+                prevent_initial_callbacks=True)
 
 #Eventually need to fix this so that we are not using a global variable
 #dash can acces Flask Cache so we should cache data by userID or something
@@ -855,6 +859,8 @@ def loadRes(n_clicks, gridRes, MachFlag):
                State('CAD-upload', 'contents'),
                State('MachFlag', 'value')])
 def loadCAD(STPfile, ts, STPcontents, MachFlag):
+    if STPfile is None:
+        raise PreventUpdate
     if MachFlag is None:
         return [html.Label("Select a machine first", style={'color':'#fc0313'})]
     else:
@@ -2109,22 +2115,23 @@ def loadOF(n_clicks,OFstartTime,OFstopTime,
     """
     sets up openFOAM for an analysis
     """
-    if n_clicks == 0:
+    if n_clicks < 1:
         raise PreventUpdate
-    gui.loadOF(OFstartTime,OFstopTime,
-                OFminMeshLev,OFmaxMeshLev,
-                OFSTLscale,OFbashrcLoc,OFdeltaT,OFwriteDeltaT,materialSelect)
-    OFdata = {
-        'OpenFOAM start time [ms]':OFstartTime,
-        'OpenFOAM stop time [ms]':OFstopTime,
-        'Minimum FVM mesh refinement level':OFminMeshLev,
-        'Maximum FVM mesh refinement level':OFmaxMeshLev,
-        'Scale multiplier for FVM meshes':OFSTLscale,
-        'OpenFOAM simulation timestep size [s]': OFdeltaT,
-        'OpenFOAM write output timestep size [s]':OFwriteDeltaT,
-        'OpenFOAM material selection': materialSelect
-        }
-    return [html.Label("Loaded OF Data into HEAT", style={'color':'#f5d142'}), OFdata]
+    else:
+        gui.loadOF(OFstartTime,OFstopTime,
+                   OFminMeshLev,OFmaxMeshLev,
+                   OFSTLscale,OFbashrcLoc,OFdeltaT,OFwriteDeltaT,materialSelect)
+        OFdata = {
+            'OpenFOAM start time [ms]':OFstartTime,
+            'OpenFOAM stop time [ms]':OFstopTime,
+            'Minimum FVM mesh refinement level':OFminMeshLev,
+            'Maximum FVM mesh refinement level':OFmaxMeshLev,
+            'Scale multiplier for FVM meshes':OFSTLscale,
+            'OpenFOAM simulation timestep size [s]': OFdeltaT,
+            'OpenFOAM write output timestep size [s]':OFwriteDeltaT,
+            'OpenFOAM material selection': materialSelect
+            }
+        return [html.Label("Loaded OF Data into HEAT", style={'color':'#f5d142'}), OFdata]
 
 
 
@@ -2785,25 +2792,50 @@ def applyMult(n_clicks, psiRZMult, psiSepMult, psiAxisMult, FpolMult,
         raise PreventUpdate
     #parse user formulas and convert then to number via python compiler
     pi = np.pi
-    #NEED TO ADAPT THIS TO HANDLE ADDITION
-    psiRZMult = eval(parser.expr(psiRZMult).compile())
-    psiSepMult = eval(parser.expr(psiSepMult).compile())
-    psiAxisMult = eval(parser.expr(psiAxisMult).compile())
-    FpolMult = eval(parser.expr(FpolMult).compile())
-    Bt0Mult = eval(parser.expr(Bt0Mult).compile())
-    IpMult = eval(parser.expr(IpMult).compile())
 
-    psiRZAdd = eval(parser.expr(psiRZAdd).compile())
-    psiSepAdd = eval(parser.expr(psiSepAdd).compile())
-    psiAxisAdd = eval(parser.expr(psiAxisAdd).compile())
-    FpolAdd = eval(parser.expr(FpolAdd).compile())
-    Bt0Add = eval(parser.expr(Bt0Add).compile())
-    IpAdd = eval(parser.expr(IpAdd).compile())
+    #THIS METHOD NOT SAFE BECAUSE ANY CODE CAN BE INSERTED
+#    psiRZMult = eval(parser.expr(psiRZMult).compile())
+#    psiSepMult = eval(parser.expr(psiSepMult).compile())
+#    psiAxisMult = eval(parser.expr(psiAxisMult).compile())
+#    FpolMult = eval(parser.expr(FpolMult).compile())
+#    Bt0Mult = eval(parser.expr(Bt0Mult).compile())
+#    IpMult = eval(parser.expr(IpMult).compile())
+
+#    psiRZAdd = eval(parser.expr(psiRZAdd).compile())
+#    psiSepAdd = eval(parser.expr(psiSepAdd).compile())
+#    psiAxisAdd = eval(parser.expr(psiAxisAdd).compile())
+#    FpolAdd = eval(parser.expr(FpolAdd).compile())
+#    Bt0Add = eval(parser.expr(Bt0Add).compile())
+#    IpAdd = eval(parser.expr(IpAdd).compile())
+
+
+    try:
+        psiRZMult = float(psiRZMult)
+        psiSepMult = float(psiSepMult)
+        psiAxisMult = float(psiAxisMult)
+        FpolMult = float(FpolMult)
+        Bt0Mult = float(Bt0Mult)
+        IpMult = float(IpMult)
+
+        psiRZAdd = float(psiRZAdd)
+        psiSepAdd = float(psiSepAdd)
+        psiAxisAdd = float(psiAxisAdd)
+        FpolAdd = float(FpolAdd)
+        Bt0Add = float(Bt0Add)
+        IpAdd = float(IpAdd)
+        returnDiv = [html.Label("Corrections Applied", style={'color':'#f5d142'})]
+
+    except:
+        print("Could not evaluate multipliers or adders")
+        print("Please ensure values are of type float")
+        print("and retry")
+        returnDiv = [html.Label("Error with inputs", style={'color':'#f70c0c'})]
+
 
     gui.gfileClean(psiRZMult,psiSepMult,psiAxisMult,FpolMult,
                    psiRZAdd,psiSepAdd,psiAxisAdd,FpolAdd,
                    Bt0Mult,Bt0Add,IpMult,IpAdd,t)
-    return [html.Label("Corrections Applied", style={'color':'#f5d142'})]
+    return returnDiv
 
 @app.callback(Output('hiddenDivSep', 'children'),
               [Input('newLCFSbutton', 'n_clicks')],
@@ -3212,27 +3244,30 @@ def buildLogTab():
             id="logTab",
             children=[
                         html.H4("HEAT Log File Updated Every 5 Seconds"),
-                        dcc.Textarea(id="logData", value='TEST', className="logBox",
+                        dcc.Textarea(id="logData", value='', className="logBox",
                             readOnly=True),
                     ],
 
             className="wideBoxDark"
             )
 
+#callback for updating log tab every 5 seconds
 @app.callback([Output('logData', 'value'),
-               Output('javascriptLog', 'run')],
+               #Output('javascriptLog', 'run')
+               ],
               [Input('intervalLog', 'n_intervals')])
 def updateLogFile(n):
     if n < 1:
         raise PreventUpdate
     with open(logFile, "r") as f:
         content = f.read()
+    #for visdcc to scroll to bottom every 5 sec
     logCMD = '''
              var textarea = document.getElementById('logData');
              textarea.scrollTop = textarea.scrollHeight;
 
              '''
-    return content, logCMD
+    return [content]#, logCMD
 
 
 """
@@ -3338,14 +3373,14 @@ app.layout = html.Div(
             dcc.Store(id='GYRODataStorage', storage_type='memory'),
             dcc.Store(id='OFDataStorage', storage_type='memory'),
 
-            #interval for updating logFile every 5 seconds
+            #interval for updating logFile tab every 5 seconds
             dcc.Interval(
                 id='intervalLog',
                 interval=5*1000, # in milliseconds
                 n_intervals=0
                 ),
             #visdcc to run js to scroll log box to bottom
-            visdcc.Run_js(id = 'javascriptLog', run = ""),
+            #visdcc.Run_js(id = 'javascriptLog', run = ""),
             build_banner(),
             build_simulator(),
             html.Div(id="hiddenDiv", style={'display': 'none'}),
@@ -3497,6 +3532,7 @@ if __name__ == '__main__':
 # dashGUI.py should be called with no arguments to run on 127.0.0.1:8050 (default)
 # to run on address:port, use command line:
 # dashGUI.py <address> <port>
+    print("Running as MAIN")
 
     try:
         ipaddress.ip_address(sys.argv[1]) #validate it is an ip address

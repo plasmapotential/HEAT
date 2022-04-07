@@ -941,3 +941,52 @@ class CAD:
 
 
         return
+
+    def getPolCrossSection(self, rMax, zMax, phi):
+        """
+        gets a poloidal cross section of the CAD at user defined toroidal angle
+        """
+
+        slices = []
+
+
+
+        for part in self.CADparts:
+            ##method 1 uses vector and double
+            #wires = []
+            #for wire in part.Shape.slice(FreeCAD.Vector(0,1,0), 4):
+            #    wires.append(wire)
+            #comp = Part.Compound(wires)
+            #name = part.Label + '_cs'
+            #slice=self.CADdoc.addObject("Part::Feature",name)
+            #slice.Shape=comp
+            #slices.append(slice)
+
+            #method 2 uses plane
+            plane = self.createPolPlane(rMax,zMax,phi)
+            sec = part.Shape.section(plane.Shape)
+            obj = self.CADdoc.addObject("Part::Feature", part.Label+"_cs")
+            obj.Shape = sec
+            slices.append(obj)
+
+        return slices
+
+    def createPolPlane(self, rMax, zMax, torAngle):
+        """
+        creates a poloidal plane
+
+        user defines toroidal angle, maximum r and z
+        plane will be 2*zMax in height and rMax in width
+        """
+        plane = self.CADdoc.addObject("Part::Plane", "HEATplane")
+        plane.Length = 2*zMax
+        plane.Width = rMax
+        planeOrig = FreeCAD.Vector(0, 0, zMax)
+        planeRot = FreeCAD.Rotation(-90, 90, -1.0*torAngle)
+        plane.Placement = FreeCAD.Placement(planeOrig, planeRot)
+        return plane
+
+
+
+
+        return

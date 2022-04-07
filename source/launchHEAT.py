@@ -28,7 +28,13 @@ def loadEnviron():
         os.environ["runMode"] = runMode
 
     #default HEAT output directory
-    homeDir = os.environ["HOME"]
+    try:
+        homeDir = os.environ["HOME"]
+    except:
+        print("HOME env var not set.  Set before running HEAT!")
+        print("Example:  export HOME=/home/tom")
+        sys.exit()
+
     dataPath = homeDir + '/HEAT/data'
 
     #=== Set up paths and environment vars
@@ -121,8 +127,10 @@ def loadEnviron():
         pvpythonCMD = '/opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/bin/pvpython'
 
         ### FREECAD
-        #downloaded appImage freecad path
-        FreeCADPath = '/opt/freecad/squashfs-root/usr/lib'
+        # daily build binary freecad path
+        FreeCADPath = '/usr/lib/freecad-daily/lib'
+        # downloaded appImage freecad path
+        #FreeCADPath = '/opt/freecad/squashfs-root/usr/lib'
         # for ubuntu repo build
         #FreeCADPath = '/usr/lib/freecad-python3/lib'
         #FreeCADPath = '/usr/lib/freecad/lib'
