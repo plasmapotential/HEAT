@@ -369,6 +369,7 @@ class PFC:
 
             #this is for printing information about a specific mesh element
             #you can get the element # from paraview Point ID
+            #by default turned off
             paraviewIndex = None
             #paraviewIndex = 1
             if paraviewIndex is not None:
@@ -899,6 +900,7 @@ class PFC:
         if mode == 'MT':
             tools.E1 = (tools.p2 - tools.p1)
             tools.E2 = (tools.p3 - tools.p1)
+            tools.N = np.cross(tools.E1, tools.E2)
             tools.D = (tools.q2-tools.q1)
             tools.Dmag = np.linalg.norm(tools.D, axis=1)
 
@@ -1042,6 +1044,7 @@ class PFC:
         if mode == 'MT':
             tools.E1 = (tools.p2 - tools.p1)
             tools.E2 = (tools.p3 - tools.p1)
+            tools.N = np.cross(tools.E1, tools.E2)
             tools.D = (tools.q2-tools.q1)
             tools.Dmag = np.linalg.norm(tools.D, axis=1)
 

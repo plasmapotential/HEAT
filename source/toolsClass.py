@@ -387,6 +387,9 @@ class tools:
         Möller, Tomas; Trumbore, Ben (1997). "Fast, Minimum Storage Ray-Triangle Intersection".
            Journal of Graphics Tools. 2: 21–28. doi:10.1080/10867651.1997.10487468.
 
+        also see this stack overflow thread:
+        https://stackoverflow.com/questions/42740765/intersection-between-line-and-triangle-in-3d/42752998#42752998
+
         i is index of parallel run from multiprocessing
 
         q1 and q2 are start/end points of trace
@@ -450,7 +453,7 @@ class tools:
                 pMin = psiMin
                 pMax = psiMax
 
-            #target faces outside of this toroidal slice
+            #target faces outside of this poloidal slice
             test0 = np.logical_and(np.logical_and(psiP1 < pMin, psiP2 < pMin), psiP3 < pMin)
             test1 = np.logical_and(np.logical_and(psiP1 > pMax, psiP2 > pMax), psiP3 > pMax)
             test = np.logical_or(test0,test1)
@@ -497,23 +500,44 @@ class tools:
         #Perform Intersection Test
         D = self.D[i] / np.linalg.norm(self.D, axis=1)[i]
         eps = 0.0
-        h = np.cross(D, self.E2[use0[useF]])
-        a = np.sum(self.E1[use0[useF]]*h, axis=1)
-        test1 = np.logical_and( a>-eps, a<eps) #ray parallel to triangle
+
+        #old method.  depends upon triangle vertex permutations.  left for reference
+        #h = np.cross(D, self.E2[use0[useF]])
+        #a = np.sum(self.E1[use0[useF]]*h, axis=1)
+        #test1 = np.logical_and( a>-eps, a<eps) #ray parallel to triangle
+        #with np.errstate(divide='ignore', invalid='ignore'):
+        #    f=1.0/a #sometimes results in div by 0 (python warning)
+        #    s = self.q1[i] - self.p1[use0[useF]]
+        #    u = f * np.sum(s*h, axis=1)
+        #    test2 = np.logical_or(u<0.0, u>1.0) #ray inside triangle
+        #    q = np.cross(s,self.E1[use0[useF]])
+        #    v = f*np.sum(D*q, axis=1)
+        #    test3 =  np.logical_or(v<0.0, (u+v)>1.0) #ray inside triangle
+        #    l = f*np.sum(self.E2[use0[useF]]*q, axis=1) #sometimes results in invalid mult (python warning)
+        #    test4 = np.logical_or(l<0.0, l>self.Dmag[i]) #ray long enough to intersect triangle
+
+        #New method: impervious to triangle vertex permutations
+        #rearranges matrix algebra as defined in MT paper, using vector triple product
+        #so that self.N is precalculated
+        T = self.q1[i] - self.p1[use0[useF]]
+        TcrossD = np.cross(T,D)
+        a = -np.sum(self.N[use0[useF]]*D, axis=1)
         with np.errstate(divide='ignore', invalid='ignore'):
             f=1.0/a #sometimes results in div by 0 (python warning)
-            s = self.q1[i] - self.p1[use0[useF]]
-            u = f * np.sum(s*h, axis=1)
+            #barycentric coordinates
+            u = f * np.sum(self.E2[use0[useF]]*TcrossD, axis=1)
+            v = -f * np.sum(self.E1[use0[useF]]*TcrossD, axis=1)
+            t = f * np.sum(T*self.N[use0[useF]], axis=1)
+            #now test if intersection point is inside triangle (true=outside)
+            test1 = np.logical_and( a>-eps, a<eps) #ray parallel to triangle
             test2 = np.logical_or(u<0.0, u>1.0) #ray inside triangle
-            q = np.cross(s,self.E1[use0[useF]])
-            v = f*np.sum(D*q, axis=1)
-            test3 =  np.logical_or(v<0.0, (u+v)>1.0) #ray inside triangle
-            l = f*np.sum(self.E2[use0[useF]]*q, axis=1) #sometimes results in invalid mult (python warning)
-            test4 = np.logical_or(l<0.0, l>self.Dmag[i]) #ray long enough to intersect triangle
-        if np.sum(~np.any([test1,test2,test3,test4], axis=0))>0:
-            result = 1
-        else:
-            result = 0
+            test3 = np.logical_or(v<0.0, v>1.0) #ray inside triangle
+            test4 = (u+v)>1.0 #ray inside triangle
+            test5 = np.logical_or(t<0.0, t>self.Dmag[i]) #ray long enough to intersect triangle
+            if np.sum(~np.any([test1,test2,test3,test4,test5], axis=0))>0:
+                result = 1
+            else:
+                result = 0
 
         #print which face we intersect with if ptIdx is this i
         if self.ptIdx is not None:
@@ -529,7 +553,6 @@ class tools:
                 print("ptIdx's last trace step:")
                 print(self.q1[i])
                 print(self.q2[i])
-
 
         return result
 
