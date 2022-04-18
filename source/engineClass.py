@@ -221,7 +221,7 @@ class engineObj():
         self.MHD.Zmin = -5.0
         self.MHD.Zmax = 5.0
         self.MHD.Rmin = 0.01
-        self.MHD.Rmax = 5.0
+        self.MHD.Rmax = 13.0
         self.MHD.useECcoil = 0
         self.MHD.useIcoil = 0
         self.MHD.useCcoil = 0
@@ -1306,7 +1306,7 @@ class engineObj():
 
     def runHEAT(self, runList):
         """
-        Run a HEAT calculation.  This is called from gui by user.
+        Run a HEAT calculation.  This is called from gui/tui by user.
         Creates point clouds at each mesh center of PFC objects in CAD ROI
 
         Steps forward in time, and then solves everything for each PFC at that
@@ -1390,7 +1390,10 @@ class engineObj():
                             self.loadHFParams(infile=self.inputFileList[tIdx])
                         except:
                             pass
-                        self.HF_PFC(PFC, PFC.tag)
+                        #check if this timestep contains an MHD EQ we already traced
+                        repeatIdx = self.MHD.check4repeatedEQ(PFC.ep, PFC.EPs[:tIdx])
+                        #get the optical heat flux
+                        self.HF_PFC(PFC, repeatIdx, PFC.tag)
                         PFC.shadowMasks[tIdx] = PFC.shadowed_mask
                         PFC.powerSumOptical[tIdx] = self.HF.power_sum_mesh(PFC, mode='optical')
                         print('Maximum optical heat load on tile: {:f}'.format(max(PFC.qDiv)))
@@ -1556,14 +1559,18 @@ class engineObj():
 
         return
 
-    def HF_PFC(self, PFC, tag=None):
+    def HF_PFC(self, PFC, repeatIdx=None, tag=None):
         """
         meat and potatoes of the HF calculation.  Called in loop or by parallel
         processes for each PFC object.  Only calculates optical heat flux
         """
         #Check for intersections with MAFOT struct
         t0 = time.time()
-        PFC.findShadows_structure(self.MHD, self.CAD)
+        #check if this is a repeated MHD EQ
+        if repeatIdx == None:
+            PFC.findShadows_structure(self.MHD, self.CAD)
+        else:
+            PFC.shadowed_mask = PFC.shadowMasks[repeatIdx].copy()
         #PFC.findIntersectionFreeCADKDTree(self.MHD,self.CAD)
         print("Intersection calculation took {:f} s".format(time.time() - t0))
 

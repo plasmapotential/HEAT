@@ -18,7 +18,7 @@ from scipy.interpolate import interp1d
 import logging
 log = logging.getLogger(__name__)
 
-def setupForTerminalUse(gFile=None):
+def setupForTerminalUse(gFile=None, shot=None, time=None):
     """
     Sets up an MHD object so that it can be used from python console
     without running HEAT.  This is convenient when a user wants to load
@@ -61,6 +61,7 @@ def setupForTerminalUse(gFile=None):
     if gFile!=None:
         print("Making MHD() object with ep included")
         MHD.ep = EP.equilParams(gFile)
+
     else:
         print("Not including ep in MHD() object")
     return MHD
@@ -149,6 +150,7 @@ class MHD:
 
         return
 
+
     def getGEQDSK(self,machine='nstx',gFileList=None):
         """
         get gfile from mds+ tree if gfileList is None, otherwise use file
@@ -170,8 +172,19 @@ class MHD:
         #load from file in GUI or TUI
         else:
             self.timesteps = []
-            for idx,gfile in enumerate(gFileList):
-                ts = self.copyGfile2tree(gfile,idx+1)
+            if len(gFileList) > 1:
+                self.N_gFiles = len(gFileList)
+            for i,gfile in enumerate(gFileList):
+                #test if gfile follows d3d naming convention
+                try:
+                    idx = gfile.find('.')
+                    fmtstr = '0' + str(idx-1) + 'd'
+                    shot, time = int(gfile[1:idx]), int(gfile[idx+1::])
+                #otherwise define new timestep based upon index
+                except:
+                    shot=1
+                    time=i+1
+                ts = self.copyGfile2tree(gfile,shot,time)
                 self.timesteps.append(ts)
             self.timesteps = np.array(self.timesteps)
 
@@ -190,7 +203,7 @@ class MHD:
             shotPath = self.shotPath
         if gfile is None:
             gfile = shotPath+'{:06d}/g{:06d}.{:05d}'.format(t,shot,t)
-        self.ep = EP.equilParams(gfile)
+        self.ep = EP.equilParams(gfile, shot, t)
         #Correct for weird helicity and field directions that are occasionally
         #in gfile.  Here we assume that Ip is the CCW direction as viewed from
         #above tokamak.
@@ -226,17 +239,6 @@ class MHD:
             gfile = shotPath+'{:06d}/g{:06d}.{:05d}'.format(t,self.shot,t)
             self.ep[idx] = EP.equilParams(gfile)
         return
-
-    def checkEFITobject(self):
-        """
-        checks to make sure that the EFIT object created from a gfile
-        has the correct signs for poloidal flux, toroidal field, plasma current,
-        etc., so that the helicity and field are in the correct orientation
-        """
-
-
-
-
 
 
     def Bfield_pointcloud(self, ep, R, Z, phi, powerDir=None, normal=False):
@@ -663,27 +665,46 @@ class MHD:
         return g
 
 
+    def check4repeatedEQ(self, ep, EPs):
+        """
+        checks if an ep object is repeated in a list of EPs
+        """
+        repeat = None
+        for i,e in enumerate(EPs):
+            test1 = ep.g['Ip'] == e.g['Ip']
+            test2 = ep.g['Bt0'] == e.g['Bt0']
+            test3 = np.all(ep.g['psiRZ'] == e.g['psiRZ'])
+            test4 = np.all(ep.g['Fpol'] == e.g['Fpol'])
+            if test1 and test2 and test3 and test4:
+                repeat = i #found it
+                print("MHD EQ repeated.  Using EQ from tIdx {:d}".format(i))
+                break
 
-    def copyGfile2tree(self,gFileName,idx,clobberflag=True):
+        return repeat
+
+
+
+    def copyGfile2tree(self,gFileName,shot,time,clobberflag=True):
         """
         Copies gfile to HEAT tree
         gFileName is name of gFile that is already located in self.tmpDir
         """
         oldgfile = self.tmpDir + gFileName
-        #try to make EP object if naming follows d3d gFile naming convention
-        try:
-            ep = EP.equilParams(oldgfile)
-            shot = ep.g['shot']
-            time = ep.g['time']
-        #if gfile doesn't follow naming convention define manually
-        except:
-            print("Couldn't open gFile with equilParams_class")
-            log.info("Couldn't open gFile with equilParams_class")
-            if self.shot is None:
-                shot = 1
-            else:
-                shot = self.shot
-            time = idx
+#        #try to make EP object if naming follows d3d gFile naming convention
+#        try:
+#            ep = EP.equilParams(oldgfile)
+#            shot = ep.g['shot']
+#            time = ep.g['time']
+#
+#        #if gfile doesn't follow naming convention define manually
+#        except:
+#            print("Couldn't open gFile with equilParams_class")
+#            log.info("Couldn't open gFile with equilParams_class")
+#            if self.shot is None:
+#                shot = 1
+#            else:
+#                shot = self.shot
+#            time = idx
 
         name = 'g{:06d}.{:05d}'.format(shot,time)
         #make tree for this shot

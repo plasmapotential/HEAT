@@ -362,6 +362,47 @@ class CAD:
             print(e)
         return
 
+    def loadBREP(self):
+        """
+        Loads BREP Open Cascade file
+        """
+        print("Loading BREP file...")
+        log.info("Loading BREP file...")
+        self.CAD = Part.open(self.BREPfile)
+        self.CADdoc = FreeCAD.ActiveDocument
+        #Coordinate permutation if necessary
+        if self.permute_mask=='True' or self.permute_mask == True:
+            self.permuteSTEP()
+            #self.permuteSTEPAssy()
+            self.permute_mask = False
+
+        #Save all parts/objects
+        self.CADobjs = self.CADdoc.Objects
+        self.CADparts = []
+        for obj in self.CADobjs:
+            if type(obj) == Part.Feature:
+                self.CADparts.append(obj)
+
+        print("Loaded BREP file: " + self.BREPfile)
+        log.info("Loaded BREP file: " + self.BREPfile)
+        return
+
+    def saveBREP(self, file, objs):
+        """
+        Saves BREP file
+
+        objs    CAD objects.  If you want to preserve Assembly architecture
+                then you need to only save [FreeCAD.ActiveDocument.ASSEMBLY].
+                Otherwise each part should be in a list
+        file    filename to save into
+        """
+        try:
+            Part.export(objs ,file)
+            print("Saved new BREP file: " + file)
+        except OSError as e:
+            print("Error saving STEP file.  Aborting.")
+            print(e)
+        return
 
     def permuteSTEPAssy(self):
         """
@@ -967,6 +1008,7 @@ class CAD:
             sec = part.Shape.section(plane.Shape)
             obj = self.CADdoc.addObject("Part::Feature", part.Label+"_cs")
             obj.Shape = sec
+            self.CADdoc.recompute()
             slices.append(obj)
 
         return slices
@@ -986,7 +1028,52 @@ class CAD:
         plane.Placement = FreeCAD.Placement(planeOrig, planeRot)
         return plane
 
+    def makeComp(self, parts):
+        """
+        makes a compound from parts
+        """
+        shps = [p.Shape for p in parts]
+        comp = Part.makeCompound(shps)
+        obj=self.CADdoc.addObject("Part::Feature","compoundSection")
+        obj.Shape = comp
+        return obj
+
+    def faceFromEdges(self, edges):
+        """
+        adds a face to edges that form a contour
+        """
 
 
+        return face
 
-        return
+    def checkWireClosed(self, edges):
+        """
+        checks if edges are closed
+
+        requires list of edges (<Edge object>)
+        """
+        return Part.Wire(edges).isClosed()
+
+    def createEdge(self, p1, p2):
+        """
+        creates a wire, or a line, or an edge, from two points
+
+        p1 and p2 should be freecad points (for example, (0,0,0) )
+        """
+        return Part.makeLine(p1,p2)
+
+
+    def createWire(self, shapes):
+        """
+        creates a wire from list of shapes.  will filter out all parts except
+        for edges
+        """
+        edges = []
+        for p in shapes:
+            if type(p)==Part.Edge:
+                edges.append(p)
+        try:
+            w = Part.Wire(edges)
+        except:
+            w = None
+        return w

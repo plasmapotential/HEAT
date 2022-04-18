@@ -93,7 +93,7 @@ server = Flask(__name__)
 #Create our own server for downloading files
 
 app = dash.Dash(server=server, meta_tags=[{"name": "viewport", "content": "width=device-width"}],
-                prevent_initial_callbacks=True)
+                prevent_initial_callbacks=False)
 
 #Eventually need to fix this so that we are not using a global variable
 #dash can acces Flask Cache so we should cache data by userID or something
