@@ -837,7 +837,8 @@ class engineObj():
                     fracCN,fracCF,fracPN,fracPF,
                     fracUI,fracUO,fracLI,fracLO,
                     lqCNmode,lqCFmode,lqPNmode,lqPFmode,SMode,
-                    qBG,Pinj,coreRadFrac,fG):
+                    qBG,Pinj,coreRadFrac,fG,
+                    qFilePath,qFileTag):
         """
         get heat flux inputs from gui or input file
         """
@@ -873,53 +874,66 @@ class engineObj():
         #fraction of power conducted to PFC surfaces
         self.HF.Psol = (1-self.HF.coreRadFrac)*self.HF.Pinj
 
+        allowed_qTags = [None, 'none', 'NA', 'None', 'N']
+        if qFileTag in allowed_qTags:
+            qFileTag = None
+        if qFilePath in allowed_qTags:
+            qFilePath = None
+        self.HF.qFilePath = qFilePath
+        self.HF.qFileTag = qFileTag
+
         print("HF Mode = "+hfMode)
         log.info("Hf Mode = "+hfMode)
-        print("Pinj = {:f}".format(self.HF.Pinj))
-        log.info("Pinj = {:f}".format(self.HF.Pinj))
-        print("Fraction of Pinj Radiated from Core = {:f}".format(self.HF.coreRadFrac))
-        log.info("Fraction of Pinj Radiated from Core = {:f}".format(self.HF.coreRadFrac))
-        print("Psol = {:f}".format(self.HF.Psol))
-        log.info("Psol = {:f}".format(self.HF.Psol))
-        print("Upper Inner Div Power Fraction: {:f}".format(self.HF.fracUI))
-        log.info("Upper Inner Div Power Fraction: {:f}".format(self.HF.fracUI))
-        print("Upper Outer Div Power Fraction: {:f}".format(self.HF.fracUO))
-        log.info("Upper Outer Div Power Fraction: {:f}".format(self.HF.fracUO))
-        print("Lower Inner Div Power Fraction: {:f}".format(self.HF.fracLI))
-        log.info("Lower Inner Div Power Fraction: {:f}".format(self.HF.fracLI))
-        print("Lower Outer Div Power Fraction: {:f}".format(self.HF.fracLO))
-        log.info("Lower Outer Div Power Fraction: {:f}".format(self.HF.fracLO))
-        print("Long range intersection checking: "+LRmask)
+        if hfMode != 'qFile':
+            print("Pinj = {:f}".format(self.HF.Pinj))
+            log.info("Pinj = {:f}".format(self.HF.Pinj))
+            print("Fraction of Pinj Radiated from Core = {:f}".format(self.HF.coreRadFrac))
+            log.info("Fraction of Pinj Radiated from Core = {:f}".format(self.HF.coreRadFrac))
+            print("Psol = {:f}".format(self.HF.Psol))
+            log.info("Psol = {:f}".format(self.HF.Psol))
+            print("Upper Inner Div Power Fraction: {:f}".format(self.HF.fracUI))
+            log.info("Upper Inner Div Power Fraction: {:f}".format(self.HF.fracUI))
+            print("Upper Outer Div Power Fraction: {:f}".format(self.HF.fracUO))
+            log.info("Upper Outer Div Power Fraction: {:f}".format(self.HF.fracUO))
+            print("Lower Inner Div Power Fraction: {:f}".format(self.HF.fracLI))
+            log.info("Lower Inner Div Power Fraction: {:f}".format(self.HF.fracLI))
+            print("Lower Outer Div Power Fraction: {:f}".format(self.HF.fracLO))
+            log.info("Lower Outer Div Power Fraction: {:f}".format(self.HF.fracLO))
+            print("Long range intersection checking: "+LRmask)
+            log.info("Long range intersection checking: "+LRmask)
 
-        #get regression parameters from MHD EQ
-        self.HF.getRegressionParams(self.MHD.ep[0])
+            #get regression parameters from MHD EQ
+            self.HF.getRegressionParams(self.MHD.ep[0])
 
-        if hasattr(self.MHD, 'ep'):
-            self.HF.HFdataDict = self.HF.getHFtableData(self.MHD.ep[0])
-        else:
-            if self.HF.lqCNmode == 'eich':
-                print("You need to load MHD to load Eich profiles")
-                log.info("You need to load MHD to load Eich profiles")
-                self.HF.HFdataDict = {}
-                raise ValueError("MHD EQ must be loaded before HF Settings to calculate Eich lq")
+            if hasattr(self.MHD, 'ep'):
+                self.HF.HFdataDict = self.HF.getHFtableData(self.MHD.ep[0])
             else:
-                self.HF.HFdataDict = self.HF.getHFtableData(ep=None)
+                if self.HF.lqCNmode == 'eich':
+                    print("You need to load MHD to load Eich profiles")
+                    log.info("You need to load MHD to load Eich profiles")
+                    self.HF.HFdataDict = {}
+                    raise ValueError("MHD EQ must be loaded before HF Settings to calculate Eich lq")
+                else:
+                    self.HF.HFdataDict = self.HF.getHFtableData(ep=None)
 
-            if self.HF.lqCF == 'horacek':
-                print("You need to load MHD to load Horacek profiles")
-                log.info("You need to load MHD to load Horacek profiles")
-                self.HF.HFdataDict = {}
-                raise ValueError("MHD EQ must be loaded before HF Settings to calculate Horacek lqCF")
-            else:
-                self.HF.HFdataDict = self.HF.getHFtableData(ep=None)
+                if self.HF.lqCF == 'horacek':
+                    print("You need to load MHD to load Horacek profiles")
+                    log.info("You need to load MHD to load Horacek profiles")
+                    self.HF.HFdataDict = {}
+                    raise ValueError("MHD EQ must be loaded before HF Settings to calculate Horacek lqCF")
+                else:
+                    self.HF.HFdataDict = self.HF.getHFtableData(ep=None)
 
-            if self.HF.SMode == 'makowski':
-                print("You need to load MHD to load Makowski profiles")
-                log.info("You need to load MHD to load Makowski profiles")
-                self.HF.HFdataDict = {}
-                raise ValueError("MHD EQ must be loaded before HF Settings to calculate Makowski S")
-            else:
-                self.HF.HFdataDict = self.HF.getHFtableData(ep=None)
+                if self.HF.SMode == 'makowski':
+                    print("You need to load MHD to load Makowski profiles")
+                    log.info("You need to load MHD to load Makowski profiles")
+                    self.HF.HFdataDict = {}
+                    raise ValueError("MHD EQ must be loaded before HF Settings to calculate Makowski S")
+                else:
+                    self.HF.HFdataDict = self.HF.getHFtableData(ep=None)
+
+        else: #if hfMode is qFile
+            self.HF.HFdataDict = self.HF.getHFtableData(ep=None)
 
         if hfMode=='eich':
             print("lqCN = {:f}".format(self.HF.lqCN))
@@ -956,6 +970,12 @@ class engineObj():
             log.info("fracCF = {:f}".format(self.HF.fracCF))
             log.info("fracPN = {:f}".format(self.HF.fracPN))
             log.info("fracPF = {:f}".format(self.HF.fracPF))
+        elif hfMode=='qFile':
+            print("qFilePath = "+qFilePath)
+            print("qFileTag = "+qFileTag)
+            log.info("qFilePath = "+qFilePath)
+            log.info("qFileTag = "+qFileTag)
+
 
         return
 
@@ -992,7 +1012,9 @@ class engineObj():
                          self.HF.qBG,
                          self.HF.Pinj,
                          self.HF.coreRadFrac,
-                         self.HF.fG)
+                         self.HF.fG,
+                         self.HF.qFilePath,
+                         self.HF.qFileTag)
         return
 
 
@@ -1392,8 +1414,17 @@ class engineObj():
                             pass
                         #check if this timestep contains an MHD EQ we already traced
                         repeatIdx = self.MHD.check4repeatedEQ(PFC.ep, PFC.EPs[:tIdx])
+
                         #get the optical heat flux
-                        self.HF_PFC(PFC, repeatIdx, PFC.tag)
+                        if self.HF.qFileTag is None:
+                            self.HF_PFC(PFC, repeatIdx, PFC.tag)
+                        else:
+                            #try to read HF from file
+                            val = self.HF.readqFile(PFC, t)
+                            #read from file failed, run regular q calculation
+                            if val == -1:
+                                self.HF_PFC(PFC, repeatIdx, PFC.tag)
+
                         PFC.shadowMasks[tIdx] = PFC.shadowed_mask
                         PFC.powerSumOptical[tIdx] = self.HF.power_sum_mesh(PFC, mode='optical')
                         print('Maximum optical heat load on tile: {:f}'.format(max(PFC.qDiv)))
@@ -1571,6 +1602,7 @@ class engineObj():
             PFC.findShadows_structure(self.MHD, self.CAD)
         else:
             PFC.shadowed_mask = PFC.shadowMasks[repeatIdx].copy()
+
         #PFC.findIntersectionFreeCADKDTree(self.MHD,self.CAD)
         print("Intersection calculation took {:f} s".format(time.time() - t0))
 
@@ -2136,6 +2168,9 @@ class engineObj():
                     'fracLI': None,
                     'fracLO': None,
                     'qBG' : None,
+                    'fG' : None,
+                    'qFilePath' : None,
+                    'qFileTag' : None,
                     'OFtMin': None,
                     'OFtMax': None,
                     'deltaT': None,
@@ -2198,6 +2233,8 @@ class engineObj():
                     'fracLO':self.HF.fracLO,
                     'qBG' : self.HF.qBG,
                     'fG' : self.HF.fG,
+                    'qFilePath': self.HF.qFilePath,
+                    'qFileTag': self.HF.qFileTag,
                     'OFtMin': self.OF.OFtMin,
                     'OFtMax': self.OF.OFtMax,
                     'deltaT': self.OF.deltaT,
@@ -2214,7 +2251,7 @@ class engineObj():
                     'ionMassAMU': self.GYRO.ionMassAMU,
                     'hfMode': self.HF.hfMode,
                     #'vMode': self.GYRO.vMode,
-                    'ionFrac': self.GYRO.ionFrac
+                    'ionFrac': self.GYRO.ionFrac,
                     }
         print("Loaded defaults")
 

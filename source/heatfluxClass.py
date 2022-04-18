@@ -3,6 +3,7 @@
 #Engineer:      T Looby
 #Date:          20191117
 import numpy as np
+import pandas as pd
 import toolsClass
 import os
 import sys
@@ -70,7 +71,9 @@ class heatFlux:
                             'Pinj',
                             'coreRadFrac',
                             'qBG',
-                            'fG'
+                            'fG',
+                            'qFilePath',
+                            'qFileTag',
                             ]
         return
 
@@ -162,7 +165,7 @@ class heatFlux:
         log.info("Found heat flux width value of: {:f} mm".format(self.lqEich))
         return
 
-    def getSpreadingFromEQ(self, ep, fG):
+    def getMakowskiFromEQ(self, ep, fG):
         """
         finds gaussian spreading associated with thermal diffusion, also known
         as S.  In Eich profile, exponential is convoluted with gaussian to
@@ -641,7 +644,7 @@ class heatFlux:
             self.lqCN = self.lqEich
 
         if self.SMode == 'makowski' or self.SMode == None:
-            self.getSpreadingFromEQ(PFC.ep, self.fG)
+            self.getMakowskiFromEQ(PFC.ep, self.fG)
 
         if self.lqCFmode == 'horacek' or self.lqCFmode == None:
             self.getHoracekFromEQ(PFC.ep)
@@ -871,6 +874,45 @@ class heatFlux:
 #===============================================================================
 #                   I/O operations
 #===============================================================================
+    def readqFile(self, PFC, t):
+        """
+        reads a heat flux .csv file and loads into PFC.qDiv variable
+
+        qFilePath should be path where .csv files are located.  This
+        path name should be identical to the HEAT data directory paths.  It should
+        contain a series of timestep directories (ie /00100/) as well as a
+        series of PFC directories in each timestep directory (ie /00100/SOLID1).
+        The .csv files should live in the PFC directories
+
+        """
+        if self.qFilePath[-1] != '/':
+            base = self.qFilePath + '/'
+        else:
+            base = self.qFilePath
+
+        f = base + '{:06d}/'.format(t) + PFC.name + '/' + self.qFileTag
+        try:
+            df = pd.read_csv(f, names=['X','Y','Z','HF'], skiprows=[0])
+            if len(df['HF'].values) != len(PFC.centers):
+                print('HF file mesh is not same length as STL file mesh.')
+                print('Will not assign HF to mismatched mesh')
+                print("qFile length: {:d}".format(len(df['HF'].values)))
+                print("PFC STL mesh length: {:d}".format(len(PFC.centers)))
+                val = -1
+            else:
+                PFC.qDiv = df['HF'].values
+                PFC.powerFrac = self.getDivertorPowerFraction(PFC.DivCode)
+                print("Loaded heat flux from file: "+f)
+                val = 0
+        except:
+            print("COULD NOT READ qFILE PATH: "+f)
+            print("Please point HEAT to a valid qFilePath and qFileTag,")
+            print("which should be a .csv file with (X,Y,Z,HF)")
+            val = -1
+
+        return val
+
+
     def readMAFOTLaminarOutput(self,PFC,file):
         """
         Reads output from MAFOT laminar into PFC object
@@ -1106,6 +1148,11 @@ class heatFlux:
             HFdict["Private Region Near Power Fraction"] = self.fracPN
             HFdict["Private Region Far Power Fraction"] = self.fracPF
 
+        elif self.hfMode == 'qFile':
+            HFdict["Heat Flux Mode"] = 'Read HF from qFile'
+            HFdict['qFilePath'] = self.qFilePath
+            HFdict['qFileTag'] = self.qFileTag
+
         elif self.hfMode == 'eich':
             HFdict['Heat Flux Mode'] = 'Gaussian Spreading'
             if self.lqCNmode == 'eich':
@@ -1123,11 +1170,12 @@ class heatFlux:
             HFdict['S [mm]'] = self.S
             HFdict['Background Heat Flux'] = self.qBG
 
-        HFdict["Power Injected (Pinj) [MW]"] = self.Pinj
-        HFdict["Radiated Fraction of Injected Power"] = self.coreRadFrac
-        HFdict["Power Crossing Separatrix (Psol) [MW]"] = self.Psol
-        HFdict["Upper Inner Divertor Power Fraction"] = self.fracUI
-        HFdict["Upper Outer Divertor Power Fraction"] = self.fracUO
-        HFdict["Lower Inner Divertor Power Fraction"] = self.fracLI
-        HFdict["Lower Outer Divertor Power Fraction"] = self.fracLO
+        if self.hfMode != 'qFile':
+            HFdict["Power Injected (Pinj) [MW]"] = self.Pinj
+            HFdict["Radiated Fraction of Injected Power"] = self.coreRadFrac
+            HFdict["Power Crossing Separatrix (Psol) [MW]"] = self.Psol
+            HFdict["Upper Inner Divertor Power Fraction"] = self.fracUI
+            HFdict["Upper Outer Divertor Power Fraction"] = self.fracUO
+            HFdict["Lower Inner Divertor Power Fraction"] = self.fracLI
+            HFdict["Lower Outer Divertor Power Fraction"] = self.fracLO
         return HFdict

@@ -27,8 +27,8 @@ lqCNmode, eich
 lqCFmode, None
 lqPNmode, None
 lqPFmode, None
-S, 1.0
-SMode, makowski
+S, 0.15
+SMode, user
 fracCN, 0.6
 fracCF, 0.4
 fracPN, 0.1
@@ -37,10 +37,12 @@ fracUI,0.0
 fracUO,0.0
 fracLI,0.3
 fracLO,0.7
-Pinj, 10
-coreRadFrac, 0.3
+Pinj, 29
+coreRadFrac, 0.0
 qBG, 0.0
-fG, 0.6
+fG, 0.37
+qFilePath, None
+qFileTag, None
 #==============================================================
 #                Ion Gyro Orbit HF Variables
 #==============================================================
@@ -64,4 +66,4 @@ writeDeltaT, 0.001
 STLscale, 1.0
 meshMinLevel, 1
 meshMaxLevel, 2
-material, SGL
+material, TUNG

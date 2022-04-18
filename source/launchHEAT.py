@@ -219,6 +219,9 @@ def launchHEAT(args):
 
     runMode = os.environ["runMode"]
 
+    #list of tokamak flags that are options in HEAT (if adding new tokamak add flag to list)
+    machineList = ['d3d','nstx','st40','step','sparc','west','kstar']
+
     #run HEAT in terminal mode
     if mode=='t':
         print('\nRunning HEAT via Terminal User Interface (TUI)...\n')
@@ -248,8 +251,6 @@ def launchHEAT(args):
         print('\nRunning HEAT via Graphical User Interface (GUI)...\n')
         log.info('\nRunning HEAT via Graphical User Interface (GUI)...\n')
         import dashGUI
-        #list of tokamak flags that are options in HEAT (if adding new tokamak add flag to list)
-        machineList = ['d3d','nstx','st40','step','sparc','west','kstar']
         dashGUI.machineList = machineList
         #use default IPv4 address and port unless user provided one
         if address == None:

@@ -888,7 +888,8 @@ def buildHFbox():
                 options=[
                     {'label': 'Gaussian Spreading', 'value': 'eich'},
                     {'label': 'Multi-Exponential', 'value': 'multiExp'},
-                    {'label': 'Limiter', 'value': 'limiter'}
+                    {'label': 'Limiter', 'value': 'limiter'},
+                    {'label': 'From qFiles', 'value': 'qFile'}
                     ],
                 value='eich',
                 ),
@@ -896,19 +897,6 @@ def buildHFbox():
                          children=[
                                     loadHFSettings(mode=None,hidden=True),
                                    ],
-                        ),
-                html.Label("Long Range Intersection Checking?"),
-                dcc.RadioItems(
-                                id="LRmask",
-                                options=[
-                                    {'label': 'Yes', 'value': 'yes'},
-                                    {'label': 'No', 'value': 'no'},
-                                        ],
-                                        value='no'
-                                ),
-
-                html.Div(id="LRthreshDiv",
-                         children=[ loadLRsettings(mask='no', hidden=True), ]
                         ),
                 html.Br(),
                 html.Button("Load HF", id="loadHF", style={'margin':'10px 10px 10px 10px'}),
@@ -1002,23 +990,43 @@ def PsolInput(hidden=False):
                     html.Label("Radiated Fraction of Injected Power"),
                     dcc.Input(id="coreRadFrac", className="textInput"),
                     row2,
-                    row3
-                    ],
+                    row3,
+                    html.Label("Long Range Intersection Checking?"),
+                    dcc.RadioItems(
+                                id="LRmask",
+                                options=[
+                                    {'label': 'Yes', 'value': 'yes'},
+                                    {'label': 'No', 'value': 'no'},
+                                        ],
+                                        value='no'
+                                ),
+
+                    html.Div(id="LRthreshDiv",
+                            children=[ loadLRsettings(mask='no', hidden=True), ]
+                            ),
+                        ],
                     )
 
 def loadHFSettings(mode=None, hidden=False):
     #do this hidden business so that we can always load defaults into these id's
     #hideMask corresponds to the following parameters:
     #[eichProfile, commonRegion, privateRegion]
-    hideMask = ['hiddenBox','hiddenBox','hiddenBox']
+    hideMask = ['hiddenBox','hiddenBox','hiddenBox','hiddenBox']
     if mode=='eich':
-        hideMask = ['hfInput','hiddenBox','hiddenBox']
+        hideMask = ['hfInput','hiddenBox','hiddenBox','hiddenBox']
     elif mode=='limiter':
-        hideMask = ['hiddenBox','hiddenBox','hfInput'] #common flux region
+        hideMask = ['hiddenBox','hiddenBox','hfInput','hiddenBox'] #common flux region
     elif mode=='multiExp':
-        hideMask = ['hiddenBox','hfInput','hiddenBox'] #common + private flux region
+        hideMask = ['hiddenBox','hfInput','hiddenBox','hiddenBox'] #common + private flux region
+    elif mode=='qFile':
+        hideMask = ['hiddenBox','hiddenBox','hiddenBox','hfInput'] #common + private flux region
     if hidden==True or mode==None:
-        hideMask=['hiddenBox','hiddenBox','hiddenBox']
+        hideMask=['hiddenBox','hiddenBox','hiddenBox','hiddenBox']
+
+
+    #if we are using qFile, hide Psol inputs
+    if mode == 'qFile':
+        hidden=True
 
     return html.Div(
             children=[
@@ -1041,6 +1049,13 @@ def loadHFSettings(mode=None, hidden=False):
                     #className=hideMask[2],
                     children=[
                         limiterParameters(hideMask[2]),
+                        ]
+                ),
+                #from file
+                html.Div(
+                    #className=hideMask[2],
+                    children=[
+                        qFileParameters(hideMask[3]),
                         ]
                 ),
                 PsolInput(hidden),
@@ -1382,6 +1397,39 @@ def limiterParameters(className):
     return div
 
 
+def  qFileParameters(className):
+    #return if this div is supposed to be hidden to prevent duplicate IDs
+    #if className== 'hiddenBox':
+    #    return
+
+    row1 = html.Div(
+        className="rowBox",
+        children = [
+            html.Div(
+                className="colBox",
+                children=[
+                    html.Label("Input qFile root path:"),
+                    dcc.Input(id="qFilePath", className="hfInput2"),
+                ]),
+            html.Div(
+                className="colBox",
+                children=[
+                    html.Label("Input qFile tag (ie hf_optical.csv):"),
+                    dcc.Input(id="qFileTag", className="hfInput2"),
+                ]),
+
+            ]
+            )
+
+    div = html.Div(
+        className=className,
+        children=[
+            row1,
+            ]
+        )
+    return div
+
+
 
 
 
@@ -1465,6 +1513,8 @@ def commonRegionParameters():
                State('Pinj', 'value'),
                State('coreRadFrac', 'value'),
                State('fG', 'value'),
+               State('qFilePath', 'value'),
+               State('qFileTag', 'value'),
                ])
 def loadHF(n_clicks,hfMode,MachFlag,
             lqEich,S,lqCN,lqCF,lqPN,lqPF,
@@ -1474,7 +1524,8 @@ def loadHF(n_clicks,hfMode,MachFlag,
             eichlqCNMode,SMode,
             multiExplqCNMode,multiExplqCFMode,multiExplqPNMode,multiExplqPFMode,
             limiterlqCNMode,limiterlqCFMode,limlqCN,limlqCF,limfracCN,limfracCF,
-            qBG,Pinj,coreRadFrac,fG):
+            qBG,Pinj,coreRadFrac,fG,
+            qFilePath, qFileTag):
     if MachFlag is None:
         raise PreventUpdate
     else:
@@ -1493,6 +1544,8 @@ def loadHF(n_clicks,hfMode,MachFlag,
             fracCF = limfracCF
             fracPN = 0.0
             fracPF = 0.0
+            qFileTag = None
+            qFilePath = None
         elif hfMode == 'multiExp':
             #add this back in after brunner scaling is in HEAT:
             lqCNmode = multiExplqCNMode
@@ -1504,7 +1557,18 @@ def loadHF(n_clicks,hfMode,MachFlag,
             lqPN = lqPN #unnecessary, but here for clarity
             lqPF = lqCF #unnecessary, but here for clarity
             SMode = None
-
+            qFileTag = None
+            qFilePath = None
+        elif hfMode == 'qFile':
+            lqCNmode = eichlqCNMode
+            lqCFmode = None
+            lqPNmode = None
+            lqPFmode = None
+            lqCN = lqEich
+            lqCF = 0.0
+            lqPN = 0.0
+            lqPF = 0.0
+            SMode = SMode
         else: #eich mode is default
             lqCNmode = eichlqCNMode
             lqCFmode = None
@@ -1515,6 +1579,8 @@ def loadHF(n_clicks,hfMode,MachFlag,
             lqPN = 0.0
             lqPF = 0.0
             SMode = SMode
+            qFileTag = None
+            qFilePath = None
         #could add private flux scalings here if they ever exist
 
 
@@ -1523,7 +1589,8 @@ def loadHF(n_clicks,hfMode,MachFlag,
                         fracCN,fracCF,fracPN,fracPF,
                         fracUI,fracUO,fracLI,fracLO,
                         lqCNmode,lqCFmode,lqPNmode,lqPFmode,SMode,
-                        qBG,Pinj,coreRadFrac,fG)
+                        qBG,Pinj,coreRadFrac,fG,
+                        qFilePath,qFileTag)
 
 
         #Update output tab table
@@ -3422,6 +3489,9 @@ Session storage callbacks and functions
                Output('fracLI', 'value'),
                Output('fracLO', 'value'),
                Output('qBG', 'value'),
+               Output('fG', 'value'),
+               Output('qFilePath', 'value'),
+               Output('qFileTag', 'value'),
                Output('OFstartTime', 'value'),
                Output('OFstopTime', 'value'),
                Output('OFminMeshLev', 'value'),
@@ -3506,6 +3576,9 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('fracLI', ''),
             data.get('fracLO', ''),
             data.get('qBG', ''),
+            data.get('fG', ''),
+            data.get('qFilePath', ''),
+            data.get('qFileTag', ''),
             data.get('OFtMin', ''),
             data.get('OFtMax', ''),
             data.get('meshMinLev', ''),
