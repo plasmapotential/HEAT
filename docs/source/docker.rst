@@ -31,7 +31,9 @@ from docker hub.  The HEAT docker hub page is located here:
 
 To pull from docker hub, execute the following command::
 
-    docker pull plasmapotential/heat
+    docker pull plasmapotential/heat:v2.0.0
+
+(change version where necessary)
 
 Download HEAT source code from github
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
