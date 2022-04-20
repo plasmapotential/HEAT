@@ -1408,13 +1408,13 @@ def  qFileParameters(className):
             html.Div(
                 className="colBox",
                 children=[
-                    html.Label("Input qFile root path:"),
+                    html.Label("Input qFile shot path:"),
                     dcc.Input(id="qFilePath", className="hfInput2"),
                 ]),
             html.Div(
                 className="colBox",
                 children=[
-                    html.Label("Input qFile tag (ie hf_optical.csv):"),
+                    html.Label("Input qFile tag (ie HF_optical.csv):"),
                     dcc.Input(id="qFileTag", className="hfInput2"),
                 ]),
 

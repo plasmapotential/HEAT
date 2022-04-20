@@ -2407,9 +2407,11 @@ class engineObj():
 
             print("Running openFOAM for PFC: "+PFC.name)
             log.info("Running openFOAM for PFC: "+PFC.name)
-            partDir = self.OF.caseDir + '/' + PFC.name
+            partDir = self.OF.caseDir + '/' + PFC.name.replace(" ", "_")
             self.OF.partDir = partDir
-            self.OF.partName = PFC.name
+            #replace spaces with underscores to prevent pyfoam from reading args as
+            # space delimited list
+            self.OF.partName = PFC.name.replace(" ", "_")
 
             #tools.makeDir(partDir, clobberFlag=True, mode=self.chmod, UID=self.UID, GID=self.GID)
             #copy heatFoam template directory to this location
@@ -2455,7 +2457,6 @@ class engineObj():
             #new method uses standard FreeCAD mesher (not mefisto) to make better volume mesh
             #standard meshing algorithm
             PFC.OFpart = PFC.name + "___" + "standard"
-            triSurfaceLocation = partDir+'/constant/triSurface/' + PFC.OFpart +".stl"
 
             if self.CAD.STLpath[-1] == '/':
                 stlfile = self.CAD.STLpath + PFC.OFpart +".stl"
@@ -2471,6 +2472,11 @@ class engineObj():
                 part = self.CAD.ROIparts[partIdx]
                 meshSTL = self.CAD.part2meshStandard(part)
                 self.CAD.writeMesh2file(meshSTL, PFC.name, path=self.CAD.STLpath, resolution='standard')
+
+            #replace spaces with underscores to prevent pyfoam from reading args as
+            # space delimited list
+            PFC.OFpart = PFC.OFpart.replace(" ", "_")
+            triSurfaceLocation = partDir+'/constant/triSurface/' + PFC.OFpart +".stl"
 
             #create hard link to STL
             os.link(stlfile,triSurfaceLocation)
@@ -2585,7 +2591,8 @@ class engineObj():
             self.OF.createDictionaries(self.OF.templateDir,
                                        partDir,
                                        templateVarFile,
-                                       stlfile)
+                                       #stlfile)
+                                       triSurfaceLocation)
 
             #generate 3D volume mesh or copy from file
             print("Generating volume mesh")

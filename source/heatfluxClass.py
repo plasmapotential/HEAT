@@ -116,7 +116,7 @@ class heatFlux:
             self.getHoracekFromEQ(ep)
 
         if self.SMode == 'makowski':
-            self.getSpreadingFromEQ(ep, self.fG)
+            self.getMakowskiFromEQ(ep, self.fG)
         return
 
 

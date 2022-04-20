@@ -57,7 +57,7 @@ class CAD:
 
 
     """
-    def __init__(self, rootDir, dataPath, chmod=0o774, UID=-1, GID=-1):
+    def __init__(self, rootDir=None, dataPath=None, chmod=0o774, UID=-1, GID=-1):
         """
         dataPath is the location where we write all output to
         """
@@ -1063,17 +1063,27 @@ class CAD:
         return Part.makeLine(p1,p2)
 
 
-    def createWire(self, shapes):
+    def createWire(self, shape):
         """
-        creates a wire from list of shapes.  will filter out all parts except
+        creates a wire from shape obj.  will filter out all parts except
         for edges
         """
-        edges = []
-        for p in shapes:
-            if type(p)==Part.Edge:
-                edges.append(p)
+        #edges = []
+        #for p in shapes:
+        #    if type(p)==Part.Edge:
+        #        edges.append(p)
+        print(len(shape.Edges))
         try:
-            w = Part.Wire(edges)
+            w = Part.Wire(shape.Edges)
         except:
             w = None
         return w
+
+    def loadExternalSTL(self, filename):
+        """
+        import STL mesh
+        """
+        mesh = Mesh.Mesh(filename)
+        print("Loaded STL files")
+        log.info("Loaded STL files")
+        return mesh

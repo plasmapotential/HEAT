@@ -145,7 +145,7 @@ def loadEnviron():
         #default openFOAM source path v1912
         #OFbashrc = '/opt/openfoam/openfoam-OpenFOAM-v1912/etc/bashrc'
         #default openFOAM source path v2106
-        OFbashrc = '/opt/openfoam/OpenFOAM-v2106/etc/bashrc'
+        OFbashrc = '/opt/openfoam/OpenFOAM-v2112/etc/bashrc'
         #python site packages where PyFoam resides
         pyFoamPath = homeDir + '/.local/lib/python3.8/site-packages'
         #pyFoam python scripts
