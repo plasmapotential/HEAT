@@ -136,10 +136,7 @@ class TUI():
                 inputFiles = machInDir + tagData['Input'].values
                 runList = [x.split(":") for x in tagData['Output'].values]
 
-                #read input file
-                #note: current versions of HEAT do not support time varying input files.
-                #over the duration of a time varying discharge, input file parameters
-                #are constant, but may be different between different discharges
+                #read input file 0
                 inputData = self.ENG.loadDefaults(inFile=inputFiles[0])
 
                 #build the HEAT tree for this tag
@@ -183,6 +180,9 @@ class TUI():
         """
         runs HEAT engine.  Steps through time solving for vars in runList
         """
+        #if user supplied multiple input files in TUI, they are parsed at each timestep
+        #note that if running openfoam, only the last timestep's input file
+        #will be used for the openFOAM settings.
         self.ENG.inputFileList = inputFiles
         self.ENG.runHEAT(runList)
         #run openFOAM

@@ -133,11 +133,14 @@ class PFC:
 
         #get MHD objects corresponding to those timesteps
         self.EPs = [] #containers for multiple ep
-        self.shadowMasks = [] #container for multiple shadowed_mask
+        self.shadowMasks = [] #container for multiple optical shadowed_mask
+        self.gyroShadowMaskList = [] #container for multiple gyro-orbit shadowed_mask
         self.powerSum = [] #container for multiple power summations
         self.powerSumOptical = [] #container for multiple optical power summations
         self.powerSumGyro = [] #container for multiple gyro orbit power summations
         self.tIndexes = [] #container for mapping between PC timesteps and MHD timesteps
+        self.qOpticalList = [] #container for optical heat fluxes for all timesteps
+        self.qGyroList = [] #container for gyro-orbit heat fluxes for all timesteps
         for t in self.timesteps:
             idx = np.where(t==MHD.timesteps)[0]
             if len(idx) > 0:

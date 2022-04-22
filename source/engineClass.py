@@ -53,6 +53,8 @@ class engineObj():
         self.makeTmpDir(dataPath)
         #initialize bashrc for OF
         self.OF.OFbashrc = OFbashrc
+        #list of input files.  will stay None if using single file (see self.runHEAT)
+        self.inputFileList = None
         return
 
     def makeTmpDir(self,dataPath):
@@ -1364,6 +1366,9 @@ class engineObj():
         else:
             self.HF.elecFrac = 1.0 - self.GYRO.ionFrac
 
+        #list of dictionaries for time varying inputs
+        self.inputDicts = []
+
         # Time Loop 1: HF, bdotn, B, psi, Norms
         for tIdx,t in enumerate(self.MHD.timesteps):
             print('\n')
@@ -1373,6 +1378,14 @@ class engineObj():
             log.info("Timestep: {:d}\n".format(t))
             print("-"*80)
             log.info("-"*80)
+            #if user supplied multiple input files in TUI, parse at each timestep
+            #note that if running openfoam, only the last timestep's input file
+            #will be used for the openFOAM settings.
+            if self.inputFileList is not None:
+                print("Received a list of input files.")
+                log.info("Received a list of input files.")
+                self.inputDicts.append(self.loadDefaults(inFile=self.inputFileList[tIdx]))
+
             for PFC in self.PFCs:
                 if t not in PFC.timesteps:
                     pass
@@ -1414,6 +1427,12 @@ class engineObj():
                             pass
                         #check if this timestep contains an MHD EQ we already traced
                         repeatIdx = self.MHD.check4repeatedEQ(PFC.ep, PFC.EPs[:tIdx])
+                        #if the inputs are different, flag it to prevent copying
+                        #shadowMask of repeatIdx
+                        self.newInputsFlag = True
+                        if repeatIdx != None:
+                            if self.inputDicts[-1] == self.inputDicts[repeatIdx]:
+                                self.newInputsFlag = False
 
                         #get the optical heat flux
                         if self.HF.qFileTag is None:
@@ -1571,7 +1590,7 @@ class engineObj():
             else:
                 tPath = self.MHD.shotPath + '/' + '{:06d}/'.format(t)
             #merge multiple pointclouds into one single pointcloud for visualization
-            self.combinePFCpointcloud(runList, tPath)
+            self.combinePFCpointcloud(runList, tPath, tIdx)
             #copy each timestep's composite point clouds to central location for
             #paraview postprocessing (movies)
             self.combineTimeSteps(runList, t)
@@ -1598,7 +1617,8 @@ class engineObj():
         #Check for intersections with MAFOT struct
         t0 = time.time()
         #check if this is a repeated MHD EQ
-        if repeatIdx == None:
+        #and that the inputs have not changed
+        if (repeatIdx == None) or (self.newInputsFlag == True):
             PFC.findShadows_structure(self.MHD, self.CAD)
         else:
             PFC.shadowed_mask = PFC.shadowMasks[repeatIdx].copy()
@@ -1639,7 +1659,7 @@ class engineObj():
         #Save data to class variable for future use
         PFC.q = q
         PFC.qDiv = qDiv
-
+        PFC.qOpticalList.append(PFC.qDiv)
         #Create pointclouds for paraview
         R,Z,phi = tools.xyz2cyl(PFC.centers[:,0],PFC.centers[:,1],PFC.centers[:,2])
         PFC.write_shadow_pointcloud(PFC.centers,PFC.shadowed_mask,PFC.controlfilePath,PFC.tag)
@@ -1696,8 +1716,10 @@ class engineObj():
             #assign gyro power to PFC
             PFC.Pgyro = self.GYRO.gyroPowMatrix[PFC.CADTGT_PFCmap]
             PFC.qGyro = PFC.Pgyro / PFC.areas
+            PFC.qGyroList.append(PFC.qGyro)
             #gyro shadowMask = 1 if a face is shadowed
             PFC.gyroShadowMask = self.GYRO.shadowMask[PFC.CADROI_PFCmap]
+            PFC.gyroShadowMaskList.append(PFC.gyroShadowMask)
             #Create pointcloud for paraview
             R,Z,phi = tools.xyz2cyl(PFC.centers[:,0],PFC.centers[:,1],PFC.centers[:,2])
             self.HF.write_heatflux_pointcloud(PFC.centers,PFC.qGyro,PFC.controlfilePath,tag=PFC.tag,mode='gyro')
@@ -1943,7 +1965,7 @@ class engineObj():
 
         return
 
-    def combinePFCpointcloud(self, runList, tPath):
+    def combinePFCpointcloud(self, runList, tPath, tIdx):
         """
         Combines multiple pointclouds into a single pointcloud then saves to file
         pcName is the name of the point cloud we are dealing with.  Run this
@@ -1964,16 +1986,16 @@ class engineObj():
         Npoints = 0
         for PFC in self.PFCs:
             if 'hfOpt' in runList:
-                hfOptical.append(PFC.qDiv.copy())
-                shadow.append(PFC.shadowed_mask.copy())
-                hfAll.append(PFC.qDiv.copy())
+                hfOptical.append(PFC.qOpticalList[tIdx].copy())
+                shadow.append(PFC.shadowMasks[tIdx].copy())
+                hfAll.append(PFC.qOpticalList[tIdx].copy())
             if 'hfGyro' in runList:
-                hfGyro.append(PFC.qGyro.copy())
-                shadowGyro.append(PFC.gyroShadowMask.copy())
+                hfGyro.append(PFC.qGyroList[tIdx].copy())
+                shadowGyro.append(PFC.gyroShadowMaskList[tIdx].copy())
                 if 'hfOpt' not in runList: #when we run HEAT twice, 2nd time gyro only
-                    hfAll.append(PFC.qDiv.copy()+PFC.qGyro.copy())
+                    hfAll.append(PFC.qOpticalList[tIdx].copy()+PFC.qGyroList[tIdx].copy())
                 else:
-                    hfAll[-1]+=PFC.qGyro.copy()
+                    hfAll[-1]+=PFC.qGyroList[tIdx].copy()
             if 'pwrDir' in runList:
                 powerDir.append(PFC.powerDir.copy())
             if 'bdotn' in runList:
