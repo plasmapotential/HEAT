@@ -686,6 +686,9 @@ class heatFlux:
         R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
         R_omp_min = R_omp_sol - 5.0*lqEich*(1e-3) #in meters now
         R_omp_max = R_omp_sol + 20.0*lqEich*(1e-3) #in meters now
+        #if R_omp_max is outside EFIT grid, cap at maximum R of grid
+        if R_omp_max > max(PFC.ep.g['R']):
+            R_omp_max = max(PFC.ep.g['R']) #in meters now
         R_omp = np.linspace(R_omp_min, R_omp_max, 1000)
         Z_omp = np.zeros(R_omp.shape)
         #Calculate flux at midplane using gfile
@@ -700,8 +703,14 @@ class heatFlux:
 
         #Get q|| profile then integrate in Psi
         #Eich profile
+        print("TEST1===")
         q_hat = self.eich_profile_fluxspace(PFC, lqEich, S, R_omp, Bp_omp, psiN)
+        print("TEST2===")
         P0 = 2*np.pi * simps(q_hat / B_omp, psi)
+        print("TEST3===")
+        print(q_hat)
+        print(B_omp)
+        print(psi)
         if P0 < 0: P0 = -P0
         #Scale to input power
         q0 = P/P0
