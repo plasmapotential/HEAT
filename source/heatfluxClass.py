@@ -703,14 +703,9 @@ class heatFlux:
 
         #Get q|| profile then integrate in Psi
         #Eich profile
-        print("TEST1===")
         q_hat = self.eich_profile_fluxspace(PFC, lqEich, S, R_omp, Bp_omp, psiN)
-        print("TEST2===")
         P0 = 2*np.pi * simps(q_hat / B_omp, psi)
-        print("TEST3===")
-        print(q_hat)
-        print(B_omp)
-        print(psi)
+        #account for nonphysical power
         if P0 < 0: P0 = -P0
         #Scale to input power
         q0 = P/P0
