@@ -1088,3 +1088,85 @@ class CAD:
         print("Loaded STL files")
         log.info("Loaded STL files")
         return mesh
+
+    def getVertexesFromEdges(self, edges):
+        """
+        create an array of XYZ coordinates corresponding to the vertexes in a
+        list of FreeCAD edge objects
+
+        edges is list of FreeCAD edge objects
+
+        returns a list of numpy arrays of the X,Y,Z coordinates for each vertex
+
+        note that vertexList is NOT ORDERED.  to weave these coordinate together,
+        into a contour, use:   self.findContour(vertexList)
+
+        """
+        vertexList = []
+        for edge in edges:
+            x = np.array([])
+            y = np.array([])
+            z = np.array([])
+            ##handle curves
+            #if edge.Curve.TypeId == 'Part::GeomCircle':
+            #    x = np.array([])
+            #    y = np.array([])
+            #    z = np.array([])
+            #    x = np.hstack([x, np.array([v.x for v in edge.Curve.discretize(10)])])
+            #    y = np.hstack([y, np.array([v.y for v in edge.Curve.discretize(10)])])
+            #    z = np.hstack([z, np.array([v.z for v in edge.Curve.discretize(10)])])
+            ##handle lines
+            #else:
+            x = np.hstack([x, np.array([v.X for v in edge.Vertexes])])
+            y = np.hstack([y, np.array([v.Y for v in edge.Vertexes])])
+            z = np.hstack([z, np.array([v.Z for v in edge.Vertexes])])
+            vertexList.append(np.vstack([x,y,z]).T)
+        return vertexList
+
+
+
+
+    def findContour(self, edgeList, seedIdx=0):
+        """
+        weaves a contour together from a list of unordered XYZ edges, each with 2
+        """
+        Npts = 0
+        allIndexes = np.arange(len(edgeList))
+        idxs = [seedIdx]
+        contours = []
+        #this ugly beast loops through all the edges in the object and weaves
+        #together the coordinates of a contour
+        while len(idxs) < len(edgeList):
+
+            if len(idxs) > 1:
+                leftovers = np.array(list(set(allIndexes)-set(idxs)))
+                seedIdx = leftovers[0]
+
+            #the initial vertex that we start from
+            vtx = edgeList[seedIdx][-1,:]
+            contour = vtx
+
+            #loop thru all the edges looking for that vertex
+            for c in range(len(edgeList)):
+                for i,edge in enumerate(edgeList):
+                    #if we already used this edge, dont use it again
+                    if i in idxs:
+                        continue
+                    else:
+                        for j,row in enumerate(edge):
+                            #if we found the original vertex in another edge's vertex list
+                            if np.all(vtx==row):
+                                tmp = np.vstack([edge[:j], edge[j+1:]])
+                                contour = np.vstack([contour,tmp])
+                                vtx = contour[-1]
+                                idxs.append(i)
+                                breaker = True
+                                break
+                            else:
+                                breaker=False
+                            if breaker == True:
+                                break
+            #append 1st index to close contour
+            contour = np.vstack([contour,contour[0,:]])
+            contours.append(contour)
+        return contours
