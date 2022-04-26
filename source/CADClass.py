@@ -1089,6 +1089,7 @@ class CAD:
         log.info("Loaded STL files")
         return mesh
 
+
     def getVertexesFromEdges(self, edges):
         """
         create an array of XYZ coordinates corresponding to the vertexes in a
@@ -1128,7 +1129,14 @@ class CAD:
 
     def findContour(self, edgeList, seedIdx=0):
         """
-        weaves a contour together from a list of unordered XYZ edges, each with 2
+        weaves a contour together from a list of unordered XYZ vertices.
+        each list element corresponds to an edge that was taken from a FreeCAD
+        edge object.
+
+        function starts at a seedIdx, and then 'connects the dots' as it 'weaves'
+        the contour together by finding edges that share common vertexes
+
+        returns a list of independent contours
         """
         Npts = 0
         allIndexes = np.arange(len(edgeList))
