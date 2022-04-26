@@ -432,8 +432,8 @@ class heatFlux:
         """
         # Get R and Z vectors at the midplane
         R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
-        R_omp_min = R_omp_sol - 5.0*(lqPN + lqPF)
-        R_omp_max = R_omp_sol + 20.0*(lqCN + lqCF)
+        R_omp_min = R_omp_sol - 5.0*(lqPN + lqPF) #already in m
+        R_omp_max = R_omp_sol + 20.0*(lqCN + lqCF) #already in m
         #if R_omp_max is outside EFIT grid, cap at maximum R of grid
         if R_omp_max > max(PFC.ep.g['R']):
             R_omp_max = max(PFC.ep.g['R']) #in meters now
@@ -514,7 +514,7 @@ class heatFlux:
             lqMax = lqCN
         else:
             lqMax = lqCF
-        R_omp_max = R_omp_sol + 20.0*lqMax
+        R_omp_max = R_omp_sol + 20.0*lqMax #already in m
         #if R_omp_max is outside EFIT grid, cap at maximum R of grid
         if R_omp_max > max(PFC.ep.g['R']):
             R_omp_max = max(PFC.ep.g['R']) #in meters now
