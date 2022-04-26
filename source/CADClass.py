@@ -1073,6 +1073,7 @@ class CAD:
         #    if type(p)==Part.Edge:
         #        edges.append(p)
         print(len(shape.Edges))
+        print(type(shape))
         try:
             w = Part.Wire(shape.Edges)
         except:

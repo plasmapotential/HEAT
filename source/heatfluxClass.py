@@ -434,6 +434,9 @@ class heatFlux:
         R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
         R_omp_min = R_omp_sol - 5.0*(lqPN + lqPF)
         R_omp_max = R_omp_sol + 20.0*(lqCN + lqCF)
+        #if R_omp_max is outside EFIT grid, cap at maximum R of grid
+        if R_omp_max > max(PFC.ep.g['R']):
+            R_omp_max = max(PFC.ep.g['R']) #in meters now
         R_omp = np.linspace(R_omp_min, R_omp_max, 1000)
         Z_omp = np.zeros(R_omp.shape)
 
@@ -512,6 +515,9 @@ class heatFlux:
         else:
             lqMax = lqCF
         R_omp_max = R_omp_sol + 20.0*lqMax
+        #if R_omp_max is outside EFIT grid, cap at maximum R of grid
+        if R_omp_max > max(PFC.ep.g['R']):
+            R_omp_max = max(PFC.ep.g['R']) #in meters now
         R_omp = np.linspace(R_omp_min, R_omp_max, 1000)
         Z_omp = np.zeros(R_omp.shape)
 
@@ -702,8 +708,8 @@ class heatFlux:
         B_omp = np.sqrt(Bp_omp**2 + Bt_omp**2)
 
         #Get q|| profile then integrate in Psi
-        #Eich profile
         q_hat = self.eich_profile_fluxspace(PFC, lqEich, S, R_omp, Bp_omp, psiN)
+
         P0 = 2*np.pi * simps(q_hat / B_omp, psi)
         #account for nonphysical power
         if P0 < 0: P0 = -P0
