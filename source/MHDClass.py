@@ -289,7 +289,19 @@ class MHD:
             Bxyz[:,2] /= B
         return Bxyz
 
-    def write_B_pointcloud(self,centers,Bxyz, dataPath, tag=None):
+    def B_pointclouds(self, ep, R, Z):
+        """
+        returns a 1D vector of Bp, Bt, Br, Bz, values that correspond to
+        input R,Z points
+        """
+        Br = ep.BRFunc.ev(R,Z)
+        Bz = ep.BZFunc.ev(R,Z)
+        Bt = ep.BtFunc.ev(ep, R,Z)
+        Bp = np.sqrt(Br**2+Bz**2)
+        return Bp, Bt, Br, Bz
+
+
+    def write_Bvec_pointcloud(self,centers,Bxyz, dataPath, tag=None):
         """
         In paraview use TableToPoints => Calculator => Glyph
         Calculator should have this formula:
@@ -317,6 +329,39 @@ class MHD:
         else:
             name = 'B_pointcloud_'+tag
             tools.createVTKOutput(pcfile, 'glyph', name)
+        return
+
+    def write_B_pointcloud(self,centers,Bp,Bt,Br,Bz,dataPath, tag=None):
+        """
+        writes a point cloud of poloidal and toroidal field
+        """
+        print("Creating B Point Clouds")
+        log.info("Creating B Point Clouds")
+
+        prefixes = ['Bp','Bt','Br','Bz']
+        arrays = [Bp, Bt, Br, Bz]
+
+        for i,prefix in enumerate(prefixes):
+            if tag is None:
+                pcfile = dataPath + prefix + '.csv'
+            else:
+                pcfile = dataPath + prefix + '_'+tag+'.csv'
+            pc = np.zeros((len(centers), 4))
+            pc[:,0] = centers[:,0]*1000.0
+            pc[:,1] = centers[:,1]*1000.0
+            pc[:,2] = centers[:,2]*1000.0
+            pc[:,3] = arrays[i]
+            head = "X,Y,Z,"+prefix
+            np.savetxt(pcfile, pc, delimiter=',',fmt='%.10f', header=head)
+
+            #Now save a vtk file for paraviewweb
+            if tag is None:
+                tools.createVTKOutput(pcfile, 'points', prefix)
+            else:
+                name = prefix+'_'+tag
+                tools.createVTKOutput(pcfile, 'points', name)
+
+
         return
 
 

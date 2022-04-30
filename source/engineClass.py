@@ -1096,8 +1096,13 @@ class engineObj():
         """
         ctrs = PFC.centers
         R,Z,phi = tools.xyz2cyl(ctrs[:,0],ctrs[:,1],ctrs[:,2])
+        #B vector field
         PFC.Bxyz = self.MHD.Bfield_pointcloud(PFC.ep, R, Z, phi)
-        self.MHD.write_B_pointcloud(ctrs,PFC.Bxyz,PFC.controlfilePath)
+        self.MHD.write_Bvec_pointcloud(ctrs,PFC.Bxyz,PFC.controlfilePath)
+        #B scalar point clouds
+        Bp, Bt, Br, Bz = self.MHD.B_pointclouds(PFC.ep, R, Z)
+        self.MHD.write_B_pointclouds(ctrs,Bp,Bt,Br,Bz,PFC.controlfilePath)
+
         return
 
     def bfieldMagnitude(self, PFC):
@@ -2063,7 +2068,7 @@ class engineObj():
             self.CAD.write_normal_pointcloud(centers,norm,tPath,tag)
         if 'B' in runList:
             bField = bField.reshape(Npoints,3)
-            self.MHD.write_B_pointcloud(centers, bField, tPath, tag)
+            self.MHD.write_Bvec_pointcloud(centers, bField, tPath, tag)
 
         print("Wrote combined pointclouds")
         log.info("Wrote combined pointclouds")
