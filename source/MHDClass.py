@@ -296,7 +296,7 @@ class MHD:
         """
         Br = ep.BRFunc.ev(R,Z)
         Bz = ep.BZFunc.ev(R,Z)
-        Bt = ep.BtFunc.ev(ep, R,Z)
+        Bt = ep.BtFunc.ev(R,Z)
         Bp = np.sqrt(Br**2+Bz**2)
         return Bp, Bt, Br, Bz
 
@@ -331,7 +331,7 @@ class MHD:
             tools.createVTKOutput(pcfile, 'glyph', name)
         return
 
-    def write_B_pointcloud(self,centers,Bp,Bt,Br,Bz,dataPath, tag=None):
+    def write_B_pointclouds(self,centers,Bp,Bt,Br,Bz,dataPath, tag=None):
         """
         writes a point cloud of poloidal and toroidal field
         """
@@ -346,6 +346,7 @@ class MHD:
                 pcfile = dataPath + prefix + '.csv'
             else:
                 pcfile = dataPath + prefix + '_'+tag+'.csv'
+            print(pcfile)
             pc = np.zeros((len(centers), 4))
             pc[:,0] = centers[:,0]*1000.0
             pc[:,1] = centers[:,1]*1000.0

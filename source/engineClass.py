@@ -1100,8 +1100,8 @@ class engineObj():
         PFC.Bxyz = self.MHD.Bfield_pointcloud(PFC.ep, R, Z, phi)
         self.MHD.write_Bvec_pointcloud(ctrs,PFC.Bxyz,PFC.controlfilePath)
         #B scalar point clouds
-        Bp, Bt, Br, Bz = self.MHD.B_pointclouds(PFC.ep, R, Z)
-        self.MHD.write_B_pointclouds(ctrs,Bp,Bt,Br,Bz,PFC.controlfilePath)
+        PFC.Bp, PFC.Bt, PFC.Br, PFC.Bz = self.MHD.B_pointclouds(PFC.ep, R, Z)
+        self.MHD.write_B_pointclouds(ctrs,PFC.Bp,PFC.Bt,PFC.Br,PFC.Bz,PFC.controlfilePath)
 
         return
 
@@ -1984,6 +1984,10 @@ class engineObj():
         shadowGyro = []
         bdotn = []
         psi = []
+        Bp = []
+        Bt = []
+        Br = []
+        Bz = []
         norm = np.array([])
         bField = np.array([])
 
@@ -2011,6 +2015,10 @@ class engineObj():
                 norm = np.append(norm, PFC.norms.copy())
             if 'B' in runList:
                 bField = np.append(bField, PFC.Bxyz.copy())
+                Bt.append(PFC.Bt.copy())
+                Bp.append(PFC.Bp.copy())
+                Br.append(PFC.Br.copy())
+                Bz.append(PFC.Bz.copy())
             #note that I don't do the normal vector norm (its same every timestep)
             #user can just get norm individually for each tile
             Npoints += len(PFC.centers)
@@ -2026,6 +2034,10 @@ class engineObj():
         bdotnNumpy = np.array([])
         psiNumpy = np.array([])
         normNumpy = np.array([])
+        BpNumpy = np.array([])
+        BtNumpy = np.array([])
+        BrNumpy = np.array([])
+        BzNumpy = np.array([])
         for arr in hfOptical:
             hfOpticalNumpy = np.append(hfOpticalNumpy, arr)
         for arr in hfGyro:
@@ -2042,6 +2054,14 @@ class engineObj():
             bdotnNumpy = np.append(bdotnNumpy, arr)
         for arr in psi:
             psiNumpy = np.append(psiNumpy, arr)
+        for arr in Bp:
+            BpNumpy = np.append(BpNumpy, arr)
+        for arr in Bt:
+            BtNumpy = np.append(BtNumpy, arr)
+        for arr in Br:
+            BrNumpy = np.append(BrNumpy, arr)
+        for arr in Bz:
+            BzNumpy = np.append(BzNumpy, arr)
 
         tag='all'
         centers = centers.reshape(Npoints,3)
@@ -2069,6 +2089,7 @@ class engineObj():
         if 'B' in runList:
             bField = bField.reshape(Npoints,3)
             self.MHD.write_Bvec_pointcloud(centers, bField, tPath, tag)
+            self.MHD.write_B_pointclouds(centers,BpNumpy,BtNumpy,BrNumpy,BzNumpy,tPath,tag)
 
         print("Wrote combined pointclouds")
         log.info("Wrote combined pointclouds")
