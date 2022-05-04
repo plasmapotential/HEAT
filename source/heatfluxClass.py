@@ -81,23 +81,47 @@ class heatFlux:
         """
         Set variable types for the stuff that isnt a string from the input file
         """
-        self.lqEich = float(self.lqCN)
-        self.S = float(self.S)
-        self.Pinj = float(self.Pinj)
-        self.qBG = float(self.qBG)
-        self.lqPN = float(self.lqPN)
-        self.lqPF = float(self.lqPF)
-        self.lqCN = float(self.lqCN)
-        self.lqCF = float(self.lqCF)
-        self.fracPN = float(self.fracPN)
-        self.fracPF = float(self.fracPF)
-        self.fracCN = float(self.fracCN)
-        self.fracCF = float(self.fracCF)
-        self.fracUI = float(self.fracUI)
-        self.fracUO = float(self.fracUO)
-        self.fracLI = float(self.fracLI)
-        self.fracLO = float(self.fracLO)
+
+        integers = []
+        floats = [
+                    'S',
+                    'Pinj',
+                    'coreRadFrac',
+                    'qBG',
+                    'lqCN',
+                    'lqCF',
+                    'lqPN',
+                    'lqPF',
+                    'fracPN',
+                    'fracPF',
+                    'fracCN',
+                    'fracCF',
+                    'fracUI',
+                    'fracUO',
+                    'fracLI',
+                    'fracLO',
+                    ]
+
+
+        for var in integers:
+            if (getattr(self, var) is not None) and (~np.isnan(float(getattr(self, var)))):
+                try:
+                    setattr(self, var, tools.makeInt(getattr(self, var)))
+                except:
+                    print("Error with input file var "+var+".  Perhaps you have invalid input values?")
+                    log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
+        for var in floats:
+            if var is not None:
+                if (getattr(self, var) is not None) and (~np.isnan(float(getattr(self, var)))):
+                    try:
+                        setattr(self, var, tools.makeFloat(getattr(self, var)))
+                    except:
+                        print("Error with input file var "+var+".  Perhaps you have invalid input values?")
+                        log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
+
         return
+
+
 
 #===============================================================================
 #                   Empirical Regressions
@@ -645,14 +669,14 @@ class heatFlux:
         use = np.where(PFC.shadowed_mask == 0)[0]
 
         #handle various heat flux regressions if user selected that in GUI
-        if self.lqCNmode == 'eich' or self.lqCNmode == None:
+        if self.lqCNmode == 'eich':
             self.getEichFromEQ(PFC.ep)
             self.lqCN = self.lqEich
 
-        if self.SMode == 'makowski' or self.SMode == None:
+        if self.SMode == 'makowski':
             self.getMakowskiFromEQ(PFC.ep, self.fG)
 
-        if self.lqCFmode == 'horacek' or self.lqCFmode == None:
+        if self.lqCFmode == 'horacek':
             self.getHoracekFromEQ(PFC.ep)
 
         #Multiple exponential profile (Brunner Profile)

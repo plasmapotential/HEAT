@@ -1389,7 +1389,9 @@ class engineObj():
             if self.inputFileList is not None:
                 print("Received a list of input files.")
                 log.info("Received a list of input files.")
-                self.inputDicts.append(self.loadDefaults(inFile=self.inputFileList[tIdx]))
+                self.inputDicts.append(self.loadInputs(inFile=self.inputFileList[tIdx]))
+            else:
+                self.inputDicts.append(self.getCurrentInputs())
 
             for PFC in self.PFCs:
                 if t not in PFC.timesteps:
@@ -2189,43 +2191,41 @@ class engineObj():
 
     def getDefaultDict(self):
         """
-        returns an empty dict with each GUI parameter
+        returns an empty dict with each inputFile parameter
         """
         emptyDict = {
+                    'gridRes': None,
                     'shot':None,
                     'tmin':None,
                     'tmax':None,
                     'nTrace': None,
-                    'gridRes': None,
-                    'STPfile': None,
+                    'dataPath': None,
+                    'torFilt': None,
+                    'psiFilt': None,
                     'hfMode': None,
-                    'lqEich': None,
-                    'S': None,
                     'lqCN': None,
                     'lqCF': None,
                     'lqPN': None,
                     'lqPF': None,
+                    'lqCNmode': None,
+                    'lqCFmode': None,
+                    'lqPNmode': None,
+                    'lqPFmode': None,
+                    'S': None,
                     'fracCN': None,
                     'fracCF': None,
                     'fracPN': None,
                     'fracPF': None,
-                    'Pinj': None,
-                    'coreRadFrac' : None,
                     'fracUI': None,
                     'fracUO': None,
                     'fracLI': None,
                     'fracLO': None,
+                    'Pinj': None,
+                    'coreRadFrac' : None,
                     'qBG' : None,
                     'fG' : None,
                     'qFilePath' : None,
                     'qFileTag' : None,
-                    'OFtMin': None,
-                    'OFtMax': None,
-                    'deltaT': None,
-                    'writeDeltaT': None,
-                    'STLscale': None,
-                    'meshMinLev': None,
-                    'meshMaxLev': None,
                     'N_gyroSteps': None,
                     'gyroDeg': None,
                     'gyroT_eV': None,
@@ -2233,12 +2233,21 @@ class engineObj():
                     'N_vPhase': None,
                     'N_gyroPhase': None,
                     'ionMassAMU': None,
-                    #'vMode': None,
-                    'ionFrac': None
+                    'vMode': None,
+                    'ionFrac': None,
+                    'gyroSources': None,
+                    'OFtMin': None,
+                    'OFtMax': None,
+                    'deltaT': None,
+                    'writeDeltaT': None,
+                    'STLscale': None,
+                    'meshMinLev': None,
+                    'meshMaxLev': None,
+                    'material': None,
                     }
         return emptyDict
 
-    def loadDefaults(self, inFile=None):
+    def loadInputs(self, inFile=None):
         """
         loads defaults from file rather than from GUI
         """
@@ -2259,18 +2268,20 @@ class engineObj():
                     'tmax': self.MHD.tmax,
                     'nTrace': self.MHD.nTrace,
                     'gridRes': self.CAD.gridRes,
+                    'hfMode': self.HF.hfMode,
                     'lqEich': self.HF.lqCN,
                     'S': self.HF.S,
+                    'SMode': self.HF.SMode,
                     'lqCN': self.HF.lqCN,
                     'lqCF': self.HF.lqCF,
                     'lqPN': self.HF.lqPN,
                     'lqPF': self.HF.lqPF,
+                    'lqCNMode': self.HF.lqCNmode,
+                    'lqCFMode': self.HF.lqCFmode,
+                    'lqPNMode': self.HF.lqPNmode,
+                    'lqPFMode': self.HF.lqPFmode,
                     'fracCN': self.HF.fracCN,
                     'fracCF': self.HF.fracCF,
-                    'limlqCN': self.HF.lqCN,
-                    'limlqCF': self.HF.lqCF,
-                    'limfracCN': self.HF.fracCN,
-                    'limfracCF': self.HF.fracCF,
                     'fracPN': self.HF.fracPN,
                     'fracPF': self.HF.fracPF,
                     'Pinj': self.HF.Pinj,
@@ -2288,8 +2299,9 @@ class engineObj():
                     'deltaT': self.OF.deltaT,
                     'writeDeltaT': self.OF.writeDeltaT,
                     'STLscale': self.OF.STLscale,
-                    'meshMinLev': self.OF.meshMinLevel,
-                    'meshMaxLev': self.OF.meshMaxLevel,
+                    'meshMinLevel': self.OF.meshMinLevel,
+                    'meshMaxLevel': self.OF.meshMaxLevel,
+                    'material': self.OF.material,
                     'N_gyroSteps': self.GYRO.N_gyroSteps,
                     'gyroDeg': self.GYRO.gyroDeg,
                     'gyroT_eV': self.GYRO.gyroT_eV,
@@ -2297,11 +2309,70 @@ class engineObj():
                     'N_vPhase': self.GYRO.N_vPhase,
                     'N_gyroPhase': self.GYRO.N_gyroPhase,
                     'ionMassAMU': self.GYRO.ionMassAMU,
-                    'hfMode': self.HF.hfMode,
-                    #'vMode': self.GYRO.vMode,
+                    'vMode': self.GYRO.vMode,
                     'ionFrac': self.GYRO.ionFrac,
+                    'gyroSources': self.GYRO.gyroSources
                     }
-        print("Loaded defaults")
+        print("Loaded inputs")
+
+        return inputDict
+
+    def getCurrentInputs(self):
+        """
+        loads current values for input file variables
+        """
+        inputDict = {
+                    'shot': self.MHD.shot,
+                    'tmin': self.MHD.tmin,
+                    'tmax': self.MHD.tmax,
+                    'nTrace': self.MHD.nTrace,
+                    'gridRes': self.CAD.gridRes,
+                    'hfMode': self.HF.hfMode,
+                    'lqEich': self.HF.lqCN,
+                    'S': self.HF.S,
+                    'SMode': self.HF.SMode,
+                    'lqCN': self.HF.lqCN,
+                    'lqCF': self.HF.lqCF,
+                    'lqPN': self.HF.lqPN,
+                    'lqPF': self.HF.lqPF,
+                    'lqCNMode': self.HF.lqCNmode,
+                    'lqCFMode': self.HF.lqCFmode,
+                    'lqPNMode': self.HF.lqPNmode,
+                    'lqPFMode': self.HF.lqPFmode,
+                    'fracCN': self.HF.fracCN,
+                    'fracCF': self.HF.fracCF,
+                    'fracPN': self.HF.fracPN,
+                    'fracPF': self.HF.fracPF,
+                    'Pinj': self.HF.Pinj,
+                    'coreRadFrac' : self.HF.coreRadFrac,
+                    'fracUI':self.HF.fracUI,
+                    'fracUO':self.HF.fracUO,
+                    'fracLI':self.HF.fracLI,
+                    'fracLO':self.HF.fracLO,
+                    'qBG' : self.HF.qBG,
+                    'fG' : self.HF.fG,
+                    'qFilePath': self.HF.qFilePath,
+                    'qFileTag': self.HF.qFileTag,
+                    'OFtMin': self.OF.OFtMin,
+                    'OFtMax': self.OF.OFtMax,
+                    'deltaT': self.OF.deltaT,
+                    'writeDeltaT': self.OF.writeDeltaT,
+                    'STLscale': self.OF.STLscale,
+                    'meshMinLevel': self.OF.meshMinLevel,
+                    'meshMaxLevel': self.OF.meshMaxLevel,
+                    'material': self.OF.material,
+                    'N_gyroSteps': self.GYRO.N_gyroSteps,
+                    'gyroDeg': self.GYRO.gyroDeg,
+                    'gyroT_eV': self.GYRO.gyroT_eV,
+                    'N_vSlice': self.GYRO.N_vSlice,
+                    'N_vPhase': self.GYRO.N_vPhase,
+                    'N_gyroPhase': self.GYRO.N_gyroPhase,
+                    'ionMassAMU': self.GYRO.ionMassAMU,
+                    'vMode': self.GYRO.vMode,
+                    'ionFrac': self.GYRO.ionFrac,
+                    'gyroSources': self.GYRO.gyroSources
+                    }
+        print("Loaded current inputs")
 
         return inputDict
 
@@ -2379,9 +2450,9 @@ class engineObj():
         self.OF.cmdTprobe = 'runTprobe'
         self.OF.deltaT = float(OFdeltaT) #this comes in [sec]
         self.OF.writeDeltaT = float(OFwriteDeltaT) #this comes in [sec]
-        self.OF.materialSelect = materialSelect
+        self.OF.material = materialSelect
 
-        print("Material Selection: "+self.OF.materialSelect)
+        print("Material Selection: "+self.OF.material)
 
         print("Loaded OF data")
         log.info("Loaded OF data")
@@ -2475,13 +2546,13 @@ class engineObj():
                 return
 
             #Set up partDir with user selected material properties
-            print("Material Selection: "+self.OF.materialSelect)
+            print("Material Selection: "+self.OF.material)
             matDst = partDir + '/constant/'
-            if self.OF.materialSelect == "ATJ":
+            if self.OF.material == "ATJ":
                 matSrc = self.OF.materialDir + '/ATJ/'
-            elif self.OF.materialSelect == "MOLY":
+            elif self.OF.material == "MOLY":
                 matSrc = self.OF.materialDir + '/MOLY/'
-            elif self.OF.materialSelect == "TUNG":
+            elif self.OF.material == "TUNG":
                 matSrc = self.OF.materialDir + '/TUNG/'
             else: #SGL6510
                 matSrc = self.OF.materialDir + '/SGLR6510/'

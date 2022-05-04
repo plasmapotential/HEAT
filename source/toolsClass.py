@@ -75,10 +75,13 @@ class tools:
         #Dynamically initialize class variables
         for i in range(len(data)):
             if data['Var'][i] in obj.allowed_vars:
-                #if there was nothing for this var in input, skip
-                #this works on all nan values
-                if (data['Val'][i] != data['Val'][i]):
-                    pass
+                noneList = ['none', None, 'None', 'NONE', '', 'na', 'NA', 'Na', 'nan', 'NaN', 'NAN', 'Nan']
+                #handle Nones
+                if type(data['Val'][i]) == str:
+                    if (data['Val'][i].strip() in noneList):
+                        setattr(obj, data['Var'][i], None)
+                    else:
+                        setattr(obj, data['Var'][i], data['Val'][i].strip())
                 else:
                     setattr(obj, data['Var'][i], data['Val'][i])
             else:
@@ -121,44 +124,44 @@ class tools:
             for var in CAD.allowed_vars:
                 if var in data:
                     if (data[var] == None) or (data[var] == 'None'):
-                        f.write(var + ', \n')
+                        f.write(var + ', None \n')
                     else:
                         f.write(var + ', ' + str(data[var]) + '\n')
                 else:
-                    f.write(var + ', \n')
+                    f.write(var + ', None \n')
             f.write("#=============================================================\n")
             f.write("#                MHD Variables\n")
             f.write("#=============================================================\n")
             for var in MHD.allowed_vars:
                 if var in data:
                     if (data[var] == None) or (data[var] == 'None'):
-                        f.write(var + ', \n')
+                        f.write(var + ',  None \n')
                     else:
                         f.write(var + ', ' + str(data[var]) + '\n')
                 else:
-                    f.write(var + ', \n')
+                    f.write(var + ',  None \n')
             f.write("#=============================================================\n")
             f.write("#                Optical HF Variables\n")
             f.write("#=============================================================\n")
             for var in HF.allowed_vars:
                 if var in data:
                     if (data[var] == None) or (data[var] == 'None'):
-                        f.write(var + ', \n')
+                        f.write(var + ',  None \n')
                     else:
                         f.write(var + ', ' + str(data[var]) + '\n')
                 else:
-                    f.write(var + ', \n')
+                    f.write(var + ',  None \n')
             f.write("#=============================================================\n")
             f.write("#                Ion Gyro Orbit HF Variables\n")
             f.write("#=============================================================\n")
             for var in GYRO.allowed_vars:
                 if var in data:
                     if (data[var] == None) or (data[var] == 'None'):
-                        f.write(var + ', \n')
+                        f.write(var + ',  None \n')
                     else:
                         f.write(var + ', ' + str(data[var]) + '\n')
                 else:
-                    f.write(var + ', \n')
+                    f.write(var + ',  None \n')
             f.write("#=============================================================\n")
             f.write("#                OpenFOAM Variables\n")
             f.write("#=============================================================\n")
@@ -167,11 +170,11 @@ class tools:
                 print(var)
                 if var in data:
                     if (data[var] == None) or (data[var] == 'None'):
-                        f.write(var + ', \n')
+                        f.write(var + ',  None \n')
                     else:
                         f.write(var + ', ' + str(data[var]) + '\n')
                 else:
-                    f.write(var + ', \n')
+                    f.write(var + ',  None \n')
 
         print("Wrote HEAT input file")
         log.info("Wrote HEAT input file")
@@ -979,3 +982,31 @@ class tools:
         z[:,1] = p2[:,2]
         z[:,2] = p3[:,2]
         return self.faceCenters(x,y,z)
+
+    def makeFloat(self, var):
+        """
+        converts var to float
+        if var is None, returns None
+        """
+        if var == None:
+            newVar = None
+        else:
+            try:
+                newVar = float(var)
+            except:
+                newVar = var
+        return newVar
+
+    def makeInt(self, var):
+        """
+        converts var to int
+        if var is None, returns None
+        """
+        if var == None:
+            newVar = None
+        else:
+            try:
+                newVar = int(var)
+            except:
+                newVar = var
+        return newVar

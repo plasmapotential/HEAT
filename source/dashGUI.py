@@ -52,8 +52,8 @@ from dash import dash_table
 import EFIT.equilParams_class as EP
 import toolsClass
 tools = toolsClass.tools()
-from dash_extensions import Download
-from dash_extensions.snippets import send_file
+#from dash.dcc import Download
+#from dash_extensions.snippets import send_file
 import ipaddress
 import logging
 log = logging.getLogger(__name__)
@@ -356,7 +356,7 @@ def buildInputButtons():
                 html.Button("Load Defaults (optional)", id="loadDefaults", n_clicks=0, className="defaultButtons"),
                 html.Button("Save Settings\nInto Input File", id="saveInputs",
                             n_clicks=0, className="defaultButtons"),
-                Download(id="downloadInputs"),
+                dcc.Download(id="downloadInputs"),
                 html.Div(id="hiddenDivSaveInput"),
             ],
         )
@@ -397,19 +397,29 @@ def inputDragDrop(file, contents, MachFlag):
         #Save user loaded file into tmp directory
         with open(newFile, "w") as f:
             f.write(decoded.decode('utf-8'))
-        data = gui.loadDefaults(inFile=newFile)
+        data = gui.loadInputs(inFile=newFile)
 
     return [outputDiv, data]
+
+
 
 @app.callback([Output('hiddenDivSaveInput','children'),
                Output('downloadInputs', 'data')],
               [Input('saveInputs','n_clicks')],
-              [State('MachFlag', 'value'),
-               State('shot', 'value'),
+              [State('shot', 'value'),
                State('tmin', 'value'),
                State('tmax', 'value'),
                State('nTrace', 'value'),
                State('gridRes', 'value'),
+               State('hfMode', 'value'),
+               State('eichlqCNMode', 'value'),
+               State('eichSMode', 'value'),
+               State('multiExplqCNMode', 'value'),
+               State('multiExplqCFMode', 'value'),
+               State('multiExplqPNMode', 'value'),
+               State('multiExplqPFMode', 'value'),
+               State('limiterlqCNMode', 'value'),
+               State('limiterlqCFMode', 'value'),
                State('lqEich', 'value'),
                State('S', 'value'),
                State('lqCN', 'value'),
@@ -420,6 +430,10 @@ def inputDragDrop(file, contents, MachFlag):
                State('fracCF', 'value'),
                State('fracPN', 'value'),
                State('fracPF', 'value'),
+               State('limlqCN', 'value'),
+               State('limlqCF', 'value'),
+               State('limfracCN', 'value'),
+               State('limfracCF', 'value'),
                State('Pinj', 'value'),
                State('coreRadFrac', 'value'),
                State('fracUI', 'value'),
@@ -427,6 +441,9 @@ def inputDragDrop(file, contents, MachFlag):
                State('fracLI', 'value'),
                State('fracLO', 'value'),
                State('qBG', 'value'),
+               State('fG', 'value'),
+               State('qFilePath', 'value'),
+               State('qFileTag', 'value'),
                State('OFstartTime', 'value'),
                State('OFstopTime', 'value'),
                State('OFminMeshLev', 'value'),
@@ -434,10 +451,7 @@ def inputDragDrop(file, contents, MachFlag):
                State('OFSTLscale', 'value'),
                State('OFdeltaT', 'value'),
                State('OFwriteDeltaT', 'value'),
-               State('PVPath', 'value'),
-               State('FreeCADPath', 'value'),
                State('dataPath', 'value'),
-               State('OFbashrc', 'value'),
                State('N_gyroSteps','value'),
                State('gyroDeg','value'),
                State('gyroT_eV','value'),
@@ -446,16 +460,25 @@ def inputDragDrop(file, contents, MachFlag):
                State('N_gyroPhase','value'),
                State('ionMassAMU','value'),
                State('vMode','value'),
-               State('ionFrac','value')
+               State('ionFrac','value'),
+               State('accFilters','value')
                ]
                )
 def saveGUIinputs(  n_clicks,
-                    MachFlag,
                     shot,
                     tmin,
                     tmax,
                     nTrace,
                     gridRes,
+                    hfMode,
+                    eichlqCNMode,
+                    eichSMode,
+                    multiExplqCNMode,
+                    multiExplqCFMode,
+                    multiExplqPNMode,
+                    multiExplqPFMode,
+                    limiterlqCNMode,
+                    limiterlqCFMode,
                     lqEich,
                     S,
                     lqCN,
@@ -466,6 +489,10 @@ def saveGUIinputs(  n_clicks,
                     fracCF,
                     fracPN,
                     fracPF,
+                    limlqCN,
+                    limlqCF,
+                    limFracCN,
+                    limFracCF,
                     Pinj,
                     coreRadFrac,
                     fracUI,
@@ -473,6 +500,9 @@ def saveGUIinputs(  n_clicks,
                     fracLI,
                     fracLO,
                     qBG,
+                    fG,
+                    qFilePath,
+                    qFileTag,
                     OFstartTime,
                     OFstopTime,
                     OFminMeshLev,
@@ -480,10 +510,7 @@ def saveGUIinputs(  n_clicks,
                     OFSTLscale,
                     OFdeltaT,
                     OFwriteDeltaT,
-                    PVLoc,
-                    FreeCADLoc,
                     dataLoc,
-                    OFbashrcLoc,
                     N_gyroSteps,
                     gyroDeg,
                     gyroT_eV,
@@ -492,7 +519,8 @@ def saveGUIinputs(  n_clicks,
                     N_gyroPhase,
                     ionMassAMU,
                     vMode,
-                    ionFrac
+                    ionFrac,
+                    accFilters
                 ):
     """
     Saves GUI text boxes into an input file in the HEAT format
@@ -501,41 +529,73 @@ def saveGUIinputs(  n_clicks,
     if n_clicks < 1:
         raise PreventUpdate
 
-    data = {}
-    data['MachFlag'] = MachFlag
+
+    #get an empty dictionary with all input file parameters as None
+    data = gui.getDefaultDict()
+    #cad variables
+    data['gridRes'] = gridRes
+    #mhd variables
     data['shot'] = shot
     data['tmin'] = tmin
     data['tmax'] = tmax
     data['nTrace'] = nTrace
-    data['gridRes'] = gridRes
-    data['lqEich'] = lqEich
-    data['S'] = S
-    data['lqCN'] = lqCN
-    data['lqCF'] = lqCF
-    data['lqPN'] = lqPN
-    data['lqPF'] = lqPF
-    data['fracCN'] = fracCN
-    data['fracCF'] = fracCF
-    data['fracPN'] = fracPN
-    data['fracPF'] = fracPF
-    data['Pinj'] = Pinj
-    data['coreRadFrac'] = coreRadFrac
+    data['dataPath'] = dataLoc
+    if 'torFilt' in accFilters:
+        data['torFilt'] = True
+    if 'psiFilt' in accFilters:
+        data['psiFilt'] = True
+
+    #hf variables
+    data['hfMode'] = hfMode
+    if hfMode == 'multiExp':
+        data['lqCN'] = lqCN
+        data['lqCF'] = lqCF
+        data['lqPN'] = lqPN
+        data['lqPF'] = lqPF
+        data['lqCNmode'] = multiExplqCNMode
+        data['lqCFmode'] = multiExplqCFMode
+        data['lqPNmode'] = multiExplqPNMode
+        data['lqPFmode'] = multiExplqPFMode
+        data['fracCN'] = fracCN
+        data['fracCF'] = fracCF
+        data['fracPN'] = fracPN
+        data['fracPF'] = fracPF
+
+    elif hfMode == 'limiter':
+        data['lqCN'] = limlqCN
+        data['lqCF'] = limlqCF
+        data['lqCNmode'] = limiterlqCNMode
+        data['lqCFmode'] = limiterlqCFMode
+        data['fracCN'] = limFracCN
+        data['fracCF'] = limFracCF
+
+    elif hfMode == 'qFile':
+        data['qFilePath'] = qFilePath
+        data['qFileTag'] = qFileTag
+
+    elif hfMode == 'eich': #gaussian spreading
+        data['lqCN'] = lqEich
+        data['lqCNmode'] = eichlqCNMode
+        data['S'] = S
+        data['SMode'] = eichSMode
+
     data['fracUI'] = fracUI
     data['fracUO'] = fracUO
     data['fracLI'] = fracLI
     data['fracLO'] = fracLO
+    data['Pinj'] = Pinj
+    data['coreRadFrac'] = coreRadFrac
     data['qBG'] = qBG
+    data['fG'] = fG
+    #openfoam variables
     data['OFtMin'] = OFstartTime
     data['OFtMax'] = OFstopTime
-    data['meshMinLev'] = OFminMeshLev
-    data['meshMaxLev'] = OFmaxMeshLev
+    data['meshMinLevel'] = OFminMeshLev
+    data['meshMaxLevel'] = OFmaxMeshLev
     data['STLscale'] = OFSTLscale
     data['deltaT'] = OFdeltaT
     data['writeDeltaT'] = OFwriteDeltaT
-    data['FreeCADPath'] = FreeCADLoc
-    data['PVPath'] = PVLoc
-    data['dataPath'] = dataLoc
-    data['OFbashrc'] = OFbashrcLoc
+    #gyro variables
     data['N_gyroSteps'] = N_gyroSteps
     data['gyroDeg'] = gyroDeg
     data['gyroT_eV'] = gyroT_eV
@@ -545,10 +605,12 @@ def saveGUIinputs(  n_clicks,
     data['ionMassAMU'] = ionMassAMU
     data['vMode'] = vMode
     data['ionFrac'] = ionFrac
+
     tools.saveInputFile(data, gui.tmpDir, gui.rootDir, gui.dataPath)
 
     outputDiv = html.Label("Saved File", style={'color':'#f5d142'})
-    return [outputDiv, send_file(gui.tmpDir + "HEATinput.csv")]
+    return [outputDiv, dcc.send_file(gui.tmpDir + "HEATinput.csv")]
+
 
 
 
@@ -616,7 +678,7 @@ def buildMHDbox():
                     ],
                     className="rowBox"
                 ),
-                Download(id="downloadEQplots"),
+                dcc.Download(id="downloadEQplots"),
                 html.Div(id="hiddenDivSaveEQ")
 
             ],
@@ -785,7 +847,7 @@ def saveEQplots(n_clicks, x, y):
 
 
     return [html.Label("Saved EQs to file", style={'color':'#f5d142'}),
-            send_file(zipFile)]
+            dcc.send_file(zipFile)]
 
 #Load gfile
 @app.callback([Output('hiddenDivGfileUpload', 'children')],
@@ -928,8 +990,10 @@ def loadLRsettings(mask, hidden=False):
                         )
 
 @app.callback([Output('hfParameters', 'children')],
-              [Input('hfMode', 'value')])
-def hfParameters(mode):
+              [Input('hfMode', 'value')],
+              [State('HFDataStorage', 'data')]
+              )
+def hfParameters(mode, HFdata):
     div = [loadHFSettings(mode=mode, hidden=False)]
     return [div]
 
@@ -1135,7 +1199,7 @@ def eichParameters(className):
                 className="colBox",
                 children=[
                     html.Label("Greenwald Density Fraction", className="hfLabel"),
-                    dcc.Input(id="fG", className="hfInput2", value=0.6),
+                    dcc.Input(id="fG", className="hfInput2"),
                 ]),
         ])
 
@@ -1627,7 +1691,7 @@ def buildPFCbox():
                 html.Button("Load PFC Settings", id="loadPFC", n_clicks=0, style={'margin':'0 10px 10px 0'}),
 #                html.Button('Add Row', id='add-rows-button', n_clicks=0, style={'margin':'0 10px 10px 0'}),
                 html.Button("Download Default PFC file", id="downloadPFCbtn", n_clicks=0, style={'margin':'0 10px 10px 0'}),
-                Download(id="downloadPFC"),
+                dcc.Download(id="downloadPFC"),
                 html.Div(id="hiddenDivDownloadPFC", style={"display": "none"}),
                 html.Div(id="hiddenDivPFC", style={"display": "none"}),
                 dcc.Input(id="hiddenDivPFC2", style={"display": "none"}),
@@ -1744,7 +1808,7 @@ def downloadPFCfile(n_clicks):
     if n_clicks < 1:
         raise PreventUpdate
     gui.savePFCfile()
-    return [send_file(gui.tmpDir + "PFCinput.csv"),
+    return [dcc.send_file(gui.tmpDir + "PFCinput.csv"),
             html.Label("Saved PFC Default File", style={'color':'#f5d142'})]
 
 
@@ -2745,7 +2809,7 @@ def saveNewGfile():
             html.Label("New gFile Name", style={'margin':'0 10px 0 10px'}),
             dcc.Input(id="newGfileName", className="gfileBoxInput"),
             html.Button("Save New gFile", id="saveGfileButton", n_clicks=0, style={'margin':'10px 10px 10px 10px'}),
-            Download(id="downloadNewGfile"),
+            dcc.Download(id="downloadNewGfile"),
             html.Div(id="hiddenDivSaveGfile")
         ],
         className="gfileBox",
@@ -2782,8 +2846,8 @@ def interpolateGfile():
                 html.Div(id='interpTable', className="gfileTable"), #updated from MHD button callback
                 dcc.Input(id="interpN", className="gfileBoxInput", placeholder='Enter N steps'),
                 html.Button("Interpolate these Timesteps", id="interpButton2", n_clicks=0, style={'margin':'0 10px 10px 0'}),
-                Download(id="download1InterpGfile"),
-                Download(id="downloadInterpGfiles"),
+                dcc.Download(id="download1InterpGfile"),
+                dcc.Download(id="downloadInterpGfiles"),
                 html.Div(id="hiddenDivInterp2")
             ],
             className="gfileBox",
@@ -2803,7 +2867,7 @@ def interpolate(n_clicks, t):
         raise PreventUpdate
     name = gui.interpolateGfile(t)
     return [html.Label("Gfile Interpolated", style={'color':'#f5d142'}),
-            send_file(name)]
+            dcc.send_file(name)]
 
 
 @app.callback([Output('hiddenDivInterp2', 'children'),
@@ -2827,7 +2891,7 @@ def interpolateNsteps(n_clicks, N, data):
     gui.interpolateNsteps(df['filename'].values, pd.to_numeric(df['timestep[ms]']).values,int(N))
     zipFile = gui.tmpDir + 'InterpolatedGfiles.zip'
     return [html.Label("gFiles Interpolated", style={'color':'#f5d142'}),
-            send_file(zipFile)]
+            dcc.send_file(zipFile)]
 
 
 
@@ -2947,7 +3011,7 @@ def saveG(n_clicks, filename, t, shot):
         raise PreventUpdate
     gui.writeGfile(filename, shot, t)
     return [html.Label("Saved gFile", style={'color':'#f5d142'}),
-            send_file(gui.tmpDir + filename)]
+            dcc.send_file(gui.tmpDir + filename)]
 
 """
 ==============================================================================
@@ -2966,7 +3030,7 @@ def outputChildren():
             html.Button("Download HEAT Results", id="downloadResults", n_clicks=0, style={'margin':'0 10px 10px 0', "width":"95%" }),
             html.Br(),
             html.Div(id="hiddenDivDownloadResults", style={"width":"100%"}),
-            Download(id="downloadResultsDir"),
+            dcc.Download(id="downloadResultsDir"),
             html.H6("Input Parameters:"),
             html.Div( children=buildInputsTable(), className="gfileTable" ),
             #qDiv plot
@@ -3047,7 +3111,7 @@ def saveResults(n_clicks, MachFlag, shot):
     print("Zipped results")
     log.info("Zipped results")
     return [html.Label("Saved HEAT output", style={'color':'#f5d142'}),
-            send_file(file+'.zip')]
+            dcc.send_file(file+'.zip')]
 
 
 
@@ -3468,8 +3532,17 @@ Session storage callbacks and functions
                Output('tmax', 'value'),
                Output('nTrace', 'value'),
                Output('gridRes', 'value'),
+#               Output('hfMode', 'value'), #this causes undefined vars
+#               Output('eichlqCNMode', 'value'), #this causes undefined vars
+               Output('multiExplqCNMode', 'value'),
+               Output('multiExplqCFMode', 'value'),
+               Output('multiExplqPNMode', 'value'),
+               Output('multiExplqPFMode', 'value'),
+               Output('limiterlqCNMode', 'value'),
+               Output('limiterlqCFMode', 'value'),
                Output('lqEich', 'value'),
                Output('S', 'value'),
+               Output('eichSMode', 'value'),
                Output('lqCN', 'value'),
                Output('lqCF', 'value'),
                Output('lqPN', 'value'),
@@ -3506,7 +3579,7 @@ Session storage callbacks and functions
                Output('N_vPhase','value'),
                Output('N_gyroPhase','value'),
                Output('ionMassAMU','value'),
-               #Output('vMode','value'),
+               #Output('vMode','value'), #this causes undefined vars
                Output('ionFrac','value'),
                Output('session', 'data'),
 #               Output('hiddenDivMachFlag', 'children')
@@ -3518,6 +3591,12 @@ Session storage callbacks and functions
                 State('session', 'data'),
                 State('userInputFileData', 'data')])
 def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
+    ctx = dash.callback_context
+    #for some reason triggers are happening from weird things.  If nothing was
+    #triggered, don't fire callback
+    if ctx.triggered[0]['value']==None:
+        raise PreventUpdate
+
     #default case
     if ts is None or MachFlag not in machineList:
         print('Initializing Data Store')
@@ -3525,7 +3604,7 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             print("Machine not in machine list")
             log.info("Machine not in machine list")
         data = gui.getDefaultDict()
-        data.update({'default_n_clicks':n_clicks})
+        data.update({'default_n_clicks':0})
 
     #Let the user know if this worked or if we still need a MachFlag
     if MachFlag not in machineList:
@@ -3533,17 +3612,17 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
     else:
         outputDiv = html.Label("Loaded Input File", style={'color':'#f5d142'})
 
+    btnTest = n_clicks > 0 and n_clicks>data.get('default_n_clicks')
     #load defaults
-    if n_clicks > 0 and n_clicks>data.get('default_n_clicks') and MachFlag is not None:
+    if btnTest and (MachFlag is not None):
         print("Loading Default Input File")
         log.info("Loading Default Input File")
-        data = gui.loadDefaults()
+        data = gui.loadInputs()
         data['default_n_clicks'] = n_clicks
     elif inputTs == None or inputTs == -1:
         pass
     #use data we saved into storage object that we got from user input file
     else:
-        print(inputTs)
         print("Loading User Input File")
         log.info("Loading User Input File")
         inputFileData['default_n_clicks'] = n_clicks
@@ -3555,16 +3634,25 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('tmax', ''),
             data.get('nTrace', ''),
             data.get('gridRes', ''),
-            data.get('lqEich', ''),
+#            data.get('hfMode', ''), #these dropdowns cause undefined text boxes
+#            data.get('lqCNmode', ''),
+            data.get('lqCNmode', ''),
+            data.get('lqCFmode', ''),
+            data.get('lqPNmode', ''),
+            data.get('lqPFmode', ''),
+            data.get('lqCNmode', ''),
+            data.get('lqCFmode', ''),
+            data.get('lqCN', ''), #eich
             data.get('S', ''),
+            data.get('SMode', ''),
             data.get('lqCN', ''),
             data.get('lqCF', ''),
             data.get('lqPN', ''),
             data.get('lqPF', ''),
-            data.get('limlqCN', ''),
-            data.get('limlqCF', ''),
-            data.get('limfracCN', ''),
-            data.get('limfracCF', ''),
+            data.get('lqCN', ''), #lim
+            data.get('lqCF', ''), #lim
+            data.get('fracCN', ''), #lim
+            data.get('fracCF', ''), #lim
             data.get('fracCN', ''),
             data.get('fracCF', ''),
             data.get('fracPN', ''),
@@ -3581,8 +3669,8 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('qFileTag', ''),
             data.get('OFtMin', ''),
             data.get('OFtMax', ''),
-            data.get('meshMinLev', ''),
-            data.get('meshMaxLev', ''),
+            data.get('meshMinLevel', ''),
+            data.get('meshMaxLevel', ''),
             data.get('STLscale', ''),
             data.get('deltaT', ''),
             data.get('writeDeltaT', ''),

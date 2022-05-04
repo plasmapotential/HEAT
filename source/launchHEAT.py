@@ -123,8 +123,8 @@ def loadEnviron():
         ### PARAVIEW
         #Include the location of the paraview binaries.
         #Specifically we need the python libs and pvpython
-        PVPath = '/opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/lib/python3.8/site-packages'
-        pvpythonCMD = '/opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/bin/pvpython'
+        PVPath = '/opt/paraview/ParaView-5.10.1-MPI-Linux-Python3.9-x86_64/lib/python3.8/site-packages'
+        pvpythonCMD = '/opt/paraview/ParaView-5.10.1-MPI-Linux-Python3.9-x86_64/bin/pvpython'
 
         ### FREECAD
         # daily build binary freecad path

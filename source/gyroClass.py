@@ -75,7 +75,7 @@ class GYRO:
         for var in integers:
             if (getattr(self, var) is not None) and (~np.isnan(float(getattr(self, var)))):
                 try:
-                    setattr(self, var, int(getattr(self, var)))
+                    setattr(self, var, tools.makeInt(getattr(self, var)))
                 except:
                     print("Error with input file var "+var+".  Perhaps you have invalid input values?")
                     log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
@@ -83,7 +83,7 @@ class GYRO:
             if var is not None:
                 if (getattr(self, var) is not None) and (~np.isnan(float(getattr(self, var)))):
                     try:
-                        setattr(self, var, float(getattr(self, var)))
+                        setattr(self, var, tools.makeFloat(getattr(self, var)))
                     except:
                         print("Error with input file var "+var+".  Perhaps you have invalid input values?")
                         log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
