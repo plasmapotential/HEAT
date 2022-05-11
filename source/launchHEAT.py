@@ -29,7 +29,7 @@ def loadEnviron():
 
     #default HEAT output directory
     try:
-        homeDir = os.environ["HOME"]
+        homeDir = os.path.expanduser("~")
     except:
         print("HOME env var not set.  Set before running HEAT!")
         print("Example:  export HOME=/home/tom")
