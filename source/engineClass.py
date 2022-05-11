@@ -845,25 +845,25 @@ class engineObj():
         get heat flux inputs from gui or input file
         """
         self.HF.hfMode = hfMode
-        self.HF.lqCN = float(lqCN)
-        self.HF.lqCF = float(lqCF)
-        self.HF.lqPN = float(lqPN)
-        self.HF.lqPF = float(lqPF)
-        self.HF.S = float(S)
-        self.HF.Pinj = float(Pinj)
-        self.HF.coreRadFrac = float(coreRadFrac)
-        self.HF.qBG = float(qBG)
-        self.HF.fracCN = float(fracCN)
-        self.HF.fracCF = float(fracCF)
-        self.HF.fracPN = float(fracPN)
-        self.HF.fracPF = float(fracPF)
-        self.HF.fracUI = float(fracUI)
-        self.HF.fracUO = float(fracUO)
-        self.HF.fracLI = float(fracLI)
-        self.HF.fracLO = float(fracLO)
+        self.HF.lqCN = lqCN
+        self.HF.lqCF = lqCF
+        self.HF.lqPN = lqPN
+        self.HF.lqPF = lqPF
+        self.HF.S = S
+        self.HF.Pinj = Pinj
+        self.HF.coreRadFrac = coreRadFrac
+        self.HF.qBG = qBG
+        self.HF.fracCN = fracCN
+        self.HF.fracCF = fracCF
+        self.HF.fracPN = fracPN
+        self.HF.fracPF = fracPF
+        self.HF.fracUI = fracUI
+        self.HF.fracUO = fracUO
+        self.HF.fracLI = fracLI
+        self.HF.fracLO = fracLO
         if 'yes' in LRmask:
             self.HF.LRmask = True
-            self.HF.LRpower = float(LRpower)
+            self.HF.LRpower = LRpower
         else:
             self.HF.LRmask = False
 
@@ -872,9 +872,7 @@ class engineObj():
         self.HF.lqPNmode = lqPNmode
         self.HF.lqPFmode = lqPFmode
         self.HF.SMode = SMode
-        self.HF.fG = float(fG)
-        #fraction of power conducted to PFC surfaces
-        self.HF.Psol = (1-self.HF.coreRadFrac)*self.HF.Pinj
+        self.HF.fG = fG
 
         allowed_qTags = [None, 'none', 'NA', 'None', 'N']
         if qFileTag in allowed_qTags:
@@ -883,6 +881,12 @@ class engineObj():
             qFilePath = None
         self.HF.qFilePath = qFilePath
         self.HF.qFileTag = qFileTag
+
+        self.HF.setTypes()
+
+        #fraction of power conducted to PFC surfaces
+        self.HF.Psol = (1-self.HF.coreRadFrac)*self.HF.Pinj
+
 
         print("HF Mode = "+hfMode)
         log.info("Hf Mode = "+hfMode)
@@ -2276,10 +2280,10 @@ class engineObj():
                     'lqCF': self.HF.lqCF,
                     'lqPN': self.HF.lqPN,
                     'lqPF': self.HF.lqPF,
-                    'lqCNMode': self.HF.lqCNmode,
-                    'lqCFMode': self.HF.lqCFmode,
-                    'lqPNMode': self.HF.lqPNmode,
-                    'lqPFMode': self.HF.lqPFmode,
+                    'lqCNmode': self.HF.lqCNmode,
+                    'lqCFmode': self.HF.lqCFmode,
+                    'lqPNmode': self.HF.lqPNmode,
+                    'lqPFmode': self.HF.lqPFmode,
                     'fracCN': self.HF.fracCN,
                     'fracCF': self.HF.fracCF,
                     'fracPN': self.HF.fracPN,
@@ -2335,10 +2339,10 @@ class engineObj():
                     'lqCF': self.HF.lqCF,
                     'lqPN': self.HF.lqPN,
                     'lqPF': self.HF.lqPF,
-                    'lqCNMode': self.HF.lqCNmode,
-                    'lqCFMode': self.HF.lqCFmode,
-                    'lqPNMode': self.HF.lqPNmode,
-                    'lqPFMode': self.HF.lqPFmode,
+                    'lqCNmode': self.HF.lqCNmode,
+                    'lqCFmode': self.HF.lqCFmode,
+                    'lqPNmode': self.HF.lqPNmode,
+                    'lqPFmode': self.HF.lqPFmode,
                     'fracCN': self.HF.fracCN,
                     'fracCF': self.HF.fracCF,
                     'fracPN': self.HF.fracPN,

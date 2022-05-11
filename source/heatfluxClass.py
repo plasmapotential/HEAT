@@ -100,6 +100,7 @@ class heatFlux:
                     'fracUO',
                     'fracLI',
                     'fracLO',
+                    'fG',
                     ]
 
 
@@ -912,11 +913,14 @@ class heatFlux:
         """
         reads a heat flux .csv file and loads into PFC.qDiv variable
 
-        qFilePath should be path where .csv files are located.  This
+        qFilePath should be root directory path where .csv files are located.  This
         path name should be identical to the HEAT data directory paths.  It should
         contain a series of timestep directories (ie /00100/) as well as a
         series of PFC directories in each timestep directory (ie /00100/SOLID1).
         The .csv files should live in the PFC directories
+        (ie /home/tom/results/nstx_204118/)
+
+        qFileTag is the name of the file we to import (ie HF_optical.csv)
 
         """
         if self.qFilePath[-1] != '/':
@@ -1145,7 +1149,6 @@ class heatFlux:
         ep is equilibrium object
         """
         HFdict = {}
-
         if self.hfMode == 'limiter':
             HFdict['Heat Flux Mode'] = 'Limiter'
             if self.lqCNmode == 'eich':
@@ -1158,12 +1161,11 @@ class heatFlux:
                 HFdict["\u03BB Far Mode"] = 'Horacek Figure 6a'
                 HFdict["Common Region Far Heat Flux Width (\u03BBq CF) [mm]"] = self.lqCF
             else:
-                HFdict["\u03BB Near Mode"] = 'User Defined'
-                HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqCF
+                HFdict["\u03BB Far Mode"] = 'User Defined'
+                HFdict["Common Region Far Heat Flux Width (\u03BBq CF) [mm]"] = self.lqCF
 
             HFdict["Common Region Near Power Fraction"] = self.fracCN
             HFdict["Common Region Far Power Fraction"] = self.fracCF
-
 
         elif self.hfMode == 'multiExp':
             HFdict['Heat Flux Mode'] = 'Multiple (4) Exponentials'
@@ -1173,7 +1175,14 @@ class heatFlux:
             else:
                 HFdict["\u03BB Near Mode"] = 'User Defined'
                 HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqCN
-            HFdict["Common Region Near Heat Flux Width (\u03BBq CN) [mm]"] = self.lqCN
+
+            if self.lqCFmode == 'horacek':
+                HFdict["\u03BB Far Mode"] = 'Horacek Figure 6a'
+            else:
+                HFdict["\u03BB Far Mode"] = 'User Defined'
+
+
+
             HFdict["Common Region Far Heat Flux Width (\u03BBq CF) [mm]"] = self.lqCF
             HFdict["Private Region Near Heat Flux Width (\u03BBq PN) [mm]"] = self.lqPN
             HFdict["Private Region Far Heat Flux Width (\u03BBq PF) [mm]"] = self.lqPF
@@ -1191,9 +1200,10 @@ class heatFlux:
             HFdict['Heat Flux Mode'] = 'Gaussian Spreading'
             if self.lqCNmode == 'eich':
                 HFdict["\u03BB Mode"] = 'Eich Regression #15'
+                HFdict["Heat Flux Width (\u03BBq) [mm]"] = self.lqEich
             else:
                 HFdict["\u03BB Mode"] = 'User Defined'
-            HFdict["Heat Flux Width (\u03BBq) [mm]"] = self.lqEich
+                HFdict["Heat Flux Width (\u03BBq) [mm]"] = self.lqCN
 
             if self.SMode == 'makowski':
                 HFdict['Greenwald Density Fraction'] = self.fG
@@ -1212,4 +1222,5 @@ class heatFlux:
             HFdict["Upper Outer Divertor Power Fraction"] = self.fracUO
             HFdict["Lower Inner Divertor Power Fraction"] = self.fracLI
             HFdict["Lower Outer Divertor Power Fraction"] = self.fracLO
+
         return HFdict

@@ -137,7 +137,7 @@ class TUI():
                 runList = [x.split(":") for x in tagData['Output'].values]
 
                 #read input file 0
-                inputData = self.ENG.loadDefaults(inFile=inputFiles[0])
+                inputData = self.ENG.loadInputs(inFile=inputFiles[0])
 
                 #build the HEAT tree for this tag
                 self.prepareDirectories(mach,tag)

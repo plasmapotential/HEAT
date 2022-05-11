@@ -893,6 +893,7 @@ class MHD:
         #Set up interpolators
         RmAxisInterp = interp1d(ts,RmAxisAll)
         ZmAxisInterp = interp1d(ts,ZmAxisAll)
+
         psiRZInterp = RegularGridInterpolator((R, Z, ts), psiRZAll)
         psiAxisInterp = interp1d(ts, psiAxisAll)
         psiSepInterp = interp1d(ts, psiSepAll)

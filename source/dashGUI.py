@@ -376,7 +376,7 @@ def machineSelector(MachFlag):
 
 
 @app.callback([Output('hiddenDivInput', 'children'),
-               Output('userInputFileData', 'data')],
+               Output('userInputFileData', 'data'),],
              [Input('input-upload','filename')],
              [State('input-upload','contents'),
               State('MachFlag','value'),])
@@ -412,14 +412,14 @@ def inputDragDrop(file, contents, MachFlag):
                State('nTrace', 'value'),
                State('gridRes', 'value'),
                State('hfMode', 'value'),
-               State('eichlqCNMode', 'value'),
+               State('eichlqCNmode', 'value'),
                State('eichSMode', 'value'),
-               State('multiExplqCNMode', 'value'),
-               State('multiExplqCFMode', 'value'),
-               State('multiExplqPNMode', 'value'),
-               State('multiExplqPFMode', 'value'),
-               State('limiterlqCNMode', 'value'),
-               State('limiterlqCFMode', 'value'),
+               State('multiExplqCNmode', 'value'),
+               State('multiExplqCFmode', 'value'),
+               State('multiExplqPNmode', 'value'),
+               State('multiExplqPFmode', 'value'),
+               State('limiterlqCNmode', 'value'),
+               State('limiterlqCFmode', 'value'),
                State('lqEich', 'value'),
                State('S', 'value'),
                State('lqCN', 'value'),
@@ -471,14 +471,14 @@ def saveGUIinputs(  n_clicks,
                     nTrace,
                     gridRes,
                     hfMode,
-                    eichlqCNMode,
+                    eichlqCNmode,
                     eichSMode,
-                    multiExplqCNMode,
-                    multiExplqCFMode,
-                    multiExplqPNMode,
-                    multiExplqPFMode,
-                    limiterlqCNMode,
-                    limiterlqCFMode,
+                    multiExplqCNmode,
+                    multiExplqCFmode,
+                    multiExplqPNmode,
+                    multiExplqPFmode,
+                    limiterlqCNmode,
+                    limiterlqCFmode,
                     lqEich,
                     S,
                     lqCN,
@@ -552,10 +552,10 @@ def saveGUIinputs(  n_clicks,
         data['lqCF'] = lqCF
         data['lqPN'] = lqPN
         data['lqPF'] = lqPF
-        data['lqCNmode'] = multiExplqCNMode
-        data['lqCFmode'] = multiExplqCFMode
-        data['lqPNmode'] = multiExplqPNMode
-        data['lqPFmode'] = multiExplqPFMode
+        data['lqCNmode'] = multiExplqCNmode
+        data['lqCFmode'] = multiExplqCFmode
+        data['lqPNmode'] = multiExplqPNmode
+        data['lqPFmode'] = multiExplqPFmode
         data['fracCN'] = fracCN
         data['fracCF'] = fracCF
         data['fracPN'] = fracPN
@@ -564,8 +564,8 @@ def saveGUIinputs(  n_clicks,
     elif hfMode == 'limiter':
         data['lqCN'] = limlqCN
         data['lqCF'] = limlqCF
-        data['lqCNmode'] = limiterlqCNMode
-        data['lqCFmode'] = limiterlqCFMode
+        data['lqCNmode'] = limiterlqCNmode
+        data['lqCFmode'] = limiterlqCFmode
         data['fracCN'] = limFracCN
         data['fracCF'] = limFracCF
 
@@ -575,7 +575,7 @@ def saveGUIinputs(  n_clicks,
 
     elif hfMode == 'eich': #gaussian spreading
         data['lqCN'] = lqEich
-        data['lqCNmode'] = eichlqCNMode
+        data['lqCNmode'] = eichlqCNmode
         data['S'] = S
         data['SMode'] = eichSMode
 
@@ -991,13 +991,13 @@ def loadLRsettings(mask, hidden=False):
 
 @app.callback([Output('hfParameters', 'children')],
               [Input('hfMode', 'value')],
-              [State('HFDataStorage', 'data')]
+              [State('session', 'data')]
               )
-def hfParameters(mode, HFdata):
-    div = [loadHFSettings(mode=mode, hidden=False)]
+def hfParameters(mode, sessionData):
+    div = [loadHFSettings(mode=mode, hidden=False, sessionData=sessionData)]
     return [div]
 
-def PsolInput(hidden=False):
+def PsolInput(hidden=False, data=None):
     #do this hidden business so that we can always load defaults into these id's
     if hidden==True:
         className="hiddenBox"
@@ -1010,14 +1010,14 @@ def PsolInput(hidden=False):
                     html.Div(
                         children=[
                             html.Label("Upper Inner Power Fraction", className="hfLabel"),
-                            dcc.Input(id="fracUI", className="hfInput2"),
+                            dcc.Input(id="fracUI", className="hfInput2", value=data['fracUI']),
                             ],
                         className="colBox"
                     ),
                     html.Div(
                         children=[
                             html.Label("Upper Outer Power Fraction", className="hfLabel"),
-                            dcc.Input(id="fracUO", className="hfInput2"),
+                            dcc.Input(id="fracUO", className="hfInput2", value=data['fracUO']),
                             ],
                         className="colBox"
                     ),
@@ -1030,14 +1030,14 @@ def PsolInput(hidden=False):
                     html.Div(
                         children=[
                             html.Label("Lower Inner Power Fraction", className="hfLabel"),
-                            dcc.Input(id="fracLI", className="hfInput2"),
+                            dcc.Input(id="fracLI", className="hfInput2", value=data['fracLI']),
                             ],
                         className="colBox"
                     ),
                     html.Div(
                         children=[
                             html.Label("Lower Outer Power Fraction", className="hfLabel"),
-                            dcc.Input(id="fracLO", className="hfInput2"),
+                            dcc.Input(id="fracLO", className="hfInput2", value=data['fracLO']),
                             ],
                         className="colBox"
                     ),
@@ -1050,9 +1050,9 @@ def PsolInput(hidden=False):
              className=className,
              children=[
                     html.Label("Power Injected [MW]"),
-                    dcc.Input(id="Pinj", className="textInput"),
+                    dcc.Input(id="Pinj", className="textInput", value=data['Pinj']),
                     html.Label("Radiated Fraction of Injected Power"),
-                    dcc.Input(id="coreRadFrac", className="textInput"),
+                    dcc.Input(id="coreRadFrac", className="textInput", value=data['coreRadFrac']),
                     row2,
                     row3,
                     html.Label("Long Range Intersection Checking?"),
@@ -1071,7 +1071,7 @@ def PsolInput(hidden=False):
                         ],
                     )
 
-def loadHFSettings(mode=None, hidden=False):
+def loadHFSettings(mode=None, hidden=False, sessionData=None):
     #do this hidden business so that we can always load defaults into these id's
     #hideMask corresponds to the following parameters:
     #[eichProfile, commonRegion, privateRegion]
@@ -1092,42 +1092,72 @@ def loadHFSettings(mode=None, hidden=False):
     if mode == 'qFile':
         hidden=True
 
+    #load session data that was provided in input file
+    if sessionData == None:
+        sessionData = {}
+        sessionData['hfMode'] = None
+        sessionData['lqCN'] = None
+        sessionData['lqCF'] = None
+        sessionData['lqPN'] = None
+        sessionData['lqPF'] = None
+        sessionData['lqCNmode'] = None
+        sessionData['lqCFmode'] = None
+        sessionData['lqPNmode'] = None
+        sessionData['lqPFmode'] = None
+        sessionData['S'] = None
+        sessionData['SMode'] = None
+        sessionData['fracCN'] = None
+        sessionData['fracCF'] = None
+        sessionData['fracPN'] = None
+        sessionData['fracPF'] = None
+        sessionData['fracUI'] = None
+        sessionData['fracUO'] = None
+        sessionData['fracLI'] = None
+        sessionData['fracLO'] = None
+        sessionData['Pinj'] = None
+        sessionData['coreRadFrac'] = None
+        sessionData['qBG'] = None
+        sessionData['fG'] = None
+        sessionData['qFilePath'] = None
+        sessionData['qFileTag'] = None
+
+
     return html.Div(
             children=[
                 #gaussian spreading / eich
                 html.Div(
                     #className=hideMask[0],
                     children=[
-                        eichParameters(hideMask[0]),
+                        eichParameters(hideMask[0], sessionData),
                         ]
                 ),
                 #multiple exponentials
                 html.Div(
                     #className=hideMask[1],
                     children=[
-                        multiExpParameters(hideMask[1]),
+                        multiExpParameters(hideMask[1], sessionData),
                         ]
                 ),
                 #limiters
                 html.Div(
                     #className=hideMask[2],
                     children=[
-                        limiterParameters(hideMask[2]),
+                        limiterParameters(hideMask[2], sessionData),
                         ]
                 ),
                 #from file
                 html.Div(
                     #className=hideMask[2],
                     children=[
-                        qFileParameters(hideMask[3]),
+                        qFileParameters(hideMask[3], sessionData),
                         ]
                 ),
-                PsolInput(hidden),
+                PsolInput(hidden, sessionData),
                     ],
                     )
 
 
-def eichParameters(className):
+def eichParameters(className, data):
     row1 = html.Div(
         className='rowBox',
         children=[
@@ -1136,14 +1166,14 @@ def eichParameters(className):
             children=[
                 html.Label("Select Heat Flux Width source:", className="hfLabel"),
                 dcc.Dropdown(
-                id='eichlqCNMode',
+                id='eichlqCNmode',
                 className="SelectorBoxInput",
                 style={'backgroundColor': 'transparent', 'color':'transparent'},
                 options=[
                     {'label': 'Eich #15', 'value': 'eich'},
                     {'label': 'User Defined', 'value': 'user'}
                     ],
-                value='eich',
+                value=data['lqCNmode'],
                 ),
                 ],
             ),
@@ -1160,7 +1190,7 @@ def eichParameters(className):
                     {'label': 'From Makowski Scaling', 'value': 'makowski'},
                     {'label': 'User Defined', 'value': 'user'}
                     ],
-                value='makowski',
+                value=data['SMode'],
                 ),
                 ],
             ),
@@ -1173,7 +1203,7 @@ def eichParameters(className):
             className="colBox",
             children=[
                 html.Label("User Defined Heat Flux Width [mm]:", className="hfLabel"),
-                dcc.Input(id="lqEich", className="hfInput2"),
+                dcc.Input(id="lqEich", className="hfInput2", value=data['lqCN']),
 
                 ],
             ),
@@ -1181,7 +1211,7 @@ def eichParameters(className):
             className="colBox",
             children=[
                 html.Label("User Defined Gaussian Spreading [mm]:", className="hfLabel"),
-                dcc.Input(id="S", className="hfInput2"),
+                dcc.Input(id="S", className="hfInput2", value=data['S']),
                 ],
             ),
             ])
@@ -1193,13 +1223,13 @@ def eichParameters(className):
                 className="colBox",
                 children=[
                     html.Label("Background Heat Flux [MW/m^2]", className="hfLabel"),
-                    dcc.Input(id="qBG", className="hfInput2"),
+                    dcc.Input(id="qBG", className="hfInput2", value=data['qBG']),
                 ]),
             html.Div(
                 className="colBox",
                 children=[
                     html.Label("Greenwald Density Fraction", className="hfLabel"),
-                    dcc.Input(id="fG", className="hfInput2"),
+                    dcc.Input(id="fG", className="hfInput2", value=data['fG']),
                 ]),
         ])
 
@@ -1216,7 +1246,7 @@ def eichParameters(className):
     return div
 
 
-def multiExpParameters(className):
+def multiExpParameters(className, data):
     row1 = html.Div(
         className="rowBox",
         children = [
@@ -1225,7 +1255,7 @@ def multiExpParameters(className):
                 children=[
                     html.Label("Select Common Near Heat Flux Width source:"),
                     dcc.Dropdown(
-                    id='multiExplqCNMode',
+                    id='multiExplqCNmode',
                     className="SelectorBoxInput",
                     style={'backgroundColor': 'transparent', 'color':'transparent'},
                     options=[
@@ -1233,7 +1263,7 @@ def multiExpParameters(className):
                         #{'label': 'From Brunner Scaling', 'value': 'brunner'},
                         {'label': 'User Defined', 'value': 'user'}
                         ],
-                    value=None,
+                    value=data['lqCNmode'],
                     )
                 ]),
             html.Div(
@@ -1241,14 +1271,14 @@ def multiExpParameters(className):
                 children=[
                     html.Label("Select Common Far Heat Flux Width source:"),
                     dcc.Dropdown(
-                    id='multiExplqCFMode',
+                    id='multiExplqCFmode',
                     className="SelectorBoxInput",
                     style={'backgroundColor': 'transparent', 'color':'transparent'},
                     options=[
                         #{'label': 'From Brunner Scaling', 'value': 'brunner'},
                         {'label': 'User Defined', 'value': 'user'}
                         ],
-                    value=None,
+                    value=data['lqCFmode'],
                     )
                 ]),
             ]
@@ -1261,14 +1291,14 @@ def multiExpParameters(className):
                 children=[
                     html.Label("Select Private Near Heat Flux Width source:"),
                     dcc.Dropdown(
-                    id='multiExplqPNMode',
+                    id='multiExplqPNmode',
                     className="SelectorBoxInput",
                     style={'backgroundColor': 'transparent', 'color':'transparent'},
                     options=[
                         #{'label': 'From Brunner Scaling', 'value': 'brunner'},
                         {'label': 'User Defined', 'value': 'user'}
                         ],
-                    value=None,
+                    value=data['lqPNmode'],
                     )
                 ]),
             html.Div(
@@ -1276,14 +1306,14 @@ def multiExpParameters(className):
                 children=[
                     html.Label("Select Private Far Heat Flux Width source:"),
                     dcc.Dropdown(
-                    id='multiExplqPFMode',
+                    id='multiExplqPFmode',
                     className="SelectorBoxInput",
                     style={'backgroundColor': 'transparent', 'color':'transparent'},
                     options=[
                         #{'label': 'From Brunner Scaling', 'value': 'brunner'},
                         {'label': 'User Defined', 'value': 'user'}
                         ],
-                    value=None,
+                    value=data['lqPFmode'],
                     )
                 ]),
             ]
@@ -1295,13 +1325,13 @@ def multiExpParameters(className):
                     className="colBox",
                     children=[
                         html.Label("Common Near Heat Flux Width [mm]"),
-                        dcc.Input(id="lqCN", className="hfInput2"),
+                        dcc.Input(id="lqCN", className="hfInput2", value=data['lqCN']),
                     ]),
                 html.Div(
                     className="colBox",
                     children=[
                         html.Label("Common Near Power Fraction"),
-                        dcc.Input(id="fracCN", className="hfInput2"),
+                        dcc.Input(id="fracCN", className="hfInput2", value = data['fracCN']),
                     ]),
             ])
 
@@ -1312,13 +1342,13 @@ def multiExpParameters(className):
                     className="colBox",
                     children=[
                         html.Label("Common Far Heat Flux Width [mm]"),
-                        dcc.Input(id="lqCF", className="hfInput2"),
+                        dcc.Input(id="lqCF", className="hfInput2", value=data['lqCF']),
                     ]),
                 html.Div(
                     className="colBox",
                     children=[
                         html.Label("Common Far Power Fraction"),
-                        dcc.Input(id="fracCF", className="hfInput2"),
+                        dcc.Input(id="fracCF", className="hfInput2", value=data['fracCF']),
                     ]),
             ])
 
@@ -1329,13 +1359,13 @@ def multiExpParameters(className):
                     className="colBox",
                     children=[
                         html.Label("Private Near Heat Flux Width [mm]"),
-                        dcc.Input(id="lqPN", className="hfInput2"),
+                        dcc.Input(id="lqPN", className="hfInput2", value=data['lqPN']),
                     ]),
                 html.Div(
                     className="colBox",
                     children=[
                         html.Label("Private Near Power Fraction"),
-                        dcc.Input(id="fracPN", className="hfInput2"),
+                        dcc.Input(id="fracPN", className="hfInput2", value=data['fracPN']),
                     ]),
             ])
 
@@ -1346,13 +1376,13 @@ def multiExpParameters(className):
                     className="colBox",
                     children=[
                         html.Label("Private Far Heat Flux Width [mm]"),
-                        dcc.Input(id="lqPF", className="hfInput2"),
+                        dcc.Input(id="lqPF", className="hfInput2", value=data['lqPF']),
                     ]),
                 html.Div(
                     className="colBox",
                     children=[
                         html.Label("Private Far Power Fraction"),
-                        dcc.Input(id="fracPF", className="hfInput2"),
+                        dcc.Input(id="fracPF", className="hfInput2", value=data['fracPF']),
                     ]),
             ])
 
@@ -1373,7 +1403,7 @@ def multiExpParameters(className):
     return div
 
 
-def limiterParameters(className):
+def limiterParameters(className, data):
     #return if this div is supposed to be hidden to prevent duplicate IDs
     #if className== 'hiddenBox':
     #    return
@@ -1386,14 +1416,14 @@ def limiterParameters(className):
                 children=[
                     html.Label("Select Common Near Heat Flux Width source:"),
                     dcc.Dropdown(
-                    id='limiterlqCNMode',
+                    id='limiterlqCNmode',
                     className="SelectorBoxInput",
                     style={'backgroundColor': 'transparent', 'color':'transparent'},
                     options=[
                         {'label': 'Eich #15', 'value': 'eich'},
                         {'label': 'User Defined', 'value': 'user'}
                         ],
-                    value='eich',
+                    value=data['lqCNmode'],
                     )
                 ]),
             html.Div(
@@ -1401,14 +1431,14 @@ def limiterParameters(className):
                 children=[
                     html.Label("Select Common Far Heat Flux Width source:"),
                     dcc.Dropdown(
-                    id='limiterlqCFMode',
+                    id='limiterlqCFmode',
                     className="SelectorBoxInput",
                     style={'backgroundColor': 'transparent', 'color':'transparent'},
                     options=[
                         {'label': 'Horacek Fig. 6a', 'value': 'horacek'},
                         {'label': 'User Defined', 'value': 'user'}
                         ],
-                    value='user',
+                    value=data['lqCFmode'],
                     )
                 ]),
 
@@ -1422,13 +1452,13 @@ def limiterParameters(className):
                     className="colBox",
                     children=[
                         html.Label("Common Near Heat Flux Width [mm]"),
-                        dcc.Input(id="limlqCN", className="hfInput2"),
+                        dcc.Input(id="limlqCN", className="hfInput2", value=data['lqCN']),
                     ]),
                 html.Div(
                     className="colBox",
                     children=[
                         html.Label("Common Far Heat Flux Width [mm]"),
-                        dcc.Input(id="limlqCF", className="hfInput2"),
+                        dcc.Input(id="limlqCF", className="hfInput2", value=data['lqCF']),
                     ]),
             ])
 
@@ -1439,14 +1469,14 @@ def limiterParameters(className):
                     className="colBox",
                     children=[
                         html.Label("Common Near Power Fraction"),
-                        dcc.Input(id="limfracCN", className="hfInput2"),
+                        dcc.Input(id="limfracCN", className="hfInput2", value=data['fracCN']),
                     ]),
 
                 html.Div(
                     className="colBox",
                     children=[
                         html.Label("Common Far Power Fraction"),
-                        dcc.Input(id="limfracCF", className="hfInput2"),
+                        dcc.Input(id="limfracCF", className="hfInput2", value=data['fracCF']),
                     ]),
             ])
 
@@ -1461,7 +1491,7 @@ def limiterParameters(className):
     return div
 
 
-def  qFileParameters(className):
+def  qFileParameters(className, data):
     #return if this div is supposed to be hidden to prevent duplicate IDs
     #if className== 'hiddenBox':
     #    return
@@ -1473,13 +1503,13 @@ def  qFileParameters(className):
                 className="colBox",
                 children=[
                     html.Label("Input qFile shot path:"),
-                    dcc.Input(id="qFilePath", className="hfInput2"),
+                    dcc.Input(id="qFilePath", className="hfInput2", value=data['qFilePath']),
                 ]),
             html.Div(
                 className="colBox",
                 children=[
                     html.Label("Input qFile tag (ie HF_optical.csv):"),
-                    dcc.Input(id="qFileTag", className="hfInput2"),
+                    dcc.Input(id="qFileTag", className="hfInput2", value=data['qFileTag']),
                 ]),
 
             ]
@@ -1494,49 +1524,45 @@ def  qFileParameters(className):
     return div
 
 
-
-
-
-
-def commonRegionParameters():
-    """
-    near and far heat flux widths and power sharing fractions
-    """
-    row1 = html.Div(
-            className="rowBox",
-            children=[
-                html.Div(
-                    className="colBox",
-                    children=[
-                        html.Label("Common Near Heat Flux Width [mm]"),
-                        dcc.Input(id="lqCN", className="hfInput2"),
-                    ]),
-                html.Div(
-                    className="colBox",
-                    children=[
-                        html.Label("Common Near Power Fraction"),
-                        dcc.Input(id="fracCN", className="hfInput2"),
-                    ]),
-            ])
-
-    row2 = html.Div(
-            className="rowBox",
-            children=[
-                html.Div(
-                    className="colBox",
-                    children=[
-                        html.Label("Common Far Heat Flux Width [mm]"),
-                        dcc.Input(id="lqCF", className="hfInput2"),
-                    ]),
-                html.Div(
-                    className="colBox",
-                    children=[
-                        html.Label("Common Far Power Fraction"),
-                        dcc.Input(id="fracCF", className="hfInput2"),
-                    ]),
-            ])
-
-    return row1,row2
+#def commonRegionParameters():
+#    """
+#    near and far heat flux widths and power sharing fractions
+#    """
+#    row1 = html.Div(
+#            className="rowBox",
+#            children=[
+#                html.Div(
+#                    className="colBox",
+#                    children=[
+#                        html.Label("Common Near Heat Flux Width [mm]"),
+#                        dcc.Input(id="lqCN", className="hfInput2"),
+#                    ]),
+#                html.Div(
+#                    className="colBox",
+#                    children=[
+#                        html.Label("Common Near Power Fraction"),
+#                        dcc.Input(id="fracCN", className="hfInput2"),
+#                    ]),
+#            ])
+#
+#    row2 = html.Div(
+#            className="rowBox",
+#            children=[
+#                html.Div(
+#                    className="colBox",
+#                    children=[
+#                        html.Label("Common Far Heat Flux Width [mm]"),
+#                        dcc.Input(id="lqCF", className="hfInput2"),
+#                    ]),
+#                html.Div(
+#                    className="colBox",
+#                    children=[
+#                        html.Label("Common Far Power Fraction"),
+#                        dcc.Input(id="fracCF", className="hfInput2"),
+#                    ]),
+#            ])
+#
+#    return row1,row2
 
 
 #Load HF button connect
@@ -1561,14 +1587,14 @@ def commonRegionParameters():
                State('fracLO', 'value'),
                State('LRmask', 'value'),
                State('LRthresh', 'value'),
-               State('eichlqCNMode', 'value'),
+               State('eichlqCNmode', 'value'),
                State('eichSMode', 'value'),
-               State('multiExplqCNMode', 'value'),
-               State('multiExplqCFMode', 'value'),
-               State('multiExplqPNMode', 'value'),
-               State('multiExplqPFMode', 'value'),
-               State('limiterlqCNMode', 'value'),
-               State('limiterlqCFMode', 'value'),
+               State('multiExplqCNmode', 'value'),
+               State('multiExplqCFmode', 'value'),
+               State('multiExplqPNmode', 'value'),
+               State('multiExplqPFmode', 'value'),
+               State('limiterlqCNmode', 'value'),
+               State('limiterlqCFmode', 'value'),
                State('limlqCN', 'value'),
                State('limlqCF', 'value'),
                State('limfracCN', 'value'),
@@ -1585,9 +1611,9 @@ def loadHF(n_clicks,hfMode,MachFlag,
             fracCN,fracCF,fracPN,fracPF,
             fracUI,fracUO,fracLI,fracLO,
             LRmask,LRthresh,
-            eichlqCNMode,SMode,
-            multiExplqCNMode,multiExplqCFMode,multiExplqPNMode,multiExplqPFMode,
-            limiterlqCNMode,limiterlqCFMode,limlqCN,limlqCF,limfracCN,limfracCF,
+            eichlqCNmode,SMode,
+            multiExplqCNmode,multiExplqCFmode,multiExplqPNmode,multiExplqPFmode,
+            limiterlqCNmode,limiterlqCFmode,limlqCN,limlqCF,limfracCN,limfracCF,
             qBG,Pinj,coreRadFrac,fG,
             qFilePath, qFileTag):
     if MachFlag is None:
@@ -1595,8 +1621,8 @@ def loadHF(n_clicks,hfMode,MachFlag,
     else:
         #set up the heat flux configuration (which scalings to use)
         if hfMode == 'limiter':
-            lqCNmode = limiterlqCNMode
-            lqCFmode = limiterlqCFMode
+            lqCNmode = limiterlqCNmode
+            lqCFmode = limiterlqCFmode
             lqPNmode = None
             lqPFmode = None
             SMode = None
@@ -1612,19 +1638,19 @@ def loadHF(n_clicks,hfMode,MachFlag,
             qFilePath = None
         elif hfMode == 'multiExp':
             #add this back in after brunner scaling is in HEAT:
-            lqCNmode = multiExplqCNMode
-            lqCFmode = multiExplqCFMode
-            lqPNmode = multiExplqPNMode
-            lqPFmode = multiExplqPFMode
+            lqCNmode = multiExplqCNmode
+            lqCFmode = multiExplqCFmode
+            lqPNmode = multiExplqPNmode
+            lqPFmode = multiExplqPFmode
             lqCN = lqCN #unnecessary, but here for clarity
             lqCF = lqCF #unnecessary, but here for clarity
             lqPN = lqPN #unnecessary, but here for clarity
-            lqPF = lqCF #unnecessary, but here for clarity
+            lqPF = lqPF #unnecessary, but here for clarity
             SMode = None
             qFileTag = None
             qFilePath = None
         elif hfMode == 'qFile':
-            lqCNmode = eichlqCNMode
+            lqCNmode = eichlqCNmode
             lqCFmode = None
             lqPNmode = None
             lqPFmode = None
@@ -1634,7 +1660,7 @@ def loadHF(n_clicks,hfMode,MachFlag,
             lqPF = 0.0
             SMode = SMode
         else: #eich mode is default
-            lqCNmode = eichlqCNMode
+            lqCNmode = eichlqCNmode
             lqCFmode = None
             lqPNmode = None
             lqPFmode = None
@@ -1660,7 +1686,6 @@ def loadHF(n_clicks,hfMode,MachFlag,
         #Update output tab table
         HFdata = gui.HF.HFdataDict
         #hfDict = [{'Parameter':i, 'Value':dataDict[i]} for i in inputTableData]
-
 
     return [html.Label("Loaded HF Settings", style={'color':'#f5d142'}), HFdata]
 
@@ -2884,8 +2909,11 @@ def interpolateNsteps(n_clicks, N, data):
         raise PreventUpdate
     #load interpolation table data
     df = pd.DataFrame(data)
-    df = df.sort_values('timestep[ms]')
+    df['timestep[ms]'] = df['timestep[ms]'].astype(int)
+    df = df.sort_values('timestep[ms]', ascending=True)
+    print("GEQDSK Dataframe:")
     print(df)
+    print("New timesteps:")
     print(df['timestep[ms]'].values)
     #interpolate N steps between each point
     gui.interpolateNsteps(df['filename'].values, pd.to_numeric(df['timestep[ms]']).values,int(N))
@@ -3532,14 +3560,14 @@ Session storage callbacks and functions
                Output('tmax', 'value'),
                Output('nTrace', 'value'),
                Output('gridRes', 'value'),
-#               Output('hfMode', 'value'), #this causes undefined vars
-#               Output('eichlqCNMode', 'value'), #this causes undefined vars
-               Output('multiExplqCNMode', 'value'),
-               Output('multiExplqCFMode', 'value'),
-               Output('multiExplqPNMode', 'value'),
-               Output('multiExplqPFMode', 'value'),
-               Output('limiterlqCNMode', 'value'),
-               Output('limiterlqCFMode', 'value'),
+               Output('hfMode', 'value'), #this causes undefined vars
+               Output('eichlqCNmode', 'value'), #this causes undefined vars
+               Output('multiExplqCNmode', 'value'),
+               Output('multiExplqCFmode', 'value'),
+               Output('multiExplqPNmode', 'value'),
+               Output('multiExplqPFmode', 'value'),
+               Output('limiterlqCNmode', 'value'),
+               Output('limiterlqCFmode', 'value'),
                Output('lqEich', 'value'),
                Output('S', 'value'),
                Output('eichSMode', 'value'),
@@ -3634,8 +3662,8 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('tmax', ''),
             data.get('nTrace', ''),
             data.get('gridRes', ''),
-#            data.get('hfMode', ''), #these dropdowns cause undefined text boxes
-#            data.get('lqCNmode', ''),
+            data.get('hfMode', ''), #these dropdowns cause undefined text boxes
+            data.get('lqCNmode', ''),
             data.get('lqCNmode', ''),
             data.get('lqCFmode', ''),
             data.get('lqPNmode', ''),
