@@ -8,18 +8,20 @@
 version: "3"
 
 services:
-  HEAT:
-    image: "plasmapotential/heat"
+  HEAT_GUI:
+    image: "plasmapotential/heat:v2.0.0"
     ports:
       - "8050:8050"
     volumes:
       #change volumes below to match your development (host) machine
       #format is: /host/path:/container/path
       #user should not edit container paths
+      #options for windows and linux below
       #
+      # === FOR LINUX ===
       # HEAT data directory on this machine (if exists)
       - ${HOME}/HEAT:/root/HEAT
-#      # HEAT source code from github
+      # HEAT source code from github
 #      - /home/tom/source/HEAT/github/source:/root/source/HEAT
 #      # ORNL EFIT class from github (if you have access)
 #      - /home/tom/source/EFIT:/root/EFIT
@@ -34,6 +36,15 @@ services:
 #      - /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/lib:/root/opt/swak4foam/lib
 #      # Batch mode directory
 #      - /home/tom/HEATtest/terminal:/root/terminal
+#
+      # === FOR WINDOWS ===
+      # HEAT data directory on this machine (if exists)
+      # - C:\Users\tlooby\HEAT:/root/HEAT
+      # HEAT source code from github
+      # - C:\Users\tlooby\github\HEAT\source:/root/source/HEAT
+      # Batch mode directory
+      # - C:\Users\tlooby\HEATruns\testCase:/root/terminal
+
     stdin_open: true # docker run -i
     tty: true        # docker run -t
     #if you want to set env vars, do it here:
