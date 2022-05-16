@@ -157,7 +157,7 @@ class MHD:
         """
         #load gfile from MDS+
         if gFileList is None:
-            self.timesteps = gfiles.GEQDSKFromMDS(
+            self.timesteps = self.GEQDSKFromMDS(
                                                   self.MachFlag,
                                                   self.shot,
                                                   self.tree,
