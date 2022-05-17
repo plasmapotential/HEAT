@@ -493,6 +493,12 @@ class OpenFOAM():
         else:
             appDir = ''
 
+        try:
+            runMode = os.environ["runMode"]
+        except:
+            runMode = 'local'
+            os.environ["runMode"] = runMode
+
         #write probe file to partDir
         file = partDir+'system/probes'
         with open(file,'w') as f:
@@ -504,7 +510,11 @@ class OpenFOAM():
         #run topoSet, createPatch, postProcess -func "probes"
         TprobeCMD = partDir+self.cmdTprobe
         try:
-            p = run([TprobeCMD], env=current_env, cwd=self.partDir, shell=True, executable=appDir+'/bin/bash')
+            if runMode == 'docker':
+                p = run([TprobeCMD], env=current_env, cwd=self.partDir, shell=True, executable='/bin/bash')
+            else:
+                p = run([TprobeCMD], env=current_env, cwd=self.partDir, shell=True, executable=appDir+'/bin/bash')
+
             retcode = p.returncode
             if retcode < 0:
                 print("thermal probe child was terminated by signal", -retcode, file=sys.stderr)
