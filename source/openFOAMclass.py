@@ -497,7 +497,6 @@ class OpenFOAM():
             runMode = os.environ["runMode"]
         except:
             runMode = 'local'
-            os.environ["runMode"] = runMode
 
         #write probe file to partDir
         file = partDir+'system/probes'
