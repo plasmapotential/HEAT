@@ -179,10 +179,10 @@ class MHD:
                 try:
                     idx = gfile.find('.')
                     fmtstr = '0' + str(idx-1) + 'd'
-                    shot, time = int(gfile[1:idx]), int(gfile[idx+1::])
+                    shot, time = int(gfile[1:idx]), int(gfile[idx+1:idx+6])
                 #otherwise define new timestep based upon index
                 except:
-                    shot=1
+                    shot=self.shot
                     time=i+1
                 ts = self.copyGfile2tree(gfile,shot,time)
                 self.timesteps.append(ts)

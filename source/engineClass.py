@@ -1435,7 +1435,7 @@ class engineObj():
                         try:
                             self.loadHFParams(infile=self.inputFileList[tIdx])
                         except:
-                            pass
+                            print("Could not load HF parameters!")
                         #check if this timestep contains an MHD EQ we already traced
                         repeatIdx = self.MHD.check4repeatedEQ(PFC.ep, PFC.EPs[:tIdx])
                         #if the inputs are different, flag it to prevent copying
