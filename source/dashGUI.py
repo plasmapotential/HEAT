@@ -2240,7 +2240,7 @@ def OFinputBoxes():
                                 {'label': 'ATJ Graphite', 'value': 'ATJ'},
                                 {'label': 'Molybdenum', 'value': 'MOLY'},
                                 {'label': 'Tungsten', 'value': 'TUNG'},
-
+                                {'label': 'Tungsten (SPARC)', 'value': 'TUNG_SPARC'},
                                 ],
                                 value='SGL'
                                 ),
@@ -2309,7 +2309,7 @@ def runChildren():
             children = [
                 html.H4("HEAT Run Settings", className="buttonRibbon"),
                 html.Br(),
-                html.H6("Acceleration, Filters, Settings: "),
+                html.H6("Acceleration Filter Settings: "),
                 buildRunSettings(),
                 html.H6("Point Clouds at Tile Surface:"),
                 runTabChecklist(),

@@ -1435,7 +1435,7 @@ class engineObj():
                         try:
                             self.loadHFParams(infile=self.inputFileList[tIdx])
                         except:
-                            print("Could not load HF parameters!")
+                            print("Could not load HF parameters.  Expected for GUI.")
                         #check if this timestep contains an MHD EQ we already traced
                         repeatIdx = self.MHD.check4repeatedEQ(PFC.ep, PFC.EPs[:tIdx])
                         #if the inputs are different, flag it to prevent copying
@@ -2558,6 +2558,8 @@ class engineObj():
                 matSrc = self.OF.materialDir + '/MOLY/'
             elif self.OF.material == "TUNG":
                 matSrc = self.OF.materialDir + '/TUNG/'
+            elif self.OF.material == "TUNG_SPARC":
+                matSrc = self.OF.materialDir + '/TUNG_SPARC/'
             else: #SGL6510
                 matSrc = self.OF.materialDir + '/SGLR6510/'
             try:
@@ -2848,6 +2850,9 @@ class engineObj():
                 partDir = self.MHD.shotPath + 'openFoam/heatFoam/'+PFC.name
             else:
                 partDir = self.MHD.shotPath + '/openFoam/heatFoam/'+PFC.name
+            #replace spaces with underscores to prevent pyfoam from reading args as
+            # space delimited list
+            partDir = partDir.replace(" ", "_")
             file = (partDir +
                     '/postProcessing/fieldMinMax1/{:f}'.format(self.OF.OFtMin).rstrip('0').rstrip('.')
                     +'/fieldMinMax.dat')
@@ -2928,6 +2933,9 @@ class engineObj():
                 print("Found Tprobe in PFC: "+PFC.name)
                 log.info("Found Tprobe in PFC: "+PFC.name)
                 partDir = self.OF.caseDir+'/'+PFC.name+'/'
+                #replace spaces with underscores to prevent pyfoam from reading args as
+                # space delimited list
+                partDir = partDir.replace(" ", "_")
                 self.OF.runTprobe(x,y,z,partDir)
                 file = (partDir +
                     'postProcessing/probes/{:f}'.format(self.OF.OFtMin).rstrip('0').rstrip('.')

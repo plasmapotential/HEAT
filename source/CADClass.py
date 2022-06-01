@@ -989,9 +989,6 @@ class CAD:
         """
 
         slices = []
-
-
-
         for part in self.CADparts:
             ##method 1 uses vector and double
             #wires = []
