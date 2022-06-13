@@ -243,6 +243,7 @@ class TUI():
         """
         self.ENG.readPFCfile(PFCfile)
         self.ENG.getPFCinputs(defaultMask=False)
+        self.ENG.setupVVdistortion()
         return
 
     def loadGYRO(self):

@@ -280,7 +280,23 @@ class PFC:
             tools.createVTKOutput(pcfile, 'points', name)
         return
 
+    def VVdistortIntersects(self, targetPoints, targetNorms):
+        """
+        distorts the intersection geometry for manufacturing error and alignment
+        error tolerances.  The function corresponds to an oblong shaped
+        Vacuum Vessel with toroidal mode number
 
+        this function does the target geometry.  the ROI geometry is handled
+        in the HEAT engineClass
+        """
+        #first do intersection mesh vertexes
+        shp = targetPoints.shape
+        collapsedTargets = targetPoints.reshape(shp[0],shp[1]*shp[2])
+        targetPoints = tools.VVdistortion(collapsedTargets).reshape(shp[0],shp[1],shp[2])
+        #now do intersection mesh normals
+        distNorms = tools.faceNormals(targetPoints)
+        targetNorms = tools.checkSignOfNorm(distNorms, targetNorms)
+        return targetPoints, targetNorms
 
     def findShadows_structure(self,MHD,CAD,verbose=False, shadowMaskClouds=False):
         """
@@ -316,6 +332,19 @@ class PFC:
         targetNorms = np.asarray(targetNorms)
         print("TOTAL INTERSECTION FACES: {:d}".format(totalMeshCounter))
         print("INTERSECTION FACES FOR THIS PFC: {:d}".format(numTargetFaces))
+
+        #distort the mesh (if requested)
+        if self.vvDistort == True:
+            tools.vvDistort = True
+            tools.distortDeltaR = self.distortDeltaR
+            tools.distortDeltaB = self.distortDeltaB
+            tools.distortN = self.distortN
+            tools.distortH = self.distortH
+            tools.distortR0 = self.distortR0
+            print("Distorting intersection mesh using VV distortion function")
+            log.info("Distorting intersection mesh using VV distortion function")
+            targetPoints, targetNorms = self.VVdistortIntersects(targetPoints, targetNorms)
+
         #for debugging, save a shadowmask at each step up fieldline
         if shadowMaskClouds == True:
             self.write_shadow_pointcloud(self.centers,self.shadowed_mask,self.controlfilePath,tag='original')

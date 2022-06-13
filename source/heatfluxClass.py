@@ -686,8 +686,8 @@ class heatFlux:
 
         #Eich Profile
         else:
-            q0 = self.scaleHF_fluxspace(PFC,self.lqEich,self.S,self.Psol)
-            q[use] = self.eich_profile_fluxspace(PFC, self.lqEich, self.S, R_omp, Bp_omp, psi)
+            q0 = self.scaleHF_fluxspace(PFC,self.lqCN,self.S,self.Psol)
+            q[use] = self.eich_profile_fluxspace(PFC, self.lqCN, self.S, R_omp, Bp_omp, psi)
             q *= q0
             q += self.qBG
 

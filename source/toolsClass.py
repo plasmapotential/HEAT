@@ -1010,3 +1010,60 @@ class tools:
             except:
                 newVar = var
         return newVar
+
+    def VVdistortion(self, points):
+        """
+        distorts a mesh's xyz coordinates by applying a transform
+
+        meshes is a list of meshes to distort
+        deltaR is change in radius bounds
+        deltaB is change in conical bounds
+        N is toroidal mode number
+        h is reference height
+        R0 is reference radius
+        """
+
+        N = self.distortN
+        R0 = self.distortR0
+        deltaR = self.distortDeltaR
+        deltaB = self.distortDeltaB
+        h = self.distortH
+
+        theta = np.arctan2(points[:,1], points[:,0])
+        #distortion transforms
+        xDist = np.sin(N*theta)*deltaR/R0 + deltaB*points[:,2]/h + 1
+        yDist = np.cos(N*theta)*deltaR/R0 + deltaB*points[:,2]/h + 1
+        zDist = np.ones((len(points)))
+
+        #perform transform
+        points[:,0] *= xDist
+        points[:,1] *= yDist
+        points[:,2] *= zDist
+        return points
+
+    def faceNormals(self, points):
+        """
+        returns an array of normal vectors from an array of triangle vertex points
+        """
+        norms = np.zeros((len(points),3))
+        for i,pt in enumerate(points):
+            A = pt[1] - pt[0]
+            B = pt[2] - pt[0]
+            norm = np.cross(A,B)
+            norms[i,:] = norm / np.linalg.norm(norm)
+
+        return norms
+
+    def checkSignOfNorm(self, normDist, normTrue):
+        """
+        checks direction of Na against Nb and changes normDist to match normTrue
+
+        this is for distorting the mesh where we know normTrue is the true surface
+        normal and we dont want to accidentally flip the normals when we distort
+        """
+
+        dot = np.multiply(normDist,normTrue).sum(axis=1)
+        flipLoc = np.where(dot < 0.0)[0]
+        normDist[flipLoc,:] *= -1.0
+
+        return normDist

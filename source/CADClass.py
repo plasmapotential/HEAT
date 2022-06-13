@@ -695,6 +695,7 @@ class CAD:
         z *= float(unitConvert)
         return x, y, z
 
+
     def faceNormals(self, mesh):
         """
         returns normal vectors for single freecad mesh object in cartesian
