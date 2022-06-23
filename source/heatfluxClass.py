@@ -327,6 +327,8 @@ class heatFlux:
         s_hat is a flux coordinate
         S is the private flux region spreading in mm
 
+        R and Bp should be at OMP, where Eich function is defined
+
         return array q1(psi)
         """
         from scipy.special import erfc

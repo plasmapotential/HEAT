@@ -59,6 +59,7 @@ class CAD:
     """
     def __init__(self, rootDir=None, dataPath=None, chmod=0o774, UID=-1, GID=-1):
         """
+        rootDir is root HEAT source code directory
         dataPath is the location where we write all output to
         """
         self.rootDir = rootDir
@@ -69,6 +70,15 @@ class CAD:
         self.GID = GID
         self.UID = UID
         return
+
+    def loadPath(self, path):
+        """
+        appends path to system environment PYTHONPATH
+        """
+        sys.path.append(path)
+        return
+
+
 
     def allowed_class_vars(self):
         """

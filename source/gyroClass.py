@@ -1,3 +1,7 @@
+#gyroClass.py
+#Description:   Gyro orbit module
+#Engineer:      T Looby
+#Date:          Fall 2021
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
