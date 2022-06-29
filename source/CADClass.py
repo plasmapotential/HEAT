@@ -1098,7 +1098,7 @@ class CAD:
         return mesh
 
 
-    def getVertexesFromEdges(self, edges):
+    def getVertexesFromEdges(self, edges, discretize=True):
         """
         create an array of XYZ coordinates corresponding to the vertexes in a
         list of FreeCAD edge objects
@@ -1116,20 +1116,24 @@ class CAD:
             x = np.array([])
             y = np.array([])
             z = np.array([])
-            ##handle curves
-            #if edge.Curve.TypeId == 'Part::GeomCircle':
-            #    x = np.array([])
-            #    y = np.array([])
-            #    z = np.array([])
-            #    x = np.hstack([x, np.array([v.x for v in edge.Curve.discretize(10)])])
-            #    y = np.hstack([y, np.array([v.y for v in edge.Curve.discretize(10)])])
-            #    z = np.hstack([z, np.array([v.z for v in edge.Curve.discretize(10)])])
-            ##handle lines
-            #else:
-            x = np.hstack([x, np.array([v.X for v in edge.Vertexes])])
-            y = np.hstack([y, np.array([v.Y for v in edge.Vertexes])])
-            z = np.hstack([z, np.array([v.Z for v in edge.Vertexes])])
-            vertexList.append(np.vstack([x,y,z]).T)
+            #handle curves
+            if edge.Edges[0].Curve.TypeId != 'Part::GeomLine' and discretize==True:
+                N = int(edge.Edges[0].Length / 20.0) #discretize in 20mm segments
+                #N = 10
+                x0 = [v.x for v in edge.Curve.discretize(N)]
+                y0 = [v.y for v in edge.Curve.discretize(N)]
+                z0 = [v.z for v in edge.Curve.discretize(N)]
+                for i in range(N-1):
+                    x = np.round([x0[i], x0[i+1]], 6)
+                    y = np.round([y0[i], y0[i+1]], 6)
+                    z = np.round([z0[i], z0[i+1]], 6)
+                    vertexList.append(np.vstack([x,y,z]).T)
+            #handle lines
+            else:
+                x = np.hstack([x, np.round([v.X for v in edge.Vertexes],6) ])
+                y = np.hstack([y, np.round([v.Y for v in edge.Vertexes],6) ])
+                z = np.hstack([z, np.round([v.Z for v in edge.Vertexes],6) ])
+                vertexList.append(np.vstack([x,y,z]).T)
         return vertexList
 
 
