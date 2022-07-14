@@ -138,9 +138,11 @@ class PFC:
         self.powerSum = [] #container for multiple power summations
         self.powerSumOptical = [] #container for multiple optical power summations
         self.powerSumGyro = [] #container for multiple gyro orbit power summations
+        self.powerSumRad = [] #container for multiple gyro orbit power summations
         self.tIndexes = [] #container for mapping between PC timesteps and MHD timesteps
         self.qOpticalList = [] #container for optical heat fluxes for all timesteps
         self.qGyroList = [] #container for gyro-orbit heat fluxes for all timesteps
+        self.qRadList = [] #container for photon radiation fluxes for all timesteps
         for t in self.timesteps:
             idx = np.where(t==MHD.timesteps)[0]
             if len(idx) > 0:
@@ -150,6 +152,7 @@ class PFC:
                 self.powerSum.append(0.0)
                 self.powerSumOptical.append(0.0)
                 self.powerSumGyro.append(0.0)
+                self.powerSumRad.append(0.0)
                 self.tIndexes.append(idx[0])
 
         #set up file directory structure using first timestep as dummy

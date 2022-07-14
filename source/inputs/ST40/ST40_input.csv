@@ -10,7 +10,8 @@ gridRes, standard
 shot, 1
 tmin, 0
 tmax, 5000
-nTrace, 10
+traceLength, 10
+dpinit, 1.0
 dataPath, /home/tom/data/HEAT/
 plasma3Dmask, 0 #1=true, 0=false
 torFilt, True

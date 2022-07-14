@@ -175,6 +175,7 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None, logFile=F
             color="#dcdce3"
         )
         )
+    fig.update_yaxes(scaleanchor = "x",scaleratio = 1,)
     return fig
 
 

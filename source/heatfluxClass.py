@@ -1011,6 +1011,8 @@ class heatFlux:
         log.info("Creating Heat Flux Point Cloud")
         if mode == 'gyro':
             prefix = 'HF_gyro'
+        elif mode == 'rad':
+            prefix = 'HF_rad'
         elif mode == 'all':
             prefix = 'HF_allSources'
         else:

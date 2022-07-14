@@ -102,7 +102,8 @@ class MHD:
                             'shot',
                             'tmin',
                             'tmax',
-                            'nTrace',
+                            'traceLength',
+                            'dpinit',
                             'dataPath',
                             'torFilt',
                             'psiFilt'
@@ -119,12 +120,11 @@ class MHD:
                     'shot',
                     'tmin',
                     'tmax',
-                    'nTrace'
+                    'traceLength'
                     ]
-        #floats = [
-        #         'MapDirection',
-        #         'MapDirectionStruct',
-        #        ]
+        floats = [
+                    'dpinit',
+                ]
         bools = ['torFilt', 'psiFilt']
 
         for var in integers:
@@ -147,6 +147,15 @@ class MHD:
                 except:
                     print("Error with input file var "+var+".  Perhaps you have invalid input values?")
                     log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
+
+        for var in floats:
+            if var is not None:
+                if (getattr(self, var) is not None) and (~np.isnan(float(getattr(self, var)))):
+                    try:
+                        setattr(self, var, tools.makeFloat(getattr(self, var)))
+                    except:
+                        print("Error with input file var "+var+".  Perhaps you have invalid input values?")
+                        log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
 
         return
 
@@ -456,9 +465,10 @@ class MHD:
                 f.write('useFilament(0=no)=\t{:d}\n'.format(self.useFilament))
                 f.write('useBusError(0=no,1=yes)=\t{:d}\n'.format(self.useBus))
                 f.write('useBcoilError(0=no,1=yes)=\t{:d}\n'.format(self.useBcoil))
-
             f.write('pi=\t3.141592653589793\n')
             f.write('2*pi=\t6.283185307179586\n')
+            #toroidal step size for HEAT
+            f.write('dpinit=\t{:f}\n'.format(self.dpinit))
             return
 
     def psi2DfromEQ(self, PFC):
@@ -538,6 +548,7 @@ class MHD:
         #args 1,2 are the number of degrees we want to run the trace for
         args.append('-d')
         args.append(str(dphi))
+
         #args 3,4 are the points that we launch traces from
         args.append('-P')
         args.append(gridfile)

@@ -2,6 +2,12 @@
 #Description:   Utility tools for HEAT
 #Engineer:      T Looby
 #Date:          20191117
+#
+#
+#THIS MODULE IS FROM HEAT, AND AS SUCH IS PROTECTED UNDER THE MIT LICENSE!
+#USERS MUST ATTRIBUTE THE SOURCE CODE
+#See https://github.com/plasmapotential/HEAT for more information
+
 import sys
 import pandas as pd
 import numpy as np
@@ -34,7 +40,6 @@ class tools:
 
         #Set all variables to None
         self.vars2None(obj)
-
         if infile == None:
             print("You must provide an input file!")
             sys.exit()
@@ -43,7 +48,6 @@ class tools:
 
         #After importing from file, set data types
         obj.setTypes()
-
         return
 
     def vars2None(self,obj):

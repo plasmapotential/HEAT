@@ -409,7 +409,8 @@ def inputDragDrop(file, contents, MachFlag):
               [State('shot', 'value'),
                State('tmin', 'value'),
                State('tmax', 'value'),
-               State('nTrace', 'value'),
+               State('traceLength', 'value'),
+               State('dpinit', 'value'),
                State('gridRes', 'value'),
                State('hfMode', 'value'),
                State('eichlqCNmode', 'value'),
@@ -468,7 +469,8 @@ def saveGUIinputs(  n_clicks,
                     shot,
                     tmin,
                     tmax,
-                    nTrace,
+                    traceLength,
+                    dpinit,
                     gridRes,
                     hfMode,
                     eichlqCNmode,
@@ -538,7 +540,8 @@ def saveGUIinputs(  n_clicks,
     data['shot'] = shot
     data['tmin'] = tmin
     data['tmax'] = tmax
-    data['nTrace'] = nTrace
+    data['traceLength'] = traceLength
+    data['dpinit'] = dpinit
     data['dataPath'] = dataLoc
     if 'torFilt' in accFilters:
         data['torFilt'] = True
@@ -629,8 +632,10 @@ def buildMHDbox():
                 dcc.Input(id="tmin", className="textInput"),
                 html.Label(id="tMaxLabel", children="Maximum Timestep [ms]"),
                 dcc.Input(id="tmax", className="textInput"),
-                html.Label(id="nTraceLabel", children="Trace Distance (degrees)"),
-                dcc.Input(id="nTrace", className="textInput"),
+                html.Label("Trace Distance [degrees]"),
+                dcc.Input(id="traceLength", className="textInput"),
+                html.Label("Toroidal Step Size [degrees]"),
+                dcc.Input(id="dpinit", className="textInput"),
                 dcc.Upload(
                     className="PFCupload",
                     id='gfiletable-upload',
@@ -698,14 +703,15 @@ def buildMHDbox():
               [State('shot', 'value'),
               State('tmin', 'value'),
               State('tmax', 'value'),
-              State('nTrace', 'value'),
+              State('traceLength', 'value'),
+              State('dpinit', 'value'),
               State('gfiletable-upload', 'filename'),
               State('gfiletable-upload', 'contents'),
               State('plasma3Dmask', 'value'),
               State('dataPath', 'value'),
               State('MachFlag', 'value')]
               )
-def loadMHD(n_clicks,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask,dataPath,MachFlag):
+def loadMHD(n_clicks,shot,tmin,tmax,traceLength,dpinit,gFileList,gFileData,plasma3Dmask,dataPath,MachFlag):
     """
     Load MHD
     """
@@ -725,7 +731,12 @@ def loadMHD(n_clicks,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask,data
     if shot is not None: shot = int(shot)
     if tmin is not None: tmin = int(tmin)
     if tmax is not None: tmax = int(tmax)
-    if nTrace is not None: nTrace = int(nTrace)
+    if traceLength is not None:
+        traceLength = float(traceLength)
+    if dpinit is not None:
+        dpinit = float(dpinit)
+    else:
+        dpinit = 1.0
     if gFileList is not None:
         if type(gFileList) is not list:
             gFileList = [gFileList]
@@ -736,7 +747,8 @@ def loadMHD(n_clicks,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask,data
     gui.getMHDInputs(shot=shot,
                      tmin=tmin,
                      tmax=tmax,
-                     nTrace=nTrace,
+                     traceLength=traceLength,
+                     dpinit=dpinit,
                      gFileList=gFileList,
                      gFileData=gFileData,
                      plasma3Dmask=plasma3Dmask,
@@ -767,7 +779,8 @@ def loadMHD(n_clicks,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask,data
         'Shot Number':shot,
         'Minimum Timestep [ms]':tmin,
         'Maximum Timesteo [ms]':tmax,
-        'Trace Distance [degrees]':nTrace,
+        'Trace Distance [degrees]':traceLength,
+        'Toroidal Step Size [degrees]':dpinit,
         '3D Plasma? [0=False]':plasma3Dmask,
         }
 
@@ -2490,7 +2503,7 @@ def loadBfieldTrace(display):
     )
 
 def loadBtraceTable():
-    params = ['x[mm]','y[mm]','z[mm]','traceDirection','Length[deg]']
+    params = ['x[mm]','y[mm]','z[mm]','traceDirection','Length[deg]','stepSize[deg]']
     cols = [{'id': p, 'name': p} for p in params]
     data = [{}]
     return dash_table.DataTable(
@@ -2545,7 +2558,7 @@ def BtraceTable(filename, dataStore, uploadContents,
             df = parse_contents(uploadContents, filename)
             tableData = df.to_dict('records')
             #tableColumns = [{"name": i, "id": i} for i in df.columns]
-            params = ['x[mm]','y[mm]','z[mm]','traceDirection','Length[deg]']
+            params = ['x[mm]','y[mm]','z[mm]','traceDirection','Length[deg]','stepSize[deg]']
             tableColumns = [{'id': p, 'name': p} for p in params]
             hiddenDiv = [html.Label("Loaded file: "+filename, style={'color':'#34b3ed'})]
             dataStore.update({'BtraceFileName':filename})
@@ -3626,7 +3639,8 @@ Session storage callbacks and functions
 @app.callback([Output('shot', 'value'),
                Output('tmin', 'value'),
                Output('tmax', 'value'),
-               Output('nTrace', 'value'),
+               Output('traceLength', 'value'),
+               Output('dpinit', 'value'),
                Output('gridRes', 'value'),
                Output('hfMode', 'value'), #this causes undefined vars
                Output('eichlqCNmode', 'value'), #this causes undefined vars
@@ -3728,7 +3742,8 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
     return [data.get('shot', ''),
             data.get('tmin', ''),
             data.get('tmax', ''),
-            data.get('nTrace', ''),
+            data.get('traceLength', ''),
+            data.get('dpinit', ''),
             data.get('gridRes', ''),
             data.get('hfMode', ''), #these dropdowns cause undefined text boxes
             data.get('lqCNmode', ''),

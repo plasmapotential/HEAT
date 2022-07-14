@@ -294,7 +294,7 @@ class GYRO:
 
     def uniformGyroPhaseAngle(self):
         """
-        Uniform sampling of a uniform distribution between 0 and 2pi
+        Uniform sampling between 0 and 2pi
 
         returns angles in radians
         """
@@ -309,7 +309,11 @@ class GYRO:
 
         returns angles in radians
         """
-        self.vPhases = np.linspace(0.0,np.pi/2,self.N_vPhase+2)[1:-1]
+        #self.vPhases = np.linspace(0.0,np.pi/2,self.N_vPhase+2)[1:-1]
+        #thankyou to NF reviewer #2 for noticing we were not using the correct
+        #sampling function:  we sample uniformly in cos(2*vP) here,
+        #with bounds in vP between (0,pi/2)
+        self.vPhases = np.arccos(np.linspace(1.0,-1.0,self.N_vPhase+2)[1:-1])/2.0
         return
 
 

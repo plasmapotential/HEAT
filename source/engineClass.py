@@ -16,6 +16,7 @@ import heatfluxClass
 import openFOAMclass
 import pfcClass
 import gyroClass
+import radClass
 import time
 import numpy as np
 import logging
@@ -91,6 +92,7 @@ class engineObj():
         self.HF = heatfluxClass.heatFlux(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
         self.OF = openFOAMclass.OpenFOAM(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
         self.GYRO = gyroClass.GYRO(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
+        self.RAD = radClass.RAD(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
 
         #set up class variables for each object
         self.MHD.allowed_class_vars()
@@ -98,6 +100,7 @@ class engineObj():
         self.HF.allowed_class_vars()
         self.OF.allowed_class_vars()
         self.GYRO.allowed_class_vars()
+        self.RAD.allowed_class_vars()
         return
 
 
@@ -273,7 +276,7 @@ class engineObj():
         return
 
 
-    def getMHDInputs(self,shot=None,tmin=None,tmax=None,nTrace=None,
+    def getMHDInputs(self,shot=None,tmin=None,tmax=None,traceLength=None,dpinit=None,
                      gFileList=None,gFileData=None,plasma3Dmask=None,
                      ):
         """
@@ -290,8 +293,11 @@ class engineObj():
             self.MHD.tmin = tmin
         if tmax is not None:
             self.MHD.tmax = tmax
-        if nTrace is not None:
-            self.MHD.nTrace = nTrace
+        if traceLength is not None:
+            self.MHD.traceLength = traceLength
+            self.MHD.nTrace = int(traceLength / dpinit)
+        if dpinit is not None:
+            self.MHD.dpinit = dpinit
         self.MHD.gFileList = gFileList
         if gFileList is not None:
             self.MHD.writeGfileData(gFileList, gFileData)
@@ -1155,6 +1161,50 @@ class engineObj():
         print("Source of gyro orbit power = "+self.GYRO.gyroSourceTag)
         return
 
+    def loadRADParams(self, infile=None):
+        """
+        function for loading RAD parameters on the fly (ie in the time loop)
+        """
+        if infile==None:
+            self.initializeRAD()
+        else:
+            self.initializeRAD(infile)
+
+        #initialize optical HF data from input file
+        self.getRADInputs(
+                          self.RAD.radFile,
+                          self.RAD.Ntor,
+                          self.RAD.Nref,
+                          self.RAD.phiMin,
+                          self.RAD.phiMax,
+                         )
+        return
+
+    def getRADInputs(self, radFile, Ntor, Nref, phiMin, phiMax, radTag=None ):
+        """
+        Sets up the RAD module
+        """
+        self.RAD.radFile = radFile
+        self.RAD.Ntor = int(Ntor)
+        self.RAD.Nref = int(Nref)
+        self.RAD.phiMin = float(phiMin)
+        self.RAD.phiMax = float(phiMax)
+
+        #read (R,Z,P) photon radiation source file (csv format)
+        self.RAD.read2DSourceFile(radFile)
+
+        #get phi that RZ profiles will be placed at in 3D
+        self.RAD.getPhis(Ntor, phiMin, phiMax)
+
+        #extrude 2D radiation profile to 3D profile
+        self.RAD.create3DFrom2D()
+
+        print('Number of radiation source points: {:d}'.format(self.RAD.NradPts))
+        log.info('Number of radiation source points: {:d}'.format(self.RAD.NradPts))
+        print("Radiation module loaded")
+        log.info("Radiation module loaded")
+        return
+
     def bfieldAtSurface(self, PFC):
         """
         Calculate the B field at tile surface
@@ -1189,7 +1239,7 @@ class engineObj():
         """
         data = pd.DataFrame.from_dict(data)[list (data[0].keys())]
         data = data.rename(columns=lambda x: x.strip())
-        data = data.astype({"x[mm]": float, "y[mm]": float, "z[mm]": float, "traceDirection": int, "Length[deg]":float})
+        data = data.astype({"x[mm]": float, "y[mm]": float, "z[mm]": float, "traceDirection": int, "Length[deg]":float, "stepSize[deg]":float})
 
         t = int(t)
         traceDirection=data['traceDirection']
@@ -1220,7 +1270,8 @@ class engineObj():
             controlfilePath =  self.MHD.shotPath + '/' + '{:06d}/'.format(t)
         structOutfile = controlfilePath + 'struct.dat'
         for i in range(len(xyz)):
-            self.MHD.ittStruct = data['Length[deg]'][i]
+            self.MHD.ittStruct = data['Length[deg]'][i] / data['stepSize[deg]'][i]
+            self.MHD.dpinit = data['stepSize[deg]'][i]
             self.MHD.writeControlFile(controlfile, t, data['traceDirection'][i], mode='struct')
             self.MHD.writeMAFOTpointfile(xyz[i,:],gridfile)
             self.MHD.getFieldpath(dphi, gridfile, controlfilePath, controlfile, paraview_mask=True, tag='pt{:03d}'.format(i))
@@ -1363,6 +1414,20 @@ class engineObj():
             tools.initializeInput(self.GYRO, infile=infile)
         return
 
+    def initializeRAD(self, infile=None):
+        """
+        Initialize radiated power heat flux variables
+        """
+        print("-"*70)
+        print("Radiated power parameters read from file")
+        log.info("Radiated power parameters read from file")
+        #Initialize RAD Object
+        if infile == None:
+            tools.initializeInput(self.RAD, infile=self.infile)
+        else:
+            tools.initializeInput(self.RAD, infile=infile)
+        return
+
     def loadAccFilters(self, accFilters):
         """
         loads status of acceleration filters.  user can choose to filter by:
@@ -1415,13 +1480,14 @@ class engineObj():
         bdotn           bdotn poitn cloud
         hfOpt           optical heat flux point cloud
         hfGyro          gyro orbit heat flux point cloud
+        hfRad          photon radiation point cloud
         """
         print('\n')
         print("-"*70)
         print("HEAT RUN INITIALIZED")
         log.info("HEAT RUN INITIALIZED")
         t0 = time.time()
-        allowedOptions = ['hfOpt', 'pwrDir', 'bdotn', 'B', 'psiN', 'norm', 'hfGyro']
+        allowedOptions = ['hfOpt', 'pwrDir', 'bdotn', 'B', 'psiN', 'norm', 'hfGyro', 'hfRad']
         #make sure that something in runList can be run in this function, else return
         if len([i for i in runList if i in allowedOptions]) < 1:
             print("No HEAT point cloud option to run")
@@ -1546,6 +1612,20 @@ class engineObj():
                         if PFC.DivCode not in divCodes:
                             powerTrue[tIdx] += self.HF.Psol*PFC.powerFrac
                         divCodes.append(PFC.DivCode)
+
+                    if 'hfRad' in runList:
+                        #load RAD settings for this timestep if applicable (terminal mode)
+                        try:
+                            self.loadRADParams(infile=self.inputFileList[tIdx])
+                        except:
+                            print("Could not load RAD parameters.  Expected for GUI.")
+                        #calculate the radiated power on the PFC mesh
+                        self.radPower(PFC)
+                        #save output files
+                        self.radPowerOutput(PFC)
+                        PFC.powerSumRad[tIdx] = np.sum(PFC.Prad)
+                        print('Tessellated radiated power to this PFC = {:0.10f}'.format(PFC.powerSumRad[tIdx]))
+
                     if 'B' in runList:
                         self.bfieldAtSurface(PFC)
                     if 'psiN' in runList:
@@ -1579,6 +1659,14 @@ class engineObj():
                 log.info("PFC array sum: {:.6f}".format(totalPowPow))
                 print("scale2circ sum:\t{:.6f}".format(totalPowPowCirc))
                 log.info("scale2circ sum:\t{:.6f}".format(totalPowPowCirc))
+
+                print("=== Last timestep's PFC arrays: Photon radiation ===")
+                try:
+                    print(PFC.name + ":\t{:.6f}".format(np.sum(PFC.Prad)))
+                    log.info(PFC.name + ":\t{:.6f}".format(np.sum(PFC.Prad)))
+                except:
+                    print("No radiated power available")
+                    log.info("No radiated power available")
 
             if 'hfGyro' in runList:
                 print("\n===+++ GYRO ORBIT CALCULATION +++===")
@@ -1654,7 +1742,7 @@ class engineObj():
 
 
             #generating allSources heat fluxes
-            if ('hfGyro' in runList) or ('hfOpt' in runList):
+            if ('hfGyro' in runList) or ('hfOpt' in runList) or ('hfRad' in runList):
                 #set up time and equilibrium
                 PFC.t = t
                 for PFC in self.PFCs:
@@ -1662,11 +1750,14 @@ class engineObj():
                         pass
                     else:
                         print("Creating allSources CSV files")
-                        R,Z,phi = tools.xyz2cyl(PFC.centers[:,0],PFC.centers[:,1],PFC.centers[:,2])
+                        q = np.zeros((len(PFC.centers)))
+                        if 'hfOpt' in runList:
+                            q += PFC.qDiv
                         if 'hfGyro' in runList:
-                            self.HF.write_heatflux_pointcloud(PFC.centers,PFC.qGyro+PFC.qDiv,PFC.controlfilePath,tag=PFC.tag,mode='all')
-                        else:
-                            self.HF.write_heatflux_pointcloud(PFC.centers,PFC.qDiv,PFC.controlfilePath,tag=PFC.tag,mode='all')
+                            q += PFC.qGyro
+                        if 'hfRad' in runList:
+                            q += PFC.qRad
+                        self.HF.write_heatflux_pointcloud(PFC.centers,q,PFC.controlfilePath,tag=PFC.tag,mode='all')
 
         # Time Loop: postprocessing
         for tIdx,t in enumerate(self.MHD.timesteps):
@@ -1755,6 +1846,32 @@ class engineObj():
         #HF.PointCloudfromStructOutput(structOutfile)
 
         return
+
+    def radPower(self,PFC):
+        """
+        runs the radiated power calculation
+        """
+        #setup the radiated power calculation
+        self.RAD.preparePowerTransfer(PFC, self.CAD)
+        #calculate photon load on PFC
+        self.RAD.calculatePowerTransfer()
+        #assign variables to the PFC itself
+        PFC.Prad = self.RAD.targetPower
+        PFC.qRad = PFC.Prad / PFC.areas
+        PFC.radPowerFracs = self.RAD.powerFrac
+        return
+
+    def radPowerOutput(self,PFC, saveFracs=False):
+        """
+        saves radiated power output
+        """
+        self.HF.write_heatflux_pointcloud(PFC.centers,PFC.qRad,PFC.controlfilePath,tag=PFC.tag,mode='rad')
+        self.RAD.write_Prad_pointcloud(self.RAD.sources, self.RAD.sourcePower, PFC.controlfilePath)
+        if saveFracs==True:
+            self.RAD.savePowerFrac(PFC)
+
+        return
+
 
     def gyroOrbitIntersects(self, PFC):
         """
@@ -2277,7 +2394,8 @@ class engineObj():
                     'shot':None,
                     'tmin':None,
                     'tmax':None,
-                    'nTrace': None,
+                    'traceLength': None,
+                    'dpinit': None,
                     'dataPath': None,
                     'torFilt': None,
                     'psiFilt': None,
@@ -2345,7 +2463,8 @@ class engineObj():
                     'shot': self.MHD.shot,
                     'tmin': self.MHD.tmin,
                     'tmax': self.MHD.tmax,
-                    'nTrace': self.MHD.nTrace,
+                    'traceLength': self.MHD.traceLength,
+                    'dpinit': self.MHD.dpinit,
                     'gridRes': self.CAD.gridRes,
                     'hfMode': self.HF.hfMode,
                     'lqEich': self.HF.lqCN,
@@ -2404,7 +2523,8 @@ class engineObj():
                     'shot': self.MHD.shot,
                     'tmin': self.MHD.tmin,
                     'tmax': self.MHD.tmax,
-                    'nTrace': self.MHD.nTrace,
+                    'traceLength': self.MHD.traceLength,
+                    'dpinit': self.MHD.dpinit,
                     'gridRes': self.CAD.gridRes,
                     'hfMode': self.HF.hfMode,
                     'lqEich': self.HF.lqCN,

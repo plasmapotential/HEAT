@@ -2,15 +2,22 @@
 #Description:   Base HEAT CAD module
 #Engineer:      T Looby
 #Date:          20191107
+#
+#
+#THIS MODULE IS FROM HEAT, AND AS SUCH IS PROTECTED UNDER THE MIT LICENSE!
+#USERS MUST ATTRIBUTE THE SOURCE CODE
+#See https://github.com/plasmapotential/HEAT for more information
 
 import sys
 import os
 
-#this happens in launchHEAT.py now
+#this happens in launchHEAT.py as of HEAT v2.0, but left here for reference
+#you need to do this before running this module
 #FREECADPATH = '/opt/freecad/appImage/squashfs-root/usr/lib'
 #oldpath = sys.path
 #sys.path.append(FREECADPATH)
 #sys.path = [FREECADPATH]
+
 import FreeCAD
 import Part
 import Mesh
@@ -494,8 +501,9 @@ class CAD:
         and default angular deviation is 0.523599rad (30deg)
         """
         if fineRes==True:
-            surfDev =0.05
-            angDev = 0.523599
+            print("Running standard mesher with fine resolution (0.01mm and 3deg deviations)")
+            surfDev =0.01
+            angDev = 0.0523599
         #Check if this is a single file or list and make it a list
         if type(part) != list:
             part = [part]
@@ -1098,7 +1106,7 @@ class CAD:
         return mesh
 
 
-    def getVertexesFromEdges(self, edges, discretize=True):
+    def getVertexesFromEdges(self, edges, discretize=True, radixFigs=3):
         """
         create an array of XYZ coordinates corresponding to the vertexes in a
         list of FreeCAD edge objects
@@ -1110,6 +1118,12 @@ class CAD:
         note that vertexList is NOT ORDERED.  to weave these coordinate together,
         into a contour, use:   self.findContour(vertexList)
 
+        if discrtetize is true, curves are discretized
+
+        radixFigs is number of figures after the radix point for rounding.
+        if you get an error about "contour = np.vstack([contour,contour[0,:]])"
+        you may need to change this
+
         """
         vertexList = []
         for edge in edges:
@@ -1117,22 +1131,25 @@ class CAD:
             y = np.array([])
             z = np.array([])
             #handle curves
+            #kif discretize==True:
             if edge.Edges[0].Curve.TypeId != 'Part::GeomLine' and discretize==True:
                 N = int(edge.Edges[0].Length / 20.0) #discretize in 20mm segments
-                #N = 10
+                if N < 2:
+                    N=2
+                #N = 5
                 x0 = [v.x for v in edge.Curve.discretize(N)]
                 y0 = [v.y for v in edge.Curve.discretize(N)]
                 z0 = [v.z for v in edge.Curve.discretize(N)]
                 for i in range(N-1):
-                    x = np.round([x0[i], x0[i+1]], 6)
-                    y = np.round([y0[i], y0[i+1]], 6)
-                    z = np.round([z0[i], z0[i+1]], 6)
+                    x = np.round([x0[i], x0[i+1]], radixFigs) #round to nearest micron
+                    y = np.round([y0[i], y0[i+1]], radixFigs)
+                    z = np.round([z0[i], z0[i+1]], radixFigs)
                     vertexList.append(np.vstack([x,y,z]).T)
             #handle lines
             else:
-                x = np.hstack([x, np.round([v.X for v in edge.Vertexes],6) ])
-                y = np.hstack([y, np.round([v.Y for v in edge.Vertexes],6) ])
-                z = np.hstack([z, np.round([v.Z for v in edge.Vertexes],6) ])
+                x = np.hstack([x, np.round([v.X for v in edge.Vertexes], radixFigs) ])
+                y = np.hstack([y, np.round([v.Y for v in edge.Vertexes], radixFigs) ])
+                z = np.hstack([z, np.round([v.Z for v in edge.Vertexes], radixFigs) ])
                 vertexList.append(np.vstack([x,y,z]).T)
         return vertexList
 
@@ -1187,6 +1204,8 @@ class CAD:
                             if breaker == True:
                                 break
             #append 1st index to close contour
+            if len(contour.shape) < 2:
+                print("Curve discretization did not work here.  Try turning off!")
             contour = np.vstack([contour,contour[0,:]])
             contours.append(contour)
         return contours

@@ -155,6 +155,9 @@ class TUI():
                 #per tag
                 self.loadPFCs(PFCfiles[0])
 
+                #note that we load HF settings (optical, gyro, rad) dynamically
+                #from input file in the self.ENG.runHEAT loop
+
                 #read filters from input file and set accordingly
                 filters = []
                 print(self.ENG.MHD.torFilt)
@@ -223,6 +226,7 @@ class TUI():
             self.ENG.MHD.getGEQDSK(machine=mach,gFileList=gFiles)
             self.ENG.MHD.makeEFITobjects()
             self.ENG.MHD.psiSepLimiter = None
+            self.ENG.MHD.nTrace = int(self.ENG.MHD.traceLength / self.ENG.MHD.dpinit)
             self.ENG.MHD.setTypes()
         else:
             print('3D plasmas not yet available in HEAT!')
@@ -250,6 +254,7 @@ class TUI():
         """
         loads gyro orbit settings
         """
+        return
 
     def loadOF(self):
         """
