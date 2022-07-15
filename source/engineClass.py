@@ -1682,14 +1682,23 @@ class engineObj():
 
                 #generate index maps
                 self.prepareGyroMaps(tIdx)
+                countGyroSources=0
                 for PFC in self.PFCs:
                     PFC.powerSumGyro = np.zeros((len(self.MHD.timesteps)))
                     if t not in PFC.timesteps:
                         pass
                     else:
                         if PFC.name in self.GYRO.gyroSources:
+                            countGyroSources+=1
                             print("\n------PFC: "+PFC.name+"------")
                             self.gyroOrbitIntersects(PFC)
+
+                if countGyroSources == 0:
+                    print("\nYOU DO NOT HAVE ANY GYRO ORBIT SOURCE CAD DEFINED!")
+                    print("Cannot complete gyro-orbit calculation.  You must")
+                    print("properly define gyro sources in input file and in")
+                    print("PFC file.  Exiting...")
+                    sys.exit()
 
                 #redistribute ion optical power and build intersectRecord
                 self.gyroOrbitHF()

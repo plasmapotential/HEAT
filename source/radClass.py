@@ -235,9 +235,7 @@ class RAD:
             self.pdotn[:,j] = output[j,0]
             self.powerFrac[:,j] = output[j,1]
             self.targetPower[j] = output[j,2]
-        print(self.pdotn[:,0])
-        print(self.powerFrac[:,0])
-        print(self.targetPower[0])
+
         return
 
     def powerFracMapParallel(self, j):

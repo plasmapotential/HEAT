@@ -226,8 +226,8 @@ class TUI():
             self.ENG.MHD.getGEQDSK(machine=mach,gFileList=gFiles)
             self.ENG.MHD.makeEFITobjects()
             self.ENG.MHD.psiSepLimiter = None
-            self.ENG.MHD.nTrace = int(self.ENG.MHD.traceLength / self.ENG.MHD.dpinit)
             self.ENG.MHD.setTypes()
+            self.ENG.MHD.nTrace = int(self.ENG.MHD.traceLength / self.ENG.MHD.dpinit)
         else:
             print('3D plasmas not yet available in HEAT!')
             sys.exit()
