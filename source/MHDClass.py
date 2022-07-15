@@ -133,10 +133,12 @@ class MHD:
                     if var == 'traceLength':
                         print("test1")
                         print(type(getattr(self, var)))
+                        print(getattr(self, var))
                     setattr(self, var, tools.makeInt(getattr(self, var)))
                     if var == 'traceLength':
                         print("Test2")
                         print(type(getattr(self, var)))
+                        print(getattr(self, var))
                 except:
                     print("Error with input file var "+var+".  Perhaps you have invalid input values?")
                     log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
