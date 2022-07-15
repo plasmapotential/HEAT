@@ -1010,7 +1010,7 @@ class tools:
             newVar = None
         else:
             try:
-                newVar = int(var)
+                newVar = int(float(var))
             except:
                 newVar = var
         return newVar

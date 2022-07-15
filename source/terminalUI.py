@@ -227,10 +227,6 @@ class TUI():
             self.ENG.MHD.makeEFITobjects()
             self.ENG.MHD.psiSepLimiter = None
             self.ENG.MHD.setTypes()
-            print(self.ENG.MHD.traceLength)
-            print(self.ENG.MHD.dpinit)
-            print(type(self.ENG.MHD.traceLength))
-            print(type(self.ENG.MHD.dpinit))
             self.ENG.MHD.nTrace = int(self.ENG.MHD.traceLength / self.ENG.MHD.dpinit)
         else:
             print('3D plasmas not yet available in HEAT!')
