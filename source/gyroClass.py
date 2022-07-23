@@ -314,6 +314,7 @@ class GYRO:
         #sampling function:  we sample uniformly in cos(2*vP) here,
         #with bounds in vP between (0,pi/2)
         self.vPhases = np.arccos(np.linspace(1.0,-1.0,self.N_vPhase+2)[1:-1])/2.0
+        #self.vPhases = np.arccos(1-2*np.linspace(0,1,self.N_vPhase+2))/2.0
         return
 
 

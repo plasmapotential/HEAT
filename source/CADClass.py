@@ -645,6 +645,13 @@ class CAD:
         mesh = Mesh.Mesh(filename)
         return mesh
 
+    def createEmptyMesh(self):
+        """
+        returns an empty mesh object
+        """
+        mesh = Mesh.Mesh()
+        return mesh
+
     def normsCentersAreas(self, meshes):
         """
         Gets face normals and face centers.  Both norms and centers are arrays

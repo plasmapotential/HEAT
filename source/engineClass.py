@@ -1861,9 +1861,9 @@ class engineObj():
         runs the radiated power calculation
         """
         #setup the radiated power calculation
-        self.RAD.preparePowerTransfer(PFC, self.CAD)
+        self.RAD.preparePowerTransfer(PFC, self.CAD, mode='open3d')
         #calculate photon load on PFC
-        self.RAD.calculatePowerTransfer()
+        self.RAD.calculatePowerTransferOpen3DLoop(mode='open3d')
         #assign variables to the PFC itself
         PFC.Prad = self.RAD.targetPower
         PFC.qRad = PFC.Prad / PFC.areas

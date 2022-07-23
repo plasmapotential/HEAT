@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 import logging
 import multiprocessing
+import time
+import open3d as o3d
 
 import toolsClass
 log = logging.getLogger(__name__)
@@ -123,7 +125,9 @@ class RAD:
         self.phis = np.linspace(phiMin, phiMax, Ntor)
         return
 
-    def preparePowerTransfer(self, PFC, CAD):
+
+
+    def preparePowerTransfer(self, PFC, CAD, mode=None):
         """
         builds the meshes and point clouds necessary for calculation.
 
@@ -143,12 +147,26 @@ class RAD:
         self.targetCtrs = PFC.centers
         self.targetNorms = PFC.norms
         self.targetAreas = PFC.areas
+        targetMeshes = []
 
         #build out intersect array
         numTargetFaces = 0
         intersectPoints = []
         intersectNorms = []
         totalMeshCounter = 0
+
+        #add ROI mesh
+        for i,target in enumerate(CAD.ROImeshes):
+            if CAD.ROIList[i] == PFC.name:
+                targetMeshes.append(target)
+                totalMeshCounter+=target.CountFacets
+                numTargetFaces += target.CountFacets
+                #append target data
+                for face in target.Facets:
+                    intersectPoints.append(face.Points)
+                    intersectNorms.append(face.Normal)
+
+
         for i,intersect in enumerate(CAD.intersectMeshes):
             try:
                 totalMeshCounter+=intersect.CountFacets
@@ -161,11 +179,15 @@ class RAD:
                 if CAD.intersectList[i] == PFC.name:
                     pass
                 else:
+                    targetMeshes.append(intersect)
                     numTargetFaces += intersect.CountFacets
                     #append target data
                     for face in intersect.Facets:
                         intersectPoints.append(face.Points)
                         intersectNorms.append(face.Normal)
+
+
+
         self.intersectPoints = np.asarray(intersectPoints)/1000.0 #scale to m
         intersectNorms = np.asarray(intersectNorms)
 
@@ -176,6 +198,24 @@ class RAD:
         self.Ni = len(self.sources)
         self.Nj = len(self.targetCtrs)
 
+        #build single mesh for KDtree
+        if mode=='kdtree':
+            self.combinedMesh = CAD.createEmptyMesh()
+            for m in targetMeshes:
+                self.combinedMesh.addFacets(m.Facets)
+
+        #build objects for open3D ray tracing
+        elif mode=='open3d':
+            combinedMesh = CAD.createEmptyMesh()
+            for m in targetMeshes:
+                combinedMesh.addFacets(m.Facets)
+            oldMask = CAD.overWriteMask
+            CAD.overWriteMask = True
+            CAD.writeMesh2file(combinedMesh, 'combinedMesh', path=CAD.STLpath, resolution='standard')
+            CAD.overWriteMask = oldMask
+            self.meshFile = CAD.STLpath + 'combinedMesh' + "___standard.stl"
+            #self.meshFile = '/home/tom/source/dummyOutput/SOLID843___5.00mm.stl'
+
         print("\nTotal Rad Intersection Faces: {:d}".format(totalMeshCounter))
         print("Rad Intersect Faces for this PFC: {:d}".format(numTargetFaces))
         print("# of radiated power point sources: {:d}".format(self.Ni))
@@ -184,10 +224,165 @@ class RAD:
 
         return
 
-    def calculatePowerTransfer(self):
+
+    def calculatePowerTransferOpen3D(self, mode=None):
+        """
+        Maps power between sources and targets (ROI PFCs).  Uses Open3D to
+        perform ray tracing.  Open3D can be optimized for CPU or GPU
+        """
+        #build r_ij matrix
+        r_ij = np.zeros((self.Ni,self.Nj,3))
+        for i in range(self.Ni):
+            r_ij[i,:,:] = self.targetCtrs - self.sources[i]
+
+        r_ij *= 1000.0
+
+        rMag = np.linalg.norm(r_ij, axis=2)
+        rNorm = r_ij / rMag[:,:,np.newaxis]
+        rdotn = np.sum(rNorm*self.targetNorms, axis=2)
+
+        #backface culling
+        shadowMask = np.zeros((self.Ni, self.Nj))
+        backFaces = np.where( rdotn > 0 )[0]
+        shadowMask[backFaces] = 1.0
+        use0 = np.where(shadowMask == 0)[0]
+
+        #build tensors for open3d
+        #q1 = self.sources[use0,:]
+        q1 = np.tile(self.sources*1000.0,(self.Nj,1))
+        #q2 = np.repeat(self.targetCtrs,self.Ni,axis=0)
+
+        #for testing
+        #q1 = np.array([[458.2, 253.5, -1500.0], [500.0, 130.0, -1500.0]])/1000.0
+        #q2 = np.array([[458.2, 253.5, -1700.0], [500.0, 130.0, -1700.0]])/1000.0
+        #self.Ni = 2
+        #self.Nj = 1
+        #rayVec = q2 - q1
+        rayVec = rNorm.reshape((rNorm.shape[0]*rNorm.shape[1]), rNorm.shape[2])
+
+        #build mesh and tensors for open3d
+        mesh = o3d.io.read_triangle_mesh(self.meshFile)
+        mesh.compute_vertex_normals()
+        #vs = np.array(mesh.vertices, dtype=np.float32)
+        #ts = np.array(mesh.triangles, dtype=np.uint32)
+        mesh = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
+        scene = o3d.t.geometry.RaycastingScene()
+        #mesh_id = scene.add_triangles(vs,ts)
+        mesh_id = scene.add_triangles(mesh)
+        t0 = time.time()
+
+        #for visualizing o3d mesh
+        #mesh.compute_vertex_normals()
+        #o3d.visualization.draw_geometries([mesh])
+
+        #calculate intersections
+        rays = o3d.core.Tensor([np.hstack([q1,rayVec])],dtype=o3d.core.Dtype.Float32)
+        hits = scene.cast_rays(rays)
+
+        #print(hits['primitive_ids'])
+
+        #convert open3d CPU tensors back to numpy
+        hitMap = hits['primitive_ids'][0].numpy().reshape(self.Ni, self.Nj)
+        distMap = hits['t_hit'][0].numpy().reshape(self.Ni, self.Nj)
+
+        Psum = np.zeros((self.Nj))
+        powerFrac = np.zeros((self.Ni, self.Nj))
+        idxSum = 0.0
+        for i in range(self.Ni):
+            for j in range(self.Nj):
+                ###YOU ARE HERE!!!!!!
+                idxTest = 4294967295
+                if j==idxTest:
+                    print('\n===')
+                    print(i)
+                    print(q1[i])
+                    print(self.targetCtrs[j]*1000.0)
+                    rV = rayVec.reshape((r_ij.shape))
+                    print(rV[i,j,:]*rMag[i,j])
+                    print(hitMap[i,j])
+                if hitMap[i,j] == idxTest:
+                    idxSum+=1
+                    print('j: {:d}'.format(j))
+
+                powerFrac[i,j] = np.abs(rdotn[i,j])*self.targetAreas[j]/(4*np.pi*rMag[i,j]**2)
+                #assign power
+                #if hitMap[i,j] == j and distMap[i,j] >= rMag[i,j]:
+                if hitMap[i,j] == j:
+                    Psum[j] += self.sourcePower[i]*powerFrac[i,j]
+                else:
+                    Psum[j] += 0.0
+
+        self.pdotn = rdotn
+        self.powerFrac = powerFrac
+        self.targetPower = Psum
+        print(idxSum)
+
+        return
+
+
+    def calculatePowerTransferOpen3DLoop(self, mode=None):
+        """
+        Maps power between sources and targets (ROI PFCs).  Uses Open3D to
+        perform ray tracing.  Open3D can be optimized for CPU or GPU
+        """
+        powerFrac = np.zeros((self.Ni,self.Nj))
+        Psum = np.zeros((self.Nj))
+        for i in range(self.Ni):
+            r_ij = np.zeros((self.Nj,3))
+            r_ij = self.targetCtrs - self.sources[i]
+            #r_ij *= 1000.0
+            rMag = np.linalg.norm(r_ij, axis=1)
+            rNorm = r_ij / rMag.reshape((-1,1))
+            rdotn = np.sum(rNorm*self.targetNorms, axis=1)
+            q1 = np.tile(self.sources[i]*1000.0,(self.Nj,1))
+
+            #build mesh and tensors for open3d
+            mesh = o3d.io.read_triangle_mesh(self.meshFile)
+            mesh.compute_vertex_normals()
+            mesh = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
+            scene = o3d.t.geometry.RaycastingScene()
+            mesh_id = scene.add_triangles(mesh)
+
+            #calculate intersections
+            rays = o3d.core.Tensor([np.hstack([q1,rNorm])],dtype=o3d.core.Dtype.Float32)
+            hits = scene.cast_rays(rays)
+
+            #convert open3d CPU tensors back to numpy
+            hitMap = hits['primitive_ids'][0].numpy()
+            distMap = hits['t_hit'][0].numpy()
+
+
+            for j in range(self.Nj):
+                powerFrac[i,j] = np.abs(rdotn[i])*self.targetAreas[j]/(4*np.pi*rMag[i]**2)
+                #assign power
+                #if hitMap[i,j] == j and distMap[i,j] >= rMag[i,j]:
+                if hitMap[j] == j:
+                    Psum[j] += self.sourcePower[i]*powerFrac[i,j]
+                else:
+                    Psum[j] += 0.0
+
+                #for testing
+                idxTest=None
+                if j==idxTest:
+                    print('\n===')
+                    print(i)
+                    print(self.targetCtrs[j])
+                    print(rNorm[j]*rMag[j])
+                    print(hitMap[j])
+                    print(self.sourcePower[i])
+                    print(powerFrac[i,j])
+
+
+        self.pdotn = rdotn
+        self.powerFrac = powerFrac
+        self.targetPower = Psum
+
+        return
+
+    def calculatePowerTransfer(self, mode=None):
         """
         Maps power between sources and targets (ROI PFCs).  Uses CPU
-        multiprocessing.
+        multiprocessing without acceleration structures
         """
         self.pdotn = np.zeros((self.Ni,self.Nj))
         self.powerFrac = np.zeros((self.Ni,self.Nj))
@@ -217,16 +412,24 @@ class RAD:
 #            pool.join()
 #            del pool
 #            del manager
-
         #Do this try clause to kill any zombie threads that don't terminate
         try:
             #manager can be used for locking, but shouldnt be necessary so long
             #as we dont overlap write locations between workers
             pool = multiprocessing.Pool(Ncores)
-            output = np.asarray(pool.map(self.powerFracMapParallel, np.arange(self.Nj)))
+            if mode=='kdtree':
+                #shm_a = multiprocessing.shared_memory.SharedMemory(create=True, size=sys.getsizeof(self.combinedMesh))
+                #buffer = shm_a.buf
+                #buffer[:] = self.combinedMesh
+                tools.combinedMesh = self.combinedMesh
+                output = np.asarray(pool.map(self.powerFracMapParallelKDtree, np.arange(self.Nj)))
+            else:
+                output = np.asarray(pool.map(self.powerFracMapParallelNoAcc, np.arange(self.Nj)))
         finally:
             pool.close()
             pool.join()
+#            shm_a.close()
+#            shm_a.unlink()
             del pool
 
 
@@ -238,7 +441,64 @@ class RAD:
 
         return
 
-    def powerFracMapParallel(self, j):
+    def powerFracMapParallelKDtree(self, j):
+        """
+        Calculates the fractional contribution of power from each self.sources
+        point to the target mesh element (ROI PFC), j.  Includes intersection
+        checking with the intersect mesh along the way.
+
+        This function is meant to be called in parallel, where j represents
+        the target (ROI PFC) mesh element we are calculating the power
+        transfer for.  This function does not calculate the explicit power, but
+        rather it builds the self.powerFrac (i,j) matrix, which can be scaled
+        to any input power
+
+        performs the intersection check using the FreeCAD KDTree structure
+        """
+        p_ij = self.targetCtrs[j] - self.sources
+        pMag = np.linalg.norm(p_ij, axis=1)
+        pNorm = p_ij / pMag[:, np.newaxis]
+        pdotn = np.sum(pNorm*self.targetNorms[j], axis=1)
+
+        #backface culling
+        shadowMask = np.zeros((self.Ni))
+        backFaces = np.where( pdotn > 0 )[0]
+        shadowMask[backFaces] = 1.0
+        use0 = np.where(shadowMask == 0)[0]
+        #use0 =np.arange(self.Ni)
+        #should we add backface culling for intersects here?!
+
+        #run in matrix or loop mode depending upon available memory?
+        #availableRAM = psutil.virtual_memory().available #bytes
+        #neededRAM = len(self.sources) * len(self.targets) * len(self.intersects) * 112 #bytes
+
+        q1 = self.sources[use0,:]
+        q2 = self.targetCtrs[j]
+
+        powerFrac = np.zeros((self.Ni))
+        #loop thru sources checking if shadowed for this target
+        Psum = 0.0
+        for i in range(len(q1)):
+            intersect = tools.combinedMesh.nearestFacetOnRay((rayOrig[0],rayOrig[1],rayOrig[2]),(rayDir[0],rayDir[1],rayDir[2]))
+
+            #we found an intersection
+            if bool(intersect):
+                idx = list(intersect.keys())[0]
+                loc = list(intersect.values())[0]
+                d = np.dot(loc-rayOrig, rayDir)
+            else:
+                idx = None
+            #check if the ray hit j
+            if idx == j:
+                powerFrac[i] = np.abs(pdotn[i])*self.targetAreas[j]/(4*np.pi*pMag[i]**2)
+                Psum += self.sourcePower[i]*powerFrac[i]
+            else:
+                powerFrac[i] = 0.0
+
+        return pdotn, powerFrac, Psum
+
+
+    def powerFracMapParallelNoAcc(self, j):
         """
         Calculates the fractional contribution of power from each self.sources
         point to the target mesh element (ROI PFC), j.  Includes intersection
@@ -249,6 +509,8 @@ class RAD:
         transfer for.  This function does not calculate the explicit power, but
         rather it builds the self.powerFrac (i,j) matrix, which can be scaled
         to any input power.
+
+        does not include acceleration structures, so this is a brute force method
         """
         #source to target vectors
         p_ij = self.targetCtrs[j] - self.sources

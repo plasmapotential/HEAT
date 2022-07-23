@@ -151,6 +151,9 @@ def loadEnviron():
         #pyFoam python scripts
         pyFoamPath = '/'
 
+        ### Open3D
+        O3Dpath = '/opt/open3d/Open3D/build/lib/python_package/open3d'
+
         #ENV VARS
         #default AppDir for when running in dev mode
         AppDir = 'not in appImage mode'
@@ -188,6 +191,8 @@ def loadEnviron():
     #append pvpython to binary path
     oldEnv = os.environ["PATH"]
     #os.environ["PATH"] = oldEnv + ':' + pvpythonCMD
+    #append Open3D to python path
+    sys.path.append(O3Dpath)        
     #===============================================================================
 
     #Create dataPath

@@ -737,7 +737,10 @@ class heatFlux:
         #Get q|| profile then integrate in Psi
         q_hat = self.eich_profile_fluxspace(PFC, lqEich, S, R_omp, Bp_omp, psiN)
 
-        P0 = 2*np.pi * simps(q_hat / B_omp, psi)
+        #Menard's method
+        P0 = 2*np.pi * simps(q_hat, psi)
+        #Matt's Method
+#        P0 = 2*np.pi * simps(q_hat / B_omp, psi)
         #account for nonphysical power
         if P0 < 0: P0 = -P0
         #Scale to input power
@@ -803,7 +806,10 @@ class heatFlux:
         q_div = np.zeros((len(xyz)))
         use = np.where(PFC.shadowed_mask == 0)[0]
 
-        q_div[use] = q[use] * B_div[use]/B_omp * PFC.bdotn[use]
+        #Matt's method
+#        q_div[use] = q[use] * B_div[use]/B_omp * PFC.bdotn[use]
+        #Menard's Method
+        q_div[use] = q[use] * B_div[use] * PFC.bdotn[use]
 
         #for i in range(len(q_div)):
         #	if q_div[i] > 8.0: q_div[i] = 0.0
