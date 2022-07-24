@@ -225,7 +225,7 @@ class RAD:
         return
 
 
-    def calculatePowerTransferOpen3D(self, mode=None):
+    def calculatePowerTransferOpen3DVectorized(self, mode=None):
         """
         Maps power between sources and targets (ROI PFCs).  Uses Open3D to
         perform ray tracing.  Open3D can be optimized for CPU or GPU
@@ -234,8 +234,6 @@ class RAD:
         r_ij = np.zeros((self.Ni,self.Nj,3))
         for i in range(self.Ni):
             r_ij[i,:,:] = self.targetCtrs - self.sources[i]
-
-        r_ij *= 1000.0
 
         rMag = np.linalg.norm(r_ij, axis=2)
         rNorm = r_ij / rMag[:,:,np.newaxis]
@@ -250,14 +248,6 @@ class RAD:
         #build tensors for open3d
         #q1 = self.sources[use0,:]
         q1 = np.tile(self.sources*1000.0,(self.Nj,1))
-        #q2 = np.repeat(self.targetCtrs,self.Ni,axis=0)
-
-        #for testing
-        #q1 = np.array([[458.2, 253.5, -1500.0], [500.0, 130.0, -1500.0]])/1000.0
-        #q2 = np.array([[458.2, 253.5, -1700.0], [500.0, 130.0, -1700.0]])/1000.0
-        #self.Ni = 2
-        #self.Nj = 1
-        #rayVec = q2 - q1
         rayVec = rNorm.reshape((rNorm.shape[0]*rNorm.shape[1]), rNorm.shape[2])
 
         #build mesh and tensors for open3d
@@ -278,8 +268,6 @@ class RAD:
         #calculate intersections
         rays = o3d.core.Tensor([np.hstack([q1,rayVec])],dtype=o3d.core.Dtype.Float32)
         hits = scene.cast_rays(rays)
-
-        #print(hits['primitive_ids'])
 
         #convert open3d CPU tensors back to numpy
         hitMap = hits['primitive_ids'][0].numpy().reshape(self.Ni, self.Nj)
@@ -323,7 +311,10 @@ class RAD:
     def calculatePowerTransferOpen3DLoop(self, mode=None):
         """
         Maps power between sources and targets (ROI PFCs).  Uses Open3D to
-        perform ray tracing.  Open3D can be optimized for CPU or GPU
+        perform ray tracing.  Open3D can be optimized for CPU or GPU.
+
+        Loops through sources calculating heat loads.  If this is slow,
+        vectorize the loop
         """
         powerFrac = np.zeros((self.Ni,self.Nj))
         Psum = np.zeros((self.Nj))

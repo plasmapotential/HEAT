@@ -12,6 +12,7 @@ import cProfile, pstats
 import pandas as pd
 import multiprocessing
 import psutil
+import open3d as o3d
 from pickle import dump, load
 tools = toolsClass.tools()
 
@@ -301,40 +302,327 @@ class PFC:
         targetNorms = tools.checkSignOfNorm(distNorms, targetNorms)
         return targetPoints, targetNorms
 
-    def findShadows_structure(self,MHD,CAD,verbose=False, shadowMaskClouds=False):
+    def buildTargetMesh(self, CAD, mode=None):
+        """
+        build targetPoints and targetNorms arrays from CAD object meshes.
+
+        if user specifies 'highRes' for mode, then the ROI meshes will be used
+        for the PFC of interest.  Default mode (None) is to use 'standard'
+        mesh resolution for all PFCs
+
+        returns numpy arrays of target vertices and normals in units of [m]
+        """
+        numTargetFaces = 0
+        targetPoints = []
+        targetNorms = []
+
+        #highRes mode: ROI meshes at their ROI resolutions
+        if mode == 'highRes':
+            print("Building intersection mesh in highRes mode")
+            log.info("Building intersection mesh in highRes mode")
+            #add ROI mesh
+            for i,target in enumerate(CAD.ROImeshes):
+                if CAD.ROIList[i] == self.name:
+                    numTargetFaces += target.CountFacets
+                    #append target data
+                    for face in target.Facets:
+                        targetPoints.append(face.Points)
+                        targetNorms.append(face.Normal)
+
+
+            for i,intersect in enumerate(CAD.intersectMeshes):
+                #check if this target is a potential intersection
+                if CAD.intersectList[i] in self.intersects:
+                    #exclude self shadowing
+                    if CAD.intersectList[i] == self.name:
+                        pass
+                    else:
+                        numTargetFaces += intersect.CountFacets
+                        #append target data
+                        for face in intersect.Facets:
+                            targetPoints.append(face.Points)
+                            targetNorms.append(face.Normal)
+
+        #default mode: all potential intersects at "standard" resolution
+        else:
+            print("Building intersection mesh in standard mode")
+            log.info("Building intersection mesh in standard mode")
+            totalMeshCounter = 0
+            for i,target in enumerate(CAD.intersectMeshes):
+                try:
+                    totalMeshCounter+=target.CountFacets
+                except:
+                    print("Cannot count faces because "+CAD.intersectList[i]+" is not a mesh!")
+                    continue
+                #check if this target is a potential intersection
+                if CAD.intersectList[i] in self.intersects:
+                    numTargetFaces += target.CountFacets
+                    #append target data
+                    for face in target.Facets:
+                        targetPoints.append(face.Points)
+                        targetNorms.append(face.Normal)
+        targetPoints = np.asarray(targetPoints)/1000.0 #scale to m
+        targetNorms = np.asarray(targetNorms)
+        print("INTERSECTION FACES FOR THIS PFC: {:d}".format(numTargetFaces))
+        return targetPoints, targetNorms
+
+
+    def findOpticalShadowsOpen3D(self,MHD,CAD,verbose=False, shadowMaskClouds=False):
         """
         Find shadowed faces for a given PFC object using MAFOT structure.
         Traces field lines from PFC surface, looking for intersections with
         triangles from intersectList meshes
         """
         use = np.where(self.shadowed_mask == 0)[0]
-        numTargetFaces = 0
-        targetPoints = []
-        targetNorms = []
+        intersectMask = np.zeros((len(self.centers)))
+
 
         print("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
         log.info("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
         print('Number of target parts: {:f}'.format(len(self.intersects)))
         log.info('Number of target parts: {:f}'.format(len(self.intersects)))
 
-        totalMeshCounter = 0
-        for i,target in enumerate(CAD.intersectMeshes):
-            try:
-                totalMeshCounter+=target.CountFacets
-            except:
-                print("Cannot count faces because "+CAD.intersectList[i]+" is not a mesh!")
-                continue
-            #check if this target is a potential intersection
-            if CAD.intersectList[i] in self.intersects:
-                numTargetFaces += target.CountFacets
-                #append target data
-                for face in target.Facets:
-                    targetPoints.append(face.Points)
-                    targetNorms.append(face.Normal)
-        targetPoints = np.asarray(targetPoints)/1000.0 #scale to m
-        targetNorms = np.asarray(targetNorms)
-        print("TOTAL INTERSECTION FACES: {:d}".format(totalMeshCounter))
-        print("INTERSECTION FACES FOR THIS PFC: {:d}".format(numTargetFaces))
+        #build the target mesh
+        targetPoints, targetNorms = self.buildTargetMesh(CAD, mode='standard')
+        targetCtrs = self.getTargetCenters(targetPoints)
+        r,z,phi = tools.xyz2cyl(targetCtrs[:,0],targetCtrs[:,1],targetCtrs[:,2])
+        targetBNorms = MHD.Bfield_pointcloud(self.ep, r, z, phi, powerDir=None, normal=True)
+        bdotnTgt = np.multiply(targetNorms, targetBNorms).sum(1)
+        powerDirTgt = tools.calculatePowerDir(bdotnTgt, self.ep.g['Bt0'])
+        fwdUseTgt = np.where(powerDirTgt > 0)[0]
+        revUseTgt = np.where(powerDirTgt < 0)[0]
+
+        #distort the mesh (if requested)
+        if self.vvDistort == True:
+            tools.vvDistort = True
+            tools.distortDeltaR = self.distortDeltaR
+            tools.distortDeltaB = self.distortDeltaB
+            tools.distortN = self.distortN
+            tools.distortH = self.distortH
+            tools.distortR0 = self.distortR0
+            print("Distorting intersection mesh using VV distortion function")
+            log.info("Distorting intersection mesh using VV distortion function")
+            targetPoints, targetNorms = self.VVdistortIntersects(targetPoints, targetNorms)
+
+        #for debugging, save a shadowmask at each step up fieldline
+        if shadowMaskClouds == True:
+            self.write_shadow_pointcloud(self.centers,self.shadowed_mask,self.controlfilePath,tag='original')
+
+        #===INTERSECTION TEST 1 (tricky frontface culling / first step up field line)
+        dphi = 1.0
+        MHD.ittStruct = 1.0
+        numSteps = MHD.nTrace #actual trace is (numSteps + 1)*dphi degrees
+        #If numSteps = 0, dont do intersection checking
+        if numSteps > 0:
+            print("\nIntersection Test #1")
+            CTLfile = self.controlfilePath + self.controlfileStruct
+            q1 = np.zeros((len(self.centers),3))
+            q2 = np.zeros((len(self.centers),3))
+
+            #run forward mesh elements
+            print("Forward Trace")
+            log.info("Forward Trace")
+            mapDirectionStruct = 1.0
+            startIdx = 1 #Match MAFOT sign convention for toroidal direction (CCW=+)
+            fwdUse = np.where(self.powerDir==-1)[0]
+            if len(fwdUse) != 0:
+                MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
+                #Perform first integration step
+                MHD.writeMAFOTpointfile(self.centers[fwdUse],self.gridfileStruct)
+                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                structData = tools.readStructOutput(self.structOutfile)
+                os.remove(self.structOutfile) #clean up
+                q1[fwdUse] = structData[0::2,:] #even indexes are first trace point
+                q2[fwdUse] = structData[1::2,:] #odd indexes are second trace point
+                intersect_mask = self.intersectTestOpen3D(q1[fwdUse],q2[fwdUse],targetPoints[fwdUseTgt],targetNorms[fwdUseTgt])
+                self.shadowed_mask[fwdUse] = intersect_mask
+            #run reverse mesh elements
+            print("Reverse Trace")
+            log.info("Reverse Trace")
+            mapDirectionStruct = -1.0
+            startIdx = 0 #Match MAFOT sign convention for toroidal direction
+            revUse = np.where(self.powerDir==1)[0]
+            if len(revUse) != 0:
+                MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
+                #Perform first integration step
+                MHD.writeMAFOTpointfile(self.centers[revUse],self.gridfileStruct)
+                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                structData = tools.readStructOutput(self.structOutfile)
+                os.remove(self.structOutfile) #clean up
+                q1[revUse] = structData[1::2,:] #even indexes are first trace point
+                q2[revUse] = structData[0::2,:] #odd indexes are second trace point
+                intersect_mask = self.intersectTestOpen3D(q1[revUse],q2[revUse],targetPoints[revUseTgt],targetNorms[revUseTgt])
+                self.shadowed_mask[revUse] = intersect_mask
+
+            #this is for printing information about a specific mesh element
+            #you can get the element # from paraview Point ID
+            #by default turned off
+            paraviewIndex = None
+            #paraviewIndex = 1
+            if paraviewIndex is not None:
+                ptIdx = np.where(use==paraviewIndex)[0]
+                print("Finding intersection face for point at:")
+                print(self.centers[paraviewIndex])
+            else:
+                ptIdx = None
+
+            #for debugging, save a shadowmask at each step up fieldline
+            if shadowMaskClouds == True:
+                self.write_shadow_pointcloud(self.centers,self.shadowed_mask,self.controlfilePath,tag='test0')
+
+        #===INTERSECTION TEST 2 (multiple steps up field line)
+        #Starts at second step up field line
+        if numSteps > 1:
+            print("\nIntersection Test #2")
+            use = np.where(self.shadowed_mask == 0)[0]
+            intersect_mask2 = np.zeros((len(use)))
+            q2 = np.zeros((len(self.centers[use]),3))
+
+            #calculate q2 for initialization of the big loop below
+            #run forward mesh elements
+            print("Forward Trace")
+            log.info("Forward Trace")
+            mapDirectionStruct = 1.0
+            startIdx = 1 #Match MAFOT sign convention for toroidal direction
+            fwdUse = np.where(self.powerDir[use]==-1)[0]
+            if len(fwdUse) != 0:
+                MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
+                #Perform first integration step
+                MHD.writeMAFOTpointfile(self.centers[use[fwdUse]],self.gridfileStruct)
+                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                structData = tools.readStructOutput(self.structOutfile)
+                os.remove(self.structOutfile) #clean up
+                q2[fwdUse] = structData[1::2,:] #odd indexes are second trace point
+
+            #run reverse mesh elements
+            print("Reverse Trace")
+            log.info("Reverse Trace")
+            mapDirectionStruct = -1.0
+            startIdx = 0 #Match MAFOT sign convention for toroidal direction
+            revUse = np.where(self.powerDir[use]==1)[0]
+            if len(revUse) != 0:
+                MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
+                #Perform first integration step
+                MHD.writeMAFOTpointfile(self.centers[use[revUse]],self.gridfileStruct)
+                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                structData = tools.readStructOutput(self.structOutfile)
+                os.remove(self.structOutfile) #clean up
+                q2[revUse] = structData[0::2,:] #even indexes are second trace point
+
+            if paraviewIndex is not None:
+                ptIdx = np.where(use==paraviewIndex)[0]
+                print("Finding intersection face for point at:")
+                print(self.centers[paraviewIndex])
+            else:
+                ptIdx = None
+
+
+
+            #Perform subsequent integration steps.  Use the point we left off at in
+            #last loop iteration as the point we launch from in next loop iteration
+            #This amounts to 'walking' up the field line looking for intersections,
+            #which is important when field line curvature makes intersections happen
+            #farther than 1-2 degrees from PFC surface.
+            #
+            #if you need to reference stuff from the original arrays (ie self.centers)
+            #you need to do nested uses (ie: self.centers[use][use2]).
+            use2 = np.where(intersect_mask2 == 0)[0]
+            for i in range(numSteps):
+                print("\nIntersect Trace #2 Step {:d}".format(i))
+                log.info("\nIntersect Trace #2 Step {:d}".format(i))
+                useOld = use2
+                use2 = np.where(intersect_mask2 == 0)[0]
+                #if all faces are shadowed, break
+                if len(use2) == 0:
+                    print("All faces shadowed on this PFC. Moving onto next PFC...")
+                    log.info("All faces shadowed on this PFC. Moving onto next PFC...")
+                    break
+
+                indexes = np.where([x==useOld for x in use2])[1] #map current steps's index back to intersect_mask2 index
+                if paraviewIndex is not None:
+                    ptIdx = np.where(use2==useOld[ptIdx])[0] #for tracing intersection locations
+                else:
+                    ptIdx = None
+
+                StartPoints = q2[indexes].copy() #odd indexes are second trace point
+                q1 = np.zeros((len(StartPoints),3))
+                q2 = np.zeros((len(StartPoints),3))
+
+                #run forward mesh elements
+                print("Forward Trace")
+                log.info("Forward Trace")
+                mapDirectionStruct = 1.0
+                startIdx = 1 #Match MAFOT sign convention for toroidal direction
+                fwdUse = np.where(self.powerDir[use[use2]]==-1)[0]
+                if len(fwdUse) == 0:
+                    print("No more traces in forward direction")
+                    log.info("No more traces in forward direction")
+                else:
+                    MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
+                    #Perform first integration step
+                    MHD.writeMAFOTpointfile(StartPoints[fwdUse],self.gridfileStruct)
+                    MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                    structData = tools.readStructOutput(self.structOutfile)
+                    os.remove(self.structOutfile) #clean up
+                    q1[fwdUse] = structData[0::2,:] #odd indexes are second trace point
+                    q2[fwdUse] = structData[1::2,:] #odd indexes are second trace point
+                    intersect_mask2[use2[fwdUse]] = self.intersectTestOpen3D(q1[fwdUse],q2[fwdUse],targetPoints,targetNorms)
+
+                #run reverse mesh elements
+                print("Reverse Trace")
+                log.info("Reverse Trace")
+                mapDirectionStruct = -1.0
+                startIdx = 0 #Match MAFOT sign convention for toroidal direction
+                revUse = np.where(self.powerDir[use[use2]]==1)[0]
+                if len(revUse) == 0:
+                    print("No more traces in reverse direction")
+                    log.info("No more traces in reverse direction")
+                else:
+                    MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
+                    #Perform first integration step
+                    MHD.writeMAFOTpointfile(StartPoints[revUse],self.gridfileStruct)
+                    MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                    structData = tools.readStructOutput(self.structOutfile)
+                    os.remove(self.structOutfile) #clean up
+                    q1[revUse] = structData[1::2,:] #odd indexes are second trace point
+                    q2[revUse] = structData[0::2,:] #odd indexes are second trace point
+                    intersect_mask2[use2[revUse]] = self.intersectTestOpen3D(q1[revUse],q2[revUse],targetPoints,targetNorms)
+
+
+
+                #for debugging, save a shadowmask at each step up fieldline
+                if shadowMaskClouds == True:
+                    self.shadowed_mask[use] = intersect_mask2
+                    self.write_shadow_pointcloud(self.centers,self.shadowed_mask,self.controlfilePath,tag='test{:d}'.format(i+1))
+                print("Step {:d} complete".format(i))
+                log.info("Step {:d} complete".format(i))
+
+            #Now revise shadowed_mask taking intersections into account
+            self.shadowed_mask[use] = intersect_mask2
+        print("Completed Intersection Check")
+        return
+
+
+    def findShadows_structure(self,MHD,CAD,verbose=False, shadowMaskClouds=False):
+        """
+        Find shadowed faces for a given PFC object using MAFOT structure.
+        Traces field lines from PFC surface, looking for intersections with
+        triangles from intersectList meshes
+
+        this function uses the original HEAT method, which is a manual Moller-Trumbore
+        ray-triangle intersection check.  superceded by the highly optimized
+        open3d algorithms that leverage C++ and GPU/CPU parallelism.  left here
+        for troubleshooting as this method is solid and we know it works.
+        """
+        use = np.where(self.shadowed_mask == 0)[0]
+
+        print("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
+        log.info("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
+        print('Number of target parts: {:f}'.format(len(self.intersects)))
+        log.info('Number of target parts: {:f}'.format(len(self.intersects)))
+
+        #build the target mesh
+        targetPoints, targetNorms = self.buildTargetMesh(CAD, mode='standard')
 
         #distort the mesh (if requested)
         if self.vvDistort == True:
@@ -418,6 +706,7 @@ class PFC:
             intersect_mask = self.intersectTestBasic(q1,q2,
                                                     targetPoints,targetNorms,
                                                     MHD,self.ep,ptIdx)
+
 
             self.shadowed_mask[use] = intersect_mask
 
@@ -825,6 +1114,74 @@ class PFC:
         #    print("Launch Face: {:d}, Intersect Face: {:d}".format(int(i), int(GYRO.intersectRecord[0,0,0,i])))
         #
         return
+
+    def intersectTestOpen3D(self,q1,q2,targets,targetNorms):
+        """
+        checks if any of the lines (field line traces) generated by MAFOT
+        struct program intersect any of the target mesh faces.
+        """
+        t0 = time.time()
+        N = len(q2)
+        Nt = len(targets)
+        print('{:d} Source Faces and {:d} Target Faces in PFC object'.format(N,Nt))
+
+        mask = np.ones((N))
+
+        r = q2-q1
+        rMag = np.linalg.norm(r, axis=1)
+        rNorm = r / rMag.reshape((-1,1))
+
+        #cast variables to 32bit for C
+        vertices = np.array(targets.reshape(Nt*3,3), dtype=np.float32)
+        triangles = np.array(np.arange(Nt*3).reshape(Nt,3), dtype=np.uint32)
+
+        #build mesh and tensors for open3d
+        mesh = o3d.t.geometry.TriangleMesh()
+        scene = o3d.t.geometry.RaycastingScene()
+        mesh_id = scene.add_triangles(vertices, triangles)
+
+        #calculate size of potential arrays in RAM
+        #run in matrix or loop mode depending upon available memory?
+        availableRAM = psutil.virtual_memory().available #bytes
+        #neededRAM = len(self.sources) * len(self.targets) * len(self.intersects) * 112 #bytes
+#        print(availableRAM/1024**3)
+#        vSize = sys.getsizeof(vertices)
+#        Tsize = sys.getsizeof(triangles)
+#        qSize = sys.getsizeof(q1)
+#        qSize2 = sys.getsizeof(np.float32(q1))
+#        rSize = sys.getsizeof(rNorm)
+#        size = (vSize)*(qSize)
+#        print(size/1024**3)
+#        print(vSize/1024**3)
+#        print(Tsize/1024**3)
+#        print(qSize/1024**3)
+#        print(qSize2/1024**3)
+#        print(rSize**2/1024**3)
+#        input()
+
+
+        #calculate intersections
+        rays = o3d.core.Tensor([np.hstack([np.float32(q1),np.float32(rNorm)])],dtype=o3d.core.Dtype.Float32)
+        hits = scene.cast_rays(rays)
+        #convert open3d CPU tensors back to numpy
+        hitMap = hits['primitive_ids'][0].numpy()
+        distMap = hits['t_hit'][0].numpy()
+
+        #escapes occur where we have 32 bits all set: 0xFFFFFFFF = 4294967295 base10
+        escapes = np.where(hitMap == 4294967295)[0]
+        mask[escapes] = 0.0
+
+        #when distances to target exceed the trace step, we exclude any hits
+        tooLong = np.where(distMap > rMag)[0]
+        mask[tooLong] = 0.0
+
+        print('Found {:f} shadowed faces'.format(np.sum(mask)))
+        log.info('Found {:f} shadowed faces'.format(np.sum(mask)))
+        print('Time elapsed: {:f}'.format(time.time() - t0))
+        log.info('Time elapsed: {:f}'.format(time.time() - t0))
+
+        return mask
+
 
     def intersectTestBasic(self,q1,q2,targets,targetNorms,MHD,ep,
                            ptIdx=None, mode='MT'):

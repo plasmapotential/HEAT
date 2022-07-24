@@ -1071,3 +1071,12 @@ class tools:
         normDist[flipLoc,:] *= -1.0
 
         return normDist
+
+    def calculatePowerDir(self, bdotn, Bt0):
+        """
+        calculate the power flow direction
+
+        returns a vector of length bdotn than has the toroidal direction
+        power flows (-1 is clockwise from above)
+        """
+        return np.sign(bdotn)*np.sign(Bt0)*-1.0

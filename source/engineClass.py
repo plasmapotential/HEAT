@@ -1805,7 +1805,10 @@ class engineObj():
         #check if this is a repeated MHD EQ
         #and that the inputs have not changed
         if (repeatIdx == None) or (self.newInputsFlag == True):
-            PFC.findShadows_structure(self.MHD, self.CAD)
+            #old manual MT ray-triangle method
+            #PFC.findShadows_structure(self.MHD, self.CAD)
+            #ray-triangle calcs using Open3D
+            PFC.findOpticalShadowsOpen3D(self.MHD,self.CAD)
         else:
             PFC.shadowed_mask = PFC.shadowMasks[repeatIdx].copy()
 
