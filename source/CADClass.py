@@ -19,6 +19,8 @@ import os
 #sys.path = [FREECADPATH]
 
 import FreeCAD
+#set compound merge on STP imports to Off
+FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/Import/hSTEP").SetBool("ReadShapeCompoundMode", False)
 import Part
 import Mesh
 

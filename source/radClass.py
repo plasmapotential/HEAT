@@ -224,97 +224,10 @@ class RAD:
 
         return
 
-
-    def calculatePowerTransferOpen3DVectorized(self, mode=None):
-        """
-        Maps power between sources and targets (ROI PFCs).  Uses Open3D to
-        perform ray tracing.  Open3D can be optimized for CPU or GPU
-        """
-        #build r_ij matrix
-        r_ij = np.zeros((self.Ni,self.Nj,3))
-        for i in range(self.Ni):
-            r_ij[i,:,:] = self.targetCtrs - self.sources[i]
-
-        rMag = np.linalg.norm(r_ij, axis=2)
-        rNorm = r_ij / rMag[:,:,np.newaxis]
-        rdotn = np.sum(rNorm*self.targetNorms, axis=2)
-
-        #backface culling
-        shadowMask = np.zeros((self.Ni, self.Nj))
-        backFaces = np.where( rdotn > 0 )[0]
-        shadowMask[backFaces] = 1.0
-        use0 = np.where(shadowMask == 0)[0]
-
-        #build tensors for open3d
-        #q1 = self.sources[use0,:]
-        q1 = np.tile(self.sources*1000.0,(self.Nj,1))
-        rayVec = rNorm.reshape((rNorm.shape[0]*rNorm.shape[1]), rNorm.shape[2])
-
-        #build mesh and tensors for open3d
-        mesh = o3d.io.read_triangle_mesh(self.meshFile)
-        mesh.compute_vertex_normals()
-        #vs = np.array(mesh.vertices, dtype=np.float32)
-        #ts = np.array(mesh.triangles, dtype=np.uint32)
-        mesh = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
-        scene = o3d.t.geometry.RaycastingScene()
-        #mesh_id = scene.add_triangles(vs,ts)
-        mesh_id = scene.add_triangles(mesh)
-        t0 = time.time()
-
-        #for visualizing o3d mesh
-        #mesh.compute_vertex_normals()
-        #o3d.visualization.draw_geometries([mesh])
-
-        #calculate intersections
-        rays = o3d.core.Tensor([np.hstack([q1,rayVec])],dtype=o3d.core.Dtype.Float32)
-        hits = scene.cast_rays(rays)
-
-        #convert open3d CPU tensors back to numpy
-        hitMap = hits['primitive_ids'][0].numpy().reshape(self.Ni, self.Nj)
-        distMap = hits['t_hit'][0].numpy().reshape(self.Ni, self.Nj)
-
-        Psum = np.zeros((self.Nj))
-        powerFrac = np.zeros((self.Ni, self.Nj))
-        idxSum = 0.0
-        for i in range(self.Ni):
-            for j in range(self.Nj):
-                ###YOU ARE HERE!!!!!!
-                idxTest = 4294967295
-                if j==idxTest:
-                    print('\n===')
-                    print(i)
-                    print(q1[i])
-                    print(self.targetCtrs[j]*1000.0)
-                    rV = rayVec.reshape((r_ij.shape))
-                    print(rV[i,j,:]*rMag[i,j])
-                    print(hitMap[i,j])
-                if hitMap[i,j] == idxTest:
-                    idxSum+=1
-                    print('j: {:d}'.format(j))
-
-                powerFrac[i,j] = np.abs(rdotn[i,j])*self.targetAreas[j]/(4*np.pi*rMag[i,j]**2)
-                #assign power
-                #if hitMap[i,j] == j and distMap[i,j] >= rMag[i,j]:
-                if hitMap[i,j] == j:
-                    Psum[j] += self.sourcePower[i]*powerFrac[i,j]
-                else:
-                    Psum[j] += 0.0
-
-        self.pdotn = rdotn
-        self.powerFrac = powerFrac
-        self.targetPower = Psum
-        print(idxSum)
-
-        return
-
-
-    def calculatePowerTransferOpen3DLoop(self, mode=None):
+    def calculatePowerTransferOpen3D(self, mode=None):
         """
         Maps power between sources and targets (ROI PFCs).  Uses Open3D to
         perform ray tracing.  Open3D can be optimized for CPU or GPU.
-
-        Loops through sources calculating heat loads.  If this is slow,
-        vectorize the loop
         """
         powerFrac = np.zeros((self.Ni,self.Nj))
         Psum = np.zeros((self.Nj))
@@ -386,32 +299,11 @@ class RAD:
             Ncores = 1
         print('Initializing intersection check across {:d} cores'.format(Ncores))
         print('Spawning tasks to multiprocessing workers')
-        #Do this try clause to kill any zombie threads that don't terminate
-#        try:
-#            #manager can be used for locking, but shouldnt be necessary so long
-#            #as we dont overlap write locations between workers
-#            manager = multiprocessing.Manager()
-#            lock=manager.lock()
-#            self.powerFrac = manager.Array('f',np.zeros((self.Ni*self.Nj)))
-#            self.targetPower = manager.Array('f',np.zeros((self.Nj)))
-#            #self.powerFrac = multiprocessing.Array('f',self.Ni*self.Nj)
-#            #self.targetPower = multiprocessing.Array('f',self.Nj)
-#            pool = multiprocessing.Pool(Ncores)
-#            pool.map(self.powerFracMapParallel, np.arange(self.Nj))
-#        finally:
-#            pool.close()
-#            pool.join()
-#            del pool
-#            del manager
-        #Do this try clause to kill any zombie threads that don't terminate
         try:
             #manager can be used for locking, but shouldnt be necessary so long
             #as we dont overlap write locations between workers
             pool = multiprocessing.Pool(Ncores)
             if mode=='kdtree':
-                #shm_a = multiprocessing.shared_memory.SharedMemory(create=True, size=sys.getsizeof(self.combinedMesh))
-                #buffer = shm_a.buf
-                #buffer[:] = self.combinedMesh
                 tools.combinedMesh = self.combinedMesh
                 output = np.asarray(pool.map(self.powerFracMapParallelKDtree, np.arange(self.Nj)))
             else:
@@ -419,8 +311,6 @@ class RAD:
         finally:
             pool.close()
             pool.join()
-#            shm_a.close()
-#            shm_a.unlink()
             del pool
 
 

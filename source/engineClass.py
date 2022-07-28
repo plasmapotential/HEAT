@@ -1865,8 +1865,10 @@ class engineObj():
         """
         #setup the radiated power calculation
         self.RAD.preparePowerTransfer(PFC, self.CAD, mode='open3d')
-        #calculate photon load on PFC
-        self.RAD.calculatePowerTransferOpen3DLoop(mode='open3d')
+        #calculate photon load on PFC using legacy methods (brute force)
+        #self.RAD.calculatePowerTransfer(mode='open3d')
+        #calculate photon load on PFC using open3d
+        self.RAD.calculatePowerTransferOpen3D(mode='open3d')
         #assign variables to the PFC itself
         PFC.Prad = self.RAD.targetPower
         PFC.qRad = PFC.Prad / PFC.areas
@@ -1899,7 +1901,9 @@ class engineObj():
         #Trace B field upstream from PFC surface
         PFC.findGuidingCenterPaths(self.MHD, self.GYRO)
         #Trace helical path downstream, checking for intersections
-        PFC.findHelicalPaths(self.GYRO)
+        #PFC.findHelicalPaths(self.GYRO)
+        #use Open3D ray tracing
+        PFC.findHelicalPathsOpen3D(self.GYRO)
         return
 
     def gyroOrbitHF(self):

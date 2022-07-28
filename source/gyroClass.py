@@ -8,6 +8,7 @@ import plotly.graph_objects as go
 import toolsClass
 import multiprocessing
 import time
+import open3d as o3d
 from scipy.interpolate import interp1d
 import scipy.integrate as integrate
 #from tqdm.contrib.concurrent import process_map #for process bar.  very slow...
@@ -309,9 +310,13 @@ class GYRO:
 
         returns angles in radians
         """
+        #original method
         #self.vPhases = np.linspace(0.0,np.pi/2,self.N_vPhase+2)[1:-1]
+
+        #new method
         #thankyou to NF reviewer #2 for noticing we were not using the correct
-        #sampling function:  we sample uniformly in cos(2*vP) here,
+        #sampling function:  we sample uniformly in cos(2*vP) here, which is
+        #the CDF of the velocity space pdf
         #with bounds in vP between (0,pi/2)
         self.vPhases = np.arccos(np.linspace(1.0,-1.0,self.N_vPhase+2)[1:-1])/2.0
         #self.vPhases = np.arccos(1-2*np.linspace(0,1,self.N_vPhase+2))/2.0
@@ -724,6 +729,158 @@ class GYRO:
         print('Parallel helix trace complete')
         log.info('Parallel helix trace complete')
         return intersectRecord, hdotn
+
+    def multipleGyroTraceOpen3D(self):
+        """
+        Calculates the helical path for multiple points,
+        each with different gyroRadii, using multiprocessing
+
+        Btrace is one step of a field line trace for each point (MAFOT structure output)
+        phase is phase angle (updated from last trace step)
+
+        updates lastPhase variable and helixTrace
+        """
+        N = len(self.p1)
+        intersectRecord = np.ones((N))*np.nan
+        lastPhases = np.zeros((N))
+
+        #cast variables to 32bit for C
+        vertices = np.array(self.targets, dtype=np.float32)
+        triangles = np.array(np.arange(self.PFC_Nt*3).reshape(self.PFC_Nt,3), dtype=np.uint32)
+        #triangles = np.array(np.repeat(np.arange(self.PFC_Nt),3).reshape(self.PFC_Nt,3), dtype=np.uint32)
+
+        #build intersection mesh and tensors for open3d
+        mesh = o3d.t.geometry.TriangleMesh()
+        scene = o3d.t.geometry.RaycastingScene()
+        mesh_id = scene.add_triangles(vertices, triangles)
+
+        #loop thru each mesh face looking for intersections along helix
+        for i in range(N):
+            #magnetic field trace
+            self.helixTrace = [None] * len(self.p0)
+            #vector
+            delP = self.p1[i] - self.p0[i]
+            #magnitude
+            magP = np.sqrt(delP[0]**2 + delP[1]**2 + delP[2]**2)
+            #time it takes to transit line segment
+            delta_t = magP / (self.vParallelMC[self.GYRO_HLXmap][i])
+            #Number of steps in line segment
+            Tsample = self.TGyro[self.GYRO_HLXmap][i] / self.N_gyroSteps
+            Nsteps = int(delta_t / Tsample)
+            #length (in time) along guiding center
+            t = np.linspace(0,delta_t,Nsteps+1)
+            #guiding center location
+            xGC = np.linspace(self.p0[i,0],self.p1[i,0],Nsteps+1)
+            yGC = np.linspace(self.p0[i,1],self.p1[i,1],Nsteps+1)
+            zGC = np.linspace(self.p0[i,2],self.p1[i,2],Nsteps+1)
+            arrGC = np.vstack([xGC,yGC,zGC]).T
+            # construct orthogonal system for coordinate transformation
+            w = delP
+            if np.all(w==[0,0,1]):
+                u = np.cross(w,[0,1,0]) #prevent failure if bhat = [0,0,1]
+            else:
+                u = np.cross(w,[0,0,1]) #this would fail if bhat = [0,0,1] (rare)
+            v = np.cross(w,u)
+            #normalize
+            u = u / np.sqrt(u.dot(u))
+            v = v / np.sqrt(v.dot(v))
+            w = w / np.sqrt(w.dot(w))
+            xfm = np.vstack([u,v,w]).T
+            #get helix path along (proxy) z axis reference frame
+            rGyro = self.rGyroMC[self.GYRO_HLXmap][i]
+            omega = self.omegaGyro[self.GYRO_HLXmap][i]
+            theta = self.lastPhase[self.GYRO_HLXmap][i]
+            x_helix = rGyro*np.cos(omega*t + theta)
+            y_helix = self.diamag*rGyro*np.sin(omega*t + theta)
+            z_helix = np.zeros((len(t)))
+            #perform rotation to field line reference frame
+            helix = np.vstack([x_helix,y_helix,z_helix]).T
+            helix_rot = np.zeros((len(helix),3))
+            for j,coord in enumerate(helix):
+                helix_rot[j,:] = helix[j,0]*u + helix[j,1]*v + helix[j,2]*w
+            #perform translation to field line reference frame
+            helix_rot[:,0] += xGC
+            helix_rot[:,1] += yGC
+            helix_rot[:,2] += zGC
+
+            #shift entire helix to ensure we capture intersections in p0 plane
+            helix_rot[:,0] += w[0]*0.0003
+            helix_rot[:,1] += w[1]*0.0003
+            helix_rot[:,2] += w[2]*0.0003
+
+            #update gyroPhase variable so next iteration starts here
+            lastPhase = omega*t[-1] + theta
+            lastPhases[i] = lastPhase
+            #=== intersection checking ===
+            q1 = helix_rot[:-1,:]
+            q2 = helix_rot[1:,:]
+
+            r = q2-q1
+            rMag = np.linalg.norm(r, axis=1)
+            rNorm = r / rMag.reshape((-1,1))
+
+            #calculate intersections
+            mask = np.ones((len(q2)))
+            rays = o3d.core.Tensor([np.hstack([np.float32(q1),np.float32(rNorm)])],dtype=o3d.core.Dtype.Float32)
+            hits = scene.cast_rays(rays)
+            #convert open3d CPU tensors back to numpy
+            hitMap = hits['primitive_ids'][0].numpy()
+            distMap = hits['t_hit'][0].numpy()
+
+            #escapes occur where we have 32 bits all set: 0xFFFFFFFF = 4294967295 base10
+            escapes = np.where(hitMap == 4294967295)[0]
+            mask[escapes] = 0.0
+
+            #when distances to target exceed the trace step, we exclude any hits
+            tooLong = np.where(distMap > rMag)[0]
+            mask[tooLong] = 0.0
+
+            if np.sum(mask)>0:
+                #first hit instance
+                idxHit = np.where(mask==1)[0][0]
+                #idxDist = np.argmin(distMap[idxHit])
+                #idx = idxHit[idxDist]
+                intersectRecord[i] = self.PFCintersectMap[hitMap[idxHit]]
+
+            else:
+                #return nan if we didnt hit anything
+                intersectRecord[i] = np.nan
+
+
+            #print the trace for a specific index
+            if self.traceIndex2 is not None:
+                if self.traceIndex2 == i:
+                    #for testing
+                    #print(hitMap)
+                    #print(distMap)
+                    #print(rMag)
+                    #print(mask)
+                    #print(intersectRecord[i])
+
+                    #print("Saving Index data to CSV and VTK formats")
+                    #save data to csv format
+                    head = 'X[mm],Y[mm],Z[mm]'
+                    np.savetxt(self.controlfilePath+'helix{:d}.csv'.format(self.N_GCdeg), helix_rot*1000.0, delimiter=',', header=head)
+                    #save data to vtk format
+                    tools.createVTKOutput(self.controlfilePath+'helix{:d}.csv'.format(self.N_GCdeg),
+                                        'trace', 'traceHelix{:d}'.format(self.N_GCdeg),verbose=False)
+                    #guiding center
+                    #np.savetxt(self.controlfilePath+'GC{:d}.csv'.format(self.N_GCdeg), arrGC*1000.0, delimiter=',', header=head)
+                    #save data to vtk format
+                    #tools.createVTKOutput(self.controlfilePath+'GC{:d}.csv'.format(self.N_GCdeg),
+                    #                        'trace', 'traceGC{:d}'.format(self.N_GCdeg),verbose=False)
+                    print("Intersection Location for ROIidx: {:f}".format(intersectRecord[i]))
+
+
+
+        self.lastPhase[self.GYRO_HLXmap] = lastPhases
+
+
+        #uncomment for avg time / calc
+        print('Parallel helix trace complete')
+        log.info('Parallel helix trace complete')
+        return intersectRecord
+
 
 
     def writeIntersectRecord(self, gyroPhase, vPhase, vSlice, faces, file):
