@@ -228,6 +228,10 @@ class RAD:
         """
         Maps power between sources and targets (ROI PFCs).  Uses Open3D to
         perform ray tracing.  Open3D can be optimized for CPU or GPU.
+
+        Uses Open3D to accelerate the calculation:
+        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
+        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).        
         """
         powerFrac = np.zeros((self.Ni,self.Nj))
         Psum = np.zeros((self.Nj))

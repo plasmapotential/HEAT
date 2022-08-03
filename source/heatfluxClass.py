@@ -871,14 +871,6 @@ class heatFlux:
         #Get fractional multipliers for each helical trace
         gyroFrac = 1.0/GYRO.N_gyroPhase
         vPhaseFrac = 1.0/GYRO.N_vPhase
-#        #energy: note these units are bad, but get divided out
-#        #old method (only converges for high resolution cases)
-#        #energies = 1.0/2.0 * GYRO.mass_eV * GYRO.vSlices**2
-#        energyTotal = GYRO.energySlices.sum(axis=1)
-#        vSliceFrac = np.zeros((len(q),GYRO.N_vSlice))
-#
-#        for vSlice in range(GYRO.N_vSlice):
-#            vSliceFrac[:,vSlice] = GYRO.energySlices[:,vSlice] / energyTotal
         vSliceFrac = GYRO.energyFracs
         #qMatrix = np.zeros((GYRO.N_gyroPhase,GYRO.N_vPhase,GYRO.N_vSlice,len(q)))
         Pgyro = np.zeros((GYRO.Nt))
@@ -914,6 +906,54 @@ class heatFlux:
         return
 
 
+    def gyroHF2(self, GYRO, PFC):
+        """
+        redistributes power calculated using the optical approximation according
+        to gyro orbits
+
+        input is an a gyroClass object.  by the time this function is called
+        you should have already calculated the intersectRecord using the
+        GYROclass
+        """
+        print("Calculating gyro orbit heat loads")
+        log.info("Calculating gyro orbit heat loads")
+        #get divertor HF
+        qDiv = PFC.qDiv[PFC.PFC_GYROmap] / self.elecFrac
+        Pdiv = qDiv * PFC.areas[PFC.PFC_GYROmap]
+        #Get fractional multipliers for each helical trace
+        gyroFrac = 1.0/GYRO.N_gyroPhase
+        vPhaseFrac = 1.0/GYRO.N_vPhase
+        vSliceFrac = GYRO.energyFracs
+        #qMatrix = np.zeros((GYRO.N_gyroPhase,GYRO.N_vPhase,GYRO.N_vSlice,len(q)))
+        Pgyro = np.zeros((GYRO.Nt))
+        PNaN = 0.0
+        sum=0
+        sum1=0
+        #loop through intersect record and redistribute power using multipliers
+        for gyroPhase in range(GYRO.N_gyroPhase):
+            for vPhase in range(GYRO.N_vPhase):
+                for vSlice in range(GYRO.N_vSlice):
+                    idx = GYRO.intersectRecord[gyroPhase,vPhase,vSlice,PFC.CADHOT_GYROmap]
+                    hdotn = np.abs(GYRO.hdotn[gyroPhase,vPhase,vSlice,PFC.CADHOT_GYROmap])
+                    isNanFrom = np.where(np.isnan(idx)==True)[0] #include NaNs (NaNs = no intersection) index we map from
+                    notNanFrom = np.where(np.isnan(idx)==False)[0] #dont include NaNs (NaNs = no intersection) index we map from
+                    notNanTo = idx[~np.isnan(idx)] #indices we map power to
+                    notNanTo = notNanTo.astype(int) #cast as integer
+                    isNanTo = idx[np.isnan(idx)] #indices we map power to
+                    isNanTo = isNanTo.astype(int) #cast as integer
+
+                    if len(notNanFrom)>0:
+                        #multiple Froms can light up the same To, so we loop
+                        for i in range(len(notNanFrom)):
+                            Pgyro[notNanTo[i]] += Pdiv[notNanFrom[i]]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[notNanFrom[i],vSlice]
+
+                    if len(isNanFrom)>0:
+                        PNaN += np.sum(Pdiv[isNanFrom]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[isNanFrom,vSlice])
+
+
+        GYRO.gyroPowMatrix += Pgyro
+        GYRO.gyroNanPower += PNaN
+        return
 
 
 #===============================================================================

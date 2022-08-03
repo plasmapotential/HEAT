@@ -270,7 +270,12 @@ class GYRO:
             #energy pdf (missing 1/2*mass but that gets divided out later anyways )
             #EofV = lambda x: x**2 * pdf(x)
             #EofV = lambda x: 4*np.pi * x**4 * pdf(x)
-            f_E = lambda x: 2 * np.sqrt(x / np.pi) * (self.T0[i])**(-3.0/2.0) * np.exp(-x / self.T0[i])
+
+            #old HEAT method
+            #f_E = lambda x: 2 * np.sqrt(x / np.pi) * (self.T0[i])**(-3.0/2.0) * np.exp(-x / self.T0[i])
+            #reviewer#2 method
+            f_E = lambda x: x**2 * np.exp(-x / self.T0[i])
+
             #energy slices that correspond to velocity slices
             self.energySlices[i,:] = f_E(0.5 * (self.mass_eV/self.c**2) * self.vSlices[i,:]**2)
             #energy integrals
@@ -279,7 +284,7 @@ class GYRO:
                 Ehi = 0.5 * (self.mass_eV/self.c**2) * vBounds[j+1]**2
                 self.energyIntegrals[i,j] = integrate.quad(f_E, Elo, Ehi)[0]
             energyTotal = self.energyIntegrals[i,:].sum()
-            #for testing
+            ##for testing
             #if i==0:
             #    print("Integral Test===")
             #    print(energyTotal)
@@ -318,8 +323,28 @@ class GYRO:
         #sampling function:  we sample uniformly in cos(2*vP) here, which is
         #the CDF of the velocity space pdf
         #with bounds in vP between (0,pi/2)
-        self.vPhases = np.arccos(np.linspace(1.0,-1.0,self.N_vPhase+2)[1:-1])/2.0
+        #self.vPhases = np.arccos(np.linspace(1.0,-1.0,self.N_vPhase+2)[1:-1])/2.0
         #self.vPhases = np.arccos(1-2*np.linspace(0,1,self.N_vPhase+2))/2.0
+
+        #beta, the vPhase angle
+        b = np.linspace(0,np.pi/2,10000).T
+        #heat flux pdf for velocity phase
+        pdf = lambda x: np.cos(x)*np.sin(x)*2
+        b_pdf = pdf(b)
+        #generate the CDF
+        b_cdf = np.cumsum(b_pdf[1:])*np.diff(b)
+        b_cdf = np.insert(b_cdf, 0, 0)
+        #create bspline interpolators for the cdf and cdf inverse
+        inverseCDF = interp1d(b_cdf, b, kind='linear')
+        forwardCDF = interp1d(b, b_cdf, kind='linear')
+        #CDF location of vSlices and bin boundaries
+        cdfBounds = np.linspace(0,b_cdf[-1],self.N_vPhase+1)
+        #spaces bins uniformly, then makes vSlices center of these bins in CDF space
+        cdfSlices = np.diff(cdfBounds)/2.0 + cdfBounds[:-1]
+        #vSlices are Maxwellian distribution sample locations (@ bin centers)
+        self.vPhases= inverseCDF(cdfSlices)
+        vBounds = inverseCDF(cdfBounds)
+
         return
 
 
@@ -732,16 +757,24 @@ class GYRO:
 
     def multipleGyroTraceOpen3D(self):
         """
-        Calculates the helical path for multiple points,
-        each with different gyroRadii, using multiprocessing
+        Calculates the helical trajectory of ions, then checks if any mesh
+        elements are intersected along the path.  This loops thru each
+        mesh element in the source plane (i) and checks for ray-triangle
+        intersections between the ray and all the mesh in the PFC's
+        intersectList.
 
-        Btrace is one step of a field line trace for each point (MAFOT structure output)
-        phase is phase angle (updated from last trace step)
+        Currently, this is called once every dpinit steps in MAFOT.  If this
+        is very slow, you could run all the trace steps in a single calculation
+        by removing the loop in PFCclass
 
-        updates lastPhase variable and helixTrace
+
+        Uses Open3D to accelerate the calculation:
+        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
+        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
         """
         N = len(self.p1)
         intersectRecord = np.ones((N))*np.nan
+        hdotn = np.ones((N))*np.nan
         lastPhases = np.zeros((N))
 
         #cast variables to 32bit for C
@@ -749,16 +782,16 @@ class GYRO:
         triangles = np.array(np.arange(self.PFC_Nt*3).reshape(self.PFC_Nt,3), dtype=np.uint32)
         #triangles = np.array(np.repeat(np.arange(self.PFC_Nt),3).reshape(self.PFC_Nt,3), dtype=np.uint32)
 
-        #build intersection mesh and tensors for open3d
+        #build intersection mesh and tensors for open3d ray-tri calcs
         mesh = o3d.t.geometry.TriangleMesh()
         scene = o3d.t.geometry.RaycastingScene()
         mesh_id = scene.add_triangles(vertices, triangles)
 
-        #loop thru each mesh face looking for intersections along helix
+        #loop thru each gyroSource mesh face looking for intersections along helix
         for i in range(N):
             #magnetic field trace
             self.helixTrace = [None] * len(self.p0)
-            #vector
+            #vector linking Bfield points
             delP = self.p1[i] - self.p0[i]
             #magnitude
             magP = np.sqrt(delP[0]**2 + delP[1]**2 + delP[2]**2)
@@ -811,7 +844,8 @@ class GYRO:
             #update gyroPhase variable so next iteration starts here
             lastPhase = omega*t[-1] + theta
             lastPhases[i] = lastPhase
-            #=== intersection checking ===
+
+            #=== intersection checking begins here ===
             q1 = helix_rot[:-1,:]
             q2 = helix_rot[1:,:]
 
@@ -838,19 +872,22 @@ class GYRO:
             if np.sum(mask)>0:
                 #first hit instance
                 idxHit = np.where(mask==1)[0][0]
-                #idxDist = np.argmin(distMap[idxHit])
-                #idx = idxHit[idxDist]
                 intersectRecord[i] = self.PFCintersectMap[hitMap[idxHit]]
-
+                hdotn[i] = np.dot(self.intersectNorms[int(intersectRecord[i])],rNorm[idxHit])
             else:
                 #return nan if we didnt hit anything
                 intersectRecord[i] = np.nan
-
+                hdotn[i] = np.nan
 
             #print the trace for a specific index
             if self.traceIndex2 is not None:
                 if self.traceIndex2 == i:
-                    #for testing
+                    ##for testing
+                    #if np.sum(mask)>0:
+                    #    print(idxHit)
+                    #    print(intersectRecord[i])
+                    #    print(rNorm[idxHit])
+                    #    print(self.intersectNorms[int(intersectRecord[i])])
                     #print(hitMap)
                     #print(distMap)
                     #print(rMag)
@@ -875,12 +912,9 @@ class GYRO:
 
         self.lastPhase[self.GYRO_HLXmap] = lastPhases
 
-
-        #uncomment for avg time / calc
         print('Parallel helix trace complete')
         log.info('Parallel helix trace complete')
-        return intersectRecord
-
+        return intersectRecord, hdotn
 
 
     def writeIntersectRecord(self, gyroPhase, vPhase, vSlice, faces, file):

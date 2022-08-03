@@ -136,6 +136,9 @@ class TUI():
                 inputFiles = machInDir + tagData['Input'].values
                 runList = [x.split(":") for x in tagData['Output'].values]
 
+                #refresh all subclasses
+                self.ENG.refreshSubclasses()
+
                 #read input file 0
                 inputData = self.ENG.loadInputs(inFile=inputFiles[0])
 

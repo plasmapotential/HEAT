@@ -103,6 +103,16 @@ class engineObj():
         self.RAD.allowed_class_vars()
         return
 
+    def refreshSubclasses(self):
+        """
+        re-initializes variables in subclasses
+        """
+        #initialize all the HEAT python submodules (subclasses)
+        self.initializeEveryone()
+        #select machine specific variables
+        self.machineSelect(self.MachFlag, self.machineList)
+        return
+
 
     def setInitialFiles(self):
         """
@@ -1676,6 +1686,7 @@ class engineObj():
                 try:
                     self.loadGYROParams(infile=self.inputFileList[tIdx])
                 except:
+                    print('Could not load gyro-orbit parameters')
                     pass
 
                 self.getGyroMeshes()
@@ -1795,7 +1806,7 @@ class engineObj():
 
         return
 
-    def HF_PFC(self, PFC, repeatIdx=None, tag=None):
+    def HF_PFC(self, PFC, repeatIdx=None, tag=None, rayTriMode='open3d'):
         """
         meat and potatoes of the HF calculation.  Called in loop or by parallel
         processes for each PFC object.  Only calculates optical heat flux
@@ -1805,10 +1816,13 @@ class engineObj():
         #check if this is a repeated MHD EQ
         #and that the inputs have not changed
         if (repeatIdx == None) or (self.newInputsFlag == True):
-            #original HEAT manual MT ray-triangle method
-            #PFC.findShadows_structure(self.MHD, self.CAD)
-            #newer ray-triangle calcs using Open3D
-            PFC.findOpticalShadowsOpen3D(self.MHD,self.CAD)
+            if rayTriMode=='open3d':
+                #newer ray-triangle calcs using Open3D
+                PFC.findOpticalShadowsOpen3D(self.MHD,self.CAD)
+            else:
+                #original HEAT homebrew MT ray-triangle method
+                PFC.findShadows_structure(self.MHD, self.CAD)
+
         else:
             PFC.shadowed_mask = PFC.shadowMasks[repeatIdx].copy()
 
@@ -1859,16 +1873,20 @@ class engineObj():
 
         return
 
-    def radPower(self,PFC):
+    def radPower(self,PFC, rayTriMode='open3d'):
         """
         runs the radiated power calculation
         """
         #setup the radiated power calculation
         self.RAD.preparePowerTransfer(PFC, self.CAD, mode='open3d')
-        #calculate photon load on PFC using legacy methods (brute force)
-        #self.RAD.calculatePowerTransfer(mode='open3d')
-        #calculate photon load on PFC using open3d
-        self.RAD.calculatePowerTransferOpen3D(mode='open3d')
+        #trace rays
+        if rayTriMode=='open3d':
+            #calculate photon load on PFC using open3d
+            self.RAD.calculatePowerTransferOpen3D(mode='open3d')
+        else:
+            #calculate photon load on PFC using legacy methods (brute force)
+            self.RAD.calculatePowerTransfer()
+
         #assign variables to the PFC itself
         PFC.Prad = self.RAD.targetPower
         PFC.qRad = PFC.Prad / PFC.areas
@@ -1887,7 +1905,7 @@ class engineObj():
         return
 
 
-    def gyroOrbitIntersects(self, PFC):
+    def gyroOrbitIntersects(self, PFC, mode='open3d'):
         """
         Calculates the gyro orbit intersects for a PFC object
 
@@ -1901,9 +1919,13 @@ class engineObj():
         #Trace B field upstream from PFC surface
         PFC.findGuidingCenterPaths(self.MHD, self.GYRO)
         #Trace helical path downstream, checking for intersections
-        #PFC.findHelicalPaths(self.GYRO)
-        #use Open3D ray tracing
-        PFC.findHelicalPathsOpen3D(self.GYRO)
+        if mode == 'open3d':
+            #use Open3D ray tracing (100X faster)
+            PFC.findHelicalPathsOpen3D(self.GYRO)
+        else:
+            #use HEAT homebrew ray tracing
+            PFC.findHelicalPaths(self.GYRO)
+
         return
 
     def gyroOrbitHF(self):
@@ -1927,7 +1949,8 @@ class engineObj():
                 self.GYRO.uniformGyroPhaseAngle()
                 #setup frequencies
                 self.GYRO.setupFreqs(PFC.Bmag[PFC.PFC_GYROmap,-1])
-                self.HF.gyroHF(self.GYRO, PFC)
+                #self.HF.gyroHF(self.GYRO, PFC)
+                self.HF.gyroHF2(self.GYRO, PFC)
 
         for PFC in self.PFCs:
             #print("PFC NAME: "+PFC.name)
@@ -2151,6 +2174,7 @@ class engineObj():
         print("Total Gyro ROI Faces: {:d}".format(self.GYRO.N_CADROI))
         print("Gyro faces not optically shadowed: {:d}".format(self.GYRO.N_HOT))
         self.GYRO.gyroPowMatrix = np.zeros((self.GYRO.Nt))
+        self.GYRO.gyroHFMatrix = np.zeros((self.GYRO.Nt))
         self.GYRO.gyroNanPower = 0.0
         #set up intersectRecord, which records index of intersection face
         #this 4D array has:
@@ -2713,6 +2737,7 @@ class engineObj():
             temperature within a PFC for a few minutes after a shot ends).  Here
             I just assign a heat flux of 0 MW/m^2 to the boundary
         """
+        input("Patch files then press enter to continue...")
         print('Setting Up OF run')
         log.info('Setting Up OF run')
         #set up base OF directory for this discharge
