@@ -1190,18 +1190,24 @@ class engineObj():
                          )
         return
 
-    def getRADInputs(self, radFile, Ntor, Nref, phiMin, phiMax, radTag=None ):
+    def getRADInputs(self, radFile, Ntor, Nref, phiMin, phiMax, radData=None):
         """
         Sets up the RAD module
+
         """
-        self.RAD.radFile = radFile
+        #radData is None when running in terminal mode
+        if radData != None:
+            self.RAD.radFile = self.RAD.writeRadFileData(radFile, radData, self.tmpDir)
+        else:
+            self.RAD.radFile = radFile
+
         self.RAD.Ntor = int(Ntor)
         self.RAD.Nref = int(Nref)
         self.RAD.phiMin = float(phiMin)
         self.RAD.phiMax = float(phiMax)
 
         #read (R,Z,P) photon radiation source file (csv format)
-        self.RAD.read2DSourceFile(radFile)
+        self.RAD.read2DSourceFile(self.RAD.radFile)
 
         #get phi that RZ profiles will be placed at in 3D
         self.RAD.getPhis(Ntor, phiMin, phiMax)
@@ -1585,8 +1591,9 @@ class engineObj():
                         #load HF settings for this timestep if applicable (terminal mode)
                         try:
                             self.loadHFParams(infile=self.inputFileList[tIdx])
-                        except:
-                            print("Could not load HF parameters.  Expected for GUI.")
+                        except Exception as e:
+                            print("Could not load HF parameters.  Expected for GUI.  Check error message:")
+                            print(e)
                         #check if this timestep contains an MHD EQ we already traced
                         repeatIdx = self.MHD.check4repeatedEQ(PFC.ep, PFC.EPs[:tIdx])
                         #if the inputs are different, flag it to prevent copying
@@ -1627,14 +1634,21 @@ class engineObj():
                         #load RAD settings for this timestep if applicable (terminal mode)
                         try:
                             self.loadRADParams(infile=self.inputFileList[tIdx])
-                        except:
-                            print("Could not load RAD parameters.  Expected for GUI.")
+                        except Exception as e:
+                            print("Could not load RAD parameters.  Expected for GUI.  Check error message:")
+                            print(e)
                         #calculate the radiated power on the PFC mesh
                         self.radPower(PFC)
                         #save output files
                         self.radPowerOutput(PFC)
                         PFC.powerSumRad[tIdx] = np.sum(PFC.Prad)
-                        print('Tessellated radiated power to this PFC = {:0.10f}'.format(PFC.powerSumRad[tIdx]))
+                        PFC.powerHullRad[tIdx] = np.sum(PFC.hullPower)
+                        print('\nSummation radiated power to this PFC = {:0.10f}'.format(PFC.powerSumRad[tIdx]))
+                        print('Convex hull radiated power to this PFC = {:0.10f}'.format(PFC.powerHullRad[tIdx]))
+                        print('Percent difference between radiation summation and hull = {:0.4f}%\n'.format(np.abs(PFC.powerSumRad[tIdx]/PFC.powerHullRad[tIdx]-1.0)*100.0))
+                        log.info('\nSummation radiated power to this PFC = {:0.10f}'.format(PFC.powerSumRad[tIdx]))
+                        log.info('Convex hull radiated power to this PFC = {:0.10f}'.format(PFC.powerHullRad[tIdx]))
+                        log.info('Percent difference between radiation summation and hull = {:0.4f}%\n'.format(np.abs(PFC.powerSumRad[tIdx]/PFC.powerHullRad[tIdx]-1.0)*100.0))
 
                     if 'B' in runList:
                         self.bfieldAtSurface(PFC)
@@ -1718,7 +1732,7 @@ class engineObj():
                 #write intersectRecord to CSV file
                 self.intersectRecordCSV(tPath)
 
-                #constribite to the tallies
+                #contribute to the tallies
                 for PFC in self.PFCs:
                     if t not in PFC.timesteps:
                         pass
@@ -1891,6 +1905,14 @@ class engineObj():
         PFC.Prad = self.RAD.targetPower
         PFC.qRad = PFC.Prad / PFC.areas
         PFC.radPowerFracs = self.RAD.powerFrac
+        PFC.qRadList.append(PFC.qRad)
+        PFC.hullPower = self.RAD.hullPower
+
+        #calculate photon radiation shadowMask
+        shadowMask = np.ones((self.RAD.Nj))
+        loaded = np.where(PFC.qRad != 0.0)
+        shadowMask[loaded] = 0.0
+        PFC.radShadowMaskList.append(shadowMask)
         return
 
     def radPowerOutput(self,PFC, saveFracs=False):
@@ -2216,10 +2238,12 @@ class engineObj():
         """
         hfOptical = []
         hfGyro = []
+        hfRad = []
         hfAll = []
         shadow =[]
         powerDir =[]
         shadowGyro = []
+        shadowRad = []
         bdotn = []
         psi = []
         Bp = []
@@ -2243,6 +2267,13 @@ class engineObj():
                     hfAll.append(PFC.qOpticalList[tIdx].copy()+PFC.qGyroList[tIdx].copy())
                 else:
                     hfAll[-1]+=PFC.qGyroList[tIdx].copy()
+            if 'hfRad' in runList:
+                hfRad.append(PFC.qRadList[tIdx].copy())
+                shadowRad.append(PFC.radShadowMaskList[tIdx].copy())
+                if 'hfOpt' not in runList: #when we run HEAT for only rad
+                    hfAll.append(PFC.qRadList[tIdx].copy())
+                else:
+                    hfAll[-1]+=PFC.qRadList[tIdx].copy()
             if 'pwrDir' in runList:
                 powerDir.append(PFC.powerDir.copy())
             if 'bdotn' in runList:
@@ -2265,9 +2296,11 @@ class engineObj():
         #now build something we can write to csv (ie numpy)
         hfOpticalNumpy = np.array([])
         hfGyroNumpy = np.array([])
+        hfRadNumpy = np.array([])
         hfAllNumpy = np.array([])
         shadowNumpy = np.array([])
         shadowGyroNumpy = np.array([])
+        shadowRadNumpy = np.array([])
         powerDirNumpy = np.array([])
         bdotnNumpy = np.array([])
         psiNumpy = np.array([])
@@ -2280,12 +2313,16 @@ class engineObj():
             hfOpticalNumpy = np.append(hfOpticalNumpy, arr)
         for arr in hfGyro:
             hfGyroNumpy = np.append(hfGyroNumpy, arr)
+        for arr in hfRad:
+            hfRadNumpy = np.append(hfRadNumpy, arr)
         for arr in hfAll:
             hfAllNumpy = np.append(hfAllNumpy, arr)
         for arr in shadow:
             shadowNumpy = np.append(shadowNumpy, arr)
         for arr in shadowGyro:
             shadowGyroNumpy = np.append(shadowGyroNumpy, arr)
+        for arr in shadowRad:
+            shadowRadNumpy = np.append(shadowRadNumpy, arr)
         for arr in powerDir:
             powerDirNumpy = np.append(powerDirNumpy, arr)
         for arr in bdotn:
@@ -2310,6 +2347,12 @@ class engineObj():
         if 'hfGyro' in runList:
             self.HF.write_heatflux_pointcloud(centers,hfGyroNumpy,tPath,tag,'gyro')
             PFC.write_shadow_pointcloud(centers,shadowGyroNumpy,tPath,tag,'gyro')
+            if 'hfOpt' not in runList:
+                self.HF.write_heatflux_pointcloud(centers,hfAllNumpy,tPath,tag,'all')
+        if 'hfRad' in runList:
+            self.HF.write_heatflux_pointcloud(centers,hfRadNumpy,tPath,tag,'rad')
+            self.RAD.write_Prad_pointcloud(self.RAD.sources,self.RAD.sourcePower,tPath)
+            PFC.write_shadow_pointcloud(centers,shadowRadNumpy,tPath,tag,'rad')
             if 'hfOpt' not in runList:
                 self.HF.write_heatflux_pointcloud(centers,hfAllNumpy,tPath,tag,'all')
         if 'shadowPC' in runList:
@@ -2497,6 +2540,7 @@ class engineObj():
         tools.initializeInput(self.CAD, self.infile)
         tools.initializeInput(self.HF, self.infile)
         tools.initializeInput(self.GYRO, self.infile)
+        tools.initializeInput(self.RAD, self.infile)
         tools.initializeInput(self.OF, self.infile)
 
         inputDict = {
@@ -2549,7 +2593,11 @@ class engineObj():
                     'ionMassAMU': self.GYRO.ionMassAMU,
                     'vMode': self.GYRO.vMode,
                     'ionFrac': self.GYRO.ionFrac,
-                    'gyroSources': self.GYRO.gyroSources
+                    'gyroSources': self.GYRO.gyroSources,
+                    'phiMin':self.RAD.phiMin,
+                    'phiMax':self.RAD.phiMax,
+                    'Ntor':self.RAD.Ntor,
+                    'Nref':self.RAD.Nref
                     }
         print("Loaded inputs")
 
@@ -2609,7 +2657,11 @@ class engineObj():
                     'ionMassAMU': self.GYRO.ionMassAMU,
                     'vMode': self.GYRO.vMode,
                     'ionFrac': self.GYRO.ionFrac,
-                    'gyroSources': self.GYRO.gyroSources
+                    'gyroSources': self.GYRO.gyroSources,
+                    'phiMin':self.RAD.phiMin,
+                    'phiMax':self.RAD.phiMax,
+                    'Ntor':self.RAD.Ntor,
+                    'Nref':self.RAD.Nref
                     }
         print("Loaded current inputs")
 

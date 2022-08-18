@@ -136,10 +136,12 @@ class PFC:
         self.EPs = [] #containers for multiple ep
         self.shadowMasks = [] #container for multiple optical shadowed_mask
         self.gyroShadowMaskList = [] #container for multiple gyro-orbit shadowed_mask
+        self.radShadowMaskList = [] #container for multiple gyro-orbit shadowed_mask
         self.powerSum = [] #container for multiple power summations
         self.powerSumOptical = [] #container for multiple optical power summations
         self.powerSumGyro = [] #container for multiple gyro orbit power summations
-        self.powerSumRad = [] #container for multiple gyro orbit power summations
+        self.powerSumRad = [] #container for multiple radPower power summations
+        self.powerHullRad = [] #container for radPower power balance checks
         self.tIndexes = [] #container for mapping between PC timesteps and MHD timesteps
         self.qOpticalList = [] #container for optical heat fluxes for all timesteps
         self.qGyroList = [] #container for gyro-orbit heat fluxes for all timesteps
@@ -154,6 +156,7 @@ class PFC:
                 self.powerSumOptical.append(0.0)
                 self.powerSumGyro.append(0.0)
                 self.powerSumRad.append(0.0)
+                self.powerHullRad.append(0.0)
                 self.tIndexes.append(idx[0])
 
         #set up file directory structure using first timestep as dummy
@@ -206,6 +209,8 @@ class PFC:
         log.info("Creating Shadow Point Cloud")
         if mode == 'gyro':
             prefix = 'shadowMask_gyro'
+        elif mode == 'rad':
+            prefix = 'shadowMask_rad'
         else:
             prefix = 'shadowMask_optical'
 

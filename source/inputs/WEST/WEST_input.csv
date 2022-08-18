@@ -58,6 +58,14 @@ vMode, single
 ionFrac,0.5
 gyroSources, gyroSourcePlane
 #==============================================================
+#                Radiated Power HF Variables
+#==============================================================
+radFile, /home/tom/source/dummyOutput/RZpower_25pts.csv
+Ntor, 1
+Nref, 1
+phiMin, 10
+phiMax, 20
+#==============================================================
 #                OpenFOAM Variables
 #==============================================================
 OFtMin, 0

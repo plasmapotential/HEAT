@@ -42,6 +42,7 @@ import dash
 from dash import html
 #import dash_core_components as dcc
 from dash import dcc
+import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 import visdcc
@@ -92,8 +93,11 @@ server = Flask(__name__)
 #app = dash.Dash(__name__, meta_tags=[{"name": "viewport", "content": "width=device-width"}])
 #Create our own server for downloading files
 
+#app = dash.Dash(server=server, meta_tags=[{"name": "viewport", "content": "width=device-width"}],
+#                prevent_initial_callbacks=False)
+
 app = dash.Dash(server=server, meta_tags=[{"name": "viewport", "content": "width=device-width"}],
-                prevent_initial_callbacks=False)
+                prevent_initial_callbacks=False, external_stylesheets=[dbc.themes.SLATE])
 
 #Eventually need to fix this so that we are not using a global variable
 #dash can acces Flask Cache so we should cache data by userID or something
@@ -137,7 +141,6 @@ tab_selected_style = {
     'color': 'blue',
     'border': 'none',
 }
-
 def build_tabs():
     """
     returns tab bar
@@ -171,6 +174,7 @@ def build_tabs():
                                 buildPFCbox(),
                                 buildHFbox(),
                                 buildGYRObox(),
+                                buildRADbox(),
                                 buildOFbox(),
                                 ]
                                 )
@@ -247,7 +251,6 @@ def build_tabs():
             )
         ],
     )
-
 """
 ==============================================================================
 Tab Contents: inputs tab
@@ -325,6 +328,7 @@ def buildMachineSelector():
                         ],
                     value=None
                     ),
+
                 html.Div(id="hiddenDivMachFlag"),
                 dcc.Upload(
                     className="inputUpload",
@@ -462,6 +466,10 @@ def inputDragDrop(file, contents, MachFlag):
                State('ionMassAMU','value'),
                State('vMode','value'),
                State('ionFrac','value'),
+               State('phiMin', 'value'),
+               State('phiMax','value'),
+               State('Ntor','value'),
+               State('Nref','value'),
                State('accFilters','value')
                ]
                )
@@ -522,6 +530,10 @@ def saveGUIinputs(  n_clicks,
                     ionMassAMU,
                     vMode,
                     ionFrac,
+                    phiMin,
+                    phiMax,
+                    Ntor,
+                    Nref,
                     accFilters
                 ):
     """
@@ -608,6 +620,10 @@ def saveGUIinputs(  n_clicks,
     data['ionMassAMU'] = ionMassAMU
     data['vMode'] = vMode
     data['ionFrac'] = ionFrac
+    data['phiMin'] = phiMin
+    data['phiMax'] = phiMax
+    data['Ntor'] = Ntor
+    data['Nref'] = Nref
 
     tools.saveInputFile(data, gui.tmpDir, gui.rootDir, gui.dataPath)
 
@@ -953,7 +969,7 @@ def buildHFbox():
     return html.Div(
             id="HFbox",
             children=[
-                html.H6("HF Settings"),
+                html.H6("Optical HF Settings"),
                 html.Label(id="hfModeLabel", children="Select a Heat Flux Profile"),
                 dcc.Dropdown(
                 id='hfMode',
@@ -1859,7 +1875,7 @@ def buildGYRObox():
     return html.Div(
         id="gyrobox",
         children=[
-            html.H6("Gyro Orbit Settings"),
+            html.H6("Gyro Orbit HF Settings"),
             gyroInputBoxes(),
             html.Label("Velocity Method"),
             dcc.Dropdown(
@@ -1947,7 +1963,7 @@ def gyroInputBoxes():
 
 @app.callback([Output('gyroVparams', 'children')],
               [Input('vMode', 'value')])
-def hfParameters(mode):
+def gyroParameters(mode):
     #select velocity mode
     div = [loadGyroSettings(mode=mode, hidden=False)]
     return [div]
@@ -2172,6 +2188,126 @@ def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
 
 
 
+
+#==========RAD==========
+def buildRADbox():
+    """
+    MHD input parameters
+    """
+    return html.Div(
+            id="RADbox",
+            children=[
+                html.H6("Radiated Power HF Settings"),
+                dcc.Upload(
+                    className="PFCupload",
+                    id='RAD-upload',
+                    children=html.Div([
+                        'Drag and Drop or ',
+                        html.A('Select radFile')
+                    ]),
+                    style={
+                        'width': '60%', 'height': '60px', 'lineHeight': '60px',
+                        'borderWidth': '1px', 'borderStyle': 'dashed',
+                        'borderRadius': '5px', 'textAlign': 'center', 'margin': '10px',
+                        },
+                    multiple=True,
+                    ),
+                html.Div(id="hiddenDivRadUpload"),
+                html.Div(
+                    children=[
+                    html.Div(
+                        children=[
+                            html.Label("Minimum phi of source [deg] "),
+                            dcc.Input(id="phiMin", className="textInput"),
+                        ],
+                        className="OFInput",
+                    ),
+                    html.Div(
+                        children=[
+                            html.Label("Maximum phi of source [deg] "),
+                            dcc.Input(id="phiMax", className="textInput"),
+                        ],
+                        className="OFInput",
+                    ),
+                    html.Div(
+                        children=[
+                            html.Label("Number of toroidal repetitions  "),
+                            dcc.Input(id="Ntor", className="textInput"),
+                        ],
+                    className="OFInput",
+                    ),
+                    html.Div(
+                        children=[
+                            html.Label("Number of reflections  "),
+                            dcc.Input(id="Nref", className="textInput"),
+                        ],
+                        className="OFInput",
+                    ),
+                    ],
+                    className="wideBoxNoColor"
+                    ),
+
+                html.Br(),
+                html.Button("Load RAD Settings", id="loadRAD", n_clicks=0, style={'margin':'10px 10px 10px 10px'}),
+                html.Div(id="hiddenDivRAD"),
+            ],
+            className="HFbox",
+        )
+
+
+
+
+#Load RAD button connect
+@app.callback([Output('hiddenDivRAD', 'children'),
+               Output('RADDataStorage', 'data')
+               ],
+              [Input('loadRAD', 'n_clicks')],
+              [State('phiMin', 'value'),
+               State('phiMax', 'value'),
+               State('Ntor', 'value'),
+               State('Nref', 'value'),
+               State('RAD-upload', 'filename'),
+               State('RAD-upload', 'contents'),
+              ])
+def loadRAD(n_clicks,phiMin,phiMax,Ntor,Nref,radFile,radData):
+    """
+    sets up RAD module
+    """
+    if n_clicks == 0:
+        raise PreventUpdate
+
+    if radFile == None:
+        outDiv = html.Label("Load radFile before loading settings...", style={'color':'#f50707'})
+        RADdata = {}
+    else:
+        outDiv = html.Label("Loaded RAD Data into HEAT", style={'color':'#f5d142'})
+        Ntor = int(Ntor)
+        Nref = int(Nref)
+        phiMin = float(phiMin)
+        phiMax = int(phiMax)
+        gui.getRADInputs(radFile[0], Ntor, Nref, phiMin, phiMax, radData[0])
+
+
+        RADdata = {
+            'Minimum phi of radiation source [deg]':phiMin,
+            'Maximum phi of radiation source [deg]':phiMax,
+            'Number of toroidal repetitions of radiation source':Ntor,
+            'Number of photon reflections to trace':Nref,
+            }
+    return [outDiv, RADdata]
+
+#Load radFile
+@app.callback([Output('hiddenDivRadUpload', 'children')],
+              [Input('RAD-upload', 'filename')],
+              [State('MachFlag', 'value')])
+def gfileUpload(radFile, MachFlag):
+    if MachFlag is None:
+        raise PreventUpdate
+    else:
+        return [html.Label("Loaded radFile: "+radFile[0], style={'color':'#f5d142'})]
+
+
+
 #==========openFOAM==========
 def buildOFbox():
     return html.Div(
@@ -2324,7 +2460,7 @@ def runChildren():
                 html.Br(),
                 html.H6("Acceleration Filter Settings: "),
                 buildRunSettings(),
-                html.H6("Mesh Perturbations: "),
+                html.H6("Mesh Perturbations (very beta): "),
                 meshPertBox(),
                 html.H6("Point Clouds at Tile Surface:"),
                 runTabChecklist(),
@@ -2428,7 +2564,8 @@ def runTabChecklist():
                         {'label': 'psiN point cloud', 'value': 'psiN'},
                         {'label': 'bdotn point cloud', 'value': 'bdotn'},
                         {'label': 'Heat flux point cloud', 'value': 'hfOpt'},
-                        {'label': 'Gyro Orbit heat flux point cloud', 'value': 'hfGyro'},
+                        {'label': 'Ion gyro-orbit heat flux point cloud', 'value': 'hfGyro'},
+                        {'label': 'Photon radiation heat flux point cloud', 'value': 'hfRad'},
                         {'label': 'openFOAM thermal analysis', 'value': 'T'},
                         ],
                         value=['hfOpt'],
@@ -3254,8 +3391,9 @@ def getOutputColumns():
                Input('CADDataStorage', 'data'),
                Input('HFDataStorage', 'data'),
                Input('GYRODataStorage', 'data'),
+               Input('RADDataStorage', 'data'),
                Input('OFDataStorage', 'data')])
-def inputsTable(MHDdata,CADdata,HFdata,GYROdata,OFdata):
+def inputsTable(MHDdata,CADdata,HFdata,GYROdata,RADdata,OFdata):
     newData = {}
     if MHDdata != None:
         for key,val in MHDdata.items():
@@ -3268,6 +3406,9 @@ def inputsTable(MHDdata,CADdata,HFdata,GYROdata,OFdata):
             newData[key] = val
     if GYROdata != None:
         for key,val in GYROdata.items():
+            newData[key] = val
+    if RADdata != None:
+        for key,val in RADdata.items():
             newData[key] = val
     if OFdata != None:
         for key,val in OFdata.items():
@@ -3611,6 +3752,7 @@ app.layout = html.Div(
             dcc.Store(id='CADDataStorage', storage_type='memory'),
             dcc.Store(id='HFDataStorage', storage_type='memory'),
             dcc.Store(id='GYRODataStorage', storage_type='memory'),
+            dcc.Store(id='RADDataStorage', storage_type='memory'),
             dcc.Store(id='OFDataStorage', storage_type='memory'),
 
             #interval for updating logFile tab every 5 seconds
@@ -3691,6 +3833,10 @@ Session storage callbacks and functions
                Output('ionMassAMU','value'),
                #Output('vMode','value'), #this causes undefined vars
                Output('ionFrac','value'),
+               Output('phiMin','value'),
+               Output('phiMax','value'),
+               Output('Ntor','value'),
+               Output('Nref','value'),
                Output('session', 'data'),
 #               Output('hiddenDivMachFlag', 'children')
                ],
@@ -3794,6 +3940,10 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('ionMassAMU',''),
             #data.get('vMode',''),
             data.get('ionFrac',''),
+            data.get('phiMin',''),
+            data.get('phiMax',''),
+            data.get('Ntor',''),
+            data.get('Nref',''),
             data,
 #            outputDiv
             ]

@@ -167,6 +167,17 @@ class tools:
                 else:
                     f.write(var + ',  None \n')
             f.write("#=============================================================\n")
+            f.write("#                Radiated Power HF Variables\n")
+            f.write("#=============================================================\n")
+            for var in RAD.allowed_vars:
+                if var in data:
+                    if (data[var] == None) or (data[var] == 'None'):
+                        f.write(var + ',  None \n')
+                    else:
+                        f.write(var + ', ' + str(data[var]) + '\n')
+                else:
+                    f.write(var + ',  None \n')
+            f.write("#=============================================================\n")
             f.write("#                OpenFOAM Variables\n")
             f.write("#=============================================================\n")
             print(data)

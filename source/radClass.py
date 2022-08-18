@@ -10,6 +10,7 @@ import logging
 import multiprocessing
 import time
 import open3d as o3d
+from scipy.spatial import ConvexHull
 
 import toolsClass
 log = logging.getLogger(__name__)
@@ -105,13 +106,16 @@ class RAD:
 
         #build out source array (R,Z,phi)
         NR = self.PC2D.shape[0]
-        Nphi = len(self.phis)
+        self.Nphi = len(self.phis)
         PC2D = np.append( self.PC2D, np.zeros([NR,1]), 1 ) #add column for phi
-        self.PC3D = np.repeat(PC2D[:,:,np.newaxis],Nphi,axis=2) #repeat Nphi times
+        self.PC3D = np.repeat(PC2D[:,:,np.newaxis],self.Nphi,axis=2) #repeat Nphi times
         self.PC3D[:,-1,:] = np.repeat(self.phis[np.newaxis], NR, axis=0) #fill in phis
+        #normalize Power to the number of toroidal steps
+        self.PC3D[:,2,:] /= self.Nphi
+
         #RZphi = np.vstack([self.PC3D[:,0,:].flatten(),self.PC3D[:,1,:].flatten()]).T
         #RZphi = np.vstack([RZ.T, self.PC3D[:,3,:].flatten()]).T
-        self.NradPts = len(self.RAD.PC3D[:,0,:].flatten())
+        self.NradPts = len(self.PC3D[:,0,:].flatten())
         return
 
     def getPhis(self, Ntor, phiMin=0.0, phiMax=360.0):
@@ -231,10 +235,12 @@ class RAD:
 
         Uses Open3D to accelerate the calculation:
         Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
-        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).        
+        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
         """
+        t0 = time.time()
         powerFrac = np.zeros((self.Ni,self.Nj))
         Psum = np.zeros((self.Nj))
+        self.hullPower = np.zeros((self.Ni))
         for i in range(self.Ni):
             r_ij = np.zeros((self.Nj,3))
             r_ij = self.targetCtrs - self.sources[i]
@@ -261,7 +267,7 @@ class RAD:
 
 
             for j in range(self.Nj):
-                powerFrac[i,j] = np.abs(rdotn[i])*self.targetAreas[j]/(4*np.pi*rMag[i]**2)
+                powerFrac[i,j] = np.abs(rdotn[j])*self.targetAreas[j]/(4*np.pi*rMag[j]**2)
                 #assign power
                 #if hitMap[i,j] == j and distMap[i,j] >= rMag[i,j]:
                 if hitMap[j] == j:
@@ -280,11 +286,28 @@ class RAD:
                     print(self.sourcePower[i])
                     print(powerFrac[i,j])
 
+            #compute convex hull on unit sphere around point i and calculate
+            #power balance via ratio of hull area to sphere area
+            #calculate spherical coordinates for each target point, with i as (0,0,0)
+            #note that we perform a coordinate permutation on rNorm, to prevent
+            #angle wrap cases: (x,y,z) => (z,x,y)
+            #If you are getting abnormally convex hull power, try a different permutation
+            #first transform to 2D (phi,theta) => (x,y) using Jacobians
+            theta = np.arccos( (rNorm[:,0]) ) #z after permutation
+            phi = np.arctan2( (rNorm[:,2]), (rNorm[:,1])  ) # y,x after permutation
+            #map (phi,theta) to cartesian plane using Jacobian
+            points = np.vstack([phi, -np.cos(theta)]).T
+            #calculate the convex hull in 2D
+            hull = ConvexHull(points)
+            #hull area for 2D points is volume, scale power to full solid angle
+            self.hullPower[i] = hull.volume / (4*np.pi) * self.sourcePower[i]
 
         self.pdotn = rdotn
         self.powerFrac = powerFrac
         self.targetPower = Psum
 
+        print("Photon tracing took {:f} seconds \n".format(time.time()-t0))
+        log.info("Photon tracing took {:f} seconds \n".format(time.time()-t0))
         return
 
     def calculatePowerTransfer(self, mode=None):
@@ -325,63 +348,6 @@ class RAD:
             self.targetPower[j] = output[j,2]
 
         return
-
-    def powerFracMapParallelKDtree(self, j):
-        """
-        Calculates the fractional contribution of power from each self.sources
-        point to the target mesh element (ROI PFC), j.  Includes intersection
-        checking with the intersect mesh along the way.
-
-        This function is meant to be called in parallel, where j represents
-        the target (ROI PFC) mesh element we are calculating the power
-        transfer for.  This function does not calculate the explicit power, but
-        rather it builds the self.powerFrac (i,j) matrix, which can be scaled
-        to any input power
-
-        performs the intersection check using the FreeCAD KDTree structure
-        """
-        p_ij = self.targetCtrs[j] - self.sources
-        pMag = np.linalg.norm(p_ij, axis=1)
-        pNorm = p_ij / pMag[:, np.newaxis]
-        pdotn = np.sum(pNorm*self.targetNorms[j], axis=1)
-
-        #backface culling
-        shadowMask = np.zeros((self.Ni))
-        backFaces = np.where( pdotn > 0 )[0]
-        shadowMask[backFaces] = 1.0
-        use0 = np.where(shadowMask == 0)[0]
-        #use0 =np.arange(self.Ni)
-        #should we add backface culling for intersects here?!
-
-        #run in matrix or loop mode depending upon available memory?
-        #availableRAM = psutil.virtual_memory().available #bytes
-        #neededRAM = len(self.sources) * len(self.targets) * len(self.intersects) * 112 #bytes
-
-        q1 = self.sources[use0,:]
-        q2 = self.targetCtrs[j]
-
-        powerFrac = np.zeros((self.Ni))
-        #loop thru sources checking if shadowed for this target
-        Psum = 0.0
-        for i in range(len(q1)):
-            intersect = tools.combinedMesh.nearestFacetOnRay((rayOrig[0],rayOrig[1],rayOrig[2]),(rayDir[0],rayDir[1],rayDir[2]))
-
-            #we found an intersection
-            if bool(intersect):
-                idx = list(intersect.keys())[0]
-                loc = list(intersect.values())[0]
-                d = np.dot(loc-rayOrig, rayDir)
-            else:
-                idx = None
-            #check if the ray hit j
-            if idx == j:
-                powerFrac[i] = np.abs(pdotn[i])*self.targetAreas[j]/(4*np.pi*pMag[i]**2)
-                Psum += self.sourcePower[i]*powerFrac[i]
-            else:
-                powerFrac[i] = 0.0
-
-        return pdotn, powerFrac, Psum
-
 
     def powerFracMapParallelNoAcc(self, j):
         """
@@ -487,3 +453,23 @@ class RAD:
             name = prefix+'_'+tag
             tools.createVTKOutput(pcfile, 'points', name)
         return
+
+    def writeRadFileData(self,radFile,radData,tmpDir):
+        """
+        writes data passed in string object (from GUI) to files in
+        tmpDir directory for use later on in HEAT
+
+        the self.tmpDir directory is accessible to the GUI users for uploading
+        and downloading
+
+        this function is called from GUI because objects are json / base64
+        """
+        import base64
+        data = radData.encode("utf8").split(b";base64,")[1]
+        path = tmpDir + radFile
+        print("Writing local radFile: "+path)
+        log.info("Writing local radFile: "+path)
+        with open(path, 'wb') as f:
+            f.write(base64.decodebytes(data))
+
+        return path
