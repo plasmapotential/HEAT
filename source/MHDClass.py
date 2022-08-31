@@ -60,7 +60,17 @@ def setupForTerminalUse(gFile=None, shot=None, time=None):
 
     if gFile!=None:
         print("Making MHD() object with ep included")
-        MHD.ep = EP.equilParams(gFile)
+        #single geqdsk
+        if type(gFile)==str:
+            MHD.ep = EP.equilParams(gFile)
+        #multiple geqdsks, filenames in a list
+        elif type(gFile)==list:
+            MHD.ep = []
+            for f in gFile:
+                MHD.ep.append(EP.equilParams(f))
+        else:
+            print("Unknown type for gFile argument.  Provide string path or list of paths")
+
 
     else:
         print("Not including ep in MHD() object")
@@ -268,15 +278,56 @@ class MHD:
         Note: this function returns the normal Bfield components if normal=True
 
         """
-#        if powerDir != None:
-#            Bt0Direction = np.sign(ep.g['Bt0']) #account for machine Bt direction
-#            Bt = ep.BtFunc.ev(R,Z)*powerDir*Bt0Direction
-#            BR = ep.BRFunc.ev(R,Z)*powerDir*Bt0Direction
-#            BZ = ep.BZFunc.ev(R,Z)*powerDir*Bt0Direction
-#        else:
+        #check for signs
+        FSign = np.sign(ep.g['Fpol'][-1])
+        Bt0Sign = np.sign(ep.g['Bt0'])
+        IpSign = np.sign(ep.g['Ip'])
+        psiSign = np.sign(ep.psiFunc.ev(R,Z))
+
         Bt = ep.BtFunc.ev(R,Z)
         BR = ep.BRFunc.ev(R,Z)
         BZ = ep.BZFunc.ev(R,Z)
+
+        #correct field directions to match psi, Fpol, Ip, Bt0
+        BtMult = 1.0
+        BpMult = 1.0
+        #the ep object (equilParams_class.py) uses Fpol to define Bt everywhere,
+        #so we check to make sure the sign matches Bt0
+        if FSign != Bt0Sign:
+            BtMult = -1.0
+        else:
+            BtMult = 1.0
+        #the ep object defines B by derivatives of psi, but doesnt take into
+        #account whether or not psi is increasing / decreasing from axis to sep
+        if ep.g['psiSep'] > ep.g['psiAxis']: #dPsi/dR > 0 at OMP
+            BpMult = 1.0
+        else:
+            BpMult = -1.0
+        #the ep object does not check for the sign of Ip when defining Bp,
+        #so we check Bp at the omp to see if it follows the sign of Ip
+        if np.sign(ep.g['Ip']) > 0:
+            BpMult *= 1.0
+        else:
+            BpMult *= -1.0
+
+
+        print("Fpol sign: {:f}".format(FSign))
+        print("Bt0 sign: {:f}".format(Bt0Sign))
+        print("Ip sign: {:f}".format(IpSign))
+        print("psiRZ sign [0]: {:f}".format(psiSign[0]))
+        print("BtMult: {:f}".format(BtMult))
+        print("BpMult: {:f}".format(BpMult))
+        log.info("Fpol sign: {:f}".format(FSign))
+        log.info("Bt0 sign: {:f}".format(Bt0Sign))
+        log.info("Ip sign: {:f}".format(IpSign))
+        log.info("psiRZ sign [0]: {:f}".format(psiSign[0]))
+        log.info("BtMult: {:f}".format(BtMult))
+        log.info("BpMult: {:f}".format(BpMult))
+
+        Bt *= BtMult
+        BR *= BpMult
+        BZ *= BpMult
+
         #print("TEST=====")
         #print(BR[0])
         #print(Bt[0])
@@ -804,6 +855,8 @@ class MHD:
         file: name of new gfile
         shot: new shot number
         time: new shot timestep [ms]
+
+        Note that this writes some data as 0 (ie rhovn, kvtor, etc.)
         """
         if ep==None:
             print("Warning no gFile provided.  Writing from gFile in memory.")
@@ -984,6 +1037,148 @@ class MHD:
 
         #return ep that can be written to file (note its not a real EP as defined by equilParams class)
         return newEP
+
+    def gFileInterpolateByS(self, newS):
+        """
+        interpolates gfiles as a function of MHD.Spols at newS
+
+        requires MHD object to have list of same length as MHD.ep, with the values
+        of Spol for each ep.  this variable is MHD.Spols
+        """
+        #Set up all arrays
+        RmAxisAll = []
+        ZmAxisAll = []
+        psiRZAll = []
+        psiAxisAll = []
+        psiSepAll = []
+        Bt0All = []
+        IpAll = []
+        FpolAll = []
+        PresAll = []
+        FFprimeAll = []
+        PprimeAll = []
+        qpsiAll = []
+
+        EPs = self.ep
+        for ep in EPs:
+            RmAxisAll.append(ep.g['RmAxis'])
+            ZmAxisAll.append(ep.g['ZmAxis'])
+            psiRZAll.append(ep.g['psiRZ'])
+            psiAxisAll.append(ep.g['psiAxis'])
+            psiSepAll.append(ep.g['psiSep'])
+            Bt0All.append(ep.g['Bt0'])
+            IpAll.append(ep.g['Ip'])
+            FpolAll.append(ep.g['Fpol'])
+            PresAll.append(ep.g['Pres'])
+            FFprimeAll.append(ep.g['FFprime'])
+            PprimeAll.append(ep.g['Pprime'])
+            qpsiAll.append(ep.g['qpsi'])
+
+
+        R = EPs[0].g['R']
+        Z = EPs[0].g['Z']
+        Spols = np.array(self.Spols)
+        RmAxisAll = np.array(RmAxisAll)
+        ZmAxisAll = np.array(ZmAxisAll)
+        psiRZAll = np.dstack(psiRZAll) #2D
+        psiAxisAll = np.array(psiAxisAll)
+        psiSepAll = np.array(psiSepAll)
+        Bt0All = np.array(Bt0All)
+        IpAll = np.array(IpAll)
+        FpolAll = np.array(FpolAll).T
+        PresAll = np.array(PresAll).T
+        FFprimeAll = np.array(FFprimeAll).T
+        PprimeAll = np.array(PprimeAll).T
+        qpsiAll = np.array(qpsiAll).T
+#       FpolAll = np.dstack(FpolAll)
+#       FFprimeAll = np.dstack(FFprimeAll)
+#       PprimeAll = np.dstack(PprimeAll)
+#       qpsiAll = np.dstack(qpsiAll)
+
+        #Set up interpolators
+        RmAxisInterp = interp1d(Spols,RmAxisAll)
+        ZmAxisInterp = interp1d(Spols,ZmAxisAll)
+
+        psiRZInterp = RegularGridInterpolator((R, Z, Spols), psiRZAll)
+        psiAxisInterp = interp1d(Spols, psiAxisAll)
+        psiSepInterp = interp1d(Spols, psiSepAll)
+        Bt0Interp = interp1d(Spols, Bt0All)
+        IpInterp = interp1d(Spols, IpAll)
+        psiN = np.linspace(0,1,len(FpolAll[:,0]))
+        FpolInterp = RegularGridInterpolator((psiN,Spols), FpolAll)
+        PresInterp = RegularGridInterpolator((psiN,Spols), PresAll)
+        FFprimeInterp = RegularGridInterpolator((psiN,Spols), FFprimeAll)
+        PprimeInterp = RegularGridInterpolator((psiN,Spols), PprimeAll)
+        qpsiInterp = RegularGridInterpolator((psiN,Spols), qpsiAll)
+
+        #Interpolate each parameter for the new timestep
+        r,z = np.meshgrid(R,Z)
+        RmAxis = RmAxisInterp(newS)
+        ZmAxis = ZmAxisInterp(newS)
+        psiRZ = psiRZInterp((r,z,newS)).T
+        psiAxis = psiAxisInterp(newS)
+        psiSep = psiSepInterp(newS)
+        Bt0 = Bt0Interp(newS)
+        Ip = IpInterp(newS)
+        Fpol = FpolInterp((psiN,newS))
+        Pres = PresInterp((psiN,newS))
+        FFprime = FFprimeInterp((psiN,newS))
+        Pprime = PprimeInterp((psiN,newS))
+        qpsi = qpsiInterp((psiN,newS))
+
+        #get new LCFS
+        surface = ep.getBs_FluxSur(1.0)
+        rlcfs = surface['Rs']
+        zlcfs = surface['Zs']
+
+        #with linear interpolation, infrequently RegularGridInterpolator cannot
+        #resolve the points correctly and returns NANs.  This messes up future gFile
+        #reading algorithms (although it shouldnt! come on!).  See RegularGridInterpolator
+        #python webpage for more info
+        #first do R
+        mask = np.ones(len(rlcfs), dtype=bool)
+        mask[np.argwhere(np.isnan(rlcfs))] = False
+        rlcfs = rlcfs[mask]
+        zlcfs = zlcfs[mask]
+        #then do Z
+        mask = np.ones(len(zlcfs), dtype=bool)
+        mask[np.argwhere(np.isnan(zlcfs))] = False
+        rlcfs = rlcfs[mask]
+        zlcfs = zlcfs[mask]
+
+        #make new dictionary with all this stuff
+        newEP = lambda: None #empty object
+        newEP.g = {
+                    'RmAxis':RmAxis,
+                    'ZmAxis':ZmAxis,
+                    'psiRZ':psiRZ,
+                    'psiAxis':psiAxis,
+                    'psiSep':psiSep,
+                    'Bt0':Bt0,
+                    'Ip':Ip,
+                    'Fpol':Fpol,
+                    'Pres':Pres,
+                    'FFprime':FFprime,
+                    'Pprime':Pprime,
+                    'qpsi':qpsi,
+                    'NR':EPs[0].g['NR'],
+                    'NZ':EPs[0].g['NZ'],
+                    'Xdim':EPs[0].g['Xdim'],
+                    'Zdim':EPs[0].g['Zdim'],
+                    'R0':EPs[0].g['R0'],
+                    'R1':EPs[0].g['R1'],
+                    'Zmid':EPs[0].g['Zmid'],
+                    'wall':EPs[0].g['wall'],
+                    'Nwall':EPs[0].g['Nwall'],
+                    'Nlcfs':len(rlcfs),
+                    'lcfs':np.column_stack((rlcfs,zlcfs)),
+                    }
+
+
+        #return ep that can be written to file (note its not a real EP as defined by equilParams class)
+        return newEP
+
+
 
 
     def GEQDSKFromMDS(machine, shot, tree='efit01', tmin=None, tmax=None,
