@@ -9,7 +9,6 @@ version: "3"
 
 services:
   HEAT:
-    user: "${UID}:${GID}"
     image: "plasmapotential/heat"
     ports:
       - "8050:8050"
