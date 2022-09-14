@@ -33,14 +33,14 @@ services:
 #      #swak4foam bins / libs
 #      - /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/bin:/root/opt/swak4foam/bin
 #      - /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/lib:/root/opt/swak4foam/lib
-      # Batch mode directory
-      - /home/tom/HEATruns/SPARC/sweep7_T4:/root/terminal
+#      # Batch mode directory
+#      - /home/tom/HEATruns/SPARC/sweep7_T4:/root/terminal
     stdin_open: true # docker run -i
     tty: true        # docker run -t
     #if you want to set env vars, do it here:
     environment:
-    - dockerUID=$dockerUID
-    - dockerGID=$dockerGID
+#    - dockerUID=$dockerUID
+#    - dockerGID=$dockerGID
 
 
 
