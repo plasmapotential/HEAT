@@ -38,9 +38,11 @@ services:
     stdin_open: true # docker run -i
     tty: true        # docker run -t
     #if you want to set env vars, do it here:
-    environment:
-#    - dockerUID=$dockerUID
-#    - dockerGID=$dockerGID
+    #environment:
+    #- dockerUID=$dockerUID
+    #- dockerGID=$dockerGID
+    #- UID=$dockerUID
+    #- GID=$dockerGID
 
 
 
