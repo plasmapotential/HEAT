@@ -348,7 +348,7 @@ class engineObj():
 
     def gfileClean(self, psiRZMult,psiSepMult,psiAxisMult,FpolMult,
                    psiRZAdd,psiSepAdd,psiAxisAdd,FpolAdd,
-                   Bt0Mult,Bt0Add,IpMult,IpAdd,t):
+                   Bt0Mult,Bt0Add,IpMult,IpAdd,t,correctAllts):
         """
         multiplies values in MHD ep object with scalars defined by user in html gui
         """
@@ -382,26 +382,37 @@ class engineObj():
         print("Ip Addition = {:f}".format(IpAdd))
         log.info("Ip Addition = {:f}".format(IpAdd))
 
-        idx = np.where(t==self.MHD.timesteps)[0][0]
-        ep = self.MHD.ep[idx]
-        ep.g['psiRZ'] *= psiRZMult
-        ep.g['psiSep'] *= psiSepMult
-        ep.g['psiAxis'] *= psiAxisMult
-        ep.g['Fpol'] *= FpolMult
-        ep.g['Bt0'] *= Bt0Mult
-        ep.g['Ip'] *= IpMult
+        #all timesteps or just the timestep viewed in GUI?
+        if correctAllts is None:
+            allMask = False
+            idx = np.where(t==self.MHD.timesteps)[0]
+        elif 'all' in correctAllts:
+            allMask = True
+            idx = self.MHD.timesteps
 
-        ep.g['psiRZ'] += psiRZAdd
-        ep.g['psiSep'] += psiSepAdd
-        ep.g['psiAxis'] += psiAxisAdd
-        ep.g['Fpol'] += FpolAdd
-        ep.g['Bt0'] += Bt0Add
-        ep.g['Ip'] += IpAdd
+        print("Apply changes to all timesteps?: "+str(allMask))
+        log.info("Apply changes to all timesteps?: "+str(allMask))
 
-        psi = ep.g['psiRZ']
-        psiSep = ep.g['psiSep']
-        psiAxis = ep.g['psiAxis']
-        ep.g['psiRZn'] = (psi - psiAxis) / (psiSep - psiAxis)
+
+        for i in range(len(idx)):
+            self.MHD.ep[i].g['psiRZ'] *= psiRZMult
+            self.MHD.ep[i].g['psiSep'] *= psiSepMult
+            self.MHD.ep[i].g['psiAxis'] *= psiAxisMult
+            self.MHD.ep[i].g['Fpol'] *= FpolMult
+            self.MHD.ep[i].g['Bt0'] *= Bt0Mult
+            self.MHD.ep[i].g['Ip'] *= IpMult
+
+            self.MHD.ep[i].g['psiRZ'] += psiRZAdd
+            self.MHD.ep[i].g['psiSep'] += psiSepAdd
+            self.MHD.ep[i].g['psiAxis'] += psiAxisAdd
+            self.MHD.ep[i].g['Fpol'] += FpolAdd
+            self.MHD.ep[i].g['Bt0'] += Bt0Add
+            self.MHD.ep[i].g['Ip'] += IpAdd
+
+            psi = self.MHD.ep[i].g['psiRZ']
+            psiSep = self.MHD.ep[i].g['psiSep']
+            psiAxis = self.MHD.ep[i].g['psiAxis']
+            self.MHD.ep[i].g['psiRZn'] = (psi - psiAxis) / (psiSep - psiAxis)
         return
 
 
@@ -562,6 +573,25 @@ class engineObj():
         log.info("Writing new gFile: " + newGfile)
         self.MHD.writeGfile(newGfile, shot, t, ep)
         return
+
+    def createGfileZip(self):
+        """
+        creates a zip file with all the GEQDSKs in self.MHD.timesteps
+        """
+        sendBack = self.tmpDir + 'savedGeqdsks.zip'
+        #stash files in a subdir in tmpDir
+        dir = self.tmpDir+'geqdsks/'
+        tools.makeDir(dir)
+
+        #write all new geqdsks to tmpDir
+        for i,t in enumerate(self.MHD.timesteps):
+            f = dir + 'g{:06d}.{:05d}'.format(self.MHD.shot,t)
+            self.MHD.writeGfile(f, self.MHD.shot, t, self.MHD.ep[i])
+
+        #combine geqdsks into zip file for user download
+        shutil.make_archive(self.tmpDir + 'savedGeqdsks', 'zip', dir)
+
+        return sendBack
 
     def interpolateGfile(self, t):
         """
@@ -2256,6 +2286,16 @@ class engineObj():
         centers = np.array([])
         Npoints = 0
         for PFC in self.PFCs:
+            if self.MHD.timesteps[tIdx] not in PFC.timesteps:
+                print("This timestep not in PFC.timesteps. ")
+                print("If this is an error, check your PFC CSV file time bounds.")
+                print("length if MHD.timesteps: {:d}".format(len(self.MHD.timesteps)))
+                print("Length of PFC.qOptList = {:d}".format(len(PFC.qOpticalList)))
+                print("Timestep index: {:d}".format(tIdx))
+                print("Timestep [s]: {:d}".format(self.MHD.timesteps[tIdx]))
+                print("Skipping to next PFC...")
+                continue
+
             if 'hfOpt' in runList:
                 hfOptical.append(PFC.qOpticalList[tIdx].copy())
                 shadow.append(PFC.shadowMasks[tIdx].copy())
@@ -2789,7 +2829,9 @@ class engineObj():
             temperature within a PFC for a few minutes after a shot ends).  Here
             I just assign a heat flux of 0 MW/m^2 to the boundary
         """
-        input("Patch files then press enter to continue...")
+        #uncomment this line when you need to patch the HF before T calc
+        #input("Patch files then press enter to continue...")
+
         print('Setting Up OF run')
         log.info('Setting Up OF run')
         #set up base OF directory for this discharge

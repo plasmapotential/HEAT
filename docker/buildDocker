@@ -25,26 +25,36 @@ cp -r /home/tom/source/HEAT/MAFOT/lib/* dockerDir/opt/mafot/lib/
 #copy paraview bins and libs
 mkdir -p dockerDir/opt/paraview/bin
 mkdir -p dockerDir/opt/paraview/lib
-cp -rn /opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/bin/* dockerDir/opt/paraview/bin/
-cp -rn /opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/lib/* dockerDir/opt/paraview/lib/
-cp -rn /opt/paraview/ParaView-5.10.0-MPI-Linux-Python3.9-x86_64/plugins/* dockerDir/opt/paraview/lib/
+cp -rn /opt/paraview/ParaView-5.10.1-MPI-Linux-Python3.9-x86_64/bin/* dockerDir/opt/paraview/bin/
+cp -rn /opt/paraview/ParaView-5.10.1-MPI-Linux-Python3.9-x86_64/lib/* dockerDir/opt/paraview/lib/
+cp -rn /opt/paraview/ParaView-5.10.1-MPI-Linux-Python3.9-x86_64/plugins/* dockerDir/opt/paraview/lib/
 
-#copy v2106 openfoam
+#copy v2112 openfoam
 # copy openFoam bins and libs
 mkdir -p dockerDir/opt/openfoam/lib
-cp -rn /opt/openfoam/OpenFOAM-v2106/etc dockerDir/opt/openfoam/etc
-cp -rn /opt/openfoam/OpenFOAM-v2106/bin dockerDir/opt/openfoam/bin
-cp -rn /opt/openfoam/OpenFOAM-v2106/platforms dockerDir/opt/openfoam/platforms
+cp -rn /opt/openfoam/OpenFOAM-v2112/etc dockerDir/opt/openfoam/etc
+cp -rn /opt/openfoam/OpenFOAM-v2112/bin dockerDir/opt/openfoam/bin
+cp -rn /opt/openfoam/OpenFOAM-v2112/platforms dockerDir/opt/openfoam/platforms
 # set up environment var files for openfoam inside container
 rm dockerDir/opt/openfoam/etc/bashrc
 mv dockerDir/opt/openfoam/etc/bashrc_HEAT dockerDir/opt/openfoam/etc/bashrc
 rm dockerDir/opt/openfoam/etc/config.sh/setup
 mv dockerDir/opt/openfoam/etc/config.sh/setupHEAT dockerDir/opt/openfoam/etc/config.sh/setup
+#copy these files to the github repo so we dont lose them
+cp -rn dockerDir/opt/openfoam/etc/bashrc github/source/openFoamTemplates/envFiles/
+cp -rn dockerDir/opt/openfoam/etc/config.sh/setup github/source/openFoamTemplates/envFiles/
+
 # copy swak4foam bins and libs (for groovyBC)
 mkdir -p dockerDir/opt/swak4foam/bin
 mkdir -p dockerDir/opt/swak4foam/lib
-cp -rn /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/bin/* dockerDir/opt/swak4foam/bin/
-cp -rn /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/lib/* dockerDir/opt/swak4foam/lib/
+cp -rn /home/tom/OpenFOAM/tom-v2112/platforms/linux64GccDPInt32Opt/bin/* dockerDir/opt/swak4foam/bin/
+cp -rn /home/tom/OpenFOAM/tom-v2112/platforms/linux64GccDPInt32Opt/lib/* dockerDir/opt/swak4foam/lib/
+
+# copy Open3D bins and libs
+mkdir -p dockerDir/opt/open3d/bin
+mkdir -p dockerDir/opt/open3d/lib
+cp -rn /opt/open3d/Open3D/build/bin/* dockerDir/opt/open3d/bin/
+cp -rn /opt/open3d/Open3D/build/lib/* dockerDir/opt/open3d/lib/
 
 #make file for docker build files
 mkdir -p dockerDir/dockerBuildFiles

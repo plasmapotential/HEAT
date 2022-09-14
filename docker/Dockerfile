@@ -3,7 +3,7 @@
 #Date: 01/27/2022
 #Description:  Dockerfile for building HEAT docker image
 #
-#this script should only be run on ORNL dev machine
+#this script should only be run on dev machine
 #script is not run directly, but is used when buildDocker bash
 #script is run.  buildDocker script calls this file using syntax
 #similar to this:
@@ -20,12 +20,28 @@ ENV AppDir /root
 ENV APPDIR /root
 ENV DEBIAN_FRONTEND noninteractive
 ENV PYTHONPATH /usr/lib/freecad-python3/lib
-ENV LD_LIBRARY_PATH /usr/lib/x86_64-linux-gnu/netgen:/root/opt/mafot/lib:/root/opt/paraview/lib:/root/opt/openfoam/lib:/root/opt/openfoam/platforms/linux64GccDPInt32Opt/lib:/root/opt/openfoam/platforms/linux64GccDPInt32Opt/lib/sys-openmpi:/root/opt/swak4foam/lib:/root/opt/openfoam/platforms/linux64GccDPInt32Opt/lib/dummy
-ENV PATH $PATH:/root/opt/mafot/bin:/root/opt/paraview/bin:/root/opt/openfoam/bin:/root/opt/openfoam/platforms/linux64GccDPInt32Opt/bin:/root/opt/swak4foam/bin
+
+#set up paths for libs
+ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/netgen
+ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/mafot/lib
+ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/paraview/lib
+ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/openfoam/lib
+ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/openfoam/platforms/linux64GccDPInt32Opt/lib
+ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/openfoam/platforms/linux64GccDPInt32Opt/lib/sys-openmpi
+ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/swak4foam/lib
+ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/openfoam/platforms/linux64GccDPInt32Opt/lib/dummy
+ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/open3d/lib
+#set up paths for bins
+ENV PATH $PATH:/root/opt/mafot/bin
+ENV PATH $PATH:/root/opt/paraview/bin
+ENV PATH $PATH:/root/opt/openfoam/bin
+ENV PATH $PATH:/root/opt/openfoam/platforms/linux64GccDPInt32Opt/bin
+ENV PATH $PATH:/root/opt/swak4foam/bin
+ENV PATH $PATH:/root/opt/open3d/bin
 
 # install system-wide deps for HEAT
 RUN apt-get -yqq update
-RUN apt-get -yqq install python3
+RUN apt-get -yqq install python3-dev
 RUN apt-get -yqq install python3-pip
 RUN apt-get -yqq install python3-pkg-resources
 RUN apt-get -yqq install python3-distutils

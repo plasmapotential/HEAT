@@ -22,7 +22,8 @@ FoamFile
 // Which of the steps to run
 castellatedMesh true;
 snap            true;
-addLayers       true;
+//you can set this to true to engage parameters below
+addLayers       false;
 
 
 // Geometry. Definition of all surfaces. All surfaces are of class
@@ -77,7 +78,7 @@ castellatedMeshControls
     // Number of buffer layers between different levels.
     // 1 means normal 2:1 refinement restriction, larger means slower
     // refinement.
-    nCellsBetweenLevels 3;
+    nCellsBetweenLevels 1;
 
 
 
@@ -169,7 +170,8 @@ snapControls
 {
     //- Number of patch smoothing iterations before finding correspondence
     //  to surface
-    nSmoothPatch 5;
+    //decrease this if your corners are getting rounded
+    nSmoothPatch 3;
 
     //- Relative distance for points to be attracted by surface feature point
     //  or edge. True distance is this factor times local
@@ -192,10 +194,10 @@ snapControls
 
         //- Detect (geometric only) features by sampling the surface
         //  (default=false).
-        implicitFeatureSnap true;
+        implicitFeatureSnap false;
 
         //- Use castellatedMeshControls::features (default = true)
-        explicitFeatureSnap false;
+        explicitFeatureSnap true;
 
         //- Detect points on multiple surfaces (only for explicitFeatureSnap)
         multiRegionFeatureSnap false;
@@ -281,7 +283,7 @@ addLayersControls
     // Overall max number of layer addition iterations. The mesher will exit
     // if it reaches this number of iterations; possibly with an illegal
     // mesh.
-    nLayerIter 50;
+    nLayerIter 100;
 }
 
 

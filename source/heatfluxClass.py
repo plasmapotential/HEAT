@@ -990,6 +990,7 @@ class heatFlux:
             else:
                 PFC.qDiv = df['HF'].values
                 PFC.powerFrac = self.getDivertorPowerFraction(PFC.DivCode)
+                PFC.qOpticalList.append(PFC.qDiv)
                 print("Loaded heat flux from file: "+f)
                 val = 0
         except:

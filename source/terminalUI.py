@@ -17,6 +17,7 @@ tools = toolsClass.tools()
 import logging
 log = logging.getLogger(__name__)
 import multiprocessing
+import time
 
 
 #get relevant environment variables.  Needed for containers
@@ -186,6 +187,7 @@ class TUI():
         """
         runs HEAT engine.  Steps through time solving for vars in runList
         """
+        t0 = time.time()
         #if user supplied multiple input files in TUI, they are parsed at each timestep
         #note that if running openfoam, only the last timestep's input file
         #will be used for the openFOAM settings.
@@ -196,6 +198,7 @@ class TUI():
             self.loadOF()
             #run openFOAM analysis
             self.ENG.runOpenFOAM()
+        print("Total time: {:f}".format(time.time() - t0))
         return
 
     def prepareDirectories(self,mach,tag, clobber='y'):

@@ -3011,6 +3011,9 @@ def gFileMultipiers():
             dcc.Input(id="IpMult", className="gfileBoxInput", value="1.0"),
             html.Label("Ip Addition", style={'margin':'0 10px 0 10px'}),
             dcc.Input(id="IpAdd", className="gfileBoxInput", value="0.0"),
+            html.Br(),
+            dcc.Checklist(options=[{'label':'Apply to all timesteps?', 'value':'all'}], id='correctAllts'),
+            html.Br(),
             html.Button("Apply Corrections", id="applyMult", n_clicks=0, style={'margin':'0 10px 10px 0'}),
             html.Div(id="hiddenDivMult"),
             html.Label("*Sign of Bt0 and Ip checked for helicity in traces (MAFOT)", style={'margin':'0 10px 0 10px'}),
@@ -3049,9 +3052,12 @@ def saveNewGfile():
     return html.Div(
         id="saveGfile",
         children=[
-            html.Label("New gFile Name", style={'margin':'0 10px 0 10px'}),
+            html.Label("New gFile Name (suffix for multiple)", style={'margin':'0 10px 0 10px'}),
             dcc.Input(id="newGfileName", className="gfileBoxInput"),
             html.Button("Save New gFile", id="saveGfileButton", n_clicks=0, style={'margin':'10px 10px 10px 10px'}),
+            html.Br(),
+            dcc.Checklist(options=[{'label':'Save all timesteps?', 'value':'all'}], id='saveAllGs'),
+            html.Br(),
             dcc.Download(id="downloadNewGfile"),
             html.Div(id="hiddenDivSaveGfile")
         ],
@@ -3157,10 +3163,11 @@ def interpolateNsteps(n_clicks, N, data):
                State('Bt0Add','value'),
                State('IpMult','value'),
                State('IpAdd','value'),
-               State('timeSlider', 'value')])
+               State('timeSlider', 'value'),
+               State('correctAllts', 'value')])
 def applyMult(n_clicks, psiRZMult, psiSepMult, psiAxisMult, FpolMult,
               psiRZAdd,psiSepAdd,psiAxisAdd,FpolAdd,
-              Bt0Mult,Bt0Add,IpMult,IpAdd,t):
+              Bt0Mult,Bt0Add,IpMult,IpAdd,t,correctAllts):
     """
     apply multiplier to psiRZ, psiSep, psiAxis, Fpol for currently
     selected equilibrium timestep
@@ -3211,7 +3218,7 @@ def applyMult(n_clicks, psiRZMult, psiSepMult, psiAxisMult, FpolMult,
 
     gui.gfileClean(psiRZMult,psiSepMult,psiAxisMult,FpolMult,
                    psiRZAdd,psiSepAdd,psiAxisAdd,FpolAdd,
-                   Bt0Mult,Bt0Add,IpMult,IpAdd,t)
+                   Bt0Mult,Bt0Add,IpMult,IpAdd,t,correctAllts)
     return returnDiv
 
 @app.callback(Output('hiddenDivSep', 'children'),
@@ -3251,13 +3258,25 @@ def findLCFSbutton(n_clicks, t, PFC_n_clicks, r):
               [Input('saveGfileButton', 'n_clicks')],
               [State('newGfileName','value'),
                State('timeSlider', 'value'),
-               State('shot', 'value')])
-def saveG(n_clicks, filename, t, shot):
+               State('shot', 'value'),
+               State('saveAllGs','value')])
+def saveG(n_clicks, name, t, shot, saveAllGs):
     if n_clicks < 1:
         raise PreventUpdate
-    gui.writeGfile(filename, shot, t)
-    return [html.Label("Saved gFile", style={'color':'#f5d142'}),
-            dcc.send_file(gui.tmpDir + filename)]
+
+    if saveAllGs is None:
+        allMask = False
+        gui.writeGfile(name, shot, t)
+        sendBack = gui.tmpDir + name
+        outDiv = html.Label("Saved gFile", style={'color':'#f5d142'})
+    elif 'all' in saveAllGs:
+        allMask = True
+        sendBack = gui.createGfileZip()
+        outDiv = html.Label("Saved gFiles", style={'color':'#f5d142'})
+
+
+    return [outDiv,
+            dcc.send_file(sendBack)]
 
 """
 ==============================================================================

@@ -106,12 +106,11 @@ class RAD:
 
         #build out source array (R,Z,phi)
         NR = self.PC2D.shape[0]
-        self.Nphi = len(self.phis)
         PC2D = np.append( self.PC2D, np.zeros([NR,1]), 1 ) #add column for phi
         self.PC3D = np.repeat(PC2D[:,:,np.newaxis],self.Nphi,axis=2) #repeat Nphi times
         self.PC3D[:,-1,:] = np.repeat(self.phis[np.newaxis], NR, axis=0) #fill in phis
-        #normalize Power to the number of toroidal steps
-        self.PC3D[:,2,:] /= self.Nphi
+        #normalize power to the number of toroidal steps and toroidal section width, deltaPhi
+        self.PC3D[:,2,:] = self.PC3D[:,2,:] * (self.deltaPhi / 360.0) / self.Nphi
 
         #RZphi = np.vstack([self.PC3D[:,0,:].flatten(),self.PC3D[:,1,:].flatten()]).T
         #RZphi = np.vstack([RZ.T, self.PC3D[:,3,:].flatten()]).T
@@ -127,6 +126,8 @@ class RAD:
         phiMax: maximum angle of phi in degrees
         """
         self.phis = np.linspace(phiMin, phiMax, Ntor)
+        self.Nphi = len(self.phis)
+        self.deltaPhi = phiMax - phiMin
         return
 
 

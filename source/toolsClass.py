@@ -916,7 +916,7 @@ class tools:
         if GID == None:
             GID = -1
         if UID == None:
-            UID == -1
+            UID = -1
         try:
             os.chown(path, UID, GID)
         except OSError as e:

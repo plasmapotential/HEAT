@@ -260,7 +260,8 @@ class MHD:
         return
 
 
-    def Bfield_pointcloud(self, ep, R, Z, phi, powerDir=None, normal=False):
+    def Bfield_pointcloud(self, ep, R, Z, phi, powerDir=None, normal=False,
+                          helicityCheck=True):
         """
         Creates a Bfield Pointcloud that can be saved in a .csv file
         This pointcloud is then used by ParaView to overlay the
@@ -277,52 +278,56 @@ class MHD:
 
         Note: this function returns the normal Bfield components if normal=True
 
+        if helicityCheck is True, we update helicity based upon signs of variables
+        in GEQDSK
+
         """
-        #check for signs
-        FSign = np.sign(ep.g['Fpol'][-1])
-        Bt0Sign = np.sign(ep.g['Bt0'])
-        IpSign = np.sign(ep.g['Ip'])
-        psiSign = np.sign(ep.psiFunc.ev(R,Z))
 
         Bt = ep.BtFunc.ev(R,Z)
         BR = ep.BRFunc.ev(R,Z)
         BZ = ep.BZFunc.ev(R,Z)
-
-        #correct field directions to match psi, Fpol, Ip, Bt0
         BtMult = 1.0
         BpMult = 1.0
-        #the ep object (equilParams_class.py) uses Fpol to define Bt everywhere,
-        #so we check to make sure the sign matches Bt0
-        if FSign != Bt0Sign:
-            BtMult = -1.0
-        else:
-            BtMult = 1.0
-        #the ep object defines B by derivatives of psi, but doesnt take into
-        #account whether or not psi is increasing / decreasing from axis to sep
-        if ep.g['psiSep'] > ep.g['psiAxis']: #dPsi/dR > 0 at OMP
-            BpMult = 1.0
-        else:
-            BpMult = -1.0
-        #the ep object does not check for the sign of Ip when defining Bp,
-        #so we check Bp at the omp to see if it follows the sign of Ip
-        if np.sign(ep.g['Ip']) > 0:
-            BpMult *= 1.0
-        else:
-            BpMult *= -1.0
 
+        if helicityCheck == True:
+            #check for signs
+            FSign = np.sign(ep.g['Fpol'][-1])
+            Bt0Sign = np.sign(ep.g['Bt0'])
+            IpSign = np.sign(ep.g['Ip'])
+            psiSign = np.sign(ep.psiFunc.ev(R,Z))
 
-        print("Fpol sign: {:f}".format(FSign))
-        print("Bt0 sign: {:f}".format(Bt0Sign))
-        print("Ip sign: {:f}".format(IpSign))
-        print("psiRZ sign [0]: {:f}".format(psiSign[0]))
-        print("BtMult: {:f}".format(BtMult))
-        print("BpMult: {:f}".format(BpMult))
-        log.info("Fpol sign: {:f}".format(FSign))
-        log.info("Bt0 sign: {:f}".format(Bt0Sign))
-        log.info("Ip sign: {:f}".format(IpSign))
-        log.info("psiRZ sign [0]: {:f}".format(psiSign[0]))
-        log.info("BtMult: {:f}".format(BtMult))
-        log.info("BpMult: {:f}".format(BpMult))
+            #correct field directions to match psi, Fpol, Ip, Bt0
+            #the ep object (equilParams_class.py) uses Fpol to define Bt everywhere,
+            #so we check to make sure the sign matches Bt0
+            if FSign != Bt0Sign:
+                BtMult = -1.0
+            else:
+                BtMult = 1.0
+            #the ep object defines B by derivatives of psi, but doesnt take into
+            #account whether or not psi is increasing / decreasing from axis to sep
+            if ep.g['psiSep'] > ep.g['psiAxis']: #dPsi/dR > 0 at OMP
+                BpMult = 1.0
+            else:
+                BpMult = -1.0
+            #the ep object does not check for the sign of Ip when defining Bp,
+            #so we check Bp at the omp to see if it follows the sign of Ip
+            if np.sign(ep.g['Ip']) > 0:
+                BpMult *= 1.0
+            else:
+                BpMult *= -1.0
+
+            print("Fpol sign: {:f}".format(FSign))
+            print("Bt0 sign: {:f}".format(Bt0Sign))
+            print("Ip sign: {:f}".format(IpSign))
+            print("psiRZ sign [0]: {:f}".format(psiSign[0]))
+            print("BtMult: {:f}".format(BtMult))
+            print("BpMult: {:f}".format(BpMult))
+            log.info("Fpol sign: {:f}".format(FSign))
+            log.info("Bt0 sign: {:f}".format(Bt0Sign))
+            log.info("Ip sign: {:f}".format(IpSign))
+            log.info("psiRZ sign [0]: {:f}".format(psiSign[0]))
+            log.info("BtMult: {:f}".format(BtMult))
+            log.info("BpMult: {:f}".format(BpMult))
 
         Bt *= BtMult
         BR *= BpMult

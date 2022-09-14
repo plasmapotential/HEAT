@@ -15,7 +15,8 @@ import matplotlib.pyplot as plt
 import logging
 
 
-def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None, logFile=False):
+def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
+                    logFile=False, bg = None, xRange=None, yRange=None):
     """
     returns a DASH object for use directly in dash app
     """
@@ -49,8 +50,9 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None, logFile=F
 # for aspect ratio
 #    if height==None:
 #        height=1000
-#    aspect = (z.max()-z.min()) / (r.max()-r.min())
-#    width = (1.0/aspect)*height
+    if height is not None:
+        aspect = (z.max()-z.min()) / (r.max()-r.min())
+        width = (1.0/aspect)*height
 
 
 
@@ -155,6 +157,9 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None, logFile=F
                 )
                 )
 
+    #set bkgrd color if not default (clear)
+    if bg is None:
+        bg = 'rgba(0,0,0,0)'
 
 
     fig.update_layout(
@@ -166,16 +171,35 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None, logFile=F
         #autosize=False,
         #width=width*1.1,
         #height=height,
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor=bg,
+        plot_bgcolor=bg,
         showlegend=False,
         font=dict(
 #            family="Courier New",
             size=18,
             color="#dcdce3"
+        ),
+        margin=dict(
+            l=10,
+            r=10,
+            b=10,
+            t=50,
+            pad=4
         )
         )
+
     fig.update_yaxes(scaleanchor = "x",scaleratio = 1,)
+
+    #set height if we use this for a png image
+    if height is not None:
+        fig.update_layout(height=height, width=width)
+
+    #set ranges if not none
+    if xRange is not None:
+        fig.update_layout(xaxis_range=xRange)
+    if yRange is not None:
+        fig.update_layout(yaxis_range=yRange)
+
     return fig
 
 
