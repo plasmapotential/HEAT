@@ -94,7 +94,8 @@ def loadEnviron():
 
         ### FREECAD
         #docker ubuntu repo freecad path
-        FreeCADPath = '/usr/lib/freecad-python3/lib'
+        #FreeCADPath = '/usr/lib/freecad-python3/lib'
+        FreeCADPath = '/usr/lib/freecad-daily/lib'
 
         ### ORNL EFIT CLASS
         #default source code location (EFIT class should be here)
@@ -111,8 +112,8 @@ def loadEnviron():
         pyFoamPath = '/'
 
         ### Open3D
-        O3Dpath = AppDir + '/opt/open3d/lib/python_package/open3d'
-
+        O3Dpath = AppDir + '/opt/open3d/lib/python_package'
+        print(O3Dpath)
 
         #ENV VARS
         #create necessary environment variables when outside appImage

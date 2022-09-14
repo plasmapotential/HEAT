@@ -9,6 +9,7 @@ version: "3"
 
 services:
   HEAT:
+    user: "${UID}:${GID}"
     image: "plasmapotential/heat"
     ports:
       - "8050:8050"
@@ -19,8 +20,8 @@ services:
       #
       # HEAT data directory on this machine (if exists)
       - ${HOME}/HEAT:/root/HEAT
-#      # HEAT source code from github
-#      - /home/tom/source/HEAT/github/source:/root/source/HEAT
+      # HEAT source code from github
+      - /home/tom/source/HEAT/github/source:/root/source/HEAT
 #      # ORNL EFIT class from github (if you have access)
 #      - /home/tom/source/EFIT:/root/EFIT
 #      # MAFOT bins and libs
@@ -32,8 +33,8 @@ services:
 #      #swak4foam bins / libs
 #      - /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/bin:/root/opt/swak4foam/bin
 #      - /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/lib:/root/opt/swak4foam/lib
-#      # Batch mode directory
-#      - /home/tom/HEATruns/NSTXU/radTests:/root/terminal
+      # Batch mode directory
+      - /home/tom/HEATruns/SPARC/sweep7_T4:/root/terminal
     stdin_open: true # docker run -i
     tty: true        # docker run -t
     #if you want to set env vars, do it here:

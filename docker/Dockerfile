@@ -10,7 +10,7 @@
 # docker build -t plasmapotential/heat -f ./Dockerfile ./github/source
 
 # start from base
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 MAINTAINER Tom Looby <loobytp@ornl.gov>
 
@@ -22,15 +22,17 @@ ENV DEBIAN_FRONTEND noninteractive
 ENV PYTHONPATH /usr/lib/freecad-python3/lib
 
 #set up paths for libs
+ENV LD_LIBARY_PATH $LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/qt5
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/netgen
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/mafot/lib
-ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/paraview/lib
+#ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/paraview/lib #comment to prevent qt5 conflicts
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/openfoam/lib
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/openfoam/platforms/linux64GccDPInt32Opt/lib
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/openfoam/platforms/linux64GccDPInt32Opt/lib/sys-openmpi
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/swak4foam/lib
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/openfoam/platforms/linux64GccDPInt32Opt/lib/dummy
-ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/open3d/lib
+ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/open3d/lib:/root/opt/open3d/lib/python_package
+
 #set up paths for bins
 ENV PATH $PATH:/root/opt/mafot/bin
 ENV PATH $PATH:/root/opt/paraview/bin
@@ -41,17 +43,25 @@ ENV PATH $PATH:/root/opt/open3d/bin
 
 # install system-wide deps for HEAT
 RUN apt-get -yqq update
-RUN apt-get -yqq install python3-dev
+RUN apt-get -yqq install python3
 RUN apt-get -yqq install python3-pip
 RUN apt-get -yqq install python3-pkg-resources
 RUN apt-get -yqq install python3-distutils
 #RUN apt-get -yqq install mdsplus-python
-RUN apt-get -yqq install libfreecad-python3-0.18
+RUN apt-get -yqq install libfreecad-python3-0.19
+#RUN apt-get -yqq install software-properties-common
+#RUN add-apt-repository ppa:freecad-maintainers/freecad-daily
+#RUN apt update
+#RUN apt-get install -yqq freecad-daily-python3
 RUN apt-get -yqq install coreutils
-RUN apt-get -yqq install libnglib-6.2.1804
+RUN apt-get -yqq install libnglib-6.2
 RUN apt-get -yqq install libcurl4
 RUN apt-get -yqq install nano
 RUN apt-get -yqq install git
+RUN apt-get -yqq install gfortran
+RUN apt-get -yqq install libunwind-dev
+RUN ln -s /usr/lib/x86_64-linux-gnu/libunwind.so /usr/lib/x86_64-linux-gnu/libunwind.so.1
+
 
 # copy context
 WORKDIR /root

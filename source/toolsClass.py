@@ -936,6 +936,9 @@ class tools:
         GID is group id
         chmod is permissions in base 10 (or if in base 8 preface with 0o)
         """
+        print("Changing directory ownership recursively")
+        print("GID: {:d}".format(GID))
+        print("UID: {:d}".format(UID))
         for dirpath, dirnames, filenames in os.walk(path):
             os.chown(dirpath, UID, GID)
             os.chmod(dirpath, chmod)
