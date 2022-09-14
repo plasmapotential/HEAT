@@ -106,6 +106,10 @@ def loadEnviron():
         #pyFoam python scripts
         pyFoamPath = '/'
 
+        ### Open3D
+        O3Dpath = AppDir + '/opt/open3d/lib/python_package/open3d'
+
+
         #ENV VARS
         #create necessary environment variables when outside appImage
         os.environ["PVPath"] = PVPath
@@ -192,7 +196,7 @@ def loadEnviron():
     oldEnv = os.environ["PATH"]
     #os.environ["PATH"] = oldEnv + ':' + pvpythonCMD
     #append Open3D to python path
-    sys.path.append(O3Dpath)        
+    sys.path.append(O3Dpath)
     #===============================================================================
 
     #Create dataPath
