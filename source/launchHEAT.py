@@ -72,6 +72,10 @@ def loadEnviron():
         #default source code location (EFIT class should be here)
         EFITPath = AppDir + '/usr/src'
 
+        ### Open3D
+        O3Dpath = AppDir + '/usr/lib/open3d/lib/python_package/open3d'
+
+
         ###  Docker container
     elif runMode == 'docker':
         print("Running in Docker mode")
