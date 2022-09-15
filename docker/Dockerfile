@@ -48,11 +48,11 @@ RUN apt-get -yqq install python3-pip
 RUN apt-get -yqq install python3-pkg-resources
 RUN apt-get -yqq install python3-distutils
 #RUN apt-get -yqq install mdsplus-python
-RUN apt-get -yqq install libfreecad-python3-0.19
-#RUN apt-get -yqq install software-properties-common
-#RUN add-apt-repository ppa:freecad-maintainers/freecad-daily
-#RUN apt update
-#RUN apt-get install -yqq freecad-daily-python3
+#RUN apt-get -yqq install libfreecad-python3-0.19
+RUN apt-get -yqq install software-properties-common
+RUN add-apt-repository ppa:freecad-maintainers/freecad-daily
+RUN apt-get update
+RUN apt-get install -yqq freecad-daily-python3
 RUN apt-get -yqq install coreutils
 RUN apt-get -yqq install libnglib-6.2
 RUN apt-get -yqq install libcurl4
@@ -61,7 +61,6 @@ RUN apt-get -yqq install git
 RUN apt-get -yqq install gfortran
 RUN apt-get -yqq install libunwind-dev
 RUN ln -s /usr/lib/x86_64-linux-gnu/libunwind.so /usr/lib/x86_64-linux-gnu/libunwind.so.1
-
 
 # copy context
 WORKDIR /root

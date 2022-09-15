@@ -113,7 +113,6 @@ def loadEnviron():
 
         ### Open3D
         O3Dpath = AppDir + '/opt/open3d/lib/python_package'
-        print(O3Dpath)
 
         #ENV VARS
         #create necessary environment variables when outside appImage
