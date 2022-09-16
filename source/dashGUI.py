@@ -3735,6 +3735,11 @@ def slideEQplot(value, dummy1, tom):
     #update plot on gfile cleaner tab with Bp, Bt
     plot3= plotly2DEQ.makePlotlyBpBt(ep, MachFlag)
 
+    #this allows zoom to be preserved across button clicks
+    plot.update_layout(uirevision='neverUpdate')
+    plot2.update_layout(uirevision='neverUpdate')
+    plot3.update_layout(uirevision='neverUpdate')
+
     return plot, data, plot2, plot3
 
 

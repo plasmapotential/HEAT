@@ -183,7 +183,7 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
             l=10,
             r=10,
             b=10,
-            t=50,
+            t=100,
             pad=4
         )
         )
