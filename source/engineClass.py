@@ -1191,6 +1191,9 @@ class engineObj():
             print(self.GYRO.gyroSources)
             log.info(self.GYRO.gyroSources)
 
+        #toroidal step size taken from MHD object
+        self.GYRO.dpinit = self.MHD.dpinit
+
         #set up GYRO object
         self.GYRO.setupConstants(self.GYRO.ionMassAMU)
         print('Loaded Gyro Orbit Settings')

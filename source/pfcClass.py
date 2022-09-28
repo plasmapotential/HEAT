@@ -420,7 +420,7 @@ class PFC:
         #===INTERSECTION TEST 1 (tricky frontface culling / first step up field line)
         dphi = 1.0
         MHD.ittStruct = 1.0
-        numSteps = MHD.nTrace #actual trace is (numSteps + 1)*dphi degrees
+        numSteps = MHD.nTrace #actual trace is (numSteps + 1)*dphi/dpinit degrees
         #If numSteps = 0, dont do intersection checking
         if numSteps > 0:
             print("\nIntersection Test #1")
@@ -612,6 +612,469 @@ class PFC:
         print("Completed Intersection Check")
         return
 
+
+    def findGuidingCenterPaths(self, MHD, GYRO):
+        """
+        traces B field in both directions (mapDirection=0) from PFCs
+        saves trace into PFC object variable, self.guidingCenterPaths
+        """
+        #walk up field line to determine where we should start helix tracing from
+        CTLfile = self.controlfilePath + self.controlfileStruct
+        MHD.ittGyro = int(GYRO.gyroDeg / GYRO.dpinit)
+        print("Tracing guiding centers for {:f} degrees".format(GYRO.gyroDeg))
+
+        #MHD.writeControlFile(CTLfile, self.t, 0, mode='gyro') #0 for both directions
+        #trace
+        if GYRO.gyroSourceTag == 'allROI':
+            MHD.writeMAFOTpointfile(self.gyroCenters,self.gridfileStruct)
+            MHD.writeControlFile(CTLfile, self.t, 0, mode='gyro') #0 for both directions
+            MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
+                                    self.controlfileStruct)
+
+
+        else:
+            #here we assume for gyroPlanes the entire PFC has 1 powerDir
+            if self.powerDir[0] > 0:
+                MHD.writeMAFOTpointfile(self.gyroCenters,self.gridfileStruct)
+                MHD.writeControlFile(CTLfile, self.t, 1, mode='gyro') #0 for both directions
+                MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
+                                        self.controlfileStruct)
+            else:
+                MHD.writeMAFOTpointfile(self.gyroCenters,self.gridfileStruct)
+                MHD.writeControlFile(CTLfile, self.t, -1, mode='gyro') #0 for both directions
+                MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
+                                        self.controlfileStruct)
+
+            #currently only support tracing one direction for gyroSourcePlanes.
+            #could modify this else to have fwd and rev capabilities for
+            #traces in multiple directions.
+            #would need to build self.guidingCenterPaths appropriately
+            #run forward
+            #fwd = np.where(self.powerDir == 1)[0]
+            #MHD.writeMAFOTpointfile(self.gyroCenters[fwd],self.gridfileStruct)
+            #MHD.writeControlFile(CTLfile, self.t, 1, mode='gyro') #0 for both directions
+            #MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
+            #                            self.controlfileStruct)
+            ##run reverse
+            #rev = np.where(self.powerDir == -1)[0]
+            #MHD.writeMAFOTpointfile(self.gyroCenters[rev],self.gridfileStruct)
+            #MHD.writeControlFile(CTLfile, self.t, -1, mode='gyro') #0 for both directions
+            #MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
+            #                        self.controlfileStruct)
+
+
+        self.guidingCenterPaths = tools.readStructOutput(self.structOutfile)
+        #os.remove(self.structOutfile) #clean up
+        #os.remove(self.gridfileStruct) #clean up
+        return
+
+    def findHelicalPathsOpen3D(self, GYRO):
+        """
+        walks downstream along the guidingCenterPaths and calculates the helical
+        trajectories of particles' gyro orbit paths.
+        Also calculates intersections along the way
+
+        Builds out the matrix, GYRO.intersectRecord, which is a 4D matrix
+        containing the indices of the face where each helical path intersects
+        on its way into the divertor.  intersectRecord is 4D to allow traces
+        for uniformly sampled gyroPhase angles (1stD), uniformly selected velocity
+        space angles (2ndD), uniformly (in terms of probability) sampled vPerp (3rdD),
+        and all the points on the PFC mesh (4thD).  To sample another variable,
+        such as vParallel, you would need to add a 5th dimension.
+
+        MC always stands for monte carlo, and is attached to variables to
+        signify that they are rewritten often (ie every MC simulation)
+
+        PFCintersectMap maps from all intersects to the intersects for this PFC
+        HOTGYRO maps from all ROI faces to the ones that have this PFCs name
+        use / indexMap maps from HOTGYRO to the faces that still havent intersected
+
+        Uses Open3D to accelerate the calculation:
+        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
+        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
+
+        performs all steps in the trace at once
+        """
+        #get only the PFCs in this PFC's intersectList
+        PFCList = self.intersects
+        #PFCList.append(self.name)
+        PFCList = np.unique(PFCList)
+        #if we are using this PFC as a source, remove it from intersections
+        #if we run in allROI gyroSource mode, all ROI PFCs are included as intersections
+        if self.name in GYRO.gyroSources:
+            rmv = np.where(PFCList == self.name)[0]
+            PFCList = np.delete(PFCList, rmv)
+        GYRO.PFCintersectMap = []
+        for pfc in PFCList:
+            if pfc in GYRO.CADtargetNames:
+                idx1 = np.where(np.array(GYRO.CADtargetNames) == pfc)[0]
+                #mapping from all targets to this PFCs intersects
+                GYRO.PFCintersectMap = np.hstack([GYRO.PFCintersectMap,idx1]).astype(int)
+
+        PFC_t1 = GYRO.t1[GYRO.PFCintersectMap]
+        PFC_t2 = GYRO.t2[GYRO.PFCintersectMap]
+        PFC_t3 = GYRO.t3[GYRO.PFCintersectMap]
+
+        GYRO.PFC_Nt = len(PFC_t1)
+        GYRO.targets = np.hstack([PFC_t1, PFC_t2, PFC_t3]).reshape(GYRO.PFC_Nt*3,3)
+        GYRO.Nctrs = self.N_gyroCenters
+
+        print("PFC "+self.name+" has {:f} / {:f} intersects and {:f} / {:f} ROIs".format(GYRO.PFC_Nt, GYRO.Nt, self.N_gyroCenters, GYRO.N_CADROI))
+
+        #for debugging, print data about ROIidx (index w.r.t. all faces: roi+intersects)
+        #also prints out the helical trace for this index to vtk format
+        #loops run slow when this index is present, as they are writing vtk files
+        #set to None when not in use
+        ROIidx = None
+        GYRO.traceIndex = None
+        GYRO.traceIndex2 = None
+        if ROIidx is not None:
+            if ROIidx in GYRO.CADROI_PFCROImap:
+                loc = np.where(GYRO.CADROI_PFCROImap==ROIidx)[0][0]
+                if np.array(GYRO.PFCROINames)[GYRO.CADROI_PFCROImap[loc]] == self.name:
+                    if ROIidx in GYRO.CADROI_HOTmap:
+                        loc2 = np.where(GYRO.CADROI_HOTmap==loc)[0][0]
+                        GYRO.traceIndex = loc2
+                        GYRO.controlfilePath = self.controlfilePath
+                        print("Tracing helix for idx: {:f}".format(GYRO.traceIndex)+' on '+self.name)
+
+        #setup velocities and velocity phase angles
+        GYRO.setupVelocities(self.N_gyroCenters)
+        #setup gyroPhase angle
+        GYRO.uniformGyroPhaseAngle()
+        #setup frequencies
+        GYRO.setupFreqs(self.Bmag[self.PFC_GYROmap,-1])
+
+        #Walk downstream along GC path tracing helices and looking for intersections
+        if "allROI" in GYRO.gyroSources:
+            N_GCdeg = int((GYRO.gyroDeg*2) / GYRO.dpinit) + 1
+        else:
+            N_GCdeg = int((GYRO.gyroDeg) / GYRO.dpinit) + 1
+
+        GYRO.Nsteps = N_GCdeg
+        gP = 0
+        vP = 0
+        vS = 0
+        #gyroPhase loop
+        for gyroPhase in range(GYRO.N_gyroPhase):
+            print("\n============GyroPhase: {:f} rad".format(GYRO.gyroPhases[gyroPhase]))
+            #velocity phase loop
+            for vPhase in range(GYRO.N_vPhase):
+                print("============vPhase: {:f} rad".format(GYRO.vPhases[vPhase]))
+                GYRO.vPhaseMC = GYRO.vPhases[vPhase]
+                #velocity slice loop
+                for vSlice in range(GYRO.N_vSlice):
+                    print("============vSLice #: {:f}".format(vSlice))
+                    print("Current gyro run (gP,vP,vS): ({:d},{:d},{:d})".format(gP,vP,vS))
+                    #initialize phase angle for this MC run
+                    GYRO.lastPhase = np.ones((self.N_gyroCenters))*GYRO.gyroPhases[gyroPhase]
+                    #calculate velocities and radii for this MC run
+                    v = GYRO.vSlices[:,vSlice]
+                    GYRO.vPerpMC = v * np.cos(GYRO.vPhaseMC)
+                    GYRO.vParallelMC = v * np.sin(GYRO.vPhaseMC)
+                    GYRO.rGyroMC = GYRO.vPerpMC / GYRO.omegaGyro
+                    #GYRO.rGyroMC = GYRO.vPerpMC / GYRO.fGyro
+                    print("Index [0] parameters:")
+                    print("vPerp = {:f} m/s".format(GYRO.vPerpMC[0]))
+                    print("vParallel = {:f} m/s".format(GYRO.vParallelMC[0]))
+                    print("rGyro = {:f} m".format(GYRO.rGyroMC[0]))
+                    print("Bmag = {:f} T".format(self.Bmag[0,-1]))
+
+
+                    #for printing helices
+                    if GYRO.traceIndex is not None:
+                        try:
+                            GYRO.traceIndex2 = np.where(self.CADHOT_GYROmap==GYRO.traceIndex)[0][0]
+                            print("Tracing index: {:d}".format(GYRO.traceIndex2))
+                        except:
+                            print("Reseting trace index")
+                            GYRO.traceIndex2 = None
+
+                    #powerDirection can flow both ways on one PFC, and MAFOT always walks CCW,
+                    #so we flip the MAFOT traces that are backwards around
+                    fwd = np.where(self.powerDir[self.PFC_GYROmap]==1)[0]
+                    rev = np.where(self.powerDir[self.PFC_GYROmap]==-1)[0]
+                    GCP = self.guidingCenterPaths.reshape(GYRO.Nctrs,GYRO.Nsteps,3)
+                    GCP[rev] = np.flip(GCP[rev], axis=1)
+                    GYRO.p0 = GCP[:,:-1,:]
+                    GYRO.p1 = GCP[:,1:,:]
+
+                    #calculate helix path for this step down guiding center path
+                    #GYRO.intersectRecord[gyroPhase,vPhase,vSlice,use], hdotn = GYRO.multipleGyroTrace()
+                    index, hdotn = GYRO.multipleGyroTraceOpen3D()
+                    GYRO.intersectRecord[gyroPhase,vPhase,vSlice,self.PFCHOT_GYROmap] = index
+
+                    #gyro trace incident angle - calculate helix dot n
+                    #idx = GYRO.intersectRecord[gyroPhase,vPhase,vSlice,self.PFCHOT_GYROmap[GYRO.GYRO_HLXmap]]
+                    #notNan = np.where(np.isnan(idx)==False)[0] #dont include NaNs (NaNs = no intersection)
+                    #idx = idx[~np.isnan(idx)] #indices we map power to
+                    #idx = idx.astype(int) #cast as integer
+                    GYRO.hdotn[gyroPhase,vPhase,vSlice,self.PFCHOT_GYROmap] = hdotn
+
+                    vS += 1
+                vP += 1
+                vS = 0
+            gP += 1
+            vP = 0
+        print("Gyro Trace Completed")
+        log.info("Gyro Trace Completed")
+
+        #profiler.disable()
+        #save intersectRecord to file
+        #stats = pstats.Stats(profiler).sort_stats('ncalls')
+        #stats.print_stats()
+        #uncomment for testing.  Print list of indices and
+        #associated intersection faces
+        #print("Intersect Record:")
+        #for i in range(len(GYRO.intersectRecord[0,0,0,:])):
+        #    print("Launch Face: {:d}, Intersect Face: {:d}".format(int(i), int(GYRO.intersectRecord[0,0,0,i])))
+        #
+        return
+
+
+
+
+    def intersectTestOpen3D(self,q1,q2,targets,targetNorms, batchSize=1000):
+        """
+        checks if any of the lines (field line traces) generated by MAFOT
+        struct program intersect any of the target mesh faces.
+
+        Uses Open3D to accelerate the calculation:
+        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
+        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
+        """
+        t0 = time.time()
+        N = len(q2)
+        Nt = len(targets)
+        print('{:d} Source Faces and {:d} Target Faces in PFC object'.format(N,Nt))
+
+        mask = np.ones((N))
+
+        #construct rays
+        r = q2-q1
+        rMag = np.linalg.norm(r, axis=1)
+        rNorm = r / rMag.reshape((-1,1))
+
+        #cast variables to 32bit for C
+        vertices = np.array(targets.reshape(Nt*3,3), dtype=np.float32)
+        triangles = np.array(np.arange(Nt*3).reshape(Nt,3), dtype=np.uint32)
+
+        #build intersection mesh and tensors for open3d
+        mesh = o3d.t.geometry.TriangleMesh()
+        scene = o3d.t.geometry.RaycastingScene()
+        mesh_id = scene.add_triangles(vertices, triangles)
+
+        #calculate size of potential arrays in RAM
+        #availableRAM = psutil.virtual_memory().available #bytes
+
+        #calculate intersections
+        rays = o3d.core.Tensor([np.hstack([np.float32(q1),np.float32(rNorm)])],dtype=o3d.core.Dtype.Float32)
+        hits = scene.cast_rays(rays)
+        #convert open3d CPU tensors back to numpy
+        hitMap = hits['primitive_ids'][0].numpy()
+        distMap = hits['t_hit'][0].numpy()
+
+        #escapes occur where we have 32 bits all set: 0xFFFFFFFF = 4294967295 base10
+        escapes = np.where(hitMap == 4294967295)[0]
+        mask[escapes] = 0.0
+
+        #when distances to target exceed the trace step, we exclude any hits
+        tooLong = np.where(distMap > rMag)[0]
+        mask[tooLong] = 0.0
+
+        print('Found {:f} shadowed faces'.format(np.sum(mask)))
+        log.info('Found {:f} shadowed faces'.format(np.sum(mask)))
+        print('Time elapsed: {:f}'.format(time.time() - t0))
+        log.info('Time elapsed: {:f}'.format(time.time() - t0))
+
+        return mask
+
+    def findHelicalPathsOpen3D_Loop(self, GYRO):
+        """
+        walks downstream along the guidingCenterPaths and calculates the helical
+        trajectories of particles' gyro orbit paths.
+        Also calculates intersections along the way
+
+        Builds out the matrix, GYRO.intersectRecord, which is a 4D matrix
+        containing the indices of the face where each helical path intersects
+        on its way into the divertor.  intersectRecord is 4D to allow traces
+        for uniformly sampled gyroPhase angles (1stD), uniformly selected velocity
+        space angles (2ndD), uniformly (in terms of probability) sampled vPerp (3rdD),
+        and all the points on the PFC mesh (4thD).  To sample another variable,
+        such as vParallel, you would need to add a 5th dimension.
+
+        MC always stands for monte carlo, and is attached to variables to
+        signify that they are rewritten often (ie every MC simulation)
+
+        PFCintersectMap maps from all intersects to the intersects for this PFC
+        HOTGYRO maps from all ROI faces to the ones that have this PFCs name
+        use / indexMap maps from HOTGYRO to the faces that still havent intersected
+
+        Uses Open3D to accelerate the calculation:
+        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
+        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
+
+        Loops through each step of the trace
+        """
+        #get only the PFCs in this PFC's intersectList
+        PFCList = self.intersects
+        #PFCList.append(self.name)
+        PFCList = np.unique(PFCList)
+        #if we are using this PFC as a source, remove it from intersections
+        #if we run in allROI gyroSource mode, all ROI PFCs are included as intersections
+        if self.name in GYRO.gyroSources:
+            rmv = np.where(PFCList == self.name)[0]
+            PFCList = np.delete(PFCList, rmv)
+        GYRO.PFCintersectMap = []
+        for pfc in PFCList:
+            if pfc in GYRO.CADtargetNames:
+                idx1 = np.where(np.array(GYRO.CADtargetNames) == pfc)[0]
+                #mapping from all targets to this PFCs intersects
+                GYRO.PFCintersectMap = np.hstack([GYRO.PFCintersectMap,idx1]).astype(int)
+
+        PFC_t1 = GYRO.t1[GYRO.PFCintersectMap]
+        PFC_t2 = GYRO.t2[GYRO.PFCintersectMap]
+        PFC_t3 = GYRO.t3[GYRO.PFCintersectMap]
+
+        GYRO.PFC_Nt = len(PFC_t1)
+        GYRO.targets = np.hstack([PFC_t1, PFC_t2, PFC_t3]).reshape(GYRO.PFC_Nt*3,3)
+
+        print("PFC "+self.name+" has {:f} / {:f} intersects and {:f} / {:f} ROIs".format(GYRO.PFC_Nt, GYRO.Nt, self.N_gyroCenters, GYRO.N_CADROI))
+
+        #for debugging, print data about ROIidx (index w.r.t. all faces: roi+intersects)
+        #also prints out the helical trace for this index to vtk format
+        #loops run slow when this index is present, as they are writing vtk files
+        #set to None when not in use
+        ROIidx = None
+        GYRO.traceIndex = None
+        GYRO.traceIndex2 = None
+        if ROIidx is not None:
+            if ROIidx in GYRO.CADROI_PFCROImap:
+                loc = np.where(GYRO.CADROI_PFCROImap==ROIidx)[0][0]
+                if np.array(GYRO.PFCROINames)[GYRO.CADROI_PFCROImap[loc]] == self.name:
+                    if ROIidx in GYRO.CADROI_HOTmap:
+                        loc2 = np.where(GYRO.CADROI_HOTmap==loc)[0][0]
+                        GYRO.traceIndex = loc2
+                        GYRO.controlfilePath = self.controlfilePath
+                        print("Tracing helix for idx: {:f}".format(GYRO.traceIndex)+' on '+self.name)
+
+        #setup velocities and velocity phase angles
+        GYRO.setupVelocities(self.N_gyroCenters)
+        #setup gyroPhase angle
+        GYRO.uniformGyroPhaseAngle()
+        #setup frequencies
+        GYRO.setupFreqs(self.Bmag[self.PFC_GYROmap,-1])
+
+        #Walk downstream along GC path tracing helices and looking for intersections
+        if "allROI" in GYRO.gyroSources:
+            N_GCdeg = int((GYRO.gyroDeg*2) / GYRO.dpinit) + 1
+        else:
+            N_GCdeg = int((GYRO.gyroDeg) / GYRO.dpinit) + 1
+
+        gP = 0
+        vP = 0
+        vS = 0
+        #gyroPhase loop
+        for gyroPhase in range(GYRO.N_gyroPhase):
+            print("\n============GyroPhase: {:f} rad".format(GYRO.gyroPhases[gyroPhase]))
+            #velocity phase loop
+            for vPhase in range(GYRO.N_vPhase):
+                print("============vPhase: {:f} rad".format(GYRO.vPhases[vPhase]))
+                GYRO.vPhaseMC = GYRO.vPhases[vPhase]
+                #velocity slice loop
+                for vSlice in range(GYRO.N_vSlice):
+                    print("============vSLice #: {:f}".format(vSlice))
+                    print("Current gyro run (gP,vP,vS): ({:d},{:d},{:d})".format(gP,vP,vS))
+                    #initialize phase angle for this MC run
+                    GYRO.lastPhase = np.ones((self.N_gyroCenters))*GYRO.gyroPhases[gyroPhase]
+                    #calculate velocities and radii for this MC run
+                    v = GYRO.vSlices[:,vSlice]
+                    GYRO.vPerpMC = v * np.cos(GYRO.vPhaseMC)
+                    GYRO.vParallelMC = v * np.sin(GYRO.vPhaseMC)
+                    GYRO.rGyroMC = GYRO.vPerpMC / GYRO.omegaGyro
+                    #GYRO.rGyroMC = GYRO.vPerpMC / GYRO.fGyro
+                    print("Index [0] parameters:")
+                    print("vPerp = {:f} m/s".format(GYRO.vPerpMC[0]))
+                    print("vParallel = {:f} m/s".format(GYRO.vParallelMC[0]))
+                    print("rGyro = {:f} m".format(GYRO.rGyroMC[0]))
+                    print("Bmag = {:f} T".format(self.Bmag[0,-1]))
+
+                    #walk along GC
+                    for i in range(N_GCdeg-1):
+                        print("Guiding Center Step {:d}".format(i))
+                        log.info("Guiding Center Step {:d}".format(i))
+
+                        #map between the HOTGYROmap and the multiprocessing idx (still nans)
+                        #GYRO.GYRO_HLXmap = np.where(np.isnan(GYRO.intersectRecord[gyroPhase,vPhase,vSlice,self.PFCHOT_GYROmap]) == True)[0]
+                        GYRO.GYRO_HLXmap = np.where(np.isnan(GYRO.intersectRecord[gyroPhase,vPhase,vSlice,self.PFCHOT_GYROmap]) == True)[0]
+                        #run a trace if there are still points that haven't intersected
+                        if len(GYRO.GYRO_HLXmap) > 0:
+                            #for printing helices
+                            if GYRO.traceIndex is not None:
+                                try:
+                                    GYRO.N_GCdeg = i
+                                    GYRO.traceIndex2 = np.where(self.CADHOT_GYROmap[GYRO.GYRO_HLXmap]==GYRO.traceIndex)[0][0]
+                                    print("Tracing index: {:d}".format(GYRO.traceIndex2))
+
+                                except:
+                                    print("Reseting trace index")
+                                    GYRO.traceIndex2 = None
+
+                            #powerDirection can flow both ways on one PFC, and MAFOT always walks CCW,
+                            #so we flip the MAFOT traces that are backwards around
+                            fwd = np.where(self.powerDir[self.PFC_GYROmap[GYRO.GYRO_HLXmap]]==1)[0]
+                            rev = np.where(self.powerDir[self.PFC_GYROmap[GYRO.GYRO_HLXmap]]==-1)[0]
+                            GYRO.p0 = np.zeros((len(GYRO.GYRO_HLXmap),3))
+                            GYRO.p1 = np.zeros((len(GYRO.GYRO_HLXmap),3))
+                            #start and end points for step i down guiding center path
+                            #powerDir=1: reverse trace optical => forward trace gyro
+                            GYRO.p0[fwd] = self.guidingCenterPaths[i::N_GCdeg,:][GYRO.GYRO_HLXmap[fwd]]
+                            GYRO.p1[fwd] = self.guidingCenterPaths[i+1::N_GCdeg,:][GYRO.GYRO_HLXmap[fwd]]
+                            #powerDir=-1: forward trace optical => reverse trace gyro
+                            #we flip if powerDirection is -1 so that we are walking downstream (MAFOT walks CCW)
+                            #then again so we are indexed according to PFC.centers
+                            GYRO.p0[rev] = np.flip(np.flip(self.guidingCenterPaths, axis=0)[i::N_GCdeg,:], axis=0)[GYRO.GYRO_HLXmap[rev]]
+                            GYRO.p1[rev] = np.flip(np.flip(self.guidingCenterPaths, axis=0)[i+1::N_GCdeg,:], axis=0)[GYRO.GYRO_HLXmap[rev]]
+
+                            if GYRO.traceIndex2 != None:
+                                print("traceIndex Bfield Steps:")
+                                print(GYRO.p0[GYRO.traceIndex2,:])
+                                print(GYRO.p1[GYRO.traceIndex2,:])
+
+                            #calculate helix path for this step down guiding center path
+                            #GYRO.intersectRecord[gyroPhase,vPhase,vSlice,use], hdotn = GYRO.multipleGyroTrace()
+                            index, hdotn = GYRO.multipleGyroTraceOpen3D()
+                            GYRO.intersectRecord[gyroPhase,vPhase,vSlice,self.PFCHOT_GYROmap[GYRO.GYRO_HLXmap]] = index
+
+                            #gyro trace incident angle - calculate helix dot n
+                            #idx = GYRO.intersectRecord[gyroPhase,vPhase,vSlice,self.PFCHOT_GYROmap[GYRO.GYRO_HLXmap]]
+                            #notNan = np.where(np.isnan(idx)==False)[0] #dont include NaNs (NaNs = no intersection)
+                            #idx = idx[~np.isnan(idx)] #indices we map power to
+                            #idx = idx.astype(int) #cast as integer
+                            GYRO.hdotn[gyroPhase,vPhase,vSlice,self.PFCHOT_GYROmap[GYRO.GYRO_HLXmap]] = hdotn
+                        else:
+                            print("All helices intersected a face.  Breaking early.")
+                            break
+
+                    vS += 1
+                vP += 1
+                vS = 0
+            gP += 1
+            vP = 0
+        print("Gyro Trace Completed")
+        log.info("Gyro Trace Completed")
+
+        #profiler.disable()
+        #save intersectRecord to file
+        #stats = pstats.Stats(profiler).sort_stats('ncalls')
+        #stats.print_stats()
+        #uncomment for testing.  Print list of indices and
+        #associated intersection faces
+        #print("Intersect Record:")
+        #for i in range(len(GYRO.intersectRecord[0,0,0,:])):
+        #    print("Launch Face: {:d}, Intersect Face: {:d}".format(int(i), int(GYRO.intersectRecord[0,0,0,i])))
+        #
+        return
 
     def findShadows_structure(self,MHD,CAD,verbose=False, shadowMaskClouds=False):
         """
@@ -862,62 +1325,6 @@ class PFC:
         return
 
 
-
-    def findGuidingCenterPaths(self, MHD, GYRO):
-        """
-        traces B field in both directions (mapDirection=0) from PFCs
-        saves trace into PFC object variable, self.guidingCenterPaths
-        """
-        #walk up field line to determine where we should start helix tracing from
-        CTLfile = self.controlfilePath + self.controlfileStruct
-        MHD.ittGyro = GYRO.gyroDeg
-        print("Tracing guiding centers for {:f} degrees".format(GYRO.gyroDeg))
-
-        #MHD.writeControlFile(CTLfile, self.t, 0, mode='gyro') #0 for both directions
-        #trace
-        if GYRO.gyroSourceTag == 'allROI':
-            MHD.writeMAFOTpointfile(self.gyroCenters,self.gridfileStruct)
-            MHD.writeControlFile(CTLfile, self.t, 0, mode='gyro') #0 for both directions
-            MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
-                                    self.controlfileStruct)
-
-
-        else:
-            #here we assume for gyroPlanes the entire PFC has 1 powerDir
-            if self.powerDir[0] > 0:
-                MHD.writeMAFOTpointfile(self.gyroCenters,self.gridfileStruct)
-                MHD.writeControlFile(CTLfile, self.t, 1, mode='gyro') #0 for both directions
-                MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
-                                        self.controlfileStruct)
-            else:
-                MHD.writeMAFOTpointfile(self.gyroCenters,self.gridfileStruct)
-                MHD.writeControlFile(CTLfile, self.t, -1, mode='gyro') #0 for both directions
-                MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
-                                        self.controlfileStruct)
-
-            #currently only support tracing one direction for gyroSourcePlanes.
-            #could modify this else to have fwd and rev capabilities for
-            #traces in multiple directions.
-            #would need to build self.guidingCenterPaths appropriately
-            #run forward
-            #fwd = np.where(self.powerDir == 1)[0]
-            #MHD.writeMAFOTpointfile(self.gyroCenters[fwd],self.gridfileStruct)
-            #MHD.writeControlFile(CTLfile, self.t, 1, mode='gyro') #0 for both directions
-            #MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
-            #                            self.controlfileStruct)
-            ##run reverse
-            #rev = np.where(self.powerDir == -1)[0]
-            #MHD.writeMAFOTpointfile(self.gyroCenters[rev],self.gridfileStruct)
-            #MHD.writeControlFile(CTLfile, self.t, -1, mode='gyro') #0 for both directions
-            #MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
-            #                        self.controlfileStruct)
-
-
-        self.guidingCenterPaths = tools.readStructOutput(self.structOutfile)
-        #os.remove(self.structOutfile) #clean up
-        #os.remove(self.gridfileStruct) #clean up
-        return
-
     def findHelicalPaths(self, GYRO):
         """
         walks downstream along the guidingCenterPaths and calculates the helical
@@ -1130,247 +1537,7 @@ class PFC:
         #
         return
 
-    def findHelicalPathsOpen3D(self, GYRO):
-        """
-        walks downstream along the guidingCenterPaths and calculates the helical
-        trajectories of particles' gyro orbit paths.
-        Also calculates intersections along the way
 
-        Builds out the matrix, GYRO.intersectRecord, which is a 4D matrix
-        containing the indices of the face where each helical path intersects
-        on its way into the divertor.  intersectRecord is 4D to allow traces
-        for uniformly sampled gyroPhase angles (1stD), uniformly selected velocity
-        space angles (2ndD), uniformly (in terms of probability) sampled vPerp (3rdD),
-        and all the points on the PFC mesh (4thD).  To sample another variable,
-        such as vParallel, you would need to add a 5th dimension.
-
-        MC always stands for monte carlo, and is attached to variables to
-        signify that they are rewritten often (ie every MC simulation)
-
-        PFCintersectMap maps from all intersects to the intersects for this PFC
-        HOTGYRO maps from all ROI faces to the ones that have this PFCs name
-        use / indexMap maps from HOTGYRO to the faces that still havent intersected
-
-        Uses Open3D to accelerate the calculation:
-        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
-        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
-        """
-        #get only the PFCs in this PFC's intersectList
-        PFCList = self.intersects
-        #PFCList.append(self.name)
-        PFCList = np.unique(PFCList)
-        #if we are using this PFC as a source, remove it from intersections
-        #if we run in allROI gyroSource mode, all ROI PFCs are included as intersections
-        if self.name in GYRO.gyroSources:
-            rmv = np.where(PFCList == self.name)[0]
-            PFCList = np.delete(PFCList, rmv)
-        GYRO.PFCintersectMap = []
-        for pfc in PFCList:
-            if pfc in GYRO.CADtargetNames:
-                idx1 = np.where(np.array(GYRO.CADtargetNames) == pfc)[0]
-                #mapping from all targets to this PFCs intersects
-                GYRO.PFCintersectMap = np.hstack([GYRO.PFCintersectMap,idx1]).astype(int)
-
-        PFC_t1 = GYRO.t1[GYRO.PFCintersectMap]
-        PFC_t2 = GYRO.t2[GYRO.PFCintersectMap]
-        PFC_t3 = GYRO.t3[GYRO.PFCintersectMap]
-
-        GYRO.PFC_Nt = len(PFC_t1)
-        GYRO.targets = np.hstack([PFC_t1, PFC_t2, PFC_t3]).reshape(GYRO.PFC_Nt*3,3)
-
-        print("PFC "+self.name+" has {:f} / {:f} intersects and {:f} / {:f} ROIs".format(GYRO.PFC_Nt, GYRO.Nt, self.N_gyroCenters, GYRO.N_CADROI))
-
-        #for debugging, print data about ROIidx (index w.r.t. all faces: roi+intersects)
-        #also prints out the helical trace for this index to vtk format
-        #loops run slow when this index is present, as they are writing vtk files
-        #set to None when not in use
-        ROIidx = None
-        GYRO.traceIndex = None
-        GYRO.traceIndex2 = None
-        if ROIidx is not None:
-            if ROIidx in GYRO.CADROI_PFCROImap:
-                loc = np.where(GYRO.CADROI_PFCROImap==ROIidx)[0][0]
-                if np.array(GYRO.PFCROINames)[GYRO.CADROI_PFCROImap[loc]] == self.name:
-                    if ROIidx in GYRO.CADROI_HOTmap:
-                        loc2 = np.where(GYRO.CADROI_HOTmap==loc)[0][0]
-                        GYRO.traceIndex = loc2
-                        GYRO.controlfilePath = self.controlfilePath
-                        print("Tracing helix for idx: {:f}".format(GYRO.traceIndex)+' on '+self.name)
-
-        #setup velocities and velocity phase angles
-        GYRO.setupVelocities(self.N_gyroCenters)
-        #setup gyroPhase angle
-        GYRO.uniformGyroPhaseAngle()
-        #setup frequencies
-        GYRO.setupFreqs(self.Bmag[self.PFC_GYROmap,-1])
-
-        #Walk downstream along GC path tracing helices and looking for intersections
-        if "allROI" in GYRO.gyroSources:
-            N_GCdeg = GYRO.gyroDeg*2 + 1
-        else:
-            N_GCdeg = GYRO.gyroDeg + 1
-        gP = 0
-        vP = 0
-        vS = 0
-        #gyroPhase loop
-        for gyroPhase in range(GYRO.N_gyroPhase):
-            print("\n============GyroPhase: {:f} rad".format(GYRO.gyroPhases[gyroPhase]))
-            #velocity phase loop
-            for vPhase in range(GYRO.N_vPhase):
-                print("============vPhase: {:f} rad".format(GYRO.vPhases[vPhase]))
-                GYRO.vPhaseMC = GYRO.vPhases[vPhase]
-                #velocity slice loop
-                for vSlice in range(GYRO.N_vSlice):
-                    print("============vSLice #: {:f}".format(vSlice))
-                    print("Current gyro run (gP,vP,vS): ({:d},{:d},{:d})".format(gP,vP,vS))
-                    #initialize phase angle for this MC run
-                    GYRO.lastPhase = np.ones((self.N_gyroCenters))*GYRO.gyroPhases[gyroPhase]
-                    #calculate velocities and radii for this MC run
-                    v = GYRO.vSlices[:,vSlice]
-                    GYRO.vPerpMC = v * np.cos(GYRO.vPhaseMC)
-                    GYRO.vParallelMC = v * np.sin(GYRO.vPhaseMC)
-                    GYRO.rGyroMC = GYRO.vPerpMC / GYRO.omegaGyro
-                    #GYRO.rGyroMC = GYRO.vPerpMC / GYRO.fGyro
-                    print("Index [0] parameters:")
-                    print("vPerp = {:f} m/s".format(GYRO.vPerpMC[0]))
-                    print("vParallel = {:f} m/s".format(GYRO.vParallelMC[0]))
-                    print("rGyro = {:f} m".format(GYRO.rGyroMC[0]))
-                    print("Bmag = {:f} T".format(self.Bmag[0,-1]))
-
-                    #walk along GC
-                    for i in range(N_GCdeg-1):
-                        print("Guiding Center Step {:d}".format(i))
-                        log.info("Guiding Center Step {:d}".format(i))
-
-                        #map between the HOTGYROmap and the multiprocessing idx (still nans)
-                        #GYRO.GYRO_HLXmap = np.where(np.isnan(GYRO.intersectRecord[gyroPhase,vPhase,vSlice,self.PFCHOT_GYROmap]) == True)[0]
-                        GYRO.GYRO_HLXmap = np.where(np.isnan(GYRO.intersectRecord[gyroPhase,vPhase,vSlice,self.PFCHOT_GYROmap]) == True)[0]
-                        #run a trace if there are still points that haven't intersected
-                        if len(GYRO.GYRO_HLXmap) > 0:
-                            #for printing helices
-                            if GYRO.traceIndex is not None:
-                                try:
-                                    GYRO.N_GCdeg = i
-                                    GYRO.traceIndex2 = np.where(self.CADHOT_GYROmap[GYRO.GYRO_HLXmap]==GYRO.traceIndex)[0][0]
-                                    print("Tracing index: {:d}".format(GYRO.traceIndex2))
-
-                                except:
-                                    print("Reseting trace index")
-                                    GYRO.traceIndex2 = None
-
-                            #powerDirection can flow both ways on one PFC, and MAFOT always walks CCW,
-                            #so we flip the MAFOT traces that are backwards around
-                            fwd = np.where(self.powerDir[self.PFC_GYROmap[GYRO.GYRO_HLXmap]]==1)[0]
-                            rev = np.where(self.powerDir[self.PFC_GYROmap[GYRO.GYRO_HLXmap]]==-1)[0]
-                            GYRO.p0 = np.zeros((len(GYRO.GYRO_HLXmap),3))
-                            GYRO.p1 = np.zeros((len(GYRO.GYRO_HLXmap),3))
-                            #start and end points for step i down guiding center path
-                            #powerDir=1: reverse trace optical => forward trace gyro
-                            GYRO.p0[fwd] = self.guidingCenterPaths[i::N_GCdeg,:][GYRO.GYRO_HLXmap[fwd]]
-                            GYRO.p1[fwd] = self.guidingCenterPaths[i+1::N_GCdeg,:][GYRO.GYRO_HLXmap[fwd]]
-                            #powerDir=-1: forward trace optical => reverse trace gyro
-                            #we flip if powerDirection is -1 so that we are walking downstream (MAFOT walks CCW)
-                            #then again so we are indexed according to PFC.centers
-                            GYRO.p0[rev] = np.flip(np.flip(self.guidingCenterPaths, axis=0)[i::N_GCdeg,:], axis=0)[GYRO.GYRO_HLXmap[rev]]
-                            GYRO.p1[rev] = np.flip(np.flip(self.guidingCenterPaths, axis=0)[i+1::N_GCdeg,:], axis=0)[GYRO.GYRO_HLXmap[rev]]
-
-                            if GYRO.traceIndex2 != None:
-                                print("traceIndex Bfield Steps:")
-                                print(GYRO.p0[GYRO.traceIndex2,:])
-                                print(GYRO.p1[GYRO.traceIndex2,:])
-
-                            #calculate helix path for this step down guiding center path
-                            #GYRO.intersectRecord[gyroPhase,vPhase,vSlice,use], hdotn = GYRO.multipleGyroTrace()
-                            index, hdotn = GYRO.multipleGyroTraceOpen3D()
-                            GYRO.intersectRecord[gyroPhase,vPhase,vSlice,self.PFCHOT_GYROmap[GYRO.GYRO_HLXmap]] = index
-
-                            #gyro trace incident angle - calculate helix dot n
-                            #idx = GYRO.intersectRecord[gyroPhase,vPhase,vSlice,self.PFCHOT_GYROmap[GYRO.GYRO_HLXmap]]
-                            #notNan = np.where(np.isnan(idx)==False)[0] #dont include NaNs (NaNs = no intersection)
-                            #idx = idx[~np.isnan(idx)] #indices we map power to
-                            #idx = idx.astype(int) #cast as integer
-                            GYRO.hdotn[gyroPhase,vPhase,vSlice,self.PFCHOT_GYROmap[GYRO.GYRO_HLXmap]] = hdotn
-                        else:
-                            print("All helices intersected a face.  Breaking early.")
-                            break
-
-                    vS += 1
-                vP += 1
-                vS = 0
-            gP += 1
-            vP = 0
-        print("Gyro Trace Completed")
-        log.info("Gyro Trace Completed")
-
-        #profiler.disable()
-        #save intersectRecord to file
-        #stats = pstats.Stats(profiler).sort_stats('ncalls')
-        #stats.print_stats()
-        #uncomment for testing.  Print list of indices and
-        #associated intersection faces
-        #print("Intersect Record:")
-        #for i in range(len(GYRO.intersectRecord[0,0,0,:])):
-        #    print("Launch Face: {:d}, Intersect Face: {:d}".format(int(i), int(GYRO.intersectRecord[0,0,0,i])))
-        #
-        return
-
-
-
-
-    def intersectTestOpen3D(self,q1,q2,targets,targetNorms, batchSize=1000):
-        """
-        checks if any of the lines (field line traces) generated by MAFOT
-        struct program intersect any of the target mesh faces.
-
-        Uses Open3D to accelerate the calculation:
-        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
-        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
-        """
-        t0 = time.time()
-        N = len(q2)
-        Nt = len(targets)
-        print('{:d} Source Faces and {:d} Target Faces in PFC object'.format(N,Nt))
-
-        mask = np.ones((N))
-
-        #construct rays
-        r = q2-q1
-        rMag = np.linalg.norm(r, axis=1)
-        rNorm = r / rMag.reshape((-1,1))
-
-        #cast variables to 32bit for C
-        vertices = np.array(targets.reshape(Nt*3,3), dtype=np.float32)
-        triangles = np.array(np.arange(Nt*3).reshape(Nt,3), dtype=np.uint32)
-
-        #build intersection mesh and tensors for open3d
-        mesh = o3d.t.geometry.TriangleMesh()
-        scene = o3d.t.geometry.RaycastingScene()
-        mesh_id = scene.add_triangles(vertices, triangles)
-
-        #calculate size of potential arrays in RAM
-        #availableRAM = psutil.virtual_memory().available #bytes
-
-        #calculate intersections
-        rays = o3d.core.Tensor([np.hstack([np.float32(q1),np.float32(rNorm)])],dtype=o3d.core.Dtype.Float32)
-        hits = scene.cast_rays(rays)
-        #convert open3d CPU tensors back to numpy
-        hitMap = hits['primitive_ids'][0].numpy()
-        distMap = hits['t_hit'][0].numpy()
-
-        #escapes occur where we have 32 bits all set: 0xFFFFFFFF = 4294967295 base10
-        escapes = np.where(hitMap == 4294967295)[0]
-        mask[escapes] = 0.0
-
-        #when distances to target exceed the trace step, we exclude any hits
-        tooLong = np.where(distMap > rMag)[0]
-        mask[tooLong] = 0.0
-
-        print('Found {:f} shadowed faces'.format(np.sum(mask)))
-        log.info('Found {:f} shadowed faces'.format(np.sum(mask)))
-        print('Time elapsed: {:f}'.format(time.time() - t0))
-        log.info('Time elapsed: {:f}'.format(time.time() - t0))
-
-        return mask
 
     def intersectTestBasic(self,q1,q2,targets,targetNorms,MHD,ep,
                            ptIdx=None, mode='MT'):
