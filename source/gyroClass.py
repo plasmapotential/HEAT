@@ -494,13 +494,12 @@ class GYRO:
 
         helix = output
 
-
         print("Initializing open3D ray-triangle intersection checks")
         log.info("Initializing open3D ray-triangle intersection checks")
         for i in range(N):
             #=== intersection checking begins here ===
-            q1 = helix[i,:-1,:]
-            q2 = helix[i,1:,:]
+            q1 = helix[i][:-1,:]
+            q2 = helix[i][1:,:]
 
             r = q2-q1
             rMag = np.linalg.norm(r, axis=1)

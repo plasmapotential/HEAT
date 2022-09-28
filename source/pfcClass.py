@@ -1043,7 +1043,7 @@ class PFC:
 
                             #calculate helix path for this step down guiding center path
                             #GYRO.intersectRecord[gyroPhase,vPhase,vSlice,use], hdotn = GYRO.multipleGyroTrace()
-                            index, hdotn = GYRO.multipleGyroTraceOpen3D()
+                            index, hdotn = GYRO.multipleGyroTraceOpen3D_Loop()
                             GYRO.intersectRecord[gyroPhase,vPhase,vSlice,self.PFCHOT_GYROmap[GYRO.GYRO_HLXmap]] = index
 
                             #gyro trace incident angle - calculate helix dot n
