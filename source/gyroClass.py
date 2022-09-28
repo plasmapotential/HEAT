@@ -484,6 +484,7 @@ class GYRO:
         log.info('Spawning tasks to workers')
         #multiprocessing with normal methods
         #Do this try clause to kill any zombie threads that don't terminate
+        t0 = time.time()
         try:
             pool = multiprocessing.Pool(Ncores)
             output = np.array(pool.map(self.buildHelixParallel, np.arange(N)))
@@ -493,6 +494,8 @@ class GYRO:
             del pool
 
         helix = output
+        print("Helix trace took {:f} seconds".format(time.time() - t0))
+        log.info("Helix trace took {:f} seconds".format(time.time() - t0))
 
         print("Initializing open3D ray-triangle intersection checks")
         log.info("Initializing open3D ray-triangle intersection checks")
