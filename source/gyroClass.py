@@ -17,7 +17,6 @@ tools = toolsClass.tools()
 import logging
 log = logging.getLogger(__name__)
 
-
 class GYRO:
 
     def __init__(self, rootDir, dataPath, chmod=0o774, UID=-1, GID=-1):
@@ -455,7 +454,7 @@ class GYRO:
         N = self.Nctrs
         intersectRecord = np.ones((N))*np.nan
         hdotn = np.ones((N))*np.nan
-        lastPhases = np.zeros((N))
+
 
         #cast variables to 32bit for C
         vertices = np.array(self.targets, dtype=np.float32)
@@ -467,15 +466,14 @@ class GYRO:
         scene = o3d.t.geometry.RaycastingScene()
         mesh_id = scene.add_triangles(vertices, triangles)
 
-        #magnetic field trace
-        self.helixTrace = np.zeros((N, self.Nsteps, 3))
-
-
         #Prepare helical trace across multiple cores
         Ncores = multiprocessing.cpu_count() - 2 #reserve 2 cores for overhead
         #in case we run on single core machine
         if Ncores <= 0:
             Ncores = 1
+        #the overhead on this calculation can be high, so limit to 3 cores
+        elif Ncores > 3:
+            Ncores = 3
         print('Initializing parallel helix trace across {:d} cores'.format(Ncores))
         log.info('Initializing parallel helix trace across {:d} cores'.format(Ncores))
         #each worker receives a single start and end point (p0 and p1),
@@ -486,7 +484,7 @@ class GYRO:
         #Do this try clause to kill any zombie threads that don't terminate
         t0 = time.time()
         try:
-            pool = multiprocessing.Pool(Ncores)
+            pool = multiprocessing.Pool(3)
             output = np.array(pool.map(self.buildHelixParallel, np.arange(N)))
         finally:
             pool.close()
@@ -570,10 +568,12 @@ class GYRO:
         return intersectRecord, hdotn
 
     def buildHelixParallel(self, i):
-
+        """
+        builds the helical trajectory of a macroparticle for the entire toroidal
+        extent of the trace.  Returns this helix
+        """
         #vector linking Bfield points
         delP = self.p1[i,:,:] - self.p0[i,:,:]
-        lastPhase = self.lastPhase[i]
         for j,dP in enumerate(delP):
             #magnitude
             magP = np.sqrt(dP[0]**2 + dP[1]**2 + dP[2]**2)
@@ -604,7 +604,7 @@ class GYRO:
             #get helix path along (proxy) z axis reference frame
             rGyro = self.rGyroMC[i]
             omega = self.omegaGyro[i]
-            theta = lastPhase
+            theta = self.lastPhase[i]
             x_helix = rGyro*np.cos(omega*t + theta)
             y_helix = self.diamag*rGyro*np.sin(omega*t + theta)
             z_helix = np.zeros((len(t)))
