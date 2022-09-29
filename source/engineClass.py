@@ -1976,7 +1976,7 @@ class engineObj():
         #Trace helical path downstream, checking for intersections
         if mode == 'open3d':
             #use Open3D ray tracing (100X faster)
-            PFC.findHelicalPathsOpen3D(self.GYRO)
+            PFC.findHelicalPathsOpen3D_Loop(self.GYRO)
         else:
             #use HEAT homebrew ray tracing
             PFC.findHelicalPaths(self.GYRO)

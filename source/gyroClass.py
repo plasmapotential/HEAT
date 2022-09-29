@@ -432,141 +432,6 @@ class GYRO:
             print("Each line segment length ~ {:f} [m]".format(magP))
         return
 
-    def multipleGyroTraceOpen3D(self):
-        """
-        Calculates the helical trajectory of ions, then checks if any mesh
-        elements are intersected along the path.  This loops thru each
-        mesh element in the source plane (i) and checks for ray-triangle
-        intersections between the ray and all the mesh in the PFC's
-        intersectList.
-
-        Currently, this is called once every dpinit steps in MAFOT.  If this
-        is very slow, you could run all the trace steps in a single calculation
-        by removing the loop in PFCclass
-
-
-        Uses Open3D to accelerate the calculation:
-        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
-        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
-
-        meant to be run once for all field line steps
-        """
-        N = self.Nctrs
-        intersectRecord = np.ones((N))*np.nan
-        hdotn = np.ones((N))*np.nan
-
-
-        #cast variables to 32bit for C
-        vertices = np.array(self.targets, dtype=np.float32)
-        triangles = np.array(np.arange(self.PFC_Nt*3).reshape(self.PFC_Nt,3), dtype=np.uint32)
-        #triangles = np.array(np.repeat(np.arange(self.PFC_Nt),3).reshape(self.PFC_Nt,3), dtype=np.uint32)
-
-        #build intersection mesh and tensors for open3d ray-tri calcs
-        mesh = o3d.t.geometry.TriangleMesh()
-        scene = o3d.t.geometry.RaycastingScene()
-        mesh_id = scene.add_triangles(vertices, triangles)
-
-        #Prepare helical trace across multiple cores
-        Ncores = multiprocessing.cpu_count() - 2 #reserve 2 cores for overhead
-        #in case we run on single core machine
-        if Ncores <= 0:
-            Ncores = 1
-        #the overhead on this calculation can be high, so limit to 3 cores
-        elif Ncores > 3:
-            Ncores = 3
-        print('Initializing parallel helix trace across {:d} cores'.format(Ncores))
-        log.info('Initializing parallel helix trace across {:d} cores'.format(Ncores))
-        #each worker receives a single start and end point (p0 and p1),
-        #corresponding to one trace from the MAFOT structure output.
-        print('Spawning tasks to workers')
-        log.info('Spawning tasks to workers')
-        #multiprocessing with normal methods
-        #Do this try clause to kill any zombie threads that don't terminate
-        t0 = time.time()
-        try:
-            pool = multiprocessing.Pool(3)
-            output = np.array(pool.map(self.buildHelixParallel, np.arange(N)))
-        finally:
-            pool.close()
-            pool.join()
-            del pool
-
-        helix = output
-        print("Helix trace took {:f} seconds".format(time.time() - t0))
-        log.info("Helix trace took {:f} seconds".format(time.time() - t0))
-
-        print("Initializing open3D ray-triangle intersection checks")
-        log.info("Initializing open3D ray-triangle intersection checks")
-        for i in range(N):
-            #=== intersection checking begins here ===
-            q1 = helix[i][:-1,:]
-            q2 = helix[i][1:,:]
-
-            r = q2-q1
-            rMag = np.linalg.norm(r, axis=1)
-            rNorm = r / rMag.reshape((-1,1))
-
-            #calculate intersections
-            mask = np.ones((len(q2)))
-            rays = o3d.core.Tensor([np.hstack([np.float32(q1),np.float32(rNorm)])],dtype=o3d.core.Dtype.Float32)
-            hits = scene.cast_rays(rays)
-            #convert open3d CPU tensors back to numpy
-            hitMap = hits['primitive_ids'][0].numpy()
-            distMap = hits['t_hit'][0].numpy()
-
-            #escapes occur where we have 32 bits all set: 0xFFFFFFFF = 4294967295 base10
-            escapes = np.where(hitMap == 4294967295)[0]
-            mask[escapes] = 0.0
-
-            #when distances to target exceed the trace step, we exclude any hits
-            tooLong = np.where(distMap > rMag)[0]
-            mask[tooLong] = 0.0
-
-            if np.sum(mask)>0:
-                #first hit instance
-                idxHit = np.where(mask==1)[0][0]
-                intersectRecord[i] = self.PFCintersectMap[hitMap[idxHit]]
-                hdotn[i] = np.dot(self.intersectNorms[int(intersectRecord[i])],rNorm[idxHit])
-            else:
-                #return nan if we didnt hit anything
-                intersectRecord[i] = np.nan
-                hdotn[i] = np.nan
-
-            #print the trace for a specific index
-            if self.traceIndex2 is not None:
-                if self.traceIndex2 == i:
-                    ##for testing
-                    #if np.sum(mask)>0:
-                    #    print(idxHit)
-                    #    print(intersectRecord[i])
-                    #    print(rNorm[idxHit])
-                    #    print(self.intersectNorms[int(intersectRecord[i])])
-                    #print(hitMap)
-                    #print(distMap)
-                    #print(rMag)
-                    #print(mask)
-                    #print(intersectRecord[i])
-
-                    #print("Saving Index data to CSV and VTK formats")
-                    #save data to csv format
-                    head = 'X[mm],Y[mm],Z[mm]'
-                    np.savetxt(self.controlfilePath+'helix{:d}.csv'.format(i), helix[i]*1000.0, delimiter=',', header=head)
-                    #save data to vtk format
-                    tools.createVTKOutput(self.controlfilePath+'helix{:d}.csv'.format(i),
-                                        'trace', 'traceHelix{:d}'.format(i),verbose=False)
-                    #guiding center
-                    #np.savetxt(self.controlfilePath+'GC{:d}.csv'.format(self.N_GCdeg), arrGC*1000.0, delimiter=',', header=head)
-                    #save data to vtk format
-                    #tools.createVTKOutput(self.controlfilePath+'GC{:d}.csv'.format(self.N_GCdeg),
-                    #                        'trace', 'traceGC{:d}'.format(self.N_GCdeg),verbose=False)
-                    print("Intersection Location for ROIidx: {:f}".format(intersectRecord[i]))
-
-
-
-        print('Parallel helix trace complete')
-        log.info('Parallel helix trace complete')
-        return intersectRecord, hdotn
-
     def buildHelixParallel(self, i):
         """
         builds the helical trajectory of a macroparticle for the entire toroidal
@@ -632,18 +497,13 @@ class GYRO:
                 helix_final = np.vstack([helix_final, helix_rot])
         return helix_final
 
-    def multipleGyroTraceOpen3D_Loop(self):
+    def multipleGyroTraceOpen3D(self):
         """
         Calculates the helical trajectory of ions, then checks if any mesh
         elements are intersected along the path.  This loops thru each
         mesh element in the source plane (i) and checks for ray-triangle
         intersections between the ray and all the mesh in the PFC's
         intersectList.
-
-        Currently, this is called once every dpinit steps in MAFOT.  If this
-        is very slow, you could run all the trace steps in a single calculation
-        by removing the loop in PFCclass
-
 
         Uses Open3D to accelerate the calculation:
         Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
@@ -790,6 +650,141 @@ class GYRO:
 
 
         self.lastPhase[self.GYRO_HLXmap] = lastPhases
+
+        print('Parallel helix trace complete')
+        log.info('Parallel helix trace complete')
+        return intersectRecord, hdotn
+
+    def multipleGyroTraceOpen3D_NoLoop(self):
+        """
+        Calculates the helical trajectory of ions, then checks if any mesh
+        elements are intersected along the path.  This loops thru each
+        mesh element in the source plane (i) and checks for ray-triangle
+        intersections between the ray and all the mesh in the PFC's
+        intersectList.
+
+        Currently, this is called once every dpinit steps in MAFOT.  If this
+        is very slow, you could run all the trace steps in a single calculation
+        by removing the loop in PFCclass
+
+
+        Uses Open3D to accelerate the calculation:
+        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
+        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
+
+        meant to be run once for all field line steps
+        """
+        N = self.Nctrs
+        intersectRecord = np.ones((N))*np.nan
+        hdotn = np.ones((N))*np.nan
+
+
+        #cast variables to 32bit for C
+        vertices = np.array(self.targets, dtype=np.float32)
+        triangles = np.array(np.arange(self.PFC_Nt*3).reshape(self.PFC_Nt,3), dtype=np.uint32)
+        #triangles = np.array(np.repeat(np.arange(self.PFC_Nt),3).reshape(self.PFC_Nt,3), dtype=np.uint32)
+
+        #build intersection mesh and tensors for open3d ray-tri calcs
+        mesh = o3d.t.geometry.TriangleMesh()
+        scene = o3d.t.geometry.RaycastingScene()
+        mesh_id = scene.add_triangles(vertices, triangles)
+
+        #Prepare helical trace across multiple cores
+        Ncores = multiprocessing.cpu_count() - 2 #reserve 2 cores for overhead
+        #in case we run on single core machine
+        if Ncores <= 0:
+            Ncores = 1
+        #the overhead on this calculation can be high, so limit to 3 cores
+        elif Ncores > 3:
+            Ncores = 3
+        print('Initializing parallel helix trace across {:d} cores'.format(Ncores))
+        log.info('Initializing parallel helix trace across {:d} cores'.format(Ncores))
+        #each worker receives a single start and end point (p0 and p1),
+        #corresponding to one trace from the MAFOT structure output.
+        print('Spawning tasks to workers')
+        log.info('Spawning tasks to workers')
+        #multiprocessing with normal methods
+        #Do this try clause to kill any zombie threads that don't terminate
+        t0 = time.time()
+        try:
+            pool = multiprocessing.Pool(3)
+            output = np.array(pool.map(self.buildHelixParallel, np.arange(N)))
+        finally:
+            pool.close()
+            pool.join()
+            del pool
+
+        helix = output
+        print("Helix trace took {:f} seconds".format(time.time() - t0))
+        log.info("Helix trace took {:f} seconds".format(time.time() - t0))
+
+        print("Initializing open3D ray-triangle intersection checks")
+        log.info("Initializing open3D ray-triangle intersection checks")
+        for i in range(N):
+            #=== intersection checking begins here ===
+            q1 = helix[i][:-1,:]
+            q2 = helix[i][1:,:]
+
+            r = q2-q1
+            rMag = np.linalg.norm(r, axis=1)
+            rNorm = r / rMag.reshape((-1,1))
+
+            #calculate intersections
+            mask = np.ones((len(q2)))
+            rays = o3d.core.Tensor([np.hstack([np.float32(q1),np.float32(rNorm)])],dtype=o3d.core.Dtype.Float32)
+            hits = scene.cast_rays(rays)
+            #convert open3d CPU tensors back to numpy
+            hitMap = hits['primitive_ids'][0].numpy()
+            distMap = hits['t_hit'][0].numpy()
+
+            #escapes occur where we have 32 bits all set: 0xFFFFFFFF = 4294967295 base10
+            escapes = np.where(hitMap == 4294967295)[0]
+            mask[escapes] = 0.0
+
+            #when distances to target exceed the trace step, we exclude any hits
+            tooLong = np.where(distMap > rMag)[0]
+            mask[tooLong] = 0.0
+
+            if np.sum(mask)>0:
+                #first hit instance
+                idxHit = np.where(mask==1)[0][0]
+                intersectRecord[i] = self.PFCintersectMap[hitMap[idxHit]]
+                hdotn[i] = np.dot(self.intersectNorms[int(intersectRecord[i])],rNorm[idxHit])
+            else:
+                #return nan if we didnt hit anything
+                intersectRecord[i] = np.nan
+                hdotn[i] = np.nan
+
+            #print the trace for a specific index
+            if self.traceIndex2 is not None:
+                if self.traceIndex2 == i:
+                    ##for testing
+                    #if np.sum(mask)>0:
+                    #    print(idxHit)
+                    #    print(intersectRecord[i])
+                    #    print(rNorm[idxHit])
+                    #    print(self.intersectNorms[int(intersectRecord[i])])
+                    #print(hitMap)
+                    #print(distMap)
+                    #print(rMag)
+                    #print(mask)
+                    #print(intersectRecord[i])
+
+                    #print("Saving Index data to CSV and VTK formats")
+                    #save data to csv format
+                    head = 'X[mm],Y[mm],Z[mm]'
+                    np.savetxt(self.controlfilePath+'helix{:d}.csv'.format(i), helix[i]*1000.0, delimiter=',', header=head)
+                    #save data to vtk format
+                    tools.createVTKOutput(self.controlfilePath+'helix{:d}.csv'.format(i),
+                                        'trace', 'traceHelix{:d}'.format(i),verbose=False)
+                    #guiding center
+                    #np.savetxt(self.controlfilePath+'GC{:d}.csv'.format(self.N_GCdeg), arrGC*1000.0, delimiter=',', header=head)
+                    #save data to vtk format
+                    #tools.createVTKOutput(self.controlfilePath+'GC{:d}.csv'.format(self.N_GCdeg),
+                    #                        'trace', 'traceGC{:d}'.format(self.N_GCdeg),verbose=False)
+                    print("Intersection Location for ROIidx: {:f}".format(intersectRecord[i]))
+
+
 
         print('Parallel helix trace complete')
         log.info('Parallel helix trace complete')
