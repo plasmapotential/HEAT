@@ -100,7 +100,6 @@ class MHD:
 
         Here is a list of variables with description:
         testvar         dummy for testing
-        MachFlag        Machine flag (nstx, d3d, cmod, etc.)
         shot            discharge number
         tree            EFIT tree (efit01, efit02, etc.)
         tmin            minimum timestep to consider
@@ -108,15 +107,11 @@ class MHD:
         MHDpath         location where we will save / read gfiles
         """
         self.allowed_vars = [
-                            #'MachFlag',
                             'shot',
                             'tmin',
                             'tmax',
                             'traceLength',
                             'dpinit',
-                            'dataPath',
-                            'torFilt',
-                            'psiFilt'
                             ]
 
         return
@@ -135,25 +130,11 @@ class MHD:
         floats = [
                     'dpinit',
                 ]
-        bools = ['torFilt', 'psiFilt']
 
         for var in integers:
             if (getattr(self, var) is not None) and (~np.isnan(float(getattr(self, var)))):
                 try:
                     setattr(self, var, tools.makeInt(getattr(self, var)))
-                except:
-                    print("Error with input file var "+var+".  Perhaps you have invalid input values?")
-                    log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
-
-        trueStrings = ["T", "True", "t", "true", "TRUE", "y", "yes", "Yes", "YES", True]
-        falseStrings =["F", "False", "f", "false", "FALSE", "n", "no", "No", "NO", False]
-        for var in bools:
-            if (getattr(self, var) is not None):
-                try:
-                    if getattr(self, var) in trueStrings:
-                        setattr(self, var, True)
-                    else:
-                        setattr(self, var, False)
                 except:
                     print("Error with input file var "+var+".  Perhaps you have invalid input values?")
                     log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")

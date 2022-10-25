@@ -1477,42 +1477,6 @@ class engineObj():
             tools.initializeInput(self.RAD, infile=infile)
         return
 
-    def loadAccFilters(self, accFilters):
-        """
-        loads status of acceleration filters.  user can choose to filter by:
-        -toroidal angle
-        -poloidal flux surface
-        """
-        #poloidal flux filtering
-        if 'psiFilt' in accFilters:
-            print("Poloidal flux filter:  ON")
-            log.info("Poloidal flux filter:  ON")
-            psiFilterSwitch = True
-        else:
-            print("Poloidal flux filter:  OFF")
-            log.info("Poloidal flux filter:  OFF")
-            psiFilterSwitch = False
-
-        #toroidal angle filtering
-        if 'torFilt' in accFilters:
-            print("Toroidal angle filter:  ON")
-            log.info("Toroidal angle filter:  ON")
-            phiFilterSwitch = True
-        else:
-            print("Toroidal angle filter:  OFF")
-            log.info("Toroidal angle filter:  OFF")
-            phiFilterSwitch = False
-
-        #for now all PFCs share a single filter state
-        try:
-            for PFC in self.PFCs:
-                PFC.psiFilterSwitch = psiFilterSwitch
-                PFC.phiFilterSwitch = phiFilterSwitch
-        except:
-            print("No PFCs to set filter switches for.  Skipping.")
-        return
-
-
     def runHEAT(self, runList):
         """
         Run a HEAT calculation.  This is called from gui/tui by user.
@@ -2523,8 +2487,6 @@ class engineObj():
                     'traceLength': None,
                     'dpinit': None,
                     'dataPath': None,
-                    'torFilt': None,
-                    'psiFilt': None,
                     'hfMode': None,
                     'lqCN': None,
                     'lqCF': None,

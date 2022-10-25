@@ -555,10 +555,6 @@ def saveGUIinputs(  n_clicks,
     data['traceLength'] = traceLength
     data['dpinit'] = dpinit
     data['dataPath'] = dataLoc
-    if 'torFilt' in accFilters:
-        data['torFilt'] = True
-    if 'psiFilt' in accFilters:
-        data['psiFilt'] = True
 
     #hf variables
     data['hfMode'] = hfMode
@@ -2458,9 +2454,7 @@ def runChildren():
             children = [
                 html.H4("HEAT Run Settings", className="buttonRibbon"),
                 html.Br(),
-                html.H6("Acceleration Filter Settings: "),
-                buildRunSettings(),
-                html.H6("Mesh Perturbations (very beta): "),
+                html.H6("Mesh Perturbations: "),
                 meshPertBox(),
                 html.H6("Point Clouds at Tile Surface:"),
                 runTabChecklist(),
@@ -2474,26 +2468,7 @@ def runChildren():
 
 
 #==========HEAT Run Settings==========
-def buildRunSettings():
-    """
-    returns user options for the HEAT run
-    """
-    return html.Div(
-            id="runSettings",
-            className="buttonRibbon",
-            children=[
-                html.Label(children="Acceleration Filters:  "),
-                dcc.Checklist(
-                    options=[
-                        {'label': 'Toroidal Filter', 'value': 'torFilt'},
-                        {'label': 'Psi Filter', 'value': 'psiFilt'},
-                    ],
-                    value=['torFilt'],
-                    id='accFilters',
-                    className="PCbox",
-                ),
-            ],
-        )
+
 
 def meshPertBox():
     """
