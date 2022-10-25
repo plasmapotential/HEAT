@@ -470,7 +470,6 @@ def inputDragDrop(file, contents, MachFlag):
                State('phiMax','value'),
                State('Ntor','value'),
                State('Nref','value'),
-               State('accFilters','value')
                ]
                )
 def saveGUIinputs(  n_clicks,
@@ -534,7 +533,6 @@ def saveGUIinputs(  n_clicks,
                     phiMax,
                     Ntor,
                     Nref,
-                    accFilters
                 ):
     """
     Saves GUI text boxes into an input file in the HEAT format
@@ -2790,7 +2788,6 @@ def loadGyroTrace(display):
                State('N_gyroSteps_trace','value'),
                State('gyroDir_trace','value'),
                State('gyroPhase_trace','value'),
-               State('accFilters','value'),
                State('meshPerts','value'),
                State('distortDeltaR','value'),
                State('distortDeltaB','value'),
@@ -2804,13 +2801,10 @@ def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
             xGyroTrace,yGyroTrace,zGyroTrace,
             t,
             gyroT_eV_trace,gyroDeg_trace,N_gyroSteps_trace,
-            gyroDir_trace,gyroPhase_trace, accFilters,
+            gyroDir_trace,gyroPhase_trace,
             meshPerts, distortDeltaR, distortDeltaB, distortN, distortH, distortR):
     if n_clicks == 0:
         raise PreventUpdate
-
-    #acceleration structure filters
-    gui.loadAccFilters(accFilters)
 
     #Bfield trace
     if 'Btrace' in Btrace:

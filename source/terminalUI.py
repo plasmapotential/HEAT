@@ -162,15 +162,6 @@ class TUI():
                 #note that we load HF settings (optical, gyro, rad) dynamically
                 #from input file in the self.ENG.runHEAT loop
 
-                #read filters from input file and set accordingly
-                filters = []
-                print(self.ENG.MHD.torFilt)
-                if self.ENG.MHD.torFilt == True:
-                    filters.append('torFilt')
-                if self.ENG.MHD.psiFilt == True:
-                    filters.append('psiFilt')
-                self.ENG.loadAccFilters(filters)
-
                 #run HEAT
                 #note: current version of HEAT only supports single runList
                 #per tag
