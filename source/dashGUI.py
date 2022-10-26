@@ -2452,8 +2452,6 @@ def runChildren():
             children = [
                 html.H4("HEAT Run Settings", className="buttonRibbon"),
                 html.Br(),
-                html.H6("Mesh Perturbations: "),
-                meshPertBox(),
                 html.H6("Point Clouds at Tile Surface:"),
                 runTabChecklist(),
                 html.H6("Traces from Points:"),
@@ -2466,65 +2464,6 @@ def runChildren():
 
 
 #==========HEAT Run Settings==========
-
-
-def meshPertBox():
-    """
-    checkbox for selecting algorithm for mesh perturbation
-    """
-    return html.Div(
-            id="meshPertBox",
-            className="buttonRibbon",
-            children=[
-                html.Label(children="Perturbation Types: "),
-                dcc.Checklist(
-                    options=[
-                        {'label': 'VV Distortion', 'value': 'vvDistort'},
-                    ],
-                    value=[],
-                    id='meshPerts',
-                    className="PCbox",
-                ),
-                html.Div(id="meshPertSettings", children=[loadMeshPertSettings(False)]),
-            ],
-        )
-
-@app.callback([Output('meshPertSettings', 'children')],
-              [Input('meshPerts', 'value')])
-def meshPert(value):
-    if 'vvDistort' in value:
-        val = True
-    else:
-        val = False
-    return [loadMeshPertSettings(val)]
-
-
-#this function enables the inputs to be rendered on page load but hidden
-def loadMeshPertSettings(display):
-    if (display == True):
-        style={}
-    else:
-        style={"display":"none"}
-    return html.Div(
-            id="meshPertInputs",
-            className="buttonRibbon",
-            children=[
-                html.Label(children="Mesh Perturbation Settings: "),
-                html.Label("\u0394 r - Radial Distortion [m]:"),
-                dcc.Input(id="distortDeltaR", className="textInput"),
-                html.Label("\u0394 b - Conical Distortion [m]:"),
-                dcc.Input(id="distortDeltaB", className="textInput"),
-                html.Label("N - Toroidal Mode Number:"),
-                dcc.Input(id="distortN", className="textInput"),
-                html.Label("h - reference height [m]:"),
-                dcc.Input(id="distortH", className="textInput"),
-                html.Label("r - reference radius [m]:"),
-                dcc.Input(id="distortR", className="textInput"),
-            ],
-            style=style,
-        )
-
-
 def runTabChecklist():
     return html.Div(
             id="runTabChecklist",
@@ -2788,12 +2727,6 @@ def loadGyroTrace(display):
                State('N_gyroSteps_trace','value'),
                State('gyroDir_trace','value'),
                State('gyroPhase_trace','value'),
-               State('meshPerts','value'),
-               State('distortDeltaR','value'),
-               State('distortDeltaB','value'),
-               State('distortN','value'),
-               State('distortH','value'),
-               State('distortR','value'),
                ])
 def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
             BtraceTableData,
@@ -2801,8 +2734,7 @@ def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
             xGyroTrace,yGyroTrace,zGyroTrace,
             t,
             gyroT_eV_trace,gyroDeg_trace,N_gyroSteps_trace,
-            gyroDir_trace,gyroPhase_trace,
-            meshPerts, distortDeltaR, distortDeltaB, distortN, distortH, distortR):
+            gyroDir_trace,gyroPhase_trace):
     if n_clicks == 0:
         raise PreventUpdate
 
@@ -2814,9 +2746,6 @@ def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
     if 'gyrotrace' in gyrotrace:
         gui.gyroTrace(xGyroTrace,yGyroTrace,zGyroTrace,t,gyroPhase_trace,
                       gyroDeg_trace,N_gyroSteps_trace,gyroDir_trace,gyroT_eV_trace)
-
-    #mesh perturbations
-    gui.setupVVdistortion(distortDeltaR, distortDeltaB, distortN, distortH, distortR)
 
     #run HEAT
     gui.runHEAT(runList)

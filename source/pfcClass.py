@@ -289,32 +289,13 @@ class PFC:
             tools.createVTKOutput(pcfile, 'points', name)
         return
 
-    def VVdistortIntersects(self, targetPoints, targetNorms):
-        """
-        distorts the intersection geometry for manufacturing error and alignment
-        error tolerances.  The function corresponds to an oblong shaped
-        Vacuum Vessel with toroidal mode number
-
-        this function does the target geometry.  the ROI geometry is handled
-        in the HEAT engineClass
-        """
-        #first do intersection mesh vertexes
-        shp = targetPoints.shape
-        collapsedTargets = targetPoints.reshape(shp[0],shp[1]*shp[2])
-        targetPoints = tools.VVdistortion(collapsedTargets).reshape(shp[0],shp[1],shp[2])
-        #now do intersection mesh normals
-        distNorms = tools.faceNormals(targetPoints)
-        targetNorms = tools.checkSignOfNorm(distNorms, targetNorms)
-        return targetPoints, targetNorms
 
     def buildTargetMesh(self, CAD, mode=None):
         """
         build targetPoints and targetNorms arrays from CAD object meshes.
-
         if user specifies 'highRes' for mode, then the ROI meshes will be used
         for the PFC of interest.  Default mode (None) is to use 'standard'
         mesh resolution for all PFCs
-
         returns numpy arrays of target vertices and normals in units of [m]
         """
         numTargetFaces = 0
@@ -400,18 +381,6 @@ class PFC:
         powerDirTgt = tools.calculatePowerDir(bdotnTgt, self.ep.g['Bt0'])
         fwdUseTgt = np.where(powerDirTgt > 0)[0]
         revUseTgt = np.where(powerDirTgt < 0)[0]
-
-        #distort the mesh (if requested)
-        if self.vvDistort == True:
-            tools.vvDistort = True
-            tools.distortDeltaR = self.distortDeltaR
-            tools.distortDeltaB = self.distortDeltaB
-            tools.distortN = self.distortN
-            tools.distortH = self.distortH
-            tools.distortR0 = self.distortR0
-            print("Distorting intersection mesh using VV distortion function")
-            log.info("Distorting intersection mesh using VV distortion function")
-            targetPoints, targetNorms = self.VVdistortIntersects(targetPoints, targetNorms)
 
         #for debugging, save a shadowmask at each step up fieldline
         if shadowMaskClouds == True:
@@ -1094,18 +1063,6 @@ class PFC:
 
         #build the target mesh
         targetPoints, targetNorms = self.buildTargetMesh(CAD, mode='standard')
-
-        #distort the mesh (if requested)
-        if self.vvDistort == True:
-            tools.vvDistort = True
-            tools.distortDeltaR = self.distortDeltaR
-            tools.distortDeltaB = self.distortDeltaB
-            tools.distortN = self.distortN
-            tools.distortH = self.distortH
-            tools.distortR0 = self.distortR0
-            print("Distorting intersection mesh using VV distortion function")
-            log.info("Distorting intersection mesh using VV distortion function")
-            targetPoints, targetNorms = self.VVdistortIntersects(targetPoints, targetNorms)
 
         #for debugging, save a shadowmask at each step up fieldline
         if shadowMaskClouds == True:
@@ -1983,6 +1940,25 @@ class PFC:
 #==============================================================================
 #                LEGACY FUNCTIONS LEFT FOR REFERENCE (DO NOT WORK!)
 #==============================================================================
+    def meshPerturbIntersects(self, targetPoints, targetNorms):
+        """
+        Legacy Function.  Left for reference
+        move the intersection geometry for manufacturing error and alignment
+        error tolerances.
+
+        this function does the target geometry.  the ROI geometry is handled
+        in the HEAT engineClass
+        """
+        #first do intersection mesh vertexes
+        shp = targetPoints.shape
+        collapsedTargets = targetPoints.reshape(shp[0]*shp[1],shp[2])
+        targetPoints = tools.meshPerturbation(collapsedTargets).reshape(shp[0],shp[1],shp[2])
+        #now do intersection mesh normals
+        distNorms = tools.faceNormals(targetPoints)
+        targetNorms = tools.checkSignOfNorm(distNorms, targetNorms)
+        return targetPoints, targetNorms
+
+
     def findIntersectionFreeCADKDTree(self,MHD,CAD,verbose=False, shadowMaskClouds=False):
         """
         finds intersections using freecad's built in kdTree space partitioning

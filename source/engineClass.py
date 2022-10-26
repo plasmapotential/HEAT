@@ -880,68 +880,6 @@ class engineObj():
         tools.saveDefaultPFCfile(self.tmpDir)
         return
 
-    def setupVVdistortion(self, deltaR=None, deltaB=None, N=None, h=None, R0=None):
-        """
-        distorts the mesh based upon potential vacuum vessel manufacturing
-        errors / defects.  Basically, applies a toroidally harmonic distortion
-        function that moves mesh elements around a bit.
-        """
-        if None in [deltaR, deltaB, N, h, R0]:
-            tools.vvDistort = False
-            tools.distortDeltaR = None
-            tools.distortDeltaB = None
-            tools.distortN = None
-            tools.distortH = None
-            tools.distortR0 = None
-        else:
-            tools.vvDistort = True
-            tools.distortDeltaR = float(deltaR)
-            tools.distortDeltaB = float(deltaB)
-            tools.distortN = float(N)
-            tools.distortH = float(h)
-            tools.distortR0 = float(R0)
-
-        try:
-            for PFC in self.PFCs:
-                PFC.vvDistort = tools.vvDistort
-                PFC.distortDeltaR = tools.distortDeltaR
-                PFC.distortDeltaB = tools.distortDeltaB
-                PFC.distortN = tools.distortN
-                PFC.distortH = tools.distortH
-                PFC.distortR0 = tools.distortR0
-        except:
-            print("No PFCs loaded.  No distortion possible.")
-
-        return
-
-    def VVdistortPFC(self, mesh):
-        """
-        distorts mesh vertex points, then returns new normals and centers for
-        the distorted geometry
-        """
-        points = []
-        norms = []
-        for face in mesh.Facets:
-            points.append(face.Points)
-            norms.append(face.Normal)
-        points = np.asarray(points)/1000.0 #scale to m
-        norms = np.asarray(norms)
-
-        #distort the points and recalculate normals
-        #vertexes
-        shp = points.shape
-        collapsed = points.reshape(shp[0],shp[1]*shp[2])
-        points = tools.VVdistortion(collapsed).reshape(shp[0],shp[1],shp[2])
-        #normals
-        distNorms = tools.faceNormals(points)
-        norms = tools.checkSignOfNorm(distNorms, norms)
-
-        #get distored centroids
-        centers = tools.getTargetCenters(points)
-
-        return centers, norms
-
-
     def getHFInputs(self,hfMode,LRmask,LRthresh,
                     lqCN,lqCF,lqPN,lqPF,S,
                     fracCN,fracCF,fracPN,fracPF,
@@ -1515,18 +1453,6 @@ class engineObj():
             self.HF.elecFrac = 1.0
         else:
             self.HF.elecFrac = 1.0 - self.GYRO.ionFrac
-
-        #distort the ROI mesh (if requested)
-        #( intersect mesh is done in PFC.findShadows_structure() )
-        if tools.vvDistort == True:
-            print("Distorting ROI meshes using VV distortion function")
-            log.info("Distorting ROI meshes using VV distortion function")
-            for PFC in self.PFCs:
-                PFC.vvDistort = True
-                PFC.centers, PFC.norms = self.VVdistortPFC(PFC.mesh)
-        else:
-            for PFC in self.PFCs:
-                PFC.vvDistort = False
 
         #list of dictionaries for time varying inputs
         self.inputDicts = []
@@ -3312,3 +3238,71 @@ class engineObj():
                                      self.GYRO.N_vSlice,
                                      )
         return fig
+
+#==============================================================================
+#                LEGACY FUNCTIONS LEFT FOR REFERENCE (DO NOT WORK!)
+#==============================================================================
+    def setupMeshPerturb(self, meshPerts, pertOpts, xT=None, yT=None, zT=None):
+        """
+        Legacy function left for reference
+
+        moves the mesh based upon user defined translations.
+        """
+        print("Setting up mesh perturbations")
+        log.info("Setting up mesh perturbations")
+        if pertOpts is not None:
+            tools.pertOpts = pertOpts
+        else:
+            tools.pertOpts = None
+
+        if None in [xT, yT, zT]:
+            tools.meshPerturb = False
+            tools.xT = None
+            tools.yT = None
+            tools.zT = None
+        else:
+            tools.meshPerturb = True
+            tools.xT = float(xT)
+            tools.yT = float(yT)
+            tools.zT = float(zT)
+
+        if len(meshPerts) == 0:
+            tools.meshPerturb = False
+
+        for PFC in self.PFCs:
+            PFC.meshPerturb = tools.meshPerturb
+            PFC.xT = tools.xT
+            PFC.yT = tools.yT
+            PFC.zT = tools.zT
+            PFC.pertOpts = pertOpts
+
+        return
+
+    def meshPerturbPFC(self, mesh):
+        """
+        legacy function left for reference
+
+        moves mesh vertex points, then returns new normals and centers for
+        the moved geometry
+        """
+        points = []
+        norms = []
+        for face in mesh.Facets:
+            points.append(face.Points)
+            norms.append(face.Normal)
+        points = np.asarray(points)/1000.0 #scale to m
+        norms = np.asarray(norms)
+
+        #move the points and recalculate normals
+        #vertexes
+        shp = points.shape
+        collapsed = points.reshape(shp[0]*shp[1],shp[2])
+        points = tools.meshPerturbation(collapsed).reshape(shp[0],shp[1],shp[2])
+        #normals
+        distNorms = tools.faceNormals(points)
+        norms = tools.checkSignOfNorm(distNorms, norms)
+
+        #get distored centroids
+        centers = tools.getTargetCenters(points)
+
+        return centers, norms
