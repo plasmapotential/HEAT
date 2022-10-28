@@ -1,0 +1,280 @@
+/*--------------------Main App--------------------*/
+.entireWindow {
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 1rem;
+  width: 100%;
+  height: 100vh;
+}
+
+.banner {
+  width: 100%;
+  height: 5%;
+  text-align: center;
+}
+
+.appWindow {
+  width: 100%;
+  height: 98%;
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.tabWindow {
+  width: 60%;
+  height: 90%;
+  justify-content:center;
+
+}
+
+.graphWindow {
+  width: 35%;
+  height: 90%;
+  margin: 0 10px 0 10px;
+}
+
+.EQplot{
+    width: 75%;
+    height: 100%;
+    padding: 0 5px 0 5px;
+}
+
+
+.tabContent {
+  animation: fadeEffect 1s; /* Fading effect takes 1 second */
+  padding: 25px 10px 10px 10px;
+  max-height: 90vh;
+  width: 95%;
+  height: 100%;
+  overflow-y: scroll;
+  overflow-x: scroll;
+  max-width: 100%; /* Change this if PFC table overflows */
+}
+
+
+.accordion {
+  width: 100%;
+  height: 100%;
+  vertical-align: middle;
+}
+
+.MHDplotBox{
+    align-items: center;
+    width: 100%;
+    height: 95%;
+    text-align:center;
+    margin: 10px 10px 10px 10px;
+/*    box-shadow: 3px 6px #242526; */
+}
+
+.column1 {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.column2 {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+}
+
+
+.hiddenBox{
+    display: none;
+/*    box-shadow: 3px 6px #242526; */
+}
+
+.visibleBox{
+  align-items: center;
+  width: 95%;
+  margin: 10px 10px 10px 10px;
+  justify-content: center;
+}
+
+.rowBox{
+  display: flex;
+  width: 100%;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  text-align:center;
+  align-items: center;
+  justify-content: center;
+}
+
+.colBox{
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  text-align:center;
+  align-items: center;
+  justify-content: center;
+  margin: 10px 10px 10px 10px
+}
+
+.hfInput{
+  align-items: center;
+  width: 100%;
+  margin: 10px 10px 10px 10px;
+}
+
+.hfInput2{
+  align-items: center;
+  text-align:center;
+  width: 300px;
+  margin: 0px 10px 10px 10px;
+}
+
+.psolInput{
+  align-items: center;
+  justify-content: center;
+  text-align:center;
+  width: 95%;
+  margin: 10px 10px 10px 10px;
+}
+
+
+.hfLabel{
+  align-items: center;
+  text-align:center;
+  width: 100%;
+  margin: 0px 10px 0px 10px;
+}
+
+
+.SelectorBoxInput{
+  width: 300px;
+  text-align:center;
+  color: #3333ff;
+  margin: 0px 10px 10px 10px;
+  background-color: #919191;
+}
+
+.wideSelect{
+  display: inline-block;
+  width: 50%;
+  text-align:center;
+}
+
+.wideBoxNoColor{
+    width: 98%;
+    align-items: center;
+    text-align:center;
+    margin: 10px 10px 10px 10px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+/*    box-shadow: 3px 6px #242526; */
+}
+
+.OFInput{
+  align-items: center;
+  width: 45%;
+  margin: 10px 10px 10px 10px;
+}
+
+.PFCupload{
+  display: inline-block;
+  align-items: center;
+  text-align:center;
+  width: 98%;
+  margin: 0 0 10px 0;
+}
+
+.button50{
+  width: 47%;
+  margin: 10px 10px 10px 10px;
+  align-items: center;
+}
+
+.testDiv{
+  width: 100%;
+  height: 100%;
+}
+
+.testCard{
+  width: 100%;
+  height: 100%;
+}
+
+
+
+.runContentBox{
+/*  width: 90%; */
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  width:100%;
+}
+
+.card100{
+  width:100%;
+}
+
+.PCbox{
+    align-items: center;
+    width: 95%;
+    text-align:left;
+    margin: 10px 10px 10px 10px;
+/*    box-shadow: 3px 6px #242526; */
+}
+
+.xyzBoxInput{
+    width: 30%;
+    margin: 10px 10px 10px 10px;
+/*    box-shadow: 3px 6px #242526; */
+}
+
+.runContentBox{
+/*  width: 90%; */
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  width:100%;
+}
+
+/*--------------------GEQDSK Tab--------------------*/
+
+.gfileBox{
+    display: flex;
+    flex-direction: column;
+    flex-wrap: wrap;
+    align-items: center;
+    width: 90%;
+    text-align:left;
+    margin: 10px 10px 10px 10px;
+/*    box-shadow: 3px 6px #242526; */
+}
+.gfileBoxInput{
+    width: 30%;
+    margin: 10px 10px 10px 10px;
+/*    box-shadow: 3px 6px #242526; */
+}
+
+.gfileTable{
+    align-items: center;
+    width: 90%;
+    text-align:left;
+    margin: 10px 10px 10px 10px;
+/*    box-shadow: 3px 6px #242526; */
+}
+
+/*--------------------Output Tab--------------------*/
+.plotBox{
+    align-items: center;
+    width: 90%;
+    text-align:left;
+    margin: 10px 10px 10px 10px;
+/*    box-shadow: 3px 6px #242526; */
+}

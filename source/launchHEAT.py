@@ -263,7 +263,8 @@ def launchHEAT(args):
     else:
         print('\nRunning HEAT via Graphical User Interface (GUI)...\n')
         log.info('\nRunning HEAT via Graphical User Interface (GUI)...\n')
-        import dashGUI
+        import dashGUI2 as dashGUI
+        dashGUI.generateLayout()
         dashGUI.machineList = machineList
         #use default IPv4 address and port unless user provided one
         if address == None:

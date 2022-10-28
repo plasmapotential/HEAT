@@ -880,7 +880,7 @@ class engineObj():
         tools.saveDefaultPFCfile(self.tmpDir)
         return
 
-    def getHFInputs(self,hfMode,LRmask,LRthresh,
+    def getHFInputs(self,hfMode,
                     lqCN,lqCF,lqPN,lqPF,S,
                     fracCN,fracCF,fracPN,fracPF,
                     fracUI,fracUO,fracLI,fracLO,
@@ -907,12 +907,6 @@ class engineObj():
         self.HF.fracUO = fracUO
         self.HF.fracLI = fracLI
         self.HF.fracLO = fracLO
-        if 'yes' in LRmask:
-            self.HF.LRmask = True
-            self.HF.LRpower = LRpower
-        else:
-            self.HF.LRmask = False
-
         self.HF.lqCNmode = lqCNmode
         self.HF.lqCFmode = lqCFmode
         self.HF.lqPNmode = lqPNmode
@@ -951,8 +945,6 @@ class engineObj():
             log.info("Lower Inner Div Power Fraction: {:f}".format(self.HF.fracLI))
             print("Lower Outer Div Power Fraction: {:f}".format(self.HF.fracLO))
             log.info("Lower Outer Div Power Fraction: {:f}".format(self.HF.fracLO))
-            print("Long range intersection checking: "+LRmask)
-            log.info("Long range intersection checking: "+LRmask)
 
             #get regression parameters from MHD EQ
             self.HF.getRegressionParams(self.MHD.ep[0])
@@ -1041,8 +1033,6 @@ class engineObj():
             self.initializeHF(infile)
         #initialize optical HF data from input file
         self.getHFInputs(self.HF.hfMode,
-                         'no', #LRmask
-                         0.0, #LRthresh
                          self.HF.lqCN,
                          self.HF.lqCF,
                          self.HF.lqPN,
@@ -1786,15 +1776,6 @@ class engineObj():
         #Create Heat Flux Profile
         q = self.HF.getHFprofile(PFC)
         qDiv = self.HF.q_div(PFC, self.MHD, q) * self.HF.elecFrac
-
-        #Points over threshold power are likely errors, so check them
-        if self.HF.LRmask == True:
-            distPhi = 370.0 #degrees
-            qDiv = PFC.longRangeIntersectCheck(qDiv,
-                                               self.HF.LRpower,
-                                               distPhi,
-                                               self.MHD,
-                                               self.CAD)
 
         #Save data to class variable for future use
         PFC.q = q
