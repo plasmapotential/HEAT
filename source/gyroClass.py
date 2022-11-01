@@ -349,7 +349,7 @@ class GYRO:
 
     def singleGyroTrace(self,vPerp,vParallel,gyroPhase,N_gyroSteps,
                         BtraceXYZ,controlfilePath,TGyro,rGyro,omegaGyro,
-                        verbose=True):
+                        tag=None, verbose=True):
         """
         Calculates the gyro-Orbit path and saves to .csv and .vtk
 
@@ -417,12 +417,17 @@ class GYRO:
         print("Saving data to CSV and VTK formats")
         #save data to csv format
         head = 'X[mm],Y[mm],Z[mm]'
-        np.savetxt(controlfilePath+'helix.csv', helixTrace, delimiter=',', header=head)
+        if tag == None:
+            name = 'helixTrace'
+        else:
+            name = 'helixTrace_'+tag
+
+        np.savetxt(controlfilePath+name+'.csv', helixTrace, delimiter=',', header=head)
         #save data to vtk format
-        tools.createVTKOutput(controlfilePath+'helix.csv', 'trace', 'Gyro_trace')
+        tools.createVTKOutput(controlfilePath+name+'.csv', 'trace', name)
 
         if verbose==True:
-            print("V_perp = {:f} [m/s]".format(vPerp))
+            print("\nV_perp = {:f} [m/s]".format(vPerp))
             print("V_parallel = {:f} [m/s]".format(vParallel))
             print("Cyclotron Freq = {:f} [rad/s]".format(self.omegaGyro[0]))
             print("Cyclotron Freq = {:f} [Hz]".format(self.fGyro[0]))

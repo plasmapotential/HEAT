@@ -6,17 +6,22 @@
 This is the python - html interface, and the launch point for the HEAT code.
 Running this script launches a web interface that can be used to run HEAT
 The web interface is html and can be accessed via any web browser.
+
 DASH is the python library that creates the html - python binding
 Under the hood, DASH is running a flask server with associated proxy mapping,
   html, javascipt, etc.  We use decorators (@) to serve as javascript callbacks
+
 There are css files that go with this program.  They are located in the
    ./assets directory
+
 If you want to use this in a production environment serving multiple sessions
 simultaneously, you will need to run a gunicorn server or something to isolate
 different users' class variables from each other.
+
 dashGUI.py should be called with no arguments to run on 127.0.0.1:8050 (default)
 to run on address:port, use command line:
 dashGUI.py <address> <port>
+
 You will need to set a few variables below, based upon your system paths
 rootDir, PVPath
 """
@@ -28,27 +33,20 @@ import io
 import json
 import numpy as np
 import pandas as pd
-#unsafe, removed 20220406
-#import parser
 import time
 import copy
-import dash
-#import dash_html_components as html
-from dash import html
-#import dash_core_components as dcc
-from dash import dcc
+from dash import Dash, dcc, html, dash_table, ctx
+import dash_bootstrap_components as dbc
+from dash_bootstrap_templates import load_figure_template, template_from_url
+from dash_bootstrap_templates import ThemeSwitchAIO, ThemeChangerAIO
 from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 import visdcc
 from flask import Flask, send_from_directory
 import plotly.io as pio
-#import dash_table
-from dash import dash_table
 import EFIT.equilParams_class as EP
 import toolsClass
 tools = toolsClass.tools()
-#from dash.dcc import Download
-#from dash_extensions.snippets import send_file
 import ipaddress
 import logging
 log = logging.getLogger(__name__)
@@ -87,15 +85,27 @@ server = Flask(__name__)
 #app = dash.Dash(__name__, meta_tags=[{"name": "viewport", "content": "width=device-width"}])
 #Create our own server for downloading files
 
-app = dash.Dash(server=server, meta_tags=[{"name": "viewport", "content": "width=device-width"}],
+#app = dash.Dash(server=server, meta_tags=[{"name": "viewport", "content": "width=device-width"}],
+#                prevent_initial_callbacks=False)
+
+app = Dash(server=server, meta_tags=[{"name": "viewport", "content": "width=device-width"}],
                 prevent_initial_callbacks=False)
+
+
+#load the HEAT flame icon into browser tab
+iconFile = "flame.ico" #located in assets folder
+if os.path.exists(rootDir + "/assets/flame.ico"):
+    app._favicon = ("flame.ico")
+else:
+    print("Cannot find icon file:")
+    print(rootDir + "/assets/flame.ico\n")
+
 
 #Eventually need to fix this so that we are not using a global variable
 #dash can acces Flask Cache so we should cache data by userID or something
 #for R&D this works
 gui = engineObj(logFile, rootDir, dataPath, OFbashrc, chmod, UID, GID)
 gui.UImode = 'g' #graphical mode
-
 
 """
 ==============================================================================
@@ -109,29 +119,16 @@ def build_banner():
         children=[
             html.Div(
                 id="banner-text",
+                className="rowBox",
+                style={"margin": "10px 10px 10px 10px"},
                 children=[
-                    html.H4("Heat flux Engineering Analysis Toolkit (HEAT)"),
+                    html.Div(style={'width':'10%'}),
+                    html.H4("Heat flux Engineering Analysis Toolkit (HEAT)", style={'width':'80%'}),
+                    html.Div(themeToggle(), style={'width':'10%', 'justify-content':'flex-end'})
                 ],
             ),
         ],
     )
-
-# Dash doesnt let CSS overwrite tab settings so do it here
-tabs_style = {
-#    'width': '15%'
-}
-tab_style = {
-    'fontWeight': 'bold',
-    'color': '#ffffff',
-    'backgroundColor': '#252626',
-    'border': 'none',
-
-}
-tab_selected_style = {
-    'backgroundColor': '#119DFF',
-    'color': 'blue',
-    'border': 'none',
-}
 
 def build_tabs():
     """
@@ -139,129 +136,205 @@ def build_tabs():
     """
     return html.Div(
         id="tabs",
-#        className="tab-container",
-        className="tabcontent",
+        className="tabWindow",
         children=[
-            dcc.Tabs(
+            dbc.Tabs(
                 id="app-tabs",
-                value="tab1",
-                vertical=True,
-                style=tabs_style,
                 children=[
-                    dcc.Tab(
+                    dbc.Tab(
                         id="input-tab",
                         label="Inputs",
-                        value="tab1",
-                        style=tab_style,
-                        selected_style=tab_selected_style,
                         children=[
                             html.Div(
-#                            className='tabcontent',
-                            className="innerTabContent",
-                            children=[
-                                buildDefaultPaths(),
-                                buildButtonRibbon(),
-                                buildMHDbox(),
-                                buildCADbox(),
-                                buildPFCbox(),
-                                buildHFbox(),
-                                buildGYRObox(),
-                                buildOFbox(),
-                                ]
+                                [build_accordian()],
+                                className="tabContent"
+
                                 )
-                        ]
-                    ),
-                    dcc.Tab(
+                                ]
+                            ),
+                    dbc.Tab(
                         id="run-tab",
                         label="Run HEAT",
-                        value="tab2",
-                        style=tab_style,
-                        selected_style=tab_selected_style,
                         children=[
                             html.Div(
-#                            className='tabcontent',
-                            className="innerTabContent",
-                            children=[
-                                buildRunTab()
-                                ]
+                                [buildRunTab()],
+                                className="tabContent",
                                 )
-                        ]
-                    ),
-                    dcc.Tab(
+                                ]
+                            ),
+                    dbc.Tab(
                         id="gfileCleaner-tab",
                         label="GEQDSK Tools",
-                        value="tab3",
-                        style=tab_style,
-                        selected_style=tab_selected_style,
                         children=[
                             html.Div(
-#                            className='tabcontent',
-                            className="innerTabContent",
-                            children=[
-                                buildGfileCleanerTab()
+                                [buildGfileCleanerTab()],
+                                className="tabContent",
+                                )
                                 ]
-                            )
-                        ]
-                    ),
+                                ),
 
-                    dcc.Tab(
+                    dbc.Tab(
                         id="output-tab",
                         label="Output",
-                        value="tab4",
-                        style=tab_style,
-                        selected_style=tab_selected_style,
                         children=[
                             html.Div(
-#                            className='tabcontent',
-                            className="innerTabContentColumn",
-                            children=[
-                                buildOutputTab()
-                                ]
+                                [buildOutputTab()],
+                                className="tabContent",
                                 )
-                        ],
-                    ),
-                    dcc.Tab(
-                        id="log-tab",
-                        label="LogFile",
-                        value="tab5",
-                        style=tab_style,
-                        selected_style=tab_selected_style,
-                        children=[
-                            html.Div(
-#                            className='tabcontent',
-                            className="logTabContent",
-                            children=[
-                                buildLogTab()
-                                ]
-                                )
-                        ],
-                    ),
-
+                            ],
+                        ),
 
                 ],
             )
         ],
     )
 
+
+
+def build_accordian():
+    """
+    returns accordian
+    """
+    return dbc.Accordion(
+        id="accordian",
+        className="accordion",
+        start_collapsed=True,
+        flush=True,
+        children=[
+            dbc.AccordionItem(
+                [
+                dbc.Card(
+                    dbc.CardBody([buildButtonRibbon()])
+                    )
+                ],
+                title="Machine Selection and Input Files",
+
+            ),
+            dbc.AccordionItem(
+                [
+                dbc.Card(
+                    dbc.CardBody([buildMHDbox()])
+                    )
+                ],
+                title="MHD Settings",
+            ),
+            dbc.AccordionItem(
+                [
+                dbc.Card(
+                    dbc.CardBody(buildCADbox())
+                    )
+                ],
+                title="CAD Settings"
+            ),
+            dbc.AccordionItem(
+                [
+                dbc.Card(
+                    dbc.CardBody(buildPFCbox(),)
+                    )
+                ],
+                title="PFC Settings"
+            ),
+            dbc.AccordionItem(
+                [
+                dbc.Card(
+                    dbc.CardBody(buildHFbox())
+                    )
+                ],
+                title="Optical HF Settings"
+            ),
+            dbc.AccordionItem(
+                [
+                dbc.Card(
+                    dbc.CardBody(buildGYRObox(),)
+                    )
+                ],
+                title="Gyro HF Settings"
+            ),
+            dbc.AccordionItem(
+                [
+                dbc.Card(
+                    dbc.CardBody(buildRADbox(),)
+                    )
+                ],
+                title="Photon HF Settings"
+            ),
+            dbc.AccordionItem(
+                [
+                dbc.Card(
+                    dbc.CardBody(buildOFbox(),),
+                    )
+                ],
+                title="OpenFOAM Settings"
+            ),
+            dbc.AccordionItem(
+                [
+                dbc.Card(
+                    dbc.CardBody([buildDefaultPaths()]),
+                    #color='secondary',
+                    )
+                ],
+                title="Default Paths (read only)",
+            ),
+            ],
+        )
+
+
 """
 ==============================================================================
 Tab Contents: inputs tab
 """
+def themeToggle():
+    """
+    returns a div with theme toggling
+    """
+
+    themes_list = [
+        dbc.themes.COSMO,
+        dbc.themes.SLATE
+        ]
+
+    themeToggle = html.Div(
+        [
+            #for toggling between two themes
+            #ThemeChangerAIO(aio_id="theme", themes=themes_list, )
+            #for switching between multiple themes
+            dbc.Row(ThemeChangerAIO(aio_id="theme",
+                                    radio_props={"value":dbc.themes.SLATE},
+                                    offcanvas_props={'placement':'end'}
+                                    ),
+                    ),
+            html.Div(id="hiddenDivTheme", style={'display':'None'}),
+        ]
+        )
+
+    return themeToggle
+
+
+@app.callback(Output("themeStorage", 'data'),
+              Input(ThemeChangerAIO.ids.radio("theme"), "value"))
+def switchStyleSheet(theme):
+    """
+    callback to switch figure theme
+    """
+    data = {"theme":theme}
+    return data
+
+
+
+
 def buildButtonRibbon():
     """
     returns machine selector and load default buttons
     """
     return html.Div(
         id="buttonRib",
-        className="buttonRibbon",
         children=[
-            html.H5("Machine Selection and Input Files"),
+            #html.H5("Machine Selection and Input Files"),
             html.Div(
                 children=[
                     buildMachineSelector(),
                     buildInputButtons(),
                     ],
-                className="rowBox"
             )
         ],
     )
@@ -272,25 +345,27 @@ def buildDefaultPaths():
     PVPath is path for paraview binaries and pvpython
     FreeCAD is location of freecad installation
     dataDir is location where HEAT output will be saved
+
     rootDir is location of HEAT source code and is not included in GUI
     because it would be impossible to run GUI if this was not already set.
     rootDir (and some other defaults) are hardcoded at the top of this file
+
     if className is Hidden, then the input exists in html but is hidden from user
     """
     return html.Div(
-        id="defaultPaths",
+        #id="defaultPaths",
+        className="column1",
         children=[
-            html.Label("ParaVIEW Path", className="textInputHidden"),
-            dcc.Input(id="PVPath", className="textInputHidden", value=PVPath),
-            html.Label("FreeCAD Path", className="textInputHidden"),
-            dcc.Input(id="FreeCADPath", className="textInputHidden", value=FreeCADPath),
-            html.Label("Data Directory"),
-            dcc.Input(id="dataPath", className="textInput", value=dataPath),
-            html.Label("OpenFOAM bashrc file", className="textInputHidden"),
-            dcc.Input(id="OFbashrc", className="textInputHidden", value=OFbashrc),
-            html.Label("Image Mount Directory: "+AppDir)
+            dbc.Label("ParaVIEW Path"),
+            dbc.Input(id="PVPath", value=PVPath, readonly=True),
+            dbc.Label("FreeCAD Path"),
+            dbc.Input(id="FreeCADPath", value=FreeCADPath, readonly=True),
+            dbc.Label("Data Directory"),
+            dbc.Input(id="dataPath", value=dataPath, readonly=True),
+            dbc.Label("OpenFOAM bashrc file"),
+            dbc.Input(id="OFbashrc", value=OFbashrc, readonly=True),
+            dbc.Label("Image Mount Directory: "+AppDir)
         ],
-        className="colBox"
     )
 
 def buildMachineSelector():
@@ -298,15 +373,12 @@ def buildMachineSelector():
     returns machine selector dropdown
     """
     return html.Div(
-            className="machineSelectBox",
+            className="column1",
             children=[
-                html.Label(id="machLabel", children="Select a Tokamak"),
+                dbc.Label(id="machLabel", children="Select a Tokamak"),
                 dcc.Dropdown(
                     id='MachFlag',
-                    className="machineSelect",
-                    style={'backgroundColor': 'transparent', 'color':'transparent',
-                            'align-items':'center'},
-                    #style=dropdown_style,
+                    className="SelectorBoxInput",
                     options=[
                         {'label': 'NSTX-U', 'value': 'nstx'},
                         {'label': 'DIII-D', 'value': 'd3d'},
@@ -318,6 +390,7 @@ def buildMachineSelector():
                         ],
                     value=None
                     ),
+
                 html.Div(id="hiddenDivMachFlag"),
                 dcc.Upload(
                     className="inputUpload",
@@ -343,12 +416,14 @@ def buildInputButtons():
     """
     return html.Div(
             id="buttonInputs",
-            className="defaultButtonBox",
+            className="column2",
             children=[
                 html.Div(id="hiddenDivInput"),
-                html.Button("Load Defaults (optional)", id="loadDefaults", n_clicks=0, className="defaultButtons"),
-                html.Button("Save Settings\nInto Input File", id="saveInputs",
-                            n_clicks=0, className="defaultButtons"),
+                dbc.Button("Load Defaults (optional)", id="loadDefaults", n_clicks=0, color="primary"),
+                html.Div(id="hiddenDivLoadDefaults"),
+                html.Br(),
+                dbc.Button("Save Settings\nInto Input File", id="saveInputs",
+                            n_clicks=0, color="secondary"),
                 dcc.Download(id="downloadInputs"),
                 html.Div(id="hiddenDivSaveInput"),
             ],
@@ -362,10 +437,10 @@ def machineSelector(MachFlag):
     """
     if MachFlag == None:
         machFlagChosen = "Select a machine"
-        return [html.Label(machFlagChosen, style={'color':'#fc0313'})]
+        return [html.Label(machFlagChosen, className="text-warning")]
     gui.machineSelect(MachFlag, machineList)
     machFlagChosen = "Selected "+MachFlag
-    return [html.Label(machFlagChosen, style={'color':'#f5d142'})]
+    return [html.Label(machFlagChosen, className="text-success")]
 
 
 @app.callback([Output('hiddenDivInput', 'children'),
@@ -384,7 +459,7 @@ def inputDragDrop(file, contents, MachFlag):
     if file is None:
         raise PreventUpdate
     else:
-        outputDiv = html.Label("Loaded Input File", style={'color':'#f5d142'})
+        outputDiv = dbc.Label("Loaded Input File", className="text-success")
         newFile = gui.tmpDir + file[0]
         decoded = base64.b64decode(contents[0].split(',')[1])
         #Save user loaded file into tmp directory
@@ -402,7 +477,8 @@ def inputDragDrop(file, contents, MachFlag):
               [State('shot', 'value'),
                State('tmin', 'value'),
                State('tmax', 'value'),
-               State('nTrace', 'value'),
+               State('traceLength', 'value'),
+               State('dpinit', 'value'),
                State('gridRes', 'value'),
                State('hfMode', 'value'),
                State('eichlqCNmode', 'value'),
@@ -454,14 +530,18 @@ def inputDragDrop(file, contents, MachFlag):
                State('ionMassAMU','value'),
                State('vMode','value'),
                State('ionFrac','value'),
-               State('accFilters','value')
+               State('phiMin', 'value'),
+               State('phiMax','value'),
+               State('Ntor','value'),
+               State('Nref','value'),
                ]
                )
 def saveGUIinputs(  n_clicks,
                     shot,
                     tmin,
                     tmax,
-                    nTrace,
+                    traceLength,
+                    dpinit,
                     gridRes,
                     hfMode,
                     eichlqCNmode,
@@ -513,7 +593,10 @@ def saveGUIinputs(  n_clicks,
                     ionMassAMU,
                     vMode,
                     ionFrac,
-                    accFilters
+                    phiMin,
+                    phiMax,
+                    Ntor,
+                    Nref,
                 ):
     """
     Saves GUI text boxes into an input file in the HEAT format
@@ -531,12 +614,9 @@ def saveGUIinputs(  n_clicks,
     data['shot'] = shot
     data['tmin'] = tmin
     data['tmax'] = tmax
-    data['nTrace'] = nTrace
+    data['traceLength'] = traceLength
+    data['dpinit'] = dpinit
     data['dataPath'] = dataLoc
-    if 'torFilt' in accFilters:
-        data['torFilt'] = True
-    if 'psiFilt' in accFilters:
-        data['psiFilt'] = True
 
     #hf variables
     data['hfMode'] = hfMode
@@ -598,10 +678,14 @@ def saveGUIinputs(  n_clicks,
     data['ionMassAMU'] = ionMassAMU
     data['vMode'] = vMode
     data['ionFrac'] = ionFrac
+    data['phiMin'] = phiMin
+    data['phiMax'] = phiMax
+    data['Ntor'] = Ntor
+    data['Nref'] = Nref
 
     tools.saveInputFile(data, gui.tmpDir, gui.rootDir, gui.dataPath)
 
-    outputDiv = html.Label("Saved File", style={'color':'#f5d142'})
+    outputDiv = html.Label("Saved File", className="text-success")
     return [outputDiv, dcc.send_file(gui.tmpDir + "HEATinput.csv")]
 
 
@@ -613,34 +697,40 @@ def buildMHDbox():
     MHD input parameters
     """
     return html.Div(
-            id="MHDbox",
+            #id="MHDbox",
+            className="column1",
             children=[
-                html.H6("MHD Settings"),
-                html.Label(id="shotLabel", children="Shot Number  "),
-                dcc.Input(id="shot", className="textInput"),
-                html.Label(id="tMinLabel", children="Minimum Timestep [ms]"),
-                dcc.Input(id="tmin", className="textInput"),
-                html.Label(id="tMaxLabel", children="Maximum Timestep [ms]"),
-                dcc.Input(id="tmax", className="textInput"),
-                html.Label(id="nTraceLabel", children="Trace Distance (degrees)"),
-                dcc.Input(id="nTrace", className="textInput"),
+                dbc.Label(id="shotLabel", children="Shot Number  "),
+                dbc.Input(id="shot"),
+                dbc.Label(id="tMinLabel", children="Minimum Timestep [ms]"),
+                dbc.Input(id="tmin"),
+                dbc.Label(id="tMaxLabel", children="Maximum Timestep [ms]"),
+                dbc.Input(id="tmax"),
+                dbc.Label("Trace Distance [degrees]"),
+                dbc.Input(id="traceLength"),
+                dbc.Label("Toroidal Step Size [degrees]"),
+                dbc.Input(id="dpinit"),
+                html.Br(),
+                dbc.Label("Load MHD Equilibria:"),
                 dcc.Upload(
                     className="PFCupload",
                     id='gfiletable-upload',
                     children=html.Div([
                         'Drag and Drop or ',
-                        html.A('Select gFiles')
+                        html.A('Select GEQDSKs')
                     ]),
                     style={
                         'width': '60%', 'height': '60px', 'lineHeight': '60px',
                         'borderWidth': '1px', 'borderStyle': 'dashed',
                         'borderRadius': '5px', 'textAlign': 'center', 'margin': '10px',
+                        'justify-content':'center',
                         },
                     multiple=True,
                     ),
                 html.Div(id="hiddenDivGfileUpload"),
                 html.Br(),
-                dcc.RadioItems(
+                dbc.Label("Select Plasma Type:"),
+                dbc.RadioItems(
                                 id="plasma3Dmask",
                                 options=[
                                     {'label': '2D Plasmas', 'value': 'plasma2D'},
@@ -648,34 +738,11 @@ def buildMHDbox():
                                         ],
                                         value='plasma2D'
                                 ),
-                html.Button("Load MHD", id="loadMHD", n_clicks=0, style={'margin':'10px 10px 10px 10px'}),
                 html.Br(),
-                #save EQ plots as png buttons / forms
-                html.Div(
-                    children=[
-                        html.Div(
-                            children=[
-                                html.Label("Width (px)"),
-                                dcc.Input(id="EQpixelX", className="textInput"),
-                            ],
-                            className="colBox"
-                        ),
-                        html.Div(
-                            children=[
-                                html.Label("Height (px)"),
-                                dcc.Input(id="EQpixelY", className="textInput"),
-                            ],
-                            className="colBox"
-                        ),
-                        html.Button("Save EQs to .png", id="saveEQbutton", n_clicks=0, style={'margin':'30px 10px 10px 10px'}),
-                    ],
-                    className="rowBox"
-                ),
-                dcc.Download(id="downloadEQplots"),
-                html.Div(id="hiddenDivSaveEQ")
-
+                html.Br(),
+                dbc.Button("Load MHD", id="loadMHD", n_clicks=0, color="secondary"),
+                html.Br(),
             ],
-            className="box",
         )
 
 
@@ -691,14 +758,15 @@ def buildMHDbox():
               [State('shot', 'value'),
               State('tmin', 'value'),
               State('tmax', 'value'),
-              State('nTrace', 'value'),
+              State('traceLength', 'value'),
+              State('dpinit', 'value'),
               State('gfiletable-upload', 'filename'),
               State('gfiletable-upload', 'contents'),
               State('plasma3Dmask', 'value'),
               State('dataPath', 'value'),
               State('MachFlag', 'value')]
               )
-def loadMHD(n_clicks,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask,dataPath,MachFlag):
+def loadMHD(n_clicks,shot,tmin,tmax,traceLength,dpinit,gFileList,gFileData,plasma3Dmask,dataPath,MachFlag):
     """
     Load MHD
     """
@@ -718,7 +786,12 @@ def loadMHD(n_clicks,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask,data
     if shot is not None: shot = int(shot)
     if tmin is not None: tmin = int(tmin)
     if tmax is not None: tmax = int(tmax)
-    if nTrace is not None: nTrace = int(nTrace)
+    if traceLength is not None:
+        traceLength = float(traceLength)
+    if dpinit is not None:
+        dpinit = float(dpinit)
+    else:
+        dpinit = 1.0
     if gFileList is not None:
         if type(gFileList) is not list:
             gFileList = [gFileList]
@@ -729,7 +802,8 @@ def loadMHD(n_clicks,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask,data
     gui.getMHDInputs(shot=shot,
                      tmin=tmin,
                      tmax=tmax,
-                     nTrace=nTrace,
+                     traceLength=traceLength,
+                     dpinit=dpinit,
                      gFileList=gFileList,
                      gFileData=gFileData,
                      plasma3Dmask=plasma3Dmask,
@@ -760,87 +834,12 @@ def loadMHD(n_clicks,shot,tmin,tmax,nTrace,gFileList,gFileData,plasma3Dmask,data
         'Shot Number':shot,
         'Minimum Timestep [ms]':tmin,
         'Maximum Timesteo [ms]':tmax,
-        'Trace Distance [degrees]':nTrace,
+        'Trace Distance [degrees]':traceLength,
+        'Toroidal Step Size [degrees]':dpinit,
         '3D Plasma? [0=False]':plasma3Dmask,
         }
 
     return tminMHD, tmaxMHD, marks, value, data, MHDdata
-
-
-@app.callback([Output('hiddenDivSaveEQ', 'children'),
-               Output('downloadEQplots', 'data')],
-              [Input('saveEQbutton', 'n_clicks')],
-              [State('EQpixelX', 'value'),
-               State('EQpixelY', 'value')])
-def saveEQplots(n_clicks, x, y):
-    if n_clicks < 1:
-        raise PreventUpdate
-    try: MachFlag = gui.MachFlag
-    except:
-        print("You didn't select a machine")
-        raise PreventUpdate
-    try: ts = gui.MHD.timesteps
-    except:
-        print('Please load MHD before saving EQ plots')
-        return [html.Label("Load MHD First", style={'color':'#f51b60'})]
-
-    #get png resolution
-    if x == None or y == None:
-        #default PV window size on toms computer,
-        #more or less preserving NSTX aspect ratio
-        x = 526
-        y = 760
-    else:
-        x = float(x)
-        y = float(y)
-
-    shot = gui.MHD.shot
-    #this import needs to be here (not at top of file) to prevent FreeCAD qt5
-    #shared object conflict
-    import GUIscripts.plot2DEQ as eqPlot
-    allFiles = []
-    for t in ts:
-        print("Saving timestep {:5d}ms to PNG".format(t))
-        log.info("Saving timestep {:5d}ms to PNG".format(t))
-        fileName = gui.MHD.tmpDir + 'EQplot_{:05d}.png'.format(t)
-        allFiles.append(fileName)
-        idx = np.where(t==ts)[0][0]
-        ep = gui.MHD.ep[idx]
-        #write EQ plot using matplotlib
-        plt = eqPlot.EQ2Dplot(ep,shot,t,MachFlag,height=y)
-        plt.savefig(fileName, facecolor="#1b1f22")
-
-        #Write Equilibrium plot using plotly
-        #plot = plotly2DEQ.makePlotlyEQDiv(shot, t, MachFlag, ep)
-        #plot.update_layout(
-        #    title="{:05d}ms".format(t),
-        #    xaxis_title="R [m]",
-        #    yaxis_title="Z [m]",
-        #    autosize=True,
-        #    paper_bgcolor='#1b1f22',
-        #    plot_bgcolor='#1b1f22',
-        #    showlegend=False,
-        #    font=dict(
-    #   #         family="Courier New",
-        #        size=22,
-        #        color="#dcdce3"
-        #    )
-        #    )
-        #plot.write_image(fileName, width=x, height=y)
-
-    #now zip all these plots into a single file that the user may
-    #download from GUI
-    from zipfile import ZipFile
-    from os.path import basename
-    zipFile = gui.tmpDir + 'EQplots.zip'
-    zipObj = ZipFile(zipFile, 'w')
-    for f in allFiles:
-        zipObj.write(f, basename(f))
-    zipObj.close()
-
-
-    return [html.Label("Saved EQs to file", style={'color':'#f5d142'}),
-            dcc.send_file(zipFile)]
 
 #Load gfile
 @app.callback([Output('hiddenDivGfileUpload', 'children')],
@@ -850,7 +849,11 @@ def gfileUpload(gFile, MachFlag):
     if MachFlag is None:
         raise PreventUpdate
     else:
-        return [html.Label("Loaded gFile: "+gFile[0], style={'color':'#f5d142'})]
+        if len(gFile) > 1:
+            div = dbc.Label("Loaded multiple gfiles", className="text-success")
+        else:
+            div = dbc.Label("Loaded gFile: "+gFile[0], className="text-success")
+        return [div]
 
 #==========CAD==========
 def buildCADbox():
@@ -861,14 +864,11 @@ def buildCADbox():
             id="CADbox",
             draggable='yes',
             children=[
-                html.H6("CAD Settings"),
-                #html.Label(id="ROIgridResLabel", children="Heat Flux Resolution [mm]  "),
-                #dcc.Input(id="ROIGridRes", className="textInput"),
-                html.Label(id="gridResLabel", children="Intersect Resolution [mm]"),
-                dcc.Input(id="gridRes", className="textInput"),
-                html.Button("Load Res Settings", id="loadRes", style={'margin':'10px 10px 10px 10px'}),
+                dbc.Label(id="gridResLabel", children="Intersect Resolution [mm]"),
+                dbc.Input(id="gridRes", className="textInput"),
+                dbc.Button("Load Res Settings", id="loadRes", style={'margin':'10px 10px 10px 10px'}),
                 html.Div(id="hiddenDivCAD1"),
-                html.Label(id="STPdropLabel", children="STP File Direct Upload:"),
+                dbc.Label(id="STPdropLabel", children="STP File Direct Upload:"),
                 dcc.Upload(
                     className="PFCupload",
                     id='CAD-upload',
@@ -898,14 +898,14 @@ def loadRes(n_clicks, gridRes, MachFlag):
     if n_clicks is None:
         raise PreventUpdate
     if MachFlag is None:
-        return [html.Label("Select a machine", style={'color':'#fc0313'})]
+        return [dbc.Label("Select a machine", style={'color':'#fc0313'})]
     gui.getCADResInputs(gridRes)
 
     CADdata = {
         'Intersect Max Edge Length [mm]':gridRes
         }
 
-    return [html.Label("Loaded Resolution Settings", style={'color':'#f5d142'}), CADdata]
+    return [dbc.Label("Loaded Resolution Settings", className="text-success"), CADdata]
 
 #Load CAD button connect
 @app.callback([Output('hiddenDivCAD2', 'children')],
@@ -917,13 +917,13 @@ def loadCAD(STPfile, ts, STPcontents, MachFlag):
     if STPfile is None:
         raise PreventUpdate
     if MachFlag is None:
-        return [html.Label("Select a machine first", style={'color':'#fc0313'})]
+        return [dbc.Label("Select a machine first", style={'color':'#fc0313'})]
     else:
         contents = STPcontents[0]
         content_type, content_string = contents.split(',')
         STPdata= base64.b64decode(content_string)
         gui.getCAD(STPfile=STPfile[0],STPdata=STPdata, ts=ts[0])
-    return [html.Label("Loaded CAD: "+STPfile[0], style={'color':'#f5d142'})]
+    return [dbc.Label("Loaded CAD: "+STPfile[0], className="text-success")]
 
 #==========HF==========
 def buildHFbox():
@@ -933,20 +933,16 @@ def buildHFbox():
     return html.Div(
             id="HFbox",
             children=[
-                html.H6("HF Settings"),
-                html.Label(id="hfModeLabel", children="Select a Heat Flux Profile"),
+                dbc.Label(id="hfModeLabel", children="Select a Heat Flux Profile"),
                 dcc.Dropdown(
                 id='hfMode',
-                className="wideSelect",
-                style={'backgroundColor': 'transparent', 'color':'transparent'},
-                #style=dropdown_style,
                 options=[
                     {'label': 'Gaussian Spreading', 'value': 'eich'},
                     {'label': 'Multi-Exponential', 'value': 'multiExp'},
                     {'label': 'Limiter', 'value': 'limiter'},
                     {'label': 'From qFiles', 'value': 'qFile'}
                     ],
-                value='eich',
+                value=None,
                 ),
                 html.Div(id='hfParameters',
                          children=[
@@ -954,34 +950,14 @@ def buildHFbox():
                                    ],
                         ),
                 html.Br(),
-                html.Button("Load HF", id="loadHF", style={'margin':'10px 10px 10px 10px'}),
+                dbc.Button("Load HF", id="loadHF", style={'margin':'10px 10px 10px 10px'}),
                 html.Div(id="hiddenDivHF"),
 
             ],
-            className="HFbox",
         )
 
 
 #Heat Flux Callbacks and Conditionals
-@app.callback(Output('LRthreshDiv', 'children'),
-              [Input('LRmask', 'value')])
-def LRselector(mask):
-    return [ loadLRsettings(mask, hidden=False) ]
-
-
-def loadLRsettings(mask, hidden=False):
-    if hidden==True or mask=='no':
-        style={"display":"none"}
-    else:
-        style={}
-    return html.Div(
-                    children=
-                        [
-                            html.Label("Long Range Checking Power Threshold [MW]", style=style),
-                            dcc.Input(id="LRthresh", className="textInput", style=style),
-                        ],
-                        )
-
 @app.callback([Output('hfParameters', 'children')],
               [Input('hfMode', 'value')],
               [State('session', 'data')]
@@ -995,73 +971,60 @@ def PsolInput(hidden=False, data=None):
     if hidden==True:
         className="hiddenBox"
     else:
-        className="hfInput"
+        className="visibleBox"
 
 
     row2 = html.Div(
+                className="rowBox",
                 children=[
                     html.Div(
+                        className="colBox",
                         children=[
-                            html.Label("Upper Inner Power Fraction", className="hfLabel"),
-                            dcc.Input(id="fracUI", className="hfInput2", value=data['fracUI']),
+                            dbc.Label("Upper Inner Power Fraction", className="hfLabel"),
+                            dbc.Input(id="fracUI", value=data['fracUI']),
                             ],
-                        className="colBox"
                     ),
                     html.Div(
+                        className="colBox",
                         children=[
-                            html.Label("Upper Outer Power Fraction", className="hfLabel"),
-                            dcc.Input(id="fracUO", className="hfInput2", value=data['fracUO']),
+                            dbc.Label("Upper Outer Power Fraction", className="hfLabel"),
+                            dbc.Input(id="fracUO", value=data['fracUO']),
                             ],
-                        className="colBox"
                     ),
                     ],
-                className="rowBox",
             )
 
     row3 = html.Div(
+                className="rowBox",
                 children=[
                     html.Div(
+                        className="colBox",
                         children=[
-                            html.Label("Lower Inner Power Fraction", className="hfLabel"),
-                            dcc.Input(id="fracLI", className="hfInput2", value=data['fracLI']),
+                            dbc.Label("Lower Inner Power Fraction", className="hfLabel"),
+                            dbc.Input(id="fracLI", value=data['fracLI']),
                             ],
-                        className="colBox"
                     ),
                     html.Div(
+                        className="colBox",
                         children=[
-                            html.Label("Lower Outer Power Fraction", className="hfLabel"),
-                            dcc.Input(id="fracLO", className="hfInput2", value=data['fracLO']),
+                            dbc.Label("Lower Outer Power Fraction", className="hfLabel"),
+                            dbc.Input(id="fracLO", value=data['fracLO']),
                             ],
-                        className="colBox"
                     ),
                     ],
-                className="rowBox",
             )
 
 
     return html.Div(
              className=className,
              children=[
-                    html.Label("Power Injected [MW]"),
-                    dcc.Input(id="Pinj", className="textInput", value=data['Pinj']),
-                    html.Label("Radiated Fraction of Injected Power"),
-                    dcc.Input(id="coreRadFrac", className="textInput", value=data['coreRadFrac']),
+                    dbc.Label("Power Injected [MW]", className="psolInput"),
+                    dbc.Input(id="Pinj", value=data['Pinj'], className="psolInput"),
+                    dbc.Label("Radiated Fraction of Injected Power", className="psolInput"),
+                    dbc.Input(id="coreRadFrac", value=data['coreRadFrac'], className="psolInput"),
                     row2,
                     row3,
-                    html.Label("Long Range Intersection Checking?"),
-                    dcc.RadioItems(
-                                id="LRmask",
-                                options=[
-                                    {'label': 'Yes', 'value': 'yes'},
-                                    {'label': 'No', 'value': 'no'},
-                                        ],
-                                        value='no'
-                                ),
-
-                    html.Div(id="LRthreshDiv",
-                            children=[ loadLRsettings(mask='no', hidden=True), ]
-                            ),
-                        ],
+                    ],
                     )
 
 def loadHFSettings(mode=None, hidden=False, sessionData=None):
@@ -1152,16 +1115,15 @@ def loadHFSettings(mode=None, hidden=False, sessionData=None):
 
 def eichParameters(className, data):
     row1 = html.Div(
-        className='rowBox',
+    className='rowBox',
         children=[
             html.Div(
-            className="colBox",
+            className='colBox',
             children=[
-                html.Label("Select Heat Flux Width source:", className="hfLabel"),
+                dbc.Label("Select Heat Flux Width source:", className="hfLabel"),
                 dcc.Dropdown(
                 id='eichlqCNmode',
                 className="SelectorBoxInput",
-                style={'backgroundColor': 'transparent', 'color':'transparent'},
                 options=[
                     {'label': 'Eich #15', 'value': 'eich'},
                     {'label': 'User Defined', 'value': 'user'}
@@ -1171,14 +1133,12 @@ def eichParameters(className, data):
                 ],
             ),
             html.Div(
-            className="colBox",
+            className='colBox',
             children=[
-                html.Label("Select Gaussian Spreading source:", className="hfLabel"),
+                dbc.Label("Select Gaussian Spreading source:", className="hfLabel"),
                 dcc.Dropdown(
                 id='eichSMode',
                 className="SelectorBoxInput",
-                style={'backgroundColor': 'transparent', 'color':'transparent'},
-                #style=dropdown_style,
                 options=[
                     {'label': 'From Makowski Scaling', 'value': 'makowski'},
                     {'label': 'User Defined', 'value': 'user'}
@@ -1195,34 +1155,34 @@ def eichParameters(className, data):
             html.Div(
             className="colBox",
             children=[
-                html.Label("User Defined Heat Flux Width [mm]:", className="hfLabel"),
-                dcc.Input(id="lqEich", className="hfInput2", value=data['lqCN']),
+                dbc.Label("User Defined Heat Flux Width [mm]:", className="hfLabel"),
+                dbc.Input(id="lqEich", value=data['lqCN'], className="hfInput2"),
 
                 ],
             ),
             html.Div(
             className="colBox",
             children=[
-                html.Label("User Defined Gaussian Spreading [mm]:", className="hfLabel"),
-                dcc.Input(id="S", className="hfInput2", value=data['S']),
+                dbc.Label("User Defined Gaussian Spreading [mm]:", className="hfLabel"),
+                dbc.Input(id="S", value=data['S'], className="hfInput2"),
                 ],
             ),
             ])
 
     row3 = html.Div(
-        className="rowBox",
+        className='rowBox',
         children=[
             html.Div(
                 className="colBox",
                 children=[
-                    html.Label("Background Heat Flux [MW/m^2]", className="hfLabel"),
-                    dcc.Input(id="qBG", className="hfInput2", value=data['qBG']),
+                    dbc.Label("Background Heat Flux [MW/m^2]", className="hfLabel"),
+                    dbc.Input(id="qBG", value=data['qBG'], className="hfInput2"),
                 ]),
             html.Div(
                 className="colBox",
                 children=[
-                    html.Label("Greenwald Density Fraction", className="hfLabel"),
-                    dcc.Input(id="fG", className="hfInput2", value=data['fG']),
+                    dbc.Label("Greenwald Density Fraction", className="hfLabel"),
+                    dbc.Input(id="fG", value=data['fG'], className="hfInput2"),
                 ]),
         ])
 
@@ -1241,16 +1201,15 @@ def eichParameters(className, data):
 
 def multiExpParameters(className, data):
     row1 = html.Div(
-        className="rowBox",
+        className='rowBox',
         children = [
             html.Div(
-                className="colBox",
+                className='colBox',
                 children=[
-                    html.Label("Select Common Near Heat Flux Width source:"),
+                    dbc.Label("Select Common Near Heat Flux Width source:"),
                     dcc.Dropdown(
-                    id='multiExplqCNmode',
                     className="SelectorBoxInput",
-                    style={'backgroundColor': 'transparent', 'color':'transparent'},
+                    id='multiExplqCNmode',
                     options=[
                         {'label': 'Eich #15', 'value': 'eich'},
                         #{'label': 'From Brunner Scaling', 'value': 'brunner'},
@@ -1260,13 +1219,12 @@ def multiExpParameters(className, data):
                     )
                 ]),
             html.Div(
-                className="colBox",
+                className='colBox',
                 children=[
-                    html.Label("Select Common Far Heat Flux Width source:"),
+                    dbc.Label("Select Common Far Heat Flux Width source:"),
                     dcc.Dropdown(
-                    id='multiExplqCFmode',
                     className="SelectorBoxInput",
-                    style={'backgroundColor': 'transparent', 'color':'transparent'},
+                    id='multiExplqCFmode',
                     options=[
                         #{'label': 'From Brunner Scaling', 'value': 'brunner'},
                         {'label': 'User Defined', 'value': 'user'}
@@ -1277,16 +1235,15 @@ def multiExpParameters(className, data):
             ]
     )
     row2 = html.Div(
-        className="rowBox",
+        className='rowBox',
         children = [
             html.Div(
-                className="colBox",
+                className='colBox',
                 children=[
-                    html.Label("Select Private Near Heat Flux Width source:"),
+                    dbc.Label("Select Private Near Heat Flux Width source:"),
                     dcc.Dropdown(
-                    id='multiExplqPNmode',
                     className="SelectorBoxInput",
-                    style={'backgroundColor': 'transparent', 'color':'transparent'},
+                    id='multiExplqPNmode',
                     options=[
                         #{'label': 'From Brunner Scaling', 'value': 'brunner'},
                         {'label': 'User Defined', 'value': 'user'}
@@ -1295,13 +1252,12 @@ def multiExpParameters(className, data):
                     )
                 ]),
             html.Div(
-                className="colBox",
+                className='colBox',
                 children=[
-                    html.Label("Select Private Far Heat Flux Width source:"),
+                    dbc.Label("Select Private Far Heat Flux Width source:"),
                     dcc.Dropdown(
-                    id='multiExplqPFmode',
                     className="SelectorBoxInput",
-                    style={'backgroundColor': 'transparent', 'color':'transparent'},
+                    id='multiExplqPFmode',
                     options=[
                         #{'label': 'From Brunner Scaling', 'value': 'brunner'},
                         {'label': 'User Defined', 'value': 'user'}
@@ -1312,70 +1268,70 @@ def multiExpParameters(className, data):
             ]
     )
     row3 = html.Div(
-            className="rowBox",
+        className='rowBox',
             children=[
                 html.Div(
-                    className="colBox",
+                    className='colBox',
                     children=[
-                        html.Label("Common Near Heat Flux Width [mm]"),
-                        dcc.Input(id="lqCN", className="hfInput2", value=data['lqCN']),
+                        dbc.Label("Common Near Heat Flux Width [mm]"),
+                        dbc.Input(id="lqCN", value=data['lqCN']),
                     ]),
                 html.Div(
-                    className="colBox",
+                    className='colBox',
                     children=[
-                        html.Label("Common Near Power Fraction"),
-                        dcc.Input(id="fracCN", className="hfInput2", value = data['fracCN']),
+                        dbc.Label("Common Near Power Fraction"),
+                        dbc.Input(id="fracCN", value = data['fracCN']),
                     ]),
             ])
 
     row4 = html.Div(
-            className="rowBox",
+            className='rowBox',
             children=[
                 html.Div(
-                    className="colBox",
+                    className='colBox',
                     children=[
-                        html.Label("Common Far Heat Flux Width [mm]"),
-                        dcc.Input(id="lqCF", className="hfInput2", value=data['lqCF']),
+                        dbc.Label("Common Far Heat Flux Width [mm]"),
+                        dbc.Input(id="lqCF", value=data['lqCF']),
                     ]),
                 html.Div(
-                    className="colBox",
+                    className='colBox',
                     children=[
-                        html.Label("Common Far Power Fraction"),
-                        dcc.Input(id="fracCF", className="hfInput2", value=data['fracCF']),
+                        dbc.Label("Common Far Power Fraction"),
+                        dbc.Input(id="fracCF", value=data['fracCF']),
                     ]),
             ])
 
     row5 = html.Div(
-            className="rowBox",
+            className='rowBox',
             children=[
                 html.Div(
-                    className="colBox",
+                    className='colBox',
                     children=[
-                        html.Label("Private Near Heat Flux Width [mm]"),
-                        dcc.Input(id="lqPN", className="hfInput2", value=data['lqPN']),
+                        dbc.Label("Private Near Heat Flux Width [mm]"),
+                        dbc.Input(id="lqPN", value=data['lqPN']),
                     ]),
                 html.Div(
-                    className="colBox",
+                    className='colBox',
                     children=[
-                        html.Label("Private Near Power Fraction"),
-                        dcc.Input(id="fracPN", className="hfInput2", value=data['fracPN']),
+                        dbc.Label("Private Near Power Fraction"),
+                        dbc.Input(id="fracPN", value=data['fracPN']),
                     ]),
             ])
 
     row6 = html.Div(
-            className="rowBox",
+            className='rowBox',
             children=[
                 html.Div(
-                    className="colBox",
+                    className='colBox',
                     children=[
-                        html.Label("Private Far Heat Flux Width [mm]"),
-                        dcc.Input(id="lqPF", className="hfInput2", value=data['lqPF']),
+                        dbc.Label("Private Far Heat Flux Width [mm]"),
+                        dbc.Input(id="lqPF", value=data['lqPF']),
                     ]),
                 html.Div(
-                    className="colBox",
+                    className='colBox',
                     children=[
-                        html.Label("Private Far Power Fraction"),
-                        dcc.Input(id="fracPF", className="hfInput2", value=data['fracPF']),
+                        dbc.Label("Private Far Power Fraction"),
+                        dbc.Input(id="fracPF", value=data['fracPF']),
                     ]),
             ])
 
@@ -1407,11 +1363,10 @@ def limiterParameters(className, data):
             html.Div(
                 className="colBox",
                 children=[
-                    html.Label("Select Common Near Heat Flux Width source:"),
+                    dbc.Label("Select Common Near Heat Flux Width source:"),
                     dcc.Dropdown(
-                    id='limiterlqCNmode',
                     className="SelectorBoxInput",
-                    style={'backgroundColor': 'transparent', 'color':'transparent'},
+                    id='limiterlqCNmode',
                     options=[
                         {'label': 'Eich #15', 'value': 'eich'},
                         {'label': 'User Defined', 'value': 'user'}
@@ -1422,11 +1377,10 @@ def limiterParameters(className, data):
             html.Div(
                 className="colBox",
                 children=[
-                    html.Label("Select Common Far Heat Flux Width source:"),
+                    dbc.Label("Select Common Far Heat Flux Width source:"),
                     dcc.Dropdown(
-                    id='limiterlqCFmode',
                     className="SelectorBoxInput",
-                    style={'backgroundColor': 'transparent', 'color':'transparent'},
+                    id='limiterlqCFmode',
                     options=[
                         {'label': 'Horacek Fig. 6a', 'value': 'horacek'},
                         {'label': 'User Defined', 'value': 'user'}
@@ -1444,14 +1398,14 @@ def limiterParameters(className, data):
                 html.Div(
                     className="colBox",
                     children=[
-                        html.Label("Common Near Heat Flux Width [mm]"),
-                        dcc.Input(id="limlqCN", className="hfInput2", value=data['lqCN']),
+                        dbc.Label("Common Near Heat Flux Width [mm]"),
+                        dbc.Input(id="limlqCN", value=data['lqCN']),
                     ]),
                 html.Div(
                     className="colBox",
                     children=[
-                        html.Label("Common Far Heat Flux Width [mm]"),
-                        dcc.Input(id="limlqCF", className="hfInput2", value=data['lqCF']),
+                        dbc.Label("Common Far Heat Flux Width [mm]"),
+                        dbc.Input(id="limlqCF", value=data['lqCF']),
                     ]),
             ])
 
@@ -1461,15 +1415,15 @@ def limiterParameters(className, data):
                 html.Div(
                     className="colBox",
                     children=[
-                        html.Label("Common Near Power Fraction"),
-                        dcc.Input(id="limfracCN", className="hfInput2", value=data['fracCN']),
+                        dbc.Label("Common Near Power Fraction"),
+                        dbc.Input(id="limfracCN", value=data['fracCN']),
                     ]),
 
                 html.Div(
                     className="colBox",
                     children=[
-                        html.Label("Common Far Power Fraction"),
-                        dcc.Input(id="limfracCF", className="hfInput2", value=data['fracCF']),
+                        dbc.Label("Common Far Power Fraction"),
+                        dbc.Input(id="limfracCF", value=data['fracCF']),
                     ]),
             ])
 
@@ -1493,16 +1447,16 @@ def  qFileParameters(className, data):
         className="rowBox",
         children = [
             html.Div(
-                className="colBox",
+            className="colBox",
                 children=[
-                    html.Label("Input qFile shot path:"),
-                    dcc.Input(id="qFilePath", className="hfInput2", value=data['qFilePath']),
+                    dbc.Label("Input qFile shot path:"),
+                    dbc.Input(id="qFilePath", value=data['qFilePath']),
                 ]),
             html.Div(
                 className="colBox",
                 children=[
-                    html.Label("Input qFile tag (ie HF_optical.csv):"),
-                    dcc.Input(id="qFileTag", className="hfInput2", value=data['qFileTag']),
+                    dbc.Label("Input qFile tag (ie HF_optical.csv):"),
+                    dbc.Input(id="qFileTag", value=data['qFileTag']),
                 ]),
 
             ]
@@ -1578,8 +1532,6 @@ def  qFileParameters(className, data):
                State('fracUO', 'value'),
                State('fracLI', 'value'),
                State('fracLO', 'value'),
-               State('LRmask', 'value'),
-               State('LRthresh', 'value'),
                State('eichlqCNmode', 'value'),
                State('eichSMode', 'value'),
                State('multiExplqCNmode', 'value'),
@@ -1603,7 +1555,6 @@ def loadHF(n_clicks,hfMode,MachFlag,
             lqEich,S,lqCN,lqCF,lqPN,lqPF,
             fracCN,fracCF,fracPN,fracPF,
             fracUI,fracUO,fracLI,fracLO,
-            LRmask,LRthresh,
             eichlqCNmode,SMode,
             multiExplqCNmode,multiExplqCFmode,multiExplqPNmode,multiExplqPFmode,
             limiterlqCNmode,limiterlqCFmode,limlqCN,limlqCF,limfracCN,limfracCF,
@@ -1667,7 +1618,7 @@ def loadHF(n_clicks,hfMode,MachFlag,
         #could add private flux scalings here if they ever exist
 
 
-        gui.getHFInputs(hfMode,LRmask,LRthresh,
+        gui.getHFInputs(hfMode,
                         lqCN,lqCF,lqPN,lqPF,S,
                         fracCN,fracCF,fracPN,fracPF,
                         fracUI,fracUO,fracLI,fracLO,
@@ -1680,7 +1631,7 @@ def loadHF(n_clicks,hfMode,MachFlag,
         HFdata = gui.HF.HFdataDict
         #hfDict = [{'Parameter':i, 'Value':dataDict[i]} for i in inputTableData]
 
-    return [html.Label("Loaded HF Settings", style={'color':'#f5d142'}), HFdata]
+    return [html.Label("Loaded HF Settings", className="text-success"), HFdata]
 
 
 
@@ -1689,7 +1640,7 @@ def buildPFCbox():
     return html.Div(
             id="PFCbox",
             children=[
-                html.H6("PFC Settings"),
+                dbc.Label("Load a PFC file:"),
                 html.Div(id="pfcUploadDiv"),
                 dcc.Upload(
                     className="PFCupload",
@@ -1704,15 +1655,16 @@ def buildPFCbox():
                         'borderRadius': '5px', 'textAlign': 'center', 'margin': '10px',
                         },
                     ),
+                html.Br(),
                 html.Div(children=loadPFCtable(), className="PFCtable"),
                 html.Br(),
-                html.Button("Load PFC Settings", id="loadPFC", n_clicks=0, style={'margin':'0 10px 10px 0'}),
+                dbc.Button("Load PFC Settings", id="loadPFC", n_clicks=0, style={'margin':'0 10px 10px 0'}),
 #                html.Button('Add Row', id='add-rows-button', n_clicks=0, style={'margin':'0 10px 10px 0'}),
-                html.Button("Download Default PFC file", id="downloadPFCbtn", n_clicks=0, style={'margin':'0 10px 10px 0'}),
+                dbc.Button("Download Default PFC file", id="downloadPFCbtn", n_clicks=0, style={'margin':'0 10px 10px 0'}),
                 dcc.Download(id="downloadPFC"),
                 html.Div(id="hiddenDivDownloadPFC", style={"display": "none"}),
                 html.Div(id="hiddenDivPFC", style={"display": "none"}),
-                dcc.Input(id="hiddenDivPFC2", style={"display": "none"}),
+                dbc.Input(id="hiddenDivPFC2", style={"display": "none"}),
                 html.Div(id="hiddenDivPFC3")
 
             ],
@@ -1727,11 +1679,11 @@ def loadPFCtable():
         id='pfcTable',
         columns = cols,
         data = data,
-        style_header={'backgroundColor': 'rgb(30, 30, 30)'},
+        style_header={'backgroundColor': 'rgb(30, 30, 30)', 'color':'white'},
         style_cell={
             'textAlign': 'left',
-            'backgroundColor': 'rgb(50, 50, 50)',
-            'color': 'white'
+            #'backgroundColor': 'rgb(50, 50, 50)',
+            'color': 'black' #text color
         },
         editable=True,
         export_format='csv',
@@ -1775,7 +1727,7 @@ def PFCtable(n_clicks, filename, dataStore, ts, uploadContents,
 
     #user has to load MHD and CAD for a specific machine before PFCs
     if MachFlag == None:
-        hiddenDiv = [html.Label("Select a Tokamak and Load MHD/CAD First", style={'color':'#db362a'})]
+        hiddenDiv = [html.Label("Select a Tokamak and Load MHD/CAD First", className="text-warning")]
 
     #Button Clicks
     elif n_clicks > 0 and n_clicks>dataStore.get('PFC_n_clicks'):
@@ -1793,14 +1745,14 @@ def PFCtable(n_clicks, filename, dataStore, ts, uploadContents,
             gui.getPFCinputs(defaultMask=False)
             tD = gui.timestepMap.to_dict('records')
 
-        hiddenDiv = [html.Label("Loaded PFC Data into HEAT", style={'color':'#f5d142'})]
+        hiddenDiv = [html.Label("Loaded PFC Data into HEAT", className="text-success")]
 
     #file dropper
     elif filename != dataStore['PFCfilename']:
         df = parse_contents(uploadContents, filename)
         tableData = df.to_dict('records')
         tableColumns = [{"name": i, "id": i} for i in df.columns]
-        hiddenDiv = [html.Label("Loaded file: "+filename, style={'color':'#34b3ed'})]
+        hiddenDiv = [html.Label("Loaded file: "+filename, className="text-info")]
         tD = tableData.copy()
 
     else:
@@ -1827,7 +1779,7 @@ def downloadPFCfile(n_clicks):
         raise PreventUpdate
     gui.savePFCfile()
     return [dcc.send_file(gui.tmpDir + "PFCinput.csv"),
-            html.Label("Saved PFC Default File", style={'color':'#f5d142'})]
+            html.Label("Saved PFC Default File", className="text-success")]
 
 
 
@@ -1839,13 +1791,11 @@ def buildGYRObox():
     return html.Div(
         id="gyrobox",
         children=[
-            html.H6("Gyro Orbit Settings"),
             gyroInputBoxes(),
-            html.Label("Velocity Method"),
+            dbc.Label("Velocity Method"),
             dcc.Dropdown(
                 id='vMode',
                 className="wideSelect",
-                style={'backgroundColor': 'transparent', 'color':'transparent'},
                 options=[
                     {'label': 'Single Value', 'value': 'single'},
                     {'label': 'From 3D File', 'value': 'file'}, # to be added at future date
@@ -1857,11 +1807,10 @@ def buildGYRObox():
                                 loadGyroSettings(mode=None,hidden=True),
                                ],
                     ),
-            html.Label("Gyro Orbit Power Source"),
+            dbc.Label("Gyro Orbit Power Source"),
             dcc.Dropdown(
                 id='sourceMode',
                 className="wideSelect",
-                style={'backgroundColor': 'transparent', 'color':'transparent'},
                 options=[
                     {'label': 'All ROI PFCs', 'value': 'allROI'},
                     {'label': 'User Selected PFCs', 'value': 'custom'},
@@ -1873,9 +1822,9 @@ def buildGYRObox():
                                 loadSourceSettings(mode=None,hidden=True),
                                ],
                     ),
-            html.Label("(Note: Sources are OMITTED from Temp Calculation)"),
+            dbc.Label("(Note: Sources are OMITTED from Temp Calculation)"),
             html.Br(),
-            html.Button("Load Gyro Settings", id="loadGYRO", n_clicks=0, style={'margin':'0 10px 10px 0'}),
+            dbc.Button("Load Gyro Settings", id="loadGYRO", n_clicks=0, style={'margin':'0 10px 10px 0'}),
             html.Div(id="hiddenDivGyro")
         ],
         className="HFbox",
@@ -1887,37 +1836,37 @@ def gyroInputBoxes():
             children=[
             html.Div(
                 children=[
-                    html.Label("# steps per helix"),
-                    dcc.Input(id="N_gyroSteps", className="textInput"),
+                    dbc.Label("# steps per helix"),
+                    dbc.Input(id="N_gyroSteps", className="textInput"),
                 ],
                 className="OFInput",
             ),
             html.Div(
                 children=[
-                    html.Label("# gyroPhase Angles"),
-                    dcc.Input(id="N_gyroPhase", className="textInput"),
+                    dbc.Label("# gyroPhase Angles"),
+                    dbc.Input(id="N_gyroPhase", className="textInput"),
                 ],
                 className="OFInput"
             ),
 
             html.Div(
                 children=[
-                    html.Label("Gyro Trace Length [deg]"),
-                    dcc.Input(id="gyroDeg", className="textInput"),
+                    dbc.Label("Gyro Trace Length [deg]"),
+                    dbc.Input(id="gyroDeg", className="textInput"),
                 ],
                 className="OFInput"
             ),
             html.Div(
                 children=[
-                    html.Label("Ion Power Fraction [0-1]"),
-                    dcc.Input(id="ionFrac", className="textInput"),
+                    dbc.Label("Ion Power Fraction [0-1]"),
+                    dbc.Input(id="ionFrac", className="textInput"),
                 ],
                 className="OFInput"
             ),
             html.Div(
                 children=[
-                    html.Label("Ion Mass [AMU]"),
-                    dcc.Input(id="ionMassAMU", className="textInput"),
+                    dbc.Label("Ion Mass [AMU]"),
+                    dbc.Input(id="ionMassAMU", className="textInput"),
                 ],
                 className="OFInput"
             ),
@@ -1927,7 +1876,7 @@ def gyroInputBoxes():
 
 @app.callback([Output('gyroVparams', 'children')],
               [Input('vMode', 'value')])
-def hfParameters(mode):
+def gyroParameters(mode):
     #select velocity mode
     div = [loadGyroSettings(mode=mode, hidden=False)]
     return [div]
@@ -1971,24 +1920,24 @@ def singleVelocity(className):
                     children=[
                     html.Div(
                         children=[
-                            html.Label("Average Temperature [eV]"),
-                            dcc.Input(id="gyroT_eV", className="textInput"),
+                            dbc.Label("Average Temperature [eV]"),
+                            dbc.Input(id="gyroT_eV", className="textInput"),
                             ],
                         className="OFInput"
                         ),
 
                     html.Div(
                         children=[
-                            html.Label("# Velocity Slices"),
-                            dcc.Input(id="N_vSlice", className="textInput"),
+                            dbc.Label("# Velocity Slices"),
+                            dbc.Input(id="N_vSlice", className="textInput"),
                             ],
                         className="OFInput"
                         ),
 
                     html.Div(
                         children=[
-                            html.Label("# Velocity Phases"),
-                            dcc.Input(id="N_vPhase", className="textInput"),
+                            dbc.Label("# Velocity Phases"),
+                            dbc.Input(id="N_vPhase", className="textInput"),
                             ],
                         className="OFInput"
                         ),
@@ -2004,7 +1953,7 @@ def singleVelocity(className):
 def velocityFromFile(className):
     return html.Div(
         children=[
-            html.Label("3D plasma temperature interpolation not yet available", style={'color':'#f5d142'})
+            dbc.Label("3D plasma temperature interpolation not yet available", className="text-warning")
         ],
         className = className
     )
@@ -2065,12 +2014,12 @@ def customSource(className, options):
                     children=[
                         dcc.Checklist(
                             id='gyroSource',
-                            className="checkListBox",
+#                            className="checkListBox",
                             options=options,
                             value=['allROI'],
                         ),
                     ],
-                    className="wideBoxNoColor"
+#                    className="wideBoxNoColor"
                     )
                 ],
             className=className,
@@ -2080,7 +2029,7 @@ def customSource(className, options):
 def allROISource(className):
     return html.Div(
         children=[
-            html.Label("Using all ROI PFCs as gyro power sources", style={'color':'#f5d142'})
+            dbc.Label("Using all ROI PFCs as gyro power sources", className="text-success")
         ],
         className = className
     )
@@ -2143,7 +2092,7 @@ def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
             'Source for gyro orbit power':':'.join(gyroSource),
             }
 
-    return [html.Label("Loaded Gyro Orbit Data into HEAT", style={'color':'#f5d142'}),
+    return [dbc.Label("Loaded Gyro Orbit Data into HEAT", className="text-success"),
             gyroPhaseFig,
             vPhaseFig,
             vSliceFig,
@@ -2152,18 +2101,136 @@ def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
 
 
 
+
+#==========RAD==========
+def buildRADbox():
+    """
+    MHD input parameters
+    """
+    return html.Div(
+            id="RADbox",
+            children=[
+                dcc.Upload(
+                    className="PFCupload",
+                    id='RAD-upload',
+                    children=html.Div([
+                        'Drag and Drop or ',
+                        html.A('Select radFile')
+                    ]),
+                    style={
+                        'width': '60%', 'height': '60px', 'lineHeight': '60px',
+                        'borderWidth': '1px', 'borderStyle': 'dashed',
+                        'borderRadius': '5px', 'textAlign': 'center', 'margin': '10px',
+                        },
+                    multiple=True,
+                    ),
+                html.Div(id="hiddenDivRadUpload"),
+                html.Div(
+                    children=[
+                    html.Div(
+                        children=[
+                            dbc.Label("Minimum phi of source [deg] "),
+                            dbc.Input(id="phiMin", className="textInput"),
+                        ],
+                        className="OFInput",
+                    ),
+                    html.Div(
+                        children=[
+                            dbc.Label("Maximum phi of source [deg] "),
+                            dbc.Input(id="phiMax", className="textInput"),
+                        ],
+                        className="OFInput",
+                    ),
+                    html.Div(
+                        children=[
+                            dbc.Label("Number of toroidal repetitions  "),
+                            dbc.Input(id="Ntor", className="textInput"),
+                        ],
+                    className="OFInput",
+                    ),
+                    html.Div(
+                        children=[
+                            dbc.Label("Number of reflections  "),
+                            dbc.Input(id="Nref", className="textInput"),
+                        ],
+                        className="OFInput",
+                    ),
+                    ],
+                    className="wideBoxNoColor"
+                    ),
+
+                html.Br(),
+                dbc.Button("Load RAD Settings", id="loadRAD", n_clicks=0, style={'margin':'10px 10px 10px 10px'}),
+                html.Div(id="hiddenDivRAD"),
+            ],
+            className="HFbox",
+        )
+
+
+
+
+#Load RAD button connect
+@app.callback([Output('hiddenDivRAD', 'children'),
+               Output('RADDataStorage', 'data')
+               ],
+              [Input('loadRAD', 'n_clicks')],
+              [State('phiMin', 'value'),
+               State('phiMax', 'value'),
+               State('Ntor', 'value'),
+               State('Nref', 'value'),
+               State('RAD-upload', 'filename'),
+               State('RAD-upload', 'contents'),
+              ])
+def loadRAD(n_clicks,phiMin,phiMax,Ntor,Nref,radFile,radData):
+    """
+    sets up RAD module
+    """
+    if n_clicks == 0:
+        raise PreventUpdate
+
+    if radFile == None:
+        outDiv = dbc.Label("Load radFile before loading settings...", style={'color':'#f50707'})
+        RADdata = {}
+    else:
+        outDiv = dbc.Label("Loaded RAD Data into HEAT", className="text-success")
+        Ntor = int(Ntor)
+        Nref = int(Nref)
+        phiMin = float(phiMin)
+        phiMax = int(phiMax)
+        gui.getRADInputs(radFile[0], Ntor, Nref, phiMin, phiMax, radData[0])
+
+
+        RADdata = {
+            'Minimum phi of radiation source [deg]':phiMin,
+            'Maximum phi of radiation source [deg]':phiMax,
+            'Number of toroidal repetitions of radiation source':Ntor,
+            'Number of photon reflections to trace':Nref,
+            }
+    return [outDiv, RADdata]
+
+#Load radFile
+@app.callback([Output('hiddenDivRadUpload', 'children')],
+              [Input('RAD-upload', 'filename')],
+              [State('MachFlag', 'value')])
+def gfileUpload(radFile, MachFlag):
+    if MachFlag is None:
+        raise PreventUpdate
+    else:
+        return [dbc.Label("Loaded radFile: "+radFile[0], className="text-success")]
+
+
+
 #==========openFOAM==========
 def buildOFbox():
     return html.Div(
         id="OFbox",
         children=[
-            html.H6("openFOAM Settings"),
             OFinputBoxes(),
             html.Br(),
-            html.Button("Load OF Settings", id="loadOF", n_clicks=0, style={'margin':'0 10px 10px 0'}),
+            dbc.Button("Load OF Settings", id="loadOF", n_clicks=0, style={'margin':'0 10px 10px 0'}),
             html.Div(id="hiddenDivOF")
         ],
-        className="HFbox",
+#        className="HFbox",
     )
 
 def OFinputBoxes():
@@ -2171,72 +2238,68 @@ def OFinputBoxes():
             children=[
             html.Div(
                 children=[
-                    html.Label("Start Time [ms]"),
-                    dcc.Input(id="OFstartTime", className="textInput"),
+                    dbc.Label("Start Time [ms]"),
+                    dbc.Input(id="OFstartTime", className="textInput"),
                 ],
                 className="OFInput",
             ),
             html.Div(
                 children=[
-                    html.Label("Stop Time [ms]"),
-                    dcc.Input(id="OFstopTime", className="textInput"),
+                    dbc.Label("Stop Time [ms]"),
+                    dbc.Input(id="OFstopTime", className="textInput"),
                 ],
                 className="OFInput"
             ),
             html.Div(
                 children=[
-                    html.Label("Minimum Mesh Refinement Level"),
-                    dcc.Input(id="OFminMeshLev", className="textInput"),
+                    dbc.Label("Minimum Mesh Refinement Level"),
+                    dbc.Input(id="OFminMeshLev", className="textInput"),
                 ],
                 className="OFInput",
             ),
             html.Div(
                 children=[
-                    html.Label("Maximum Mesh Refinement Level"),
-                    dcc.Input(id="OFmaxMeshLev", className="textInput"),
+                    dbc.Label("Maximum Mesh Refinement Level"),
+                    dbc.Input(id="OFmaxMeshLev", className="textInput"),
                 ],
                 className="OFInput",
             ),
             html.Div(
                 children=[
-                    html.Label("STL scaling"),
-                    dcc.Input(id="OFSTLscale", className="textInput"),
+                    dbc.Label("STL scaling"),
+                    dbc.Input(id="OFSTLscale", className="textInput"),
                 ],
                 className="OFInput",
             ),
             html.Div(
                 children=[
-                    html.Label("deltaT [s]"),
-                    dcc.Input(id="OFdeltaT", className="textInput"),
+                    dbc.Label("deltaT [s]"),
+                    dbc.Input(id="OFdeltaT", className="textInput"),
                 ],
                 className="OFInput",
             ),
             html.Div(
                 children=[
-                    html.Label(" Write deltaT [s]"),
-                    dcc.Input(id="OFwriteDeltaT", className="textInput"),
+                    dbc.Label(" Write deltaT [s]"),
+                    dbc.Input(id="OFwriteDeltaT", className="textInput"),
                 ],
                 className="OFInput",
             ),
             html.Div(
                 children=[
-                    html.Label("Material Selection"),
-
+                    dbc.Label("Material Selection"),
                     dcc.Dropdown(
                         id='materialSelect',
-                        className="machineSelect",
-                        style={'backgroundColor': 'transparent', 'color':'transparent',
-                                'align-items':'center'},
-                                #style=dropdown_style,
-                                options=[
-                                {'label': 'SGLR6510 Graphite', 'value': 'SGL'},
-                                {'label': 'ATJ Graphite', 'value': 'ATJ'},
-                                {'label': 'Molybdenum', 'value': 'MOLY'},
-                                {'label': 'Tungsten', 'value': 'TUNG'},
-                                {'label': 'Tungsten (SPARC)', 'value': 'TUNG_SPARC'},
-                                ],
-                                value='SGL'
-                                ),
+                        className="SelectorBoxInput",
+                        options=[
+                            {'label': 'SGLR6510 Graphite', 'value': 'SGL'},
+                            {'label': 'ATJ Graphite', 'value': 'ATJ'},
+                            {'label': 'Molybdenum', 'value': 'MOLY'},
+                            {'label': 'Tungsten', 'value': 'TUNG'},
+                            {'label': 'Tungsten (SPARC)', 'value': 'TUNG_SPARC'},
+                        ],
+                        value='SGL'
+                        ),
                 ],
                 className="OFInput",
             ),
@@ -2280,7 +2343,7 @@ def loadOF(n_clicks,OFstartTime,OFstopTime,
             'OpenFOAM write output timestep size [s]':OFwriteDeltaT,
             'OpenFOAM material selection': materialSelect
             }
-        return [html.Label("Loaded OF Data into HEAT", style={'color':'#f5d142'}), OFdata]
+        return [dbc.Label("Loaded OF Data into HEAT", className="text-success"), OFdata]
 
 
 
@@ -2300,148 +2363,108 @@ def buildRunTab():
 def runChildren():
     return html.Div(
             children = [
-                html.H4("HEAT Run Settings", className="buttonRibbon"),
+                html.H4("HEAT Run Settings", style={"width":"100%"}),
                 html.Br(),
-                html.H6("Acceleration Filter Settings: "),
-                buildRunSettings(),
-                html.H6("Mesh Perturbations: "),
-                meshPertBox(),
-                html.H6("Point Clouds at Tile Surface:"),
+                html.H5("Point Clouds at Tile Surface:"),
                 runTabChecklist(),
-                html.H6("Traces from Points:"),
+                html.H5("Traces from Points:"),
                 runTabTraces(),
-                html.Button("Run HEAT", id="runHEAT", n_clicks=0, style={'margin':'0 10px 10px 0'}),
+                dbc.Button("Run HEAT", id="runHEAT", n_clicks=0, style={'margin':'0 10px 10px 0'}),
                 html.Div(id="hiddenDivRun")
                 ],
-            className="wideBoxDark",
+            className="wideBoxNoColor",
                 )
 
 
 #==========HEAT Run Settings==========
-def buildRunSettings():
-    """
-    returns user options for the HEAT run
-    """
-    return html.Div(
-            id="runSettings",
-            className="buttonRibbon",
-            children=[
-                html.Label(children="Acceleration Filters:  "),
-                dcc.Checklist(
-                    options=[
-                        {'label': 'Toroidal Filter', 'value': 'torFilt'},
-                        {'label': 'Psi Filter', 'value': 'psiFilt'},
-                    ],
-                    value=['torFilt'],
-                    id='accFilters',
-                    className="PCbox",
-                ),
-            ],
-        )
-
-def meshPertBox():
-    """
-    checkbox for selecting algorithm for mesh perturbation
-    """
-    return html.Div(
-            id="meshPertBox",
-            className="buttonRibbon",
-            children=[
-                html.Label(children="Perturbation Types: "),
-                dcc.Checklist(
-                    options=[
-                        {'label': 'VV Distortion', 'value': 'vvDistort'},
-                    ],
-                    value=[],
-                    id='meshPerts',
-                    className="PCbox",
-                ),
-                html.Div(id="meshPertSettings", children=[loadMeshPertSettings(False)]),
-            ],
-        )
-
-@app.callback([Output('meshPertSettings', 'children')],
-              [Input('meshPerts', 'value')])
-def meshPert(value):
-    if 'vvDistort' in value:
-        val = True
-    else:
-        val = False
-    return [loadMeshPertSettings(val)]
-
-
-#this function enables the inputs to be rendered on page load but hidden
-def loadMeshPertSettings(display):
-    if (display == True):
-        style={}
-    else:
-        style={"display":"none"}
-    return html.Div(
-            id="meshPertInputs",
-            className="buttonRibbon",
-            children=[
-                html.Label(children="Mesh Perturbation Settings: "),
-                html.Label("\u0394 r - Radial Distortion [m]:"),
-                dcc.Input(id="distortDeltaR", className="textInput"),
-                html.Label("\u0394 b - Conical Distortion [m]:"),
-                dcc.Input(id="distortDeltaB", className="textInput"),
-                html.Label("N - Toroidal Mode Number:"),
-                dcc.Input(id="distortN", className="textInput"),
-                html.Label("h - reference height [m]:"),
-                dcc.Input(id="distortH", className="textInput"),
-                html.Label("r - reference radius [m]:"),
-                dcc.Input(id="distortR", className="textInput"),
-            ],
-            style=style,
-        )
-
-
 def runTabChecklist():
     return html.Div(
             id="runTabChecklist",
             children=[
-                dcc.Checklist(
-                    options=[
-                        {'label': 'B-field point cloud ', 'value': 'B'},
-                        {'label': 'Normal vector point cloud', 'value': 'norm'},
-                        {'label': 'powerDir point cloud', 'value': 'pwrDir'},
-                        {'label': 'psiN point cloud', 'value': 'psiN'},
-                        {'label': 'bdotn point cloud', 'value': 'bdotn'},
-                        {'label': 'Heat flux point cloud', 'value': 'hfOpt'},
-                        {'label': 'Gyro Orbit heat flux point cloud', 'value': 'hfGyro'},
-                        {'label': 'openFOAM thermal analysis', 'value': 'T'},
+                dbc.Card(
+                    [dbc.CardBody(
+                        dbc.Checklist(
+                        options=[
+                            {'label': 'B-field point cloud ', 'value': 'B'},
+                            {'label': 'Normal vector point cloud', 'value': 'norm'},
+                            {'label': 'powerDir point cloud', 'value': 'pwrDir'},
+                            {'label': 'psiN point cloud', 'value': 'psiN'},
+                            {'label': 'bdotn point cloud', 'value': 'bdotn'},
+                            {'label': 'Heat flux point cloud', 'value': 'hfOpt'},
+                            {'label': 'Ion gyro-orbit heat flux point cloud', 'value': 'hfGyro'},
+                            {'label': 'Photon radiation heat flux point cloud', 'value': 'hfRad'},
+                            {'label': 'openFOAM thermal analysis', 'value': 'T'},
                         ],
                         value=['hfOpt'],
                         id='checklistPC',
+                        switch=True,
                         ),
-                    ],
-                className="PCbox",
+                    )],
+                    className="card100",
                 )
+            ],
+                className="PCbox",
+            )
+
+
 def runTabTraces():
     return html.Div(
             id="runTabTraces",
             children=[
-                dcc.Checklist(
-                    options=[{'label': 'B-field Trace ', 'value': 'Btrace'}],
-                    value=[''],
-                    id="Btrace",
-                        ),
-                html.Div(id="bFieldTracePoints", children=[loadBfieldTrace(False)]),
-                dcc.Checklist(
-                    options=[{'label': 'OpenFOAM Temp Probe ', 'value': 'OFtrace'}],
-                    value=[''],
-                    id="OFtrace",
-                        ),
-                html.Div(id="OFTracePoints", children=[loadOFTrace(False)]),
-                dcc.Checklist(
-                    options=[{'label': 'Gyro Orbit Trace ', 'value': 'gyrotrace'}],
-                    value=[''],
-                    id="gyrotrace",
-                        ),
-                html.Div(id="gyroTracePoints", children=[loadGyroTrace(False)]),
+                dbc.Card(
+                    [dbc.CardBody(
+                        [
+                        dbc.Checklist(
+                            options=[{'label': 'B-field Trace ', 'value': 'Btrace'}],
+                            value=[''],
+                            id="Btrace",
+                            switch=True,
+                            ),
+                        html.Div(id="bFieldTracePoints", children=[loadBfieldTrace(False)]),
+                        ],
+                        className="card100",
+                    )
                     ],
-                className="PCbox",
-                )
+                    className="card100",
+                ),
+                dbc.Card(
+                    [dbc.CardBody(
+                        [
+                        dbc.Checklist(
+                            options=[{'label': 'OpenFOAM Temp Probe ', 'value': 'OFtrace'}],
+                            value=[''],
+                            id="OFtrace",
+                            switch=True,
+                            ),
+                        html.Div(id="OFTracePoints", children=[loadOFTrace(False)]),
+                        ],
+                        )
+                    ],
+                    className="card100",
+                ),
+
+                dbc.Card(
+                    [dbc.CardBody(
+                        [
+                        dbc.Checklist(
+                            options=[{'label': 'Gyro Orbit Trace ', 'value': 'gyrotrace'}],
+                            value=[''],
+                            id="gyrotrace",
+                            switch=True,
+                        ),
+                        html.Div(id="gyroTracePoints", children=[loadGyroTrace(False)]),
+                        ],
+                        className="card100",
+                    )
+                    ],
+                    className="card100",
+                ),
+
+
+
+            ],
+            className="PCbox",
+            )
 
 @app.callback([Output('bFieldTracePoints', 'children')],
               [Input('Btrace', 'value')])
@@ -2483,18 +2506,17 @@ def loadBfieldTrace(display):
     )
 
 def loadBtraceTable():
-    params = ['x[mm]','y[mm]','z[mm]','traceDirection','Length[deg]']
+    params = ['x[mm]','y[mm]','z[mm]','traceDirection','Length[deg]','stepSize[deg]']
     cols = [{'id': p, 'name': p} for p in params]
     data = [{}]
     return dash_table.DataTable(
         id='BtraceTable',
         columns = cols,
         data = data,
-        style_header={'backgroundColor': 'rgb(30, 30, 30)'},
+#        style_header={'backgroundColor': 'rgb(30, 30, 30)'},
         style_cell={
             'textAlign': 'left',
-            'backgroundColor': 'rgb(50, 50, 50)',
-            'color': 'white'
+            'color': 'black'
         },
         editable=True,
         export_format='csv',
@@ -2538,7 +2560,7 @@ def BtraceTable(filename, dataStore, uploadContents,
             df = parse_contents(uploadContents, filename)
             tableData = df.to_dict('records')
             #tableColumns = [{"name": i, "id": i} for i in df.columns]
-            params = ['x[mm]','y[mm]','z[mm]','traceDirection','Length[deg]']
+            params = ['x[mm]','y[mm]','z[mm]','traceDirection','Length[deg]','stepSize[deg]']
             tableColumns = [{'id': p, 'name': p} for p in params]
             hiddenDiv = [html.Label("Loaded file: "+filename, style={'color':'#34b3ed'})]
             dataStore.update({'BtraceFileName':filename})
@@ -2547,8 +2569,6 @@ def BtraceTable(filename, dataStore, uploadContents,
         hiddenDiv = []
 
     return dataStore, tableData, tableColumns, hiddenDiv
-
-
 
 @app.callback(Output('OFTracePoints', 'children'),
               [Input('OFtrace', 'value')])
@@ -2570,12 +2590,12 @@ def loadOFTrace(display):
                 children=[
                     html.Div(
                         children = [
-                            html.Label("x [mm]"),
-                            dcc.Input(id="xOFtrace", className="xyzBoxInput"),
-                            html.Label("y [mm]"),
-                            dcc.Input(id="yOFtrace", className="xyzBoxInput"),
-                            html.Label("z [mm]"),
-                            dcc.Input(id="zOFtrace", className="xyzBoxInput"),
+                            dbc.Label("x [mm]"),
+                            dbc.Input(id="xOFtrace", className="xyzBoxInput"),
+                            dbc.Label("y [mm]"),
+                            dbc.Input(id="yOFtrace", className="xyzBoxInput"),
+                            dbc.Label("z [mm]"),
+                            dbc.Input(id="zOFtrace", className="xyzBoxInput"),
                             #html.Label("t [ms]"),
                             #dcc.Input(id="tOFtrace", className="xyzBoxInput"),
                         ],
@@ -2601,38 +2621,96 @@ def loadGyroTrace(display):
         style={}
     else:
         style={"display":"none"}
+
     return html.Div(
-                children=[
-                    html.Div(
-                        children=[
-                            html.Label("x [mm]"),
-                            dcc.Input(id="xGyroTrace", className="xyzBoxInput"),
-                            html.Label("y [mm]"),
-                            dcc.Input(id="yGyroTrace", className="xyzBoxInput"),
-                            html.Label("z [mm]"),
-                            dcc.Input(id="zGyroTrace", className="xyzBoxInput"),
-                        ],
-                        className="xyzBox"
-                    ),
-                    html.Div(
-                        children=[
-                            html.Label("Temperature [eV]"),
-                            dcc.Input(id="gyroT_eV_trace", className="xyzBoxInput"),
-                            html.Label("Gyro Phase [deg]"),
-                            dcc.Input(id="gyroPhase_trace", className="xyzBoxInput"),
-                            html.Label("Trace Length [deg]"),
-                            dcc.Input(id="gyroDeg_trace", className="xyzBoxInput"),
-                            html.Label("# Helix Discretizations"),
-                            dcc.Input(id="N_gyroSteps_trace", className="xyzBoxInput"),
-                            html.Label("Trace Direction"),
-                            dcc.Input(id="gyroDir_trace", className="xyzBoxInput"),
-                        ],
-                        className="xyzBox"
-                    )
-                    ],
-                style=style,
-                className="xyzBoxVert",
-                    )
+        children=[
+            dcc.Upload(
+                className="PFCupload",
+                id='gyroTrace-upload',
+                children=html.Div([
+                    'Drag and Drop or ',
+                    html.A('Select File')
+                    ]),
+                    style={
+                        'width': '100%', 'height': '60px', 'lineHeight': '60px',
+                        'borderWidth': '1px', 'borderStyle': 'dashed',
+                        'borderRadius': '5px', 'textAlign': 'center', 'margin': '10px',
+                        },
+                multiple=False,
+                ),
+            html.Div(children=loadGyroTable(), className="PFCtable"),
+            html.Div(id="hiddenDivGyroTrace"),
+        ],
+        className="xyzBoxVert",
+        style=style,
+    )
+
+def loadGyroTable():
+    params = ['x[mm]','y[mm]','z[mm]','T[eV]','gPhase[deg]', 'vPhase[deg]','N_helix','traceDirection','Length[deg]','stepSize[deg]']
+    cols = [{'id': p, 'name': p} for p in params]
+    data = [{}]
+    return dash_table.DataTable(
+        id='gyroTraceTable',
+        columns = cols,
+        data = data,
+#        style_header={'backgroundColor': 'rgb(30, 30, 30)'},
+        style_cell={
+            'textAlign': 'left',
+            'color': 'black',
+        },
+        editable=True,
+        export_format='csv',
+        row_deletable=True,
+        persistence=True,
+        )
+
+
+
+#Uploading files and button presses update table and HTML storage object
+@app.callback([Output('gyroTraceDataStorage', 'data'),
+               Output('gyroTraceTable', 'data'),
+               Output('gyroTraceTable', 'columns'),
+               Output('hiddenDivGyroTrace', 'children')],
+              [Input('gyroTrace-upload', 'filename')],
+              [State('gyroTraceDataStorage', 'data'),
+               State('gyroTrace-upload', 'contents'),
+               State('gyroTraceTable', 'data'),
+               State('gyroTraceTable', 'columns'),
+               State('MachFlag', 'value'),
+               State('gyrotrace', 'value')])
+def gyroTraceTable(filename, dataStore, uploadContents,
+             tableData, tableColumns, MachFlag, gyroTraceList):
+    if 'gyrotrace' in gyroTraceList:
+        trace = True
+    else:
+        trace = False
+
+    if dataStore==None:
+        print('Initializing HTML PFC data storage object')
+        dataStore = {}
+        dataStore.update({'gyroTraceFileName':None})
+        dataStore.update({'gyroTraceContents':None})
+        dataStore.update({'gyroTrace':trace})
+
+    #user has to load MHD and CAD for a specific machine before PFCs
+    if MachFlag == None:
+        hiddenDiv = [html.Label("Select a Tokamak and Load MHD First", style={'color':'#db362a'})]
+    elif filename is None:
+        hiddenDiv = []
+    #file dropper
+    elif (trace == True) and (uploadContents!= dataStore['gyroTraceContents']):
+            df = parse_contents(uploadContents, filename)
+            tableData = df.to_dict('records')
+            #tableColumns = [{"name": i, "id": i} for i in df.columns]
+            params = ['x[mm]','y[mm]','z[mm]','T[eV]','gPhase[deg]', 'vPhase[deg]','N_helix','traceDirection','Length[deg]','stepSize[deg]']
+            tableColumns = [{'id': p, 'name': p} for p in params]
+            hiddenDiv = [html.Label("Loaded file: "+filename, style={'color':'#34b3ed'})]
+            dataStore.update({'gyroTraceFileName':filename})
+            dataStore.update({'gyroTraceContents':uploadContents})
+    else:
+        hiddenDiv = []
+
+    return dataStore, tableData, tableColumns, hiddenDiv
 
 
 
@@ -2649,36 +2727,16 @@ def loadGyroTrace(display):
                State('xOFtrace','value'),
                State('yOFtrace','value'),
                State('zOFtrace','value'),
-               State('xGyroTrace','value'),
-               State('yGyroTrace','value'),
-               State('zGyroTrace','value'),
+               State('gyroTraceTable','data'),
                State('timeSlider','value'),
-               State('gyroT_eV_trace','value'),
-               State('gyroDeg_trace','value'),
-               State('N_gyroSteps_trace','value'),
-               State('gyroDir_trace','value'),
-               State('gyroPhase_trace','value'),
-               State('accFilters','value'),
-               State('meshPerts','value'),
-               State('distortDeltaR','value'),
-               State('distortDeltaB','value'),
-               State('distortN','value'),
-               State('distortH','value'),
-               State('distortR','value'),
                ])
 def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
             BtraceTableData,
             xOFtrace,yOFtrace,zOFtrace,
-            xGyroTrace,yGyroTrace,zGyroTrace,
-            t,
-            gyroT_eV_trace,gyroDeg_trace,N_gyroSteps_trace,
-            gyroDir_trace,gyroPhase_trace, accFilters,
-            meshPerts, distortDeltaR, distortDeltaB, distortN, distortH, distortR):
+            gyroTraceTableData,
+            t):
     if n_clicks == 0:
         raise PreventUpdate
-
-    #acceleration structure filters
-    gui.loadAccFilters(accFilters)
 
     #Bfield trace
     if 'Btrace' in Btrace:
@@ -2686,11 +2744,7 @@ def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
 
     #gyro orbit trace
     if 'gyrotrace' in gyrotrace:
-        gui.gyroTrace(xGyroTrace,yGyroTrace,zGyroTrace,t,gyroPhase_trace,
-                      gyroDeg_trace,N_gyroSteps_trace,gyroDir_trace,gyroT_eV_trace)
-
-    #mesh perturbations
-    gui.setupVVdistortion(distortDeltaR, distortDeltaB, distortN, distortH, distortR)
+        gui.gyroTraceMultiple(gyroTraceTableData, t)
 
     #run HEAT
     gui.runHEAT(runList)
@@ -2716,7 +2770,7 @@ def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
     else:
         OFTprobeFig = OFTprobePlots(update=False)
 
-    return ([html.Label("HEAT Run Complete", style={'color':'#f5d142'})],
+    return ([html.Label("HEAT Run Complete", className="text-success")],
             qDistFig,
             OFminmaxFig,
             OFTprobeFig)
@@ -2738,21 +2792,69 @@ def gfileChildren():
     return html.Div(
         children = [
             html.H4("GEQDSK Tools", style={"text-align":"center", "width":"100%"}),
-            #html.Div( children=MHDplot(), className="MHDplotBox2" ),
-            html.H6("Loaded gFile Parameters:"),
+            html.Br(),
+            html.H6("Loaded gFile Parameters:", style={"text-align":"left", "width":"100%"}),
             html.Div( children=buildGfileTable(), className="gfileTable" ),
-            html.Div( children=buildGfilePlots(), className="gfileTable" ),
-            html.Div( children=buildBFieldPlots(), className="gfileTable" ),
-            html.H6("gFile Multipliers:"),
-            gFileMultipiers(),
-            html.H6("Re-define LCFS:"),
-            gFileNewSep(),
-            html.H6("Save New gFile:"),
-            saveNewGfile(),
-            html.H6("Interpolate gFile:"),
-            interpolateGfile(),
+            dbc.Accordion(
+                [
+                dbc.AccordionItem(
+                    [
+                    dbc.Card(
+                        dbc.CardBody(
+                            [
+                            html.Div( children=buildGfilePlots(), className="gfileTable" ),
+                            html.Div( children=buildBFieldPlots(), className="gfileTable" ),
+                            ]
+                            )
+                    )
+                    ],
+                    title="Plots",
+                ),
+                dbc.AccordionItem(
+                    [
+                        dbc.Card(
+                            dbc.CardBody(
+                            gFileMultipiers(),
+                            )
+                        )
+                    ],
+                    title="Multiply and Add"
+                ),
+                dbc.AccordionItem(
+                    [
+                        dbc.Card(
+                            dbc.CardBody(
+                                gFileNewSep(),
+                            )
+                        )
+                    ],
+                    title="Re-define LCFS"
+                ),
+                dbc.AccordionItem(
+                    [
+                        dbc.Card(
+                            dbc.CardBody(
+                                saveNewGfile(),
+                            )
+                        )
+                    ],
+                    title="Save New gFile"
+                ),
+                dbc.AccordionItem(
+                    [
+                        dbc.Card(
+                            dbc.CardBody(
+                                interpolateGfile(),
+                            )
+                        )
+                    ],
+                    title="Interpolate gFile"
+                ),
+                ],
+                start_collapsed=True
+            )
             ],
-        className="wideBoxDark",
+        className="wideBoxNoColor",
         )
 
 def buildGfilePlots():
@@ -2761,7 +2863,7 @@ def buildGfilePlots():
     """
     return html.Div(
             id="gFilePlots",
-            children=[dcc.Graph(id="gFilePlot1", className=""),],
+            children=[dcc.Graph(id="gFilePlot1", className="card100"),],
             className="gfileBox"
             )
 
@@ -2771,7 +2873,7 @@ def buildBFieldPlots():
     """
     return html.Div(
             id="bFieldPlots",
-            children=[dcc.Graph(id="bFieldPlot", className=""),],
+            children=[dcc.Graph(id="bFieldPlot", className="card100"),],
             className="gfileBox"
             )
 
@@ -2782,11 +2884,11 @@ def buildGfileTable():
         id='gFileTable',
         columns = cols,
         data = data,
-        style_header={'backgroundColor': 'rgb(30, 30, 30)'},
+        style_header={'backgroundColor': 'rgb(60, 60, 60)', 'color': 'white'},
         style_cell={
             'textAlign': 'left',
-            'backgroundColor': 'rgb(50, 50, 50)',
-            'color': 'white'
+#            'backgroundColor': 'rgb(50, 50, 50)',
+            'color': 'black'
         },
         editable=False,
         row_deletable=False,
@@ -2830,34 +2932,37 @@ def gFileMultipiers():
     return html.Div(
         id="gfileMult",
         children=[
-            html.Label("psiRZ Multiplier", style={'margin':'0 10px 0 10px'}),
-            dcc.Input(id="psiRZMult", className="gfileBoxInput", value="1.0"),
-            html.Label("psiRZ Addition", style={'margin':'0 10px 0 10px'}),
-            dcc.Input(id="psiRZAdd", className="gfileBoxInput", value="0.0"),
-            html.Label("psiSep Multiplier", style={'margin':'0 10px 0 10px'}),
-            dcc.Input(id="psiSepMult", className="gfileBoxInput", value="1.0"),
-            html.Label("psiSep Addition", style={'margin':'0 10px 0 10px'}),
-            dcc.Input(id="psiSepAdd", className="gfileBoxInput", value="0.0"),
-            html.Label("psiAxis Multiplier", style={'margin':'0 10px 0 10px'}),
-            dcc.Input(id="psiAxisMult", className="gfileBoxInput", value="1.0"),
-            html.Label("psiAxis Addition", style={'margin':'0 10px 0 10px'}),
-            dcc.Input(id="psiAxisAdd", className="gfileBoxInput", value="0.0"),
-            html.Label("Fpol Multiplier", style={'margin':'0 10px 0 10px'}),
-            dcc.Input(id="FpolMult", className="gfileBoxInput", value="1.0"),
-            html.Label("Fpol Addition", style={'margin':'0 10px 0 10px'}),
-            dcc.Input(id="FpolAdd", className="gfileBoxInput", value="0.0"),
-            html.Label("Bt0 Multiplier", style={'margin':'0 10px 0 10px'}),
-            dcc.Input(id="Bt0Mult", className="gfileBoxInput", value="1.0"),
-            html.Label("Bt0 Addition", style={'margin':'0 10px 0 10px'}),
-            dcc.Input(id="Bt0Add", className="gfileBoxInput", value="0.0"),
-            html.Label("Ip Multiplier", style={'margin':'0 10px 0 10px'}),
-            dcc.Input(id="IpMult", className="gfileBoxInput", value="1.0"),
-            html.Label("Ip Addition", style={'margin':'0 10px 0 10px'}),
-            dcc.Input(id="IpAdd", className="gfileBoxInput", value="0.0"),
-            html.Button("Apply Corrections", id="applyMult", n_clicks=0, style={'margin':'0 10px 10px 0'}),
+            dbc.Label("psiRZ Multiplier", style={'margin':'0 10px 0 10px'}),
+            dbc.Input(id="psiRZMult", className="gfileBoxInput", value="1.0"),
+            dbc.Label("psiRZ Addition", style={'margin':'0 10px 0 10px'}),
+            dbc.Input(id="psiRZAdd", className="gfileBoxInput", value="0.0"),
+            dbc.Label("psiSep Multiplier", style={'margin':'0 10px 0 10px'}),
+            dbc.Input(id="psiSepMult", className="gfileBoxInput", value="1.0"),
+            dbc.Label("psiSep Addition", style={'margin':'0 10px 0 10px'}),
+            dbc.Input(id="psiSepAdd", className="gfileBoxInput", value="0.0"),
+            dbc.Label("psiAxis Multiplier", style={'margin':'0 10px 0 10px'}),
+            dbc.Input(id="psiAxisMult", className="gfileBoxInput", value="1.0"),
+            dbc.Label("psiAxis Addition", style={'margin':'0 10px 0 10px'}),
+            dbc.Input(id="psiAxisAdd", className="gfileBoxInput", value="0.0"),
+            dbc.Label("Fpol Multiplier", style={'margin':'0 10px 0 10px'}),
+            dbc.Input(id="FpolMult", className="gfileBoxInput", value="1.0"),
+            dbc.Label("Fpol Addition", style={'margin':'0 10px 0 10px'}),
+            dbc.Input(id="FpolAdd", className="gfileBoxInput", value="0.0"),
+            dbc.Label("Bt0 Multiplier", style={'margin':'0 10px 0 10px'}),
+            dbc.Input(id="Bt0Mult", className="gfileBoxInput", value="1.0"),
+            dbc.Label("Bt0 Addition", style={'margin':'0 10px 0 10px'}),
+            dbc.Input(id="Bt0Add", className="gfileBoxInput", value="0.0"),
+            dbc.Label("Ip Multiplier", style={'margin':'0 10px 0 10px'}),
+            dbc.Input(id="IpMult", className="gfileBoxInput", value="1.0"),
+            dbc.Label("Ip Addition", style={'margin':'0 10px 0 10px'}),
+            dbc.Input(id="IpAdd", className="gfileBoxInput", value="0.0"),
+            html.Br(),
+            dbc.Checklist(options=[{'label':'Apply to all timesteps?', 'value':'all'}], id='correctAllts'),
+            html.Br(),
+            dbc.Button("Apply Corrections", id="applyMult", n_clicks=0, style={'margin':'0 10px 10px 0'}),
             html.Div(id="hiddenDivMult"),
-            html.Label("*Sign of Bt0 and Ip checked for helicity in traces (MAFOT)", style={'margin':'0 10px 0 10px'}),
-            html.Label("**Sign of psiRZ, psiSep, psiAxis, checked for helicity in point clouds (HEAT)", style={'margin':'0 10px 0 10px'}),
+            dbc.Label("*Sign of Bt0 and Ip checked for helicity in traces (MAFOT)", style={'margin':'0 10px 0 10px'}),
+            dbc.Label("**Sign of psiRZ, psiSep, psiAxis, checked for helicity in point clouds (HEAT)", style={'margin':'0 10px 0 10px'}),
         ],
         className="gfileBox",
     )
@@ -2866,13 +2971,13 @@ def gFileNewSep():
     return html.Div(
         id="gfileNewSep",
         children=[
-            html.Label("New LCFS R Value [m]", style={'margin':'0 10px 0 10px'}),
-            dcc.Input(id="newLCFSr", className="gfileBoxInput", value="NA"),
-            html.Label("New LCFS Z Value [m]", style={'margin':'0 10px 0 10px'}),
-            dcc.Input(id="newLCFSz", className="gfileBoxInput", value="NA"),
-            html.Label("(Value of NA in Z will choose minimum psi)"),
+            dbc.Label("New LCFS R Value [m]", style={'margin':'0 10px 0 10px'}),
+            dbc.Input(id="newLCFSr", className="gfileBoxInput", value="NA"),
+            dbc.Label("New LCFS Z Value [m]", style={'margin':'0 10px 0 10px'}),
+            dbc.Input(id="newLCFSz", className="gfileBoxInput", value="NA"),
+            dbc.Label("(Value of NA in Z will choose minimum psi)"),
             html.Br(),
-            dcc.RadioItems(
+            dbc.RadioItems(
                             id="newLCFSradio",
                             options=[
                                 {'label': 'Apply to All Timesteps', 'value': 'all'},
@@ -2880,9 +2985,9 @@ def gFileNewSep():
                                     ],
                                     value='all'
                             ),
-            html.Button("Re-Define LCFS", id="newLCFSbutton", n_clicks=0, style={'margin':'10px 10px 10px 10px'}),
+            dbc.Button("Re-Define LCFS", id="newLCFSbutton", n_clicks=0, style={'margin':'10px 10px 10px 10px'}),
             html.Div(id="hiddenDivSep"),
-            html.Button("Find LCFS From PFCs", id="findLCFSbutton", n_clicks=0, style={'margin':'10px 10px 10px 10px'}),
+            dbc.Button("Find LCFS From PFCs", id="findLCFSbutton", n_clicks=0, style={'margin':'10px 10px 10px 10px'}),
             html.Div(id="hiddenDivSep2")
         ],
         className="gfileBox",
@@ -2892,9 +2997,12 @@ def saveNewGfile():
     return html.Div(
         id="saveGfile",
         children=[
-            html.Label("New gFile Name", style={'margin':'0 10px 0 10px'}),
-            dcc.Input(id="newGfileName", className="gfileBoxInput"),
-            html.Button("Save New gFile", id="saveGfileButton", n_clicks=0, style={'margin':'10px 10px 10px 10px'}),
+            dbc.Label("New gFile Name (suffix for multiple)", style={'margin':'0 10px 0 10px'}),
+            dbc.Input(id="newGfileName", className="gfileBoxInput"),
+            dbc.Button("Save New gFile", id="saveGfileButton", n_clicks=0, style={'margin':'10px 10px 10px 10px'}),
+            html.Br(),
+            dbc.Checklist(options=[{'label':'Save all timesteps?', 'value':'all'}], id='saveAllGs'),
+            html.Br(),
             dcc.Download(id="downloadNewGfile"),
             html.Div(id="hiddenDivSaveGfile")
         ],
@@ -2907,20 +3015,20 @@ def interpolateGfile():
     return html.Div(
             id="interpGfile",
             children=[
-                html.Label("Interpolation by Timestep", style={'margin':'0 10px 0 10px'}),
-                dcc.Input(id="interpTime", className="gfileBoxInput"),
-                html.Button("Interpolate this Timestep", id="interpButton", n_clicks=0, style={'margin':'0 10px 10px 0'}),
+                dbc.Label("Interpolation by Timestep", style={'margin':'0 10px 0 10px'}),
+                dbc.Input(id="interpTime", className="gfileBoxInput"),
+                dbc.Button("Interpolate this Timestep", id="interpButton", n_clicks=0, style={'margin':'0 10px 10px 0'}),
                 html.Div(id="hiddenDivInterp1"),
                 html.Br(),
                 dash_table.DataTable(
                     id='gFileTable2',
                     columns = ([{'id': p, 'name': p} for p in params]),
                     data = data,
-                    style_header={'backgroundColor': 'rgb(30, 30, 30)'},
+                    style_header={'backgroundColor': 'rgb(60, 60, 60)', 'color': 'white'},
                     style_cell={
                         'textAlign': 'left',
-                        'backgroundColor': 'rgb(50, 50, 50)',
-                        'color': 'white'
+#                        'backgroundColor': 'rgb(50, 50, 50)',
+#                        'color': 'white'
                                 },
                     editable=True,
                     row_deletable=False,
@@ -2928,10 +3036,10 @@ def interpolateGfile():
                 ),
                 html.Br(),
 
-                html.Label("Interpolate N steps between gFiles", style={'margin':'0 10px 0 10px'}),
+                dbc.Label("Interpolate N steps between gFiles", style={'margin':'0 10px 0 10px'}),
                 html.Div(id='interpTable', className="gfileTable"), #updated from MHD button callback
-                dcc.Input(id="interpN", className="gfileBoxInput", placeholder='Enter N steps'),
-                html.Button("Interpolate these Timesteps", id="interpButton2", n_clicks=0, style={'margin':'0 10px 10px 0'}),
+                dbc.Input(id="interpN", className="gfileBoxInput", placeholder='Enter N steps'),
+                dbc.Button("Interpolate these Timesteps", id="interpButton2", n_clicks=0, style={'margin':'0 10px 10px 0'}),
                 dcc.Download(id="download1InterpGfile"),
                 dcc.Download(id="downloadInterpGfiles"),
                 html.Div(id="hiddenDivInterp2")
@@ -2952,7 +3060,7 @@ def interpolate(n_clicks, t):
     if n_clicks < 1:
         raise PreventUpdate
     name = gui.interpolateGfile(t)
-    return [html.Label("Gfile Interpolated", style={'color':'#f5d142'}),
+    return [dbc.Label("Gfile Interpolated", className="text-success"),
             dcc.send_file(name)]
 
 
@@ -2979,7 +3087,7 @@ def interpolateNsteps(n_clicks, N, data):
     #interpolate N steps between each point
     gui.interpolateNsteps(df['filename'].values, pd.to_numeric(df['timestep[ms]']).values,int(N))
     zipFile = gui.tmpDir + 'InterpolatedGfiles.zip'
-    return [html.Label("gFiles Interpolated", style={'color':'#f5d142'}),
+    return [html.Label("gFiles Interpolated", className="text-success"),
             dcc.send_file(zipFile)]
 
 
@@ -3000,10 +3108,11 @@ def interpolateNsteps(n_clicks, N, data):
                State('Bt0Add','value'),
                State('IpMult','value'),
                State('IpAdd','value'),
-               State('timeSlider', 'value')])
+               State('timeSlider', 'value'),
+               State('correctAllts', 'value')])
 def applyMult(n_clicks, psiRZMult, psiSepMult, psiAxisMult, FpolMult,
               psiRZAdd,psiSepAdd,psiAxisAdd,FpolAdd,
-              Bt0Mult,Bt0Add,IpMult,IpAdd,t):
+              Bt0Mult,Bt0Add,IpMult,IpAdd,t,correctAllts):
     """
     apply multiplier to psiRZ, psiSep, psiAxis, Fpol for currently
     selected equilibrium timestep
@@ -3043,7 +3152,7 @@ def applyMult(n_clicks, psiRZMult, psiSepMult, psiAxisMult, FpolMult,
         FpolAdd = float(FpolAdd)
         Bt0Add = float(Bt0Add)
         IpAdd = float(IpAdd)
-        returnDiv = [html.Label("Corrections Applied", style={'color':'#f5d142'})]
+        returnDiv = [html.Label("Corrections Applied", className="text-success")]
 
     except:
         print("Could not evaluate multipliers or adders")
@@ -3054,7 +3163,7 @@ def applyMult(n_clicks, psiRZMult, psiSepMult, psiAxisMult, FpolMult,
 
     gui.gfileClean(psiRZMult,psiSepMult,psiAxisMult,FpolMult,
                    psiRZAdd,psiSepAdd,psiAxisAdd,FpolAdd,
-                   Bt0Mult,Bt0Add,IpMult,IpAdd,t)
+                   Bt0Mult,Bt0Add,IpMult,IpAdd,t,correctAllts)
     return returnDiv
 
 @app.callback(Output('hiddenDivSep', 'children'),
@@ -3070,7 +3179,7 @@ def newLCFSbutton(n_clicks, rNew, zNew, t, radio):
         gui.newLCFSallTimesteps(rNew, zNew)
     else:
         gui.newLCFS(t, rNew, zNew)
-    return [html.Label("Redefined LCFS", style={'color':'#f5d142'})]
+    return [html.Label("Redefined LCFS", className="text-success")]
 
 @app.callback(Output('hiddenDivSep2', 'children'),
               [Input('findLCFSbutton', 'n_clicks')],
@@ -3085,7 +3194,7 @@ def findLCFSbutton(n_clicks, t, PFC_n_clicks, r):
         raise PreventUpdate
     gui.findPsiSepfromPFCs(t, r)
 #    gui.findPsiSepfromEQ(t)
-    return [html.Label("Iteratively Found LCFS", style={'color':'#f5d142'})]
+    return [html.Label("Iteratively Found LCFS", className="text-success")]
 
 
 
@@ -3094,13 +3203,25 @@ def findLCFSbutton(n_clicks, t, PFC_n_clicks, r):
               [Input('saveGfileButton', 'n_clicks')],
               [State('newGfileName','value'),
                State('timeSlider', 'value'),
-               State('shot', 'value')])
-def saveG(n_clicks, filename, t, shot):
+               State('shot', 'value'),
+               State('saveAllGs','value')])
+def saveG(n_clicks, name, t, shot, saveAllGs):
     if n_clicks < 1:
         raise PreventUpdate
-    gui.writeGfile(filename, shot, t)
-    return [html.Label("Saved gFile", style={'color':'#f5d142'}),
-            dcc.send_file(gui.tmpDir + filename)]
+
+    if saveAllGs is None:
+        allMask = False
+        gui.writeGfile(name, shot, t)
+        sendBack = gui.tmpDir + name
+        outDiv = html.Label("Saved gFile", className="text-success")
+    elif 'all' in saveAllGs:
+        allMask = True
+        sendBack = gui.createGfileZip()
+        outDiv = html.Label("Saved gFiles", className="text-success")
+
+
+    return [outDiv,
+            dcc.send_file(sendBack)]
 
 """
 ==============================================================================
@@ -3116,7 +3237,7 @@ def outputChildren():
     return html.Div(
         children = [
             html.H4("HEAT outputs", style={"text-align":"center", "width":"100%"}),
-            html.Button("Download HEAT Results", id="downloadResults", n_clicks=0, style={'margin':'0 10px 10px 0', "width":"95%" }),
+            dbc.Button("Download HEAT Results", id="downloadResults", n_clicks=0, style={'margin':'0 10px 10px 0', "width":"95%" }),
             html.Br(),
             html.Div(id="hiddenDivDownloadResults", style={"width":"100%"}),
             dcc.Download(id="downloadResultsDir"),
@@ -3199,7 +3320,7 @@ def saveResults(n_clicks, MachFlag, shot):
     shutil.make_archive(file, 'zip', gui.MHD.shotPath)
     print("Zipped results")
     log.info("Zipped results")
-    return [html.Label("Saved HEAT output", style={'color':'#f5d142'}),
+    return [html.Label("Saved HEAT output", className="text-success"),
             dcc.send_file(file+'.zip')]
 
 
@@ -3212,11 +3333,11 @@ def buildInputsTable(data=None):
         id='inputsTable',
         columns = cols,
         data = data,
-        style_header={'backgroundColor': 'rgb(30, 30, 30)'},
+        style_header={'backgroundColor': 'rgb(60, 60, 60)', 'color':'white'},
         style_cell={
             'textAlign': 'left',
-            'backgroundColor': 'rgb(50, 50, 50)',
-            'color': 'white'
+#            'backgroundColor': 'rgb(50, 50, 50)',
+            'color': 'black'
         },
         editable=False,
         row_deletable=False,
@@ -3234,8 +3355,9 @@ def getOutputColumns():
                Input('CADDataStorage', 'data'),
                Input('HFDataStorage', 'data'),
                Input('GYRODataStorage', 'data'),
+               Input('RADDataStorage', 'data'),
                Input('OFDataStorage', 'data')])
-def inputsTable(MHDdata,CADdata,HFdata,GYROdata,OFdata):
+def inputsTable(MHDdata,CADdata,HFdata,GYROdata,RADdata,OFdata):
     newData = {}
     if MHDdata != None:
         for key,val in MHDdata.items():
@@ -3249,6 +3371,9 @@ def inputsTable(MHDdata,CADdata,HFdata,GYROdata,OFdata):
     if GYROdata != None:
         for key,val in GYROdata.items():
             newData[key] = val
+    if RADdata != None:
+        for key,val in RADdata.items():
+            newData[key] = val
     if OFdata != None:
         for key,val in OFdata.items():
             newData[key] = val
@@ -3261,14 +3386,16 @@ def inputsTable(MHDdata,CADdata,HFdata,GYROdata,OFdata):
 def hfDistPlots(update=False):
     """
     div for heat flux distribution plots
+
     if update is False, just return an empty div, so that nothing happens on
     page load.  If update=True, get qDivs and update the plot.
+
     This is called at the end of a HEAT run (runHEAT callback) button click
     """
     if update==True:
         fig = gui.getHFdistPlots()
 
-        return html.Div(
+        div = html.Div(
             className="plotBox",
             children=[
                 dcc.Graph(id="", figure=fig),
@@ -3276,25 +3403,28 @@ def hfDistPlots(update=False):
                 )
     else:
 
-        return html.Div(
+        div = html.Div(
             children=[
                 html.Label("Run HEAT to get qDiv plot", style={'color':'#52caeb'})
                 ],
             className="gfileBox"
             )
 
+    return dbc.Card(dbc.CardBody(div))
 
 def OFmaxTPlots(update=False):
     """
     div for maximum openFOAM temperature plots
+
     if update is False, just return an empty div, so that nothing happens on
     page load.  If update=True, get qDivs and update the plot.
+
     This is called at the end of a HEAT run (runHEAT callback) button click
     """
     if update==True:
         fig = gui.getOFMinMaxPlots()
 
-        return html.Div(
+        div = html.Div(
             className="plotBox",
             children=[
                 dcc.Graph(id="", figure=fig),
@@ -3302,26 +3432,31 @@ def OFmaxTPlots(update=False):
                 )
     else:
 
-        return html.Div(
+        div = html.Div(
             children=[
                 html.Label("Run OpenFOAM to get max(T) plot", style={'color':'#52caeb'})
                 ],
             className="gfileBox"
             )
 
+    return dbc.Card(dbc.CardBody(div))
+
 
 def OFTprobePlots(update=False,x=None,y=None,z=None):
     """
     div for openFOAM probe plots
+
     if update is False, just return an empty div, so that nothing happens on
     page load.  If update=True, get qDivs and update the plot.
+
     x,y,z are coordinate locations [mm] of T probe
+
     This is called at the end of a HEAT run (runHEAT callback) button click
     """
     if update==True:
         fig = gui.TprobeOF(float(x),float(y),float(z))
 
-        return html.Div(
+        div =  html.Div(
             className="plotBox",
             children=[
                 dcc.Graph(id="", figure=fig),
@@ -3329,25 +3464,28 @@ def OFTprobePlots(update=False,x=None,y=None,z=None):
                 )
     else:
 
-        return html.Div(
+        div = html.Div(
             children=[
                 html.Label("Run OpenFOAM Temp Probe to get plot", style={'color':'#52caeb'})
                 ],
             className="gfileBox"
             )
+    return dbc.Card(dbc.CardBody(div))
 
 
 def gyroPhasePlots(update=False):
     """
     div for gyro orbit phase angle plot
+
     if update is False, just return an empty div, so that nothing happens on
     page load.  If update=True, get qDivs and update the plot.
+
     This is called at the end of a HEAT run (runHEAT callback) button click
     """
     if update==True:
         fig = gui.gyroPhasePlot()
 
-        return html.Div(
+        div = html.Div(
             className="plotBox",
             children=[
                 dcc.Graph(id="", figure=fig),
@@ -3355,24 +3493,28 @@ def gyroPhasePlots(update=False):
                 )
     else:
 
-        return html.Div(
+        div =  html.Div(
             children=[
                 html.Label("Run gyro orbit calculation to get plot", style={'color':'#52caeb'})
                 ],
             className="gfileBox"
             )
 
+    return dbc.Card(dbc.CardBody(div))
+
 def vPhasePlots(update=False):
     """
     div for gyro orbit velocity phase angle plot
+
     if update is False, just return an empty div, so that nothing happens on
     page load.  If update=True, get qDivs and update the plot.
+
     This is called at the end of a HEAT run (runHEAT callback) button click
     """
     if update==True:
         fig = gui.vPhasePlot()
 
-        return html.Div(
+        div = html.Div(
             className="plotBox",
             children=[
                 dcc.Graph(id="", figure=fig),
@@ -3380,24 +3522,27 @@ def vPhasePlots(update=False):
                 )
     else:
 
-        return html.Div(
+        div = html.Div(
             children=[
                 html.Label("Run gyro orbit calculation to get plot", style={'color':'#52caeb'})
                 ],
             className="gfileBox"
             )
+    return dbc.Card(dbc.CardBody(div))
 
 def vSlicePlots(update=False):
     """
     div for gyro orbit velocity slice / distribution plot
+
     if update is False, just return an empty div, so that nothing happens on
     page load.  If update=True, get qDivs and update the plot.
+
     This is called at the end of a HEAT run (runHEAT callback) button click
     """
     if update==True:
         fig = gui.vSlicePlot()
 
-        return html.Div(
+        div = html.Div(
             className="plotBox",
             children=[
                 dcc.Graph(id="", figure=fig),
@@ -3405,24 +3550,27 @@ def vSlicePlots(update=False):
                 )
     else:
 
-        return html.Div(
+        div = html.Div(
             children=[
                 html.Label("Run gyro orbit calculation to get plot", style={'color':'#52caeb'})
                 ],
             className="gfileBox"
             )
+    return dbc.Card(dbc.CardBody(div))
 
 def cdfSlicePlots(update=False):
     """
     div for gyro orbit CDF slice / distribution plot
+
     if update is False, just return an empty div, so that nothing happens on
     page load.  If update=True, get qDivs and update the plot.
+
     This is called at the end of a HEAT run (runHEAT callback) button click
     """
     if update==True:
         fig = gui.cdfSlicePlot()
 
-        return html.Div(
+        div = html.Div(
             className="plotBox",
             children=[
                 dcc.Graph(id="", figure=fig),
@@ -3430,12 +3578,13 @@ def cdfSlicePlots(update=False):
                 )
     else:
 
-        return html.Div(
+        div = html.Div(
             children=[
                 html.Label("Run gyro orbit calculation to get plot", style={'color':'#52caeb'})
                 ],
             className="gfileBox"
             )
+    return dbc.Card(dbc.CardBody(div))
 
 
 
@@ -3443,6 +3592,8 @@ def cdfSlicePlots(update=False):
 """
 ==============================================================================
 Tab Contents: logfile tab
+
+DEPRECATED
 """
 def buildLogTab():
         return html.Div(
@@ -3456,24 +3607,6 @@ def buildLogTab():
             className="wideBoxDark"
             )
 
-#callback for updating log tab every 5 seconds
-@app.callback([Output('logData', 'value'),
-               #Output('javascriptLog', 'run')
-               ],
-              [Input('intervalLog', 'n_intervals')])
-def updateLogFile(n):
-    if n < 1:
-        raise PreventUpdate
-    with open(logFile, "r") as f:
-        content = f.read()
-    #for visdcc to scroll to bottom every 5 sec
-    logCMD = '''
-             var textarea = document.getElementById('logData');
-             textarea.scrollTop = textarea.scrollHeight;
-             '''
-    return [content]#, logCMD
-
-
 """
 ==============================================================================
 Graphs, plots, etc.
@@ -3481,6 +3614,7 @@ Graphs, plots, etc.
 def build_graphs():
     return html.Div(
         id="graph-container",
+        className="graphWindow",
         children=[
             MHDplot(),
         ],
@@ -3512,8 +3646,9 @@ def MHDplot():
                Output('bFieldPlot', 'figure')],
               [Input('timeSlider', 'value'),
                Input('hiddenDivMult', 'children'),
-               Input('hiddenDivSep', 'children'),])
-def slideEQplot(value, dummy1, tom):
+               Input('hiddenDivSep', 'children'),
+               Input('themeStorage', 'data')])
+def slideEQplot(value, dummy1, tom, themeData):
     try: MachFlag = gui.MachFlag
     except:
         print("You didn't select a machine")
@@ -3522,7 +3657,10 @@ def slideEQplot(value, dummy1, tom):
     except:
         print('Please load MHD')
         raise PreventUpdate
-    idx = np.where(value==gui.MHD.timesteps)[0][0]
+    try: idx = np.where(value==gui.MHD.timesteps)[0][0]
+    except:
+        print("Trouble loading MHD EQ")
+        raise PreventUpdate
     ep = gui.MHD.ep[idx]
     shot = gui.MHD.shot
     t = gui.MHD.timesteps[idx]
@@ -3530,6 +3668,7 @@ def slideEQplot(value, dummy1, tom):
     #this import needs to be here (not at top of file) to prevent FreeCAD qt5
     #shared object conflict
     import GUIscripts.plotly2DEQ as plotly2DEQ
+    load_figure_template(template_from_url(themeData['theme']))
     plot = plotly2DEQ.makePlotlyEQDiv(shot, t, MachFlag, ep)
     data = getGfileData(t)
 
@@ -3538,6 +3677,11 @@ def slideEQplot(value, dummy1, tom):
 
     #update plot on gfile cleaner tab with Bp, Bt
     plot3= plotly2DEQ.makePlotlyBpBt(ep, MachFlag)
+
+    #this allows zoom to be preserved across button clicks
+    plot.update_layout(uirevision='neverUpdate')
+    plot2.update_layout(uirevision='neverUpdate')
+    plot3.update_layout(uirevision='neverUpdate')
 
     return plot, data, plot2, plot3
 
@@ -3552,18 +3696,10 @@ def slideEQplot(value, dummy1, tom):
 ==============================================================================
 Main Layout
 """
-def build_simulator():
-    return html.Div(
-        id="simulator-container",
-        children=[
-            build_tabs(),
-            build_graphs(),
-        ],
-    )
-
-logJScmd = ""
-app.layout = html.Div(
+def generateLayout():
+    app.layout = html.Div(
         id="big-app-container",
+        className="entireWindow",
         children=[
             #store the session data until browser tab is closed
             dcc.Store(id='session', storage_type='memory'),
@@ -3571,29 +3707,48 @@ app.layout = html.Div(
             dcc.Store(id='PFCdataStorage', storage_type='memory'),
             dcc.Store(id='gFileListStorage', storage_type='memory'),
             dcc.Store(id='BtraceDataStorage', storage_type='memory'),
+            dcc.Store(id='gyroTraceDataStorage', storage_type='memory'),
             dcc.Store(id='MHDDataStorage', storage_type='memory'),
             dcc.Store(id='CADDataStorage', storage_type='memory'),
             dcc.Store(id='HFDataStorage', storage_type='memory'),
             dcc.Store(id='GYRODataStorage', storage_type='memory'),
+            dcc.Store(id='RADDataStorage', storage_type='memory'),
             dcc.Store(id='OFDataStorage', storage_type='memory'),
+            dcc.Store(id='themeStorage', storage_type='memory'),
 
-            #interval for updating logFile tab every 5 seconds
-            dcc.Interval(
-                id='intervalLog',
-                interval=5*1000, # in milliseconds
-                n_intervals=0
-                ),
-            #visdcc to run js to scroll log box to bottom
-            #visdcc.Run_js(id = 'javascriptLog', run = ""),
             build_banner(),
             build_simulator(),
             html.Div(id="hiddenDiv", style={'display': 'none'}),
         ],
-)
+    )
 
-app.title = 'HEAT'
+    app.title = 'HEAT'
+
+    return
 
 
+def build_simulator():
+    return html.Div(
+        id="simulator",
+        className="appWindow",
+        children=[
+            build_tabs(),
+            #testDiv(), #use this to test out CSS classes
+            build_graphs(),
+        ],
+    )
+
+def testDiv():
+    div = html.Div(
+        className="tabWindow",
+        children=[
+            dbc.Card(
+                [dbc.CardBody(dbc.Label("TEST"))],
+                className="testCard",
+                ),
+            ]
+    )
+    return div
 
 """
 ==============================================================================
@@ -3603,7 +3758,8 @@ Session storage callbacks and functions
 @app.callback([Output('shot', 'value'),
                Output('tmin', 'value'),
                Output('tmax', 'value'),
-               Output('nTrace', 'value'),
+               Output('traceLength', 'value'),
+               Output('dpinit', 'value'),
                Output('gridRes', 'value'),
                Output('hfMode', 'value'), #this causes undefined vars
                Output('eichlqCNmode', 'value'), #this causes undefined vars
@@ -3654,8 +3810,12 @@ Session storage callbacks and functions
                Output('ionMassAMU','value'),
                #Output('vMode','value'), #this causes undefined vars
                Output('ionFrac','value'),
+               Output('phiMin','value'),
+               Output('phiMax','value'),
+               Output('Ntor','value'),
+               Output('Nref','value'),
                Output('session', 'data'),
-#               Output('hiddenDivMachFlag', 'children')
+               Output('hiddenDivLoadDefaults', 'children')
                ],
                [Input('loadDefaults', 'n_clicks'),
                 Input('userInputFileData', 'modified_timestamp')],
@@ -3664,7 +3824,6 @@ Session storage callbacks and functions
                 State('session', 'data'),
                 State('userInputFileData', 'data')])
 def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
-    ctx = dash.callback_context
     #for some reason triggers are happening from weird things.  If nothing was
     #triggered, don't fire callback
     if ctx.triggered[0]['value']==None:
@@ -3681,9 +3840,9 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
 
     #Let the user know if this worked or if we still need a MachFlag
     if MachFlag not in machineList:
-        outputDiv = html.Label("Select Machine First", style={'color':'#f51b60'})
+        outputDiv = html.Label("Select Machine First", className="text-danger")
     else:
-        outputDiv = html.Label("Loaded Input File", style={'color':'#f5d142'})
+        outputDiv = html.Label("Loaded Input File", className="text-success")
 
     btnTest = n_clicks > 0 and n_clicks>data.get('default_n_clicks')
     #load defaults
@@ -3692,6 +3851,7 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
         log.info("Loading Default Input File")
         data = gui.loadInputs()
         data['default_n_clicks'] = n_clicks
+        defaultDiv = [dbc.Label("Loaded Defaults", className="text-success")]
     elif inputTs == None or inputTs == -1:
         pass
     #use data we saved into storage object that we got from user input file
@@ -3705,7 +3865,8 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
     return [data.get('shot', ''),
             data.get('tmin', ''),
             data.get('tmax', ''),
-            data.get('nTrace', ''),
+            data.get('traceLength', ''),
+            data.get('dpinit', ''),
             data.get('gridRes', ''),
             data.get('hfMode', ''), #these dropdowns cause undefined text boxes
             data.get('lqCNmode', ''),
@@ -3756,8 +3917,12 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('ionMassAMU',''),
             #data.get('vMode',''),
             data.get('ionFrac',''),
+            data.get('phiMin',''),
+            data.get('phiMax',''),
+            data.get('Ntor',''),
+            data.get('Nref',''),
             data,
-#            outputDiv
+            defaultDiv
             ]
 
 

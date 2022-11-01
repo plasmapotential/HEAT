@@ -270,11 +270,19 @@
 /*    box-shadow: 3px 6px #242526; */
 }
 
-/*--------------------Output Tab--------------------*/
 .plotBox{
     align-items: center;
     width: 90%;
     text-align:left;
     margin: 10px 10px 10px 10px;
 /*    box-shadow: 3px 6px #242526; */
+}
+
+.PFCtable{
+  display: inline-block;
+  align-items: center;
+  text-align:center;
+  width: 98%;
+  margin: 0 0 10px 0;
+  overflow-x: scroll;
 }

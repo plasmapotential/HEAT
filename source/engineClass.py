@@ -1219,6 +1219,7 @@ class engineObj():
         data = data.astype({"x[mm]": float, "y[mm]": float, "z[mm]": float, "traceDirection": int, "Length[deg]":float, "stepSize[deg]":float})
 
         t = int(t)
+        tIdx = np.where(float(t)==self.MHD.timesteps)[0][0]
         traceDirection=data['traceDirection']
         x = data['x[mm]'] / 1000.0
         y = data['y[mm]'] / 1000.0
@@ -1235,9 +1236,9 @@ class engineObj():
             R,Z,phi = tools.xyz2cyl(xyz[0],xyz[1],xyz[2])
 
 
-        Bt = self.MHD.ep[0].BtFunc.ev(R,Z)
-        BR = self.MHD.ep[0].BRFunc.ev(R,Z)
-        BZ = self.MHD.ep[0].BZFunc.ev(R,Z)
+        Bt = self.MHD.ep[tIdx].BtFunc.ev(R,Z)
+        BR = self.MHD.ep[tIdx].BRFunc.ev(R,Z)
+        BZ = self.MHD.ep[tIdx].BZFunc.ev(R,Z)
 
         if self.MHD.shotPath[-1]=='/':
             gridfile = self.MHD.shotPath + '{:06d}/struct_grid.dat'.format(t)
@@ -1256,17 +1257,19 @@ class engineObj():
         return
 
 
-    def Btrace(self,x,y,z,t,mapDirection, traceDeg):
+    def Btrace(self,x,y,z,t,direction,traceDeg,dpinit,tag=None):
         """
         Run a MAFOT structure trace from a point defined in the gui
+
+        assumes xyz is in meters
         """
 #        idx = np.where(t==self.MHD.timesteps)[0][0]
 #        ep = self.MHD.ep[idx]
         t = int(t)
-        mapDirection=int(mapDirection)
-        x = float(x)/1000.0
-        y = float(y)/1000.0
-        z = float(z)/1000.0
+        direction=int(direction)
+        x = float(x)
+        y = float(y)
+        z = float(z)
 
         xyz = np.array([x,y,z])
         controlfile = '_structCTL.dat'
@@ -1279,14 +1282,17 @@ class engineObj():
         else:
             gridfile = self.MHD.shotPath + '/' + '{:06d}/struct_grid.dat'.format(t)
             controlfilePath =  self.MHD.shotPath + '/' + '{:06d}/'.format(t)
-        self.MHD.writeControlFile(controlfile, t, mapDirection, mode='struct')
+
+        self.MHD.ittStruct = traceDeg / dpinit
+        self.MHD.dpinit = dpinit
+        self.MHD.writeControlFile(controlfile, t, direction, mode='struct')
         self.MHD.writeMAFOTpointfile(xyz,gridfile)
-        self.MHD.getFieldpath(dphi, gridfile, controlfilePath, controlfile, paraview_mask=True)
+        self.MHD.getFieldpath(dphi, gridfile, controlfilePath, controlfile, paraview_mask=True, tag=tag)
         return
 
-    def gyroTrace(self,x,y,z,t,gyroPhase,gyroDeg,N_gyroSteps,gyroDir,gyroT_eV):
+    def gyroTrace(self,x,y,z,t,gPhase,vPhase,gyroDeg,dpinit,N_helix,traceDirection,gyroT_eV,tag=None):
         """
-        performs a gyro orbit trace from GUI defined location
+        performs a single gyro orbit trace
 
         (x,y,z) are locations where we launch trace from
         gyroPhase is initial phase angle of orbit in degrees
@@ -1295,7 +1301,7 @@ class engineObj():
         """
         print("\n========Gyro Trace Initialized========")
         #get bField trace from this point
-        self.Btrace(x,y,z,t,gyroDir,gyroDeg)
+        self.Btrace(x,y,z,t,traceDirection,gyroDeg,dpinit,tag)
         #read bField trace csv output
         if self.MHD.shotPath[-1]=='/':
             structOutfile = self.MHD.shotPath + '{:06d}/struct.dat'.format(t)
@@ -1307,10 +1313,10 @@ class engineObj():
         #Setup gyro orbit trace constants and velocities
         self.GYRO.setupConstants()
         v = self.GYRO.temp2thermalVelocity(float(gyroT_eV))
-        vPerp = v*np.cos(np.pi/4)
-        vParallel = v*np.sin(np.pi/4)
+        vPerp = v*np.cos(np.radians(vPhase))
+        vParallel = v*np.sin(np.radians(vPhase))
         # Evaluate B
-        R,Z,phi = tools.xyz2cyl(float(x)/1000.0,float(y)/1000.0,float(z)/1000.0)#mm => m
+        R,Z,phi = tools.xyz2cyl(float(x),float(y),float(z))#mm => m
         tIdx = np.where(float(t)==self.MHD.timesteps)[0][0]
         ep = self.MHD.ep[tIdx]
         Bt = ep.BtFunc.ev(R,Z)
@@ -1322,11 +1328,65 @@ class engineObj():
         self.GYRO.setupFreqs(B)
         self.GYRO.setupRadius(vPerp)
         #trace helix and save to CSV and VTK formats
-        self.GYRO.singleGyroTrace(vPerp,vParallel,float(gyroPhase),float(N_gyroSteps),BtraceXYZ,controlfilePath,
-                                  self.GYRO.TGyro[0],self.GYRO.rGyro[0],self.GYRO.omegaGyro[0],)
-        print("Temp of {:f} eV yields thermal velocity of {:f} m/s".format(float(gyroT_eV), float(vPerp)))
-        print("B magntidude = {:f}".format(B))
+        self.GYRO.singleGyroTrace(vPerp,vParallel,float(gPhase),float(N_helix),BtraceXYZ,controlfilePath,
+                                  self.GYRO.TGyro[0],self.GYRO.rGyro[0],self.GYRO.omegaGyro[0],tag=tag)
+        print("Perpendicular velocity of {:f} m/s".format(float(vPerp)))
+        print("Parallel velocity of {:f} m/s".format(float(vParallel)))
+        print("B magnitude = {:f}".format(B))
         return
+
+    def gyroTraceMultiple(self,data,t):
+        """
+        Run a MAFOT structure trace from multiple points defined in the gui,
+        then calculate helical trajectory around trace
+        """
+        data = pd.DataFrame.from_dict(data)[list (data[0].keys())]
+        data = data.rename(columns=lambda x: x.strip())
+        data = data.astype({"x[mm]": float, "y[mm]": float, "z[mm]": float,
+                            "T[eV]":float,"gPhase[deg]":int,"vPhase[deg]":int,
+                            "N_helix":int, "traceDirection": int,
+                            "Length[deg]":float, "stepSize[deg]":float})
+
+        t = int(t)
+        tIdx = np.where(float(t)==self.MHD.timesteps)[0][0]
+
+        traceDirection=data['traceDirection']
+        dpinit = data['stepSize[deg]']
+        x = data['x[mm]'] / 1000.0
+        y = data['y[mm]'] / 1000.0
+        z = data['z[mm]'] / 1000.0
+        gPhase = data['gPhase[deg]']
+        vPhase = data['vPhase[deg]']
+        gyroT_eV = data['T[eV]']
+        N_helix = data['N_helix']
+        gyroDeg = data['Length[deg]']
+
+        xyz = np.array([x,y,z]).T
+        controlfile = '_structCTL.dat'
+        dphi = 1.0
+
+        if len(xyz.shape) > 1:
+            R,Z,phi = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
+            Ntraces = len(xyz)
+        else:
+            R,Z,phi = tools.xyz2cyl(xyz[0],xyz[1],xyz[2])
+            Ntraces = 1
+
+        if self.MHD.shotPath[-1]=='/':
+            gridfile = self.MHD.shotPath + '{:06d}/struct_grid.dat'.format(t)
+            controlfilePath =  self.MHD.shotPath + '{:06d}/'.format(t)
+        else:
+            gridfile = self.MHD.shotPath + '/' + '{:06d}/struct_grid.dat'.format(t)
+            controlfilePath =  self.MHD.shotPath + '/' + '{:06d}/'.format(t)
+        structOutfile = controlfilePath + 'struct.dat'
+
+        for i in range(Ntraces):
+            self.gyroTrace(x[i],y[i],z[i],t,gPhase[i],vPhase[i],gyroDeg[i],
+                           dpinit[i],N_helix[i],traceDirection[i],gyroT_eV[i],
+                           tag='pt{:03d}'.format(i))
+            os.remove(structOutfile)
+        return
+
 
 
 
