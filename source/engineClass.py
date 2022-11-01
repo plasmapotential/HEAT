@@ -3280,6 +3280,24 @@ class engineObj():
                                      )
         return fig
 
+
+
+    def writeInputTable(self, data):
+        if self.MHD.shotPath[-1]!= '/':
+            path = self.MHD.shotPath + '/inputData.csv'
+        else:
+            path = self.MHD.shotPath + 'inputData.csv'
+        with open(path, 'w') as f:
+            for line in data:
+                p = line['Parameter']
+                if "\u03bb" in p:
+                    p = p.replace("\u03bb","lq")
+                v = line['Value']
+                f.write("{}:\t{}\n".format(p,v))
+
+
+        return
+
 #==============================================================================
 #                LEGACY FUNCTIONS LEFT FOR REFERENCE (DO NOT WORK!)
 #==============================================================================

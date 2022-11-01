@@ -2466,6 +2466,7 @@ def runTabTraces():
             className="PCbox",
             )
 
+#=== magnetic field line traces
 @app.callback([Output('bFieldTracePoints', 'children')],
               [Input('Btrace', 'value')])
 def bfieldTracePoint(value):
@@ -2570,6 +2571,8 @@ def BtraceTable(filename, dataStore, uploadContents,
 
     return dataStore, tableData, tableColumns, hiddenDiv
 
+
+#=== openfoam temperature trace
 @app.callback(Output('OFTracePoints', 'children'),
               [Input('OFtrace', 'value')])
 def OFTracePoint(value):
@@ -2606,6 +2609,7 @@ def loadOFTrace(display):
                 className="xyzBoxVert",
                     )
 
+#=== Gyro orbit traces
 @app.callback(Output('gyroTracePoints', 'children'),
               [Input('gyrotrace', 'value')])
 def gyroTracePoints(value):
@@ -2729,12 +2733,12 @@ def gyroTraceTable(filename, dataStore, uploadContents,
                State('zOFtrace','value'),
                State('gyroTraceTable','data'),
                State('timeSlider','value'),
+               State('inputsTable', 'data'),
                ])
 def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
             BtraceTableData,
             xOFtrace,yOFtrace,zOFtrace,
-            gyroTraceTableData,
-            t):
+            gyroTraceTableData, t, inputData):
     if n_clicks == 0:
         raise PreventUpdate
 
@@ -2769,6 +2773,8 @@ def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
         qDistFig = hfDistPlots(update=True)
     else:
         OFTprobeFig = OFTprobePlots(update=False)
+
+    gui.writeInputTable(inputData)
 
     return ([html.Label("HEAT Run Complete", className="text-success")],
             qDistFig,
@@ -3122,22 +3128,6 @@ def applyMult(n_clicks, psiRZMult, psiSepMult, psiAxisMult, FpolMult,
     #parse user formulas and convert then to number via python compiler
     pi = np.pi
 
-    #THIS METHOD NOT SAFE BECAUSE ANY CODE CAN BE INSERTED
-#    psiRZMult = eval(parser.expr(psiRZMult).compile())
-#    psiSepMult = eval(parser.expr(psiSepMult).compile())
-#    psiAxisMult = eval(parser.expr(psiAxisMult).compile())
-#    FpolMult = eval(parser.expr(FpolMult).compile())
-#    Bt0Mult = eval(parser.expr(Bt0Mult).compile())
-#    IpMult = eval(parser.expr(IpMult).compile())
-
-#    psiRZAdd = eval(parser.expr(psiRZAdd).compile())
-#    psiSepAdd = eval(parser.expr(psiSepAdd).compile())
-#    psiAxisAdd = eval(parser.expr(psiAxisAdd).compile())
-#    FpolAdd = eval(parser.expr(FpolAdd).compile())
-#    Bt0Add = eval(parser.expr(Bt0Add).compile())
-#    IpAdd = eval(parser.expr(IpAdd).compile())
-
-
     try:
         psiRZMult = float(psiRZMult)
         psiSepMult = float(psiSepMult)
@@ -3309,6 +3299,9 @@ def outputChildren():
               [State('MachFlag','value'),
                State('shot', 'value')])
 def saveResults(n_clicks, MachFlag, shot):
+    """
+    saves all HEAT results in the shotDir
+    """
     if n_clicks is None:
         raise PreventUpdate
     if MachFlag is None:
