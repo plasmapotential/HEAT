@@ -392,14 +392,15 @@ class PFC:
         numSteps = MHD.nTrace #actual trace is (numSteps + 1)*dphi/dpinit degrees
         #If numSteps = 0, dont do intersection checking
         if numSteps > 0:
-            print("\nIntersection Test #1")
+            print("\n----Intersection Step 1----")
+            log.info("\n----Intersection Step 1----")
             CTLfile = self.controlfilePath + self.controlfileStruct
             q1 = np.zeros((len(self.centers),3))
             q2 = np.zeros((len(self.centers),3))
 
             #run forward mesh elements
-            print("Forward Trace")
-            log.info("Forward Trace")
+            print("-Forward Trace-")
+            log.info("-Forward Trace-")
             mapDirectionStruct = 1.0
             startIdx = 1 #Match MAFOT sign convention for toroidal direction (CCW=+)
             fwdUse = np.where(self.powerDir==-1)[0]
@@ -415,8 +416,8 @@ class PFC:
                 intersect_mask = self.intersectTestOpen3D(q1[fwdUse],q2[fwdUse],targetPoints[fwdUseTgt],targetNorms[fwdUseTgt])
                 self.shadowed_mask[fwdUse] = intersect_mask
             #run reverse mesh elements
-            print("Reverse Trace")
-            log.info("Reverse Trace")
+            print("-Reverse Trace-")
+            log.info("-Reverse Trace-")
             mapDirectionStruct = -1.0
             startIdx = 0 #Match MAFOT sign convention for toroidal direction
             revUse = np.where(self.powerDir==1)[0]
@@ -451,15 +452,16 @@ class PFC:
         #===INTERSECTION TEST 2 (multiple steps up field line)
         #Starts at second step up field line
         if numSteps > 1:
-            print("\nIntersection Test #2")
+            print("\n----Intersection Step 2----")
+            log.info("\n----Intersection Step 2----")
             use = np.where(self.shadowed_mask == 0)[0]
             intersect_mask2 = np.zeros((len(use)))
             q2 = np.zeros((len(self.centers[use]),3))
 
             #calculate q2 for initialization of the big loop below
             #run forward mesh elements
-            print("Forward Trace")
-            log.info("Forward Trace")
+            print("-Forward Trace-")
+            log.info("-Forward Trace-")
             mapDirectionStruct = 1.0
             startIdx = 1 #Match MAFOT sign convention for toroidal direction
             fwdUse = np.where(self.powerDir[use]==-1)[0]
@@ -473,8 +475,8 @@ class PFC:
                 q2[fwdUse] = structData[1::2,:] #odd indexes are second trace point
 
             #run reverse mesh elements
-            print("Reverse Trace")
-            log.info("Reverse Trace")
+            print("-Reverse Trace-")
+            log.info("-Reverse Trace-")
             mapDirectionStruct = -1.0
             startIdx = 0 #Match MAFOT sign convention for toroidal direction
             revUse = np.where(self.powerDir[use]==1)[0]
@@ -506,8 +508,8 @@ class PFC:
             #you need to do nested uses (ie: self.centers[use][use2]).
             use2 = np.where(intersect_mask2 == 0)[0]
             for i in range(numSteps):
-                print("\nIntersect Trace #2 Step {:d}".format(i))
-                log.info("\nIntersect Trace #2 Step {:d}".format(i))
+                print("\n----Intersect Trace Step {:d}----".format(i+3))
+                log.info("\n----Intersect Trace Step {:d}----".format(i+3))
 
                 useOld = use2
                 use2 = np.where(intersect_mask2 == 0)[0]
@@ -529,8 +531,8 @@ class PFC:
                 q1 = np.zeros((len(StartPoints),3))
                 q2 = np.zeros((len(StartPoints),3))
                 #run forward mesh elements
-                print("Forward Trace")
-                log.info("Forward Trace")
+                print("-Forward Trace-")
+                log.info("-Forward Trace-")
                 mapDirectionStruct = 1.0
                 startIdx = 1 #Match MAFOT sign convention for toroidal direction
                 fwdUse = np.where(self.powerDir[use[use2]]==-1)[0]
@@ -549,8 +551,8 @@ class PFC:
                     intersect_mask2[use2[fwdUse]] = self.intersectTestOpen3D(q1[fwdUse],q2[fwdUse],targetPoints,targetNorms)
 
                 #run reverse mesh elements
-                print("Reverse Trace")
-                log.info("Reverse Trace")
+                print("-Reverse Trace-")
+                log.info("-Reverse Trace-")
                 mapDirectionStruct = -1.0
                 startIdx = 0 #Match MAFOT sign convention for toroidal direction
                 revUse = np.where(self.powerDir[use[use2]]==1)[0]

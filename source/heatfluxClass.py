@@ -846,6 +846,8 @@ class heatFlux:
         if mode=='gyro':
             #sum = np.sum(PFC.qGyro * PFC.areas )
             sum = np.sum(PFC.Pgyro)
+        elif mode=='rad':
+            sum = np.sum(PFC.Prad)
         else:
             sum = np.sum(PFC.qDiv * PFC.areas )
 
@@ -943,7 +945,7 @@ class heatFlux:
                     isNanTo = isNanTo.astype(int) #cast as integer
 
                     if len(notNanFrom)>0:
-                        #multiple Froms can light up the same To, so we loop
+                        #multiple sources can load the same target face, so we loop
                         for i in range(len(notNanFrom)):
                             Pgyro[notNanTo[i]] += Pdiv[notNanFrom[i]]*GYRO.ionFrac*gyroFrac*vPhaseFrac*vSliceFrac[notNanFrom[i],vSlice]
 

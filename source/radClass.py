@@ -177,6 +177,7 @@ class RAD:
                 totalMeshCounter+=intersect.CountFacets
             except:
                 print("Cannot count faces because "+CAD.intersectList[i]+" is not a mesh!")
+                log.info("Cannot count faces because "+CAD.intersectList[i]+" is not a mesh!")
                 continue
             #check if this target is a potential intersection
             if CAD.intersectList[i] in PFC.intersects:
@@ -226,7 +227,13 @@ class RAD:
         print("# of radiated power point sources: {:d}".format(self.Ni))
         print("# of PFC ROI mesh elements: {:d}".format(self.Nj))
         print("Total number of source-target ray-tracing calculations: {:d}\n".format(self.Ni*self.Nj))
-
+        print("Running intersection check...")
+        log.info("\nTotal Rad Intersection Faces: {:d}".format(totalMeshCounter))
+        log.info("Rad Intersect Faces for this PFC: {:d}".format(numTargetFaces))
+        log.info("# of radiated power point sources: {:d}".format(self.Ni))
+        log.info("# of PFC ROI mesh elements: {:d}".format(self.Nj))
+        log.info("Total number of source-target ray-tracing calculations: {:d}\n".format(self.Ni*self.Nj))
+        log.info("Running intersection check...")
         return
 
     def calculatePowerTransferOpen3D(self, mode=None):

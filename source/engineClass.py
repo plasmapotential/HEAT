@@ -1182,7 +1182,7 @@ class engineObj():
         log.info("Radiation module loaded")
         return
 
-    def bfieldAtSurface(self, PFC):
+    def bfieldAtSurface(self, PFC, paraview=False):
         """
         Calculate the B field at tile surface
 
@@ -1194,7 +1194,8 @@ class engineObj():
         self.MHD.write_Bvec_pointcloud(ctrs,PFC.Bxyz,PFC.controlfilePath)
         #B scalar point clouds
         PFC.Bp, PFC.Bt, PFC.Br, PFC.Bz = self.MHD.B_pointclouds(PFC.ep, R, Z)
-        self.MHD.write_B_pointclouds(ctrs,PFC.Bp,PFC.Bt,PFC.Br,PFC.Bz,PFC.controlfilePath)
+        if paraview == True:
+            self.MHD.write_B_pointclouds(ctrs,PFC.Bp,PFC.Bt,PFC.Br,PFC.Bz,PFC.controlfilePath)
 
         return
 
@@ -1588,14 +1589,15 @@ class engineObj():
 
                         PFC.shadowMasks[tIdx] = PFC.shadowed_mask
                         PFC.powerSumOptical[tIdx] = self.HF.power_sum_mesh(PFC, mode='optical')
-                        print('Maximum optical heat load on tile: {:f}'.format(max(PFC.qDiv)))
+
+                        print('\nMaximum optical heat load on tile: {:f}'.format(max(PFC.qDiv)))
                         print('Theoretical optical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac*self.HF.elecFrac))
                         print('Tessellated divertor power to this PFC = {:f}'.format(PFC.powerSumOptical[tIdx]))
-                        log.info('Maximum heat load on tile: {:f}'.format(max(PFC.qDiv)))
+                        log.info('\nMaximum heat load on tile: {:f}'.format(max(PFC.qDiv)))
                         log.info('Power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
                         log.info('Tessellated Total Power = {:f}'.format(PFC.powerSumOptical[tIdx]))
-                        print("\nTime Elapsed: {:f}".format(time.time() - t0))
-                        log.info("\nTime Elapsed: {:f}".format(time.time() - t0))
+                        print("Optical Calculation Time Elapsed: {:f}".format(time.time() - t0))
+                        log.info("Optical Calculation Time Elapsed: {:f}\n".format(time.time() - t0))
                         powerTesselate[tIdx] += PFC.powerSumOptical[tIdx]
                         #Add ground truth power for all the PFCs, but not if we
                         #already counted this divertor
@@ -1624,7 +1626,7 @@ class engineObj():
                         log.info('Percent difference between radiation summation and hull = {:0.4f}%\n'.format(np.abs(PFC.powerSumRad[tIdx]/PFC.powerHullRad[tIdx]-1.0)*100.0))
 
                     if 'B' in runList:
-                        self.bfieldAtSurface(PFC)
+                        self.bfieldAtSurface(PFC,paraview=True)
                     if 'psiN' in runList:
                         self.psiPC(PFC)
                     if 'norm' in runList:
@@ -1634,36 +1636,29 @@ class engineObj():
                     if 'bdotn' in runList:
                         self.bdotnPC(PFC)
 
-                    if 'hfOpt' in runList:
-                        print('Total Input Power = {:f}'.format(np.sum(powerTrue)))
-                        print('Theoretical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
-                        print('Optical Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumOptical)))
-                        log.info('Total Input Power = {:f}'.format(np.sum(powerTrue)))
-                        log.info('Theoretical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
-                        log.info('Optical Tessellated Total Power = {:f}'.format(np.sum(PFC.powerSumOptical)))
-
             totalPowPow = 0
             totalPowPowCirc = 0
             for PFC in self.PFCs:
-                print("=== Last timestep's PFC arrays: Optical ===")
-                tmpPow = self.HF.power_sum_mesh(PFC, scale2circ=False, verbose=False)
-                tmpPowCirc = self.HF.power_sum_mesh(PFC, scale2circ=True, verbose=False)
-                totalPowPow += tmpPow
-                totalPowPowCirc += tmpPowCirc
-                print(PFC.name + ":\t{:.6f}".format(tmpPow))
-                log.info(PFC.name + ":\t{:.6f}".format(tmpPow))
-                print("PFC array sum: {:.6f}".format(totalPowPow))
-                log.info("PFC array sum: {:.6f}".format(totalPowPow))
-                print("scale2circ sum:\t{:.6f}".format(totalPowPowCirc))
-                log.info("scale2circ sum:\t{:.6f}".format(totalPowPowCirc))
-
-                print("=== Last timestep's PFC arrays: Photon radiation ===")
-                try:
-                    print(PFC.name + ":\t{:.6f}".format(np.sum(PFC.Prad)))
-                    log.info(PFC.name + ":\t{:.6f}".format(np.sum(PFC.Prad)))
-                except:
-                    print("No radiated power available")
-                    log.info("No radiated power available")
+                if 'hfOpt' in runList:
+                    print("\n=== Final PFC tallies: Optical ===")
+                    tmpPow = self.HF.power_sum_mesh(PFC, scale2circ=False, verbose=False)
+                    tmpPowCirc = self.HF.power_sum_mesh(PFC, scale2circ=True, verbose=False)
+                    totalPowPow += tmpPow
+                    totalPowPowCirc += tmpPowCirc
+                    print(PFC.name + ":\t{:.6f}".format(tmpPow))
+                    log.info(PFC.name + ":\t{:.6f}".format(tmpPow))
+                    print("PFC array sum: {:.6f}".format(totalPowPow))
+                    log.info("PFC array sum: {:.6f}".format(totalPowPow))
+                    print("scale2circ sum:\t{:.6f}".format(totalPowPowCirc))
+                    log.info("scale2circ sum:\t{:.6f}".format(totalPowPowCirc))
+                if 'hfRad' in runList:
+                    print("=== Final PFC tallies: Photon radiation ===")
+                    try:
+                        print(PFC.name + ":\t{:.6f}".format(np.sum(PFC.Prad)))
+                        log.info(PFC.name + ":\t{:.6f}".format(np.sum(PFC.Prad)))
+                    except:
+                        print("No radiated power available")
+                        log.info("No radiated power available")
 
             if 'hfGyro' in runList:
                 print("\n===+++ GYRO ORBIT CALCULATION +++===")
@@ -1673,7 +1668,7 @@ class engineObj():
                 try:
                     self.loadGYROParams(infile=self.inputFileList[tIdx])
                 except:
-                    print('Could not load gyro-orbit parameters')
+                    print('Could not load gyro-orbit parameters.  Expected for GUI.')
                     pass
 
                 self.getGyroMeshes()
@@ -1696,7 +1691,7 @@ class engineObj():
                     print("Cannot complete gyro-orbit calculation.  You must")
                     print("properly define gyro sources in input file and in")
                     print("PFC file.  Exiting...")
-                    sys.exit()
+                    return
 
                 #redistribute ion optical power and build intersectRecord
                 self.gyroOrbitHF()
@@ -1719,7 +1714,10 @@ class engineObj():
                         print('Escaped Gyro Power = {:f}'.format(self.GYRO.gyroNanPower))
                         print("Gyro orbit calculation took: {:f} [s]\n".format(time.time() - tGyro))
 
-                print("\=== Last timestep's PFC arrays: Gyro ===")
+
+                #print some stats to terminal after all runs completed
+                print("\n=== Final PFC Tallies: Gyro ===")
+                log.info("\n=== Final PFC Tallies: Gyro ===")
                 totalPowPow = 0
                 for PFC in self.PFCs:
                     if t not in PFC.timesteps:
@@ -1733,8 +1731,8 @@ class engineObj():
                         log.info("PFC array sum: {:.6f}".format(totalPowPow))
                         print("PFC Max HF: {:.6f}".format(max(PFC.qGyro)))
                         log.info("PFC Max HF: {:.6f}".format(max(PFC.qGyro)))
-
-                print("=== Last timestep's PFC arrays: Optical ===")
+                print("=== Final PFC Tallies: Optical ===")
+                log.info("=== Final PFC Tallies: Optical ===")
                 totalPowPow = 0
                 for PFC in self.PFCs:
                     if t not in PFC.timesteps:
@@ -1746,7 +1744,23 @@ class engineObj():
                         log.info(PFC.name + ":\t{:.6f}".format(tmpPow))
                         print("PFC array sum: {:.6f}".format(totalPowPow))
                         log.info("PFC array sum: {:.6f}".format(totalPowPow))
+                if 'hfRad' in runList:
+                    print("=== Final PFC Tallies: Photon Radiation ===")
+                    log.info("=== Final PFC Tallies: Photon Radiation ===")
+                    totalPowPow = 0
+                    for PFC in self.PFCs:
+                        if t not in PFC.timesteps:
+                            pass
+                        else:
+                            tmpPow = self.HF.power_sum_mesh(PFC, mode='rad', scale2circ=False, verbose=False)
+                            totalPowPow += tmpPow
+                            print(PFC.name + ":\t{:.6f}".format(tmpPow))
+                            log.info(PFC.name + ":\t{:.6f}".format(tmpPow))
+                            print("PFC array sum: {:.6f}".format(totalPowPow))
+                            log.info("PFC array sum: {:.6f}".format(totalPowPow))
 
+            print("Completed all heat flux calculations\n")
+            log.info("Completed all heat flux calculations\n")
 
             #generating allSources heat fluxes
             if ('hfGyro' in runList) or ('hfOpt' in runList) or ('hfRad' in runList):
@@ -1814,7 +1828,7 @@ class engineObj():
             PFC.shadowed_mask = PFC.shadowMasks[repeatIdx].copy()
 
         #PFC.findIntersectionFreeCADKDTree(self.MHD,self.CAD)
-        print("Intersection calculation took {:f} s".format(time.time() - t0))
+        print("Intersection calculation took {:f} [s]\n".format(time.time() - t0))
 
         #Run MAFOT laminar for 3D plasmas
         if self.MHD.plasma3Dmask==True:
@@ -1834,6 +1848,8 @@ class engineObj():
             self.MHD.psi2DfromEQ(PFC)
 
         #Create Heat Flux Profile
+        print('----Calculating Heat Flux Profile----')
+        log.info('----Calculating Heat Flux Profile----')
         q = self.HF.getHFprofile(PFC)
         qDiv = self.HF.q_div(PFC, self.MHD, q) * self.HF.elecFrac
 
@@ -1842,6 +1858,8 @@ class engineObj():
         PFC.qDiv = qDiv
         PFC.qOpticalList.append(PFC.qDiv)
         #Create pointclouds for paraview
+        print('\n----Creating point clouds for ParaView----')
+        log.info('\n----Creating point clouds for ParaView----')
         R,Z,phi = tools.xyz2cyl(PFC.centers[:,0],PFC.centers[:,1],PFC.centers[:,2])
         PFC.write_shadow_pointcloud(PFC.centers,PFC.shadowed_mask,PFC.controlfilePath,PFC.tag)
         self.HF.write_heatflux_pointcloud(PFC.centers,qDiv,PFC.controlfilePath,PFC.tag,mode='optical')
@@ -1960,6 +1978,8 @@ class engineObj():
         """
         set up gyro meshes, independent of timestep
         """
+        print("\nBuilding gyro-orbit meshes and mappings")
+        log.info("\nBuilding gyro-orbit meshes and mappings")
         totalMeshCounter = 0
         numTargetFaces = 0
         numROIFaces = 0
@@ -2168,7 +2188,7 @@ class engineObj():
         #one dimension for vPhases,
         #one dimension for vSlices,
         #and one dimesion for the PFC.centers points we are tracing
-        #each element is the face that was intersected for that MC run
+        #each element is the face that was intersected for that macroparticle
         self.GYRO.intersectRecord = np.ones((self.GYRO.N_gyroPhase,
                                             self.GYRO.N_vPhase,
                                             self.GYRO.N_vSlice,

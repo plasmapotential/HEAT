@@ -89,7 +89,7 @@ server = Flask(__name__)
 #                prevent_initial_callbacks=False)
 
 app = Dash(server=server, meta_tags=[{"name": "viewport", "content": "width=device-width"}],
-                prevent_initial_callbacks=False)
+                prevent_initial_callbacks=False, update_title='Processing...')
 
 
 #load the HEAT flame icon into browser tab
@@ -2012,7 +2012,7 @@ def customSource(className, options):
             children = [
                 html.Div(
                     children=[
-                        dcc.Checklist(
+                        dbc.Checklist(
                             id='gyroSource',
 #                            className="checkListBox",
                             options=options,
@@ -2150,8 +2150,8 @@ def buildRADbox():
                     ),
                     html.Div(
                         children=[
-                            dbc.Label("Number of reflections  "),
-                            dbc.Input(id="Nref", className="textInput"),
+                            dbc.Label("Number of reflections (currently disabled)"),
+                            dbc.Input(id="Nref", className="textInput", disabled=True),
                         ],
                         className="OFInput",
                     ),
@@ -2196,7 +2196,7 @@ def loadRAD(n_clicks,phiMin,phiMax,Ntor,Nref,radFile,radData):
         Ntor = int(Ntor)
         Nref = int(Nref)
         phiMin = float(phiMin)
-        phiMax = int(phiMax)
+        phiMax = float(phiMax)
         gui.getRADInputs(radFile[0], Ntor, Nref, phiMin, phiMax, radData[0])
 
 
@@ -2273,15 +2273,15 @@ def OFinputBoxes():
             ),
             html.Div(
                 children=[
-                    dbc.Label("deltaT [s]"),
+                    dbc.Label("Timestep Size [s]"),
                     dbc.Input(id="OFdeltaT", className="textInput"),
                 ],
                 className="OFInput",
             ),
             html.Div(
                 children=[
-                    dbc.Label(" Write deltaT [s]"),
-                    dbc.Input(id="OFwriteDeltaT", className="textInput"),
+                    dbc.Label(" Write Timestep [s] (disabled)"),
+                    dbc.Input(id="OFwriteDeltaT", className="textInput", value="NA", disabled=True),
                 ],
                 className="OFInput",
             ),
@@ -2330,6 +2330,11 @@ def loadOF(n_clicks,OFstartTime,OFstopTime,
     if n_clicks < 1:
         raise PreventUpdate
     else:
+        #we choose the same delta t for writing and the solver, to avoid
+        #mismatched timesteps for solver and writer.  Advanced users
+        #can uncomment the OFwriteDeltaT input div above and adapt this function
+        #if desired
+        OFwriteDeltaT = OFdeltaT
         gui.loadOF(OFstartTime,OFstopTime,
                    OFminMeshLev,OFmaxMeshLev,
                    OFSTLscale,OFbashrcLoc,OFdeltaT,OFwriteDeltaT,materialSelect)
@@ -2774,7 +2779,12 @@ def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
     else:
         OFTprobeFig = OFTprobePlots(update=False)
 
+
     gui.writeInputTable(inputData)
+
+    #set tree permissions
+    tools.recursivePermissions(gui.MHD.shotPath, gui.UID, gui.GID, gui.chmod)
+    print("\nReturned to GUI.  HEAT run complete.\n")
 
     return ([html.Label("HEAT Run Complete", className="text-success")],
             qDistFig,
