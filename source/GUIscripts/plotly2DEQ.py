@@ -13,6 +13,7 @@ from scipy.interpolate import interp1d
 import json
 import matplotlib.pyplot as plt
 import logging
+from dash_bootstrap_templates import template_from_url
 
 
 def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
@@ -74,7 +75,7 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
             contours_coloring='heatmap',
             name='psiN',
             showscale=False,
-            ncontours=20
+            ncontours=20,
         ))
 
     #Wall in green
@@ -86,7 +87,7 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
             name="Wall",
             line=dict(
                 color="#19fa1d"
-                    )
+                    ),
             )
             )
 
@@ -158,8 +159,8 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
                 )
 
     #set bkgrd color if not default (clear)
-    if bg is None:
-        bg = 'rgba(0,0,0,0)'
+#    if bg is None:
+#        bg = 'rgba(0,0,0,0)'
 
 
     fig.update_layout(
@@ -171,13 +172,13 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
         #autosize=False,
         #width=width*1.1,
         #height=height,
-        paper_bgcolor=bg,
-        plot_bgcolor=bg,
+#        paper_bgcolor=bg,
+#        plot_bgcolor=bg,
         showlegend=False,
         font=dict(
 #            family="Courier New",
             size=18,
-            color="#dcdce3"
+#            color="primary"
         ),
         margin=dict(
             l=10,
@@ -386,10 +387,11 @@ def makePlotlyGfilePlot(ep):
     zMid = ep.g['ZmAxis']
     Fpol = ep.g['Fpol']
     N = len(Fpol)
-    axis2sep = np.linspace(rAxis,RmaxLCFS,N)
+    rN = np.linspace(rAxis, RmaxLCFS, N)
     psiAxis = ep.g['psiAxis']
     psiSep = ep.g['psiSep']
     zMidplane = np.ones(len(ep.g['R']))*zMid
+
     #psiRZN = ep.psiFunc.ev(ep.g['R'],zMidplane)
     psiRZ = ep.g['psiRZ'][int(ep.g['NZ']/2)][:]
     psiRZN = (psiRZ - psiAxis)/(psiSep - psiAxis)
@@ -397,7 +399,7 @@ def makePlotlyGfilePlot(ep):
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
     fig = make_subplots(specs=[[{"secondary_y": True}]])
-    fig.add_trace(go.Scatter(x=ep.g['R'], y=Fpol,
+    fig.add_trace(go.Scatter(x=rN, y=Fpol,
                     mode='lines',
                     name='Fpol'),
                     secondary_y=True)
@@ -415,7 +417,7 @@ def makePlotlyGfilePlot(ep):
                     name='psiSep'))
 
     fig.update_layout(
-    title="gFile Parameters at Midplane",
+    title="GEQDSK Parameters at Midplane",
     xaxis_title="R [m]",
     font=dict(
         family="Arial",

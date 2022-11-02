@@ -118,7 +118,7 @@ def plotlyqDivPlot(heatFlux, labels, logPlot=False):
         font=dict(
             family="Arial",
             size=18,
-            color="Black"
+#            color="Black"
             ),
         )
 
@@ -160,8 +160,8 @@ def plotlyTprobes(t,T,names):
         name="Sublimation T",
         text=["Limit", "Limit"],
         textposition="top center",
-        line=dict(color='firebrick', width=3, dash='dot'),
-        textfont=dict(family="Arial", size=16, color="firebrick"),
+        line=dict(width=3, dash='dot'),
+        textfont=dict(family="Arial", size=16),
 
     ))
 
@@ -172,7 +172,7 @@ def plotlyTprobes(t,T,names):
         font=dict(
         family="Arial",
         size=18,
-        color="Black"
+#        color="Black"
     ),
     )
 
