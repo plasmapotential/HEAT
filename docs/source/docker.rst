@@ -112,6 +112,10 @@ the HEAT run will be saved with the user's UID/GID.  This happens in the followi
     fi
 
 
+If your docker configuration has UID/GID mapping enabled, then you can comment out those
+aforementioned lines in runDockerCompose.
+
+
 It is also possible to pass environment variables from your local session into the docker container
 using the docker compose recipe file, docker-compose.yml .  To achieve this, you would first need
 to determine your UID / GID and then uncomment the relevant lines in docker-compose.yml:
@@ -141,7 +145,7 @@ Start HEAT in GUI mode
 To start HEAT using the graphical user interface, perform the following steps:
 
   1) Navigate to the HEAT source code docker directory, <sourcePath>/docker
-  2) Once in the docker directory, make sure the last 4 lines appear as follows::
+  2) Once in the docker directory, make sure the last 4 lines of runDockerCompose appear as follows::
 
 .. code-block:: yaml
 
@@ -149,6 +153,7 @@ To start HEAT using the graphical user interface, perform the following steps:
       docker-compose up
       #run docker compose interactively (for terminal mode)
       #docker-compose run HEAT /bin/bash
+
 
   3) Run docker compose from within the docker directory:
 
@@ -186,13 +191,13 @@ To start HEAT using the terminal user interface, perform the following steps:
 
   3) In the docker directory, make sure the last line appears as follows::
 
-      docker-compose run HEAT /bin/bash
+    #run docker compose
+    #docker-compose up
+    #run docker compose interactively (for terminal mode)
+    docker-compose run HEAT /bin/bash
   4) Run docker compose from within the docker directory::
 
-      #run docker compose
-      #docker-compose up
-      #run docker compose interactively (for terminal mode)
-      docker-compose run HEAT /bin/bash
+    docker-compose up
   5) Running docker-compose in terminal mode launches a bash terminal inside the
      container.  Once inside the container, navigate to the HEAT source code
      directory::
