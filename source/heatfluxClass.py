@@ -682,9 +682,19 @@ class heatFlux:
         if self.lqCFmode == 'horacek':
             self.getHoracekFromEQ(PFC.ep)
 
+
+        print("Heat flux profile type: "+self.hfMode)
         #Multiple exponential profile (Brunner Profile)
         if self.hfMode=='multiExp' or self.hfMode=='limiter':
             q[use] = self.multiExp_profile_fluxspace(PFC, R_omp, Bp_omp, psi, self.hfMode)
+            if self.hfMode =='multiExp':
+                print("lqCN: {}".format(self.lqCN))
+                print("lqCF: {}".format(self.lqCF))
+                print("lqPN: {}".format(self.lqPN))
+                print("lqPF: {}".format(self.lqPF))
+            elif self.hfMode == 'limiter':
+                print("lqCN: {}".format(self.lqCN))
+                print("lqCF: {}".format(self.lqCF))
 
         #Eich Profile
         else:
@@ -692,6 +702,9 @@ class heatFlux:
             q[use] = self.eich_profile_fluxspace(PFC, self.lqCN, self.S, R_omp, Bp_omp, psi)
             q *= q0
             q += self.qBG
+            print("lqCN: {} [mm]".format(self.lqCN))
+            print("S: {} [mm]".format(self.S))
+            print("q0 {} [MW/m^2]".format(q0))
 
         #Scale by fraction of power going to this PFC's divertor
         PFC.powerFrac = self.getDivertorPowerFraction(PFC.DivCode)

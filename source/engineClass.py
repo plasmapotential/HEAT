@@ -1019,8 +1019,6 @@ class engineObj():
             print("qFileTag = "+qFileTag)
             log.info("qFilePath = "+qFilePath)
             log.info("qFileTag = "+qFileTag)
-
-
         return
 
     def loadHFParams(self, infile=None):
@@ -2786,6 +2784,7 @@ class engineObj():
 
         print('Setting Up OF run')
         log.info('Setting Up OF run')
+
         #set up base OF directory for this discharge
         if self.MHD.shotPath[-1]=='/':
             self.OF.OFDir = self.MHD.shotPath + 'openFoam'

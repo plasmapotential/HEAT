@@ -9,7 +9,7 @@ version: "3"
 
 services:
   HEAT:
-    image: "plasmapotential/heat:v2.1.0"
+    image: "plasmapotential/heat:v3.0"
     ports:
       - "8050:8050"
     volumes:
@@ -19,9 +19,9 @@ services:
       #
       # HEAT data directory on this machine (if exists)
       - ${HOME}/HEAT:/root/HEAT
-      # HEAT source code from github
-      - /home/tom/source/HEAT/github/source:/root/source/HEAT
-#      # ORNL EFIT class from github (if you have access)
+#      # HEAT source code from github
+#      - /home/tom/source/HEAT/github/source:/root/source/HEAT
+#      # ORNL EFIT class from github (if you have access, else in container)
 #      - /home/tom/source/EFIT:/root/EFIT
 #      # MAFOT bins and libs
 #      - /home/tom/source/HEAT/MAFOT/bin:/root/opt/mafot/bin

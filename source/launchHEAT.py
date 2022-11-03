@@ -36,6 +36,7 @@ def loadEnviron():
         sys.exit()
 
     dataPath = homeDir + '/HEAT/data'
+    OFversion = 'v2112'
 
     #=== Set up paths and environment vars
     ### appImage
@@ -152,7 +153,7 @@ def loadEnviron():
         ### OPENFOAM
         #default openFOAM source path v1912
         #OFbashrc = '/opt/openfoam/openfoam-OpenFOAM-v1912/etc/bashrc'
-        #default openFOAM source path v2106
+        #default openFOAM source path v2112
         OFbashrc = '/opt/openfoam/OpenFOAM-v2112/etc/bashrc'
         #python site packages where PyFoam resides
         pyFoamPath = homeDir + '/.local/lib/python3.8/site-packages'
@@ -179,6 +180,7 @@ def loadEnviron():
     os.environ["OFbashrc"] = OFbashrc
     os.environ["FreeCADPath"] = FreeCADPath
     os.environ["HEATchmod"] = '0o774' #chmod in base 8 (octal)
+    os.environ["WM_PROJECT_VERSION"] = OFversion
 
     #clear uname mask for docker saving
     os.umask(0)
