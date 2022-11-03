@@ -117,6 +117,7 @@ using the docker compose recipe file, docker-compose.yml .  To achieve this, you
 to determine your UID / GID and then uncomment the relevant lines in docker-compose.yml:
 
 .. code-block:: yaml
+
        #environment:
        - dockerUID=$dockerUID
        - dockerGID=$dockerGID
@@ -130,6 +131,7 @@ If you are unsure if your version of docker will do UID mapping, its best to jus
 on the host (echo $UID), and then launch the docker container directly into bash mode and perform the same test:
 
 .. code-block:: bash
+
       docker-compose run HEAT /bin/bash
 
 
@@ -147,7 +149,8 @@ To start HEAT using the graphical user interface, perform the following steps:
       docker-compose up
       #run docker compose interactively (for terminal mode)
       #docker-compose run HEAT /bin/bash
-  3) Run docker compose from within the docker directory::
+
+  3) Run docker compose from within the docker directory:
 
 .. code-block:: bash
 
