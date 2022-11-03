@@ -51,10 +51,13 @@ docker directory, <sourcePath>/docker
 
 If you already have the HEAT source code downloaded, then you can pull the latest with:
 
+.. code-block:: bash
+
     git pull
 
-If you want to force the pull to overwrite your local changes:
+If you want to force the pull to overwrite your local changes::
 
+.. code-block:: bash
     git reset --hard HEAD
 
 
@@ -84,32 +87,35 @@ This can be problematic if the container writes files to the host OS, as the use
 inside the container may not match up with the UID and GID of the user on the host.  Newer versions of docker
 intelligently pass the UID and GID into the container, but older versions do not.  The HEAT source code contains
 a bash script, runDockerCompose, that can pass the UID and GID into the container so that all files written during
-the HEAT run will be saved with the user's UID/GID.  This happens in the following code:
+the HEAT run will be saved with the user's UID/GID.  This happens in the following code::
 
-      #check for docker group and load into ${dockerGID}
-      if [ $(getent group docker) ]; then
-        echo "docker group exists. setting dockerGID env var..."
-        export dockerGID="$(getent group docker | cut -d: -f3)"
-      else
-        echo "'docker' group does not exist."
-        echo "If you continue HEAT files will be saved under root group!"
-        echo "It is recommended (but not required) that you create group"
-        echo "'docker' and add yourself to it before running HEAT."
-      fi
-      #get user id
-      if [ $(getent group docker) ]; then
-        echo "copying UID for user into docker container"
-        export dockerUID="$(echo $UID)"
-      else
-        echo "could not copy user ID into docker."
-        echo "files will be saved as root:root !"
-      fi
+.. code-block:: bash
+
+    #check for docker group and load into ${dockerGID}
+    if [ $(getent group docker) ]; then
+      echo "docker group exists. setting dockerGID env var..."
+      export dockerGID="$(getent group docker | cut -d: -f3)"
+    else
+      echo "'docker' group does not exist."
+      echo "If you continue HEAT files will be saved under root group!"
+      echo "It is recommended (but not required) that you create group"
+      echo "'docker' and add yourself to it before running HEAT."
+    fi
+    #get user id
+    if [ $(getent group docker) ]; then
+      echo "copying UID for user into docker container"
+      export dockerUID="$(echo $UID)"
+    else
+      echo "could not copy user ID into docker."
+      echo "files will be saved as root:root !"
+    fi
 
 
 It is also possible to pass environment variables from your local session into the docker container
 using the docker compose recipe file, docker-compose.yml .  To achieve this, you would first need
-to determine your UID / GID and then uncomment the relevant lines in docker-compose.yml:
+to determine your UID / GID and then uncomment the relevant lines in docker-compose.yml::
 
+.. code-block:: yaml
        #environment:
        - dockerUID=$dockerUID
        - dockerGID=$dockerGID
@@ -120,8 +126,9 @@ For the latest version of docker, the UID and GID are passed into the container
 automatically.  More information on this can be found here:  https://docs.docker.com/engine/security/userns-remap/
 
 If you are unsure if your version of docker will do UID mapping, its best to just run a test.  First, get the UID
-on the host (echo $UID), and then launch the docker container directly into bash mode and perform the same test:
+on the host (echo $UID), and then launch the docker container directly into bash mode and perform the same test::
 
+.. code-block:: bash
       docker-compose run HEAT /bin/bash
 
 
@@ -133,11 +140,16 @@ To start HEAT using the graphical user interface, perform the following steps:
   1) Navigate to the HEAT source code docker directory, <sourcePath>/docker
   2) Once in the docker directory, make sure the last 4 lines appear as follows::
 
+.. code-block:: yaml
+
       #run docker compose
       docker-compose up
       #run docker compose interactively (for terminal mode)
       #docker-compose run HEAT /bin/bash
   3) Run docker compose from within the docker directory::
+
+.. code-block:: bash
+
       docker-compose up
 
 Start HEAT in TUI mode
