@@ -16,7 +16,7 @@ Some examples of what HEAT can predict:
 The latest release of HEAT is v3.0, which includes the following notable additions / patches:
  - Open3D, which can accelerate ray tracing by 100X in some cases
  - New GUI using Dash Bootstrap Components.  User can choose GUI theme.
- - Updates to the ion gyro-orbit module after work published in Nuclear Fusion journal
+ - Updates to the ion gyro-orbit module after work published in Nuclear Fusion journal ()
  - Photon radiation heat flux predictions from an axisymmetric radiation profile
  - Numerous other bug fixes and user requests
 
@@ -28,6 +28,12 @@ https://github.com/plasmapotential/HEATtools.git
 
 To cite HEAT, you can use a paper published by the journal Fusion Science and Technology under open access.  The paper can be found here: https://doi.org/10.1080/15361055.2021.1951532
 
+Other recent HEAT related publications:
+ - 3D ion gyro-orbit heat load predictions for NSTX-U, Looby et al, https://iopscience.iop.org/article/10.1088/1741-4326/ac8a05
+ - 3D PFC Power Exhaust Predictions for the SPARC Tokamak, Looby et al, https://meetings.aps.org/Meeting/DPP22/Session/NO03.11
+ - Measurements of multiple heat flux components at the divertor target by using surface eroding thermocouples (invited), Ren et al, https://aip.scitation.org/doi/full/10.1063/5.0101719
+
+ 
 For users who want to run HEAT, there are two options:
  - An appImage for running with a single executable on Linux
  - A docker container, which also allows HEAT development
