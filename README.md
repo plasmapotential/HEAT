@@ -57,15 +57,16 @@ Example output for 30 degree section of the NSTX-U divertor with Equilibrium, He
 Example output of PFC tile temperature for various strike points sweep frequencies:
 ![Alt text](sideBySide.gif "Example output of EQ, HF, T, video")
 
-Example trace for ion gyro orbit tracing:
+Example trace for ion gyro orbit tracing from T. Looby et al 2022 Nucl. Fusion 62 106020:
 ![Alt text](helixVisual2.png "Example ion gyro orbit trajectory from T. Looby et al 2022 Nucl. Fusion 62 106020")
 
-Example output for ion gyro orbit tracing:
+Example output for ion gyro orbit tracing from T. Looby et al 2022 Nucl. Fusion 62 106020:
 ![Alt text](gyroHF.png "Example ion gyro orbit heat fluxes from T. Looby et al 2022 Nucl. Fusion 62 106020")
 
 Example output for limited discharges:
 ![Alt text](limiter.gif "Example output of EQ, HF, T, video")
 
-HEAT Dash / plotly GUI:
+HEAT Dash GUI Theme Example 1:
 ![Alt text](gui1.png "HEAT Dash GUI Theme Example 1")
+HEAT Dash GUI Theme Example 2:
 ![Alt text](gui2.png "HEAT Dash GUI Theme Example 2")
