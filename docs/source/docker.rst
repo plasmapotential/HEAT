@@ -55,9 +55,10 @@ If you already have the HEAT source code downloaded, then you can pull the lates
 
     git pull
 
-If you want to force the pull to overwrite your local changes::
+If you want to force the pull to overwrite your local changes:
 
 .. code-block:: bash
+
     git reset --hard HEAD
 
 
@@ -87,7 +88,7 @@ This can be problematic if the container writes files to the host OS, as the use
 inside the container may not match up with the UID and GID of the user on the host.  Newer versions of docker
 intelligently pass the UID and GID into the container, but older versions do not.  The HEAT source code contains
 a bash script, runDockerCompose, that can pass the UID and GID into the container so that all files written during
-the HEAT run will be saved with the user's UID/GID.  This happens in the following code::
+the HEAT run will be saved with the user's UID/GID.  This happens in the following code:
 
 .. code-block:: bash
 
@@ -113,7 +114,7 @@ the HEAT run will be saved with the user's UID/GID.  This happens in the followi
 
 It is also possible to pass environment variables from your local session into the docker container
 using the docker compose recipe file, docker-compose.yml .  To achieve this, you would first need
-to determine your UID / GID and then uncomment the relevant lines in docker-compose.yml::
+to determine your UID / GID and then uncomment the relevant lines in docker-compose.yml:
 
 .. code-block:: yaml
        #environment:
@@ -126,7 +127,7 @@ For the latest version of docker, the UID and GID are passed into the container
 automatically.  More information on this can be found here:  https://docs.docker.com/engine/security/userns-remap/
 
 If you are unsure if your version of docker will do UID mapping, its best to just run a test.  First, get the UID
-on the host (echo $UID), and then launch the docker container directly into bash mode and perform the same test::
+on the host (echo $UID), and then launch the docker container directly into bash mode and perform the same test:
 
 .. code-block:: bash
       docker-compose run HEAT /bin/bash
