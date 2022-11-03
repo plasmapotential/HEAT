@@ -38,7 +38,7 @@ where <tag> reflects the latest HEAT version (ie v3.0)
 Download HEAT source code from github
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-To run HEAT using docker, you will need to have several files from the HEAT
+To run HEAT using docker, it can be useful to have several files from the HEAT
 github page that set up the docker environment.  The easiest way to download the
 HEAT source code is to create a new directory, and pull the source using git::
 
@@ -53,12 +53,12 @@ If you already have the HEAT source code downloaded, then you can pull the lates
 
     git pull
 
-If you want to force the pull to overwrite your existing changes:
+If you want to force the pull to overwrite your local changes:
 
     git reset --hard HEAD
 
 
-Starting HEAT from docker
+Starting HEAT with docker
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 In HEAT v2+ here are two ways a user can run HEAT:
  - In an html5 based Graphical User Interface (GUI)
@@ -75,6 +75,55 @@ HEAT from the docker container:
         <div style="position: relative; padding-bottom: 2%; height: 0; overflow: hidden; max-width: 100%; height: auto;">
             <iframe width="560" height="315" src="https://www.youtube.com/embed/a1i_66ky_xQ" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
         </div>
+
+
+Permissions in Docker on Linux
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+When a user launches an application in a docker container, that application is run as root inside the container.
+This can be problematic if the container writes files to the host OS, as the user id (UID) and group id (GID)
+inside the container may not match up with the UID and GID of the user on the host.  Newer versions of docker
+intelligently pass the UID and GID into the container, but older versions do not.  The HEAT source code contains
+a bash script, runDockerCompose, that can pass the UID and GID into the container so that all files written during
+the HEAT run will be saved with the user's UID/GID.  This happens in the following code:
+
+      #check for docker group and load into ${dockerGID}
+      if [ $(getent group docker) ]; then
+        echo "docker group exists. setting dockerGID env var..."
+        export dockerGID="$(getent group docker | cut -d: -f3)"
+      else
+        echo "'docker' group does not exist."
+        echo "If you continue HEAT files will be saved under root group!"
+        echo "It is recommended (but not required) that you create group"
+        echo "'docker' and add yourself to it before running HEAT."
+      fi
+      #get user id
+      if [ $(getent group docker) ]; then
+        echo "copying UID for user into docker container"
+        export dockerUID="$(echo $UID)"
+      else
+        echo "could not copy user ID into docker."
+        echo "files will be saved as root:root !"
+      fi
+
+
+It is also possible to pass environment variables from your local session into the docker container
+using the docker compose recipe file, docker-compose.yml .  To achieve this, you would first need
+to determine your UID / GID and then uncomment the relevant lines in docker-compose.yml:
+
+       #environment:
+       - dockerUID=$dockerUID
+       - dockerGID=$dockerGID
+       - UID=$dockerUID
+       - GID=$dockerGID
+
+For the latest version of docker, the UID and GID are passed into the container
+automatically.  More information on this can be found here:  https://docs.docker.com/engine/security/userns-remap/
+
+If you are unsure if your version of docker will do UID mapping, its best to just run a test.  First, get the UID
+on the host (echo $UID), and then launch the docker container directly into bash mode and perform the same test:
+
+      docker-compose run HEAT /bin/bash
+
 
 
 Start HEAT in GUI mode
