@@ -31,9 +31,9 @@ from docker hub.  The HEAT docker hub page is located here:
 
 To pull from docker hub, execute the following command::
 
-    docker pull plasmapotential/heat:v2.0.0
+    docker pull plasmapotential/heat:<tag>
 
-(change version where necessary)
+where <tag> reflects the latest HEAT version (ie v3.0)
 
 Download HEAT source code from github
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -48,6 +48,14 @@ HEAT source code is to create a new directory, and pull the source using git::
 Where <sourcePath> is the path where you want to save HEAT  Once you have the
 HEAT source code downloaded, the files you need to run docker are located in the
 docker directory, <sourcePath>/docker
+
+If you already have the HEAT source code downloaded, then you can pull the latest with:
+
+    git pull
+
+If you want to force the pull to overwrite your existing changes:
+
+    git reset --hard HEAD
 
 
 Starting HEAT from docker
