@@ -199,9 +199,13 @@ To start HEAT using the terminal user interface, perform the following steps:
     docker-compose run HEAT /bin/bash
 
 
-  4) Run docker compose from within the docker directory::
+  4) Run docker compose from within the docker directory:
 
-    docker-compose up
+.. code-block:: bash
+
+    docker-compose up 
+
+
   5) Running docker-compose in terminal mode launches a bash terminal inside the
      container.  Once inside the container, navigate to the HEAT source code
      directory::
