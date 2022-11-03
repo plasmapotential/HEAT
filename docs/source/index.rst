@@ -28,7 +28,6 @@ Some examples of what HEAT can predict:
 - Magnetic field line traces
 - Many other quantities
 
----
 
 The latest release of HEAT is v3.0, which includes the following notable additions / patches:
 - Open3D, which can accelerate ray tracing by 100X in some cases
@@ -39,9 +38,8 @@ The latest release of HEAT is v3.0, which includes the following notable additio
 
 
 The following physics modules are scheduled to be added to HEAT soon:
-1) 3D plasmas using M3DC1
+ - 3D plasmas using M3DC1
 
----
 
 
 To cite HEAT, you can use a paper published by the journal Fusion Science and Technology under open access.  The paper can be found here: https://doi.org/10.1080/15361055.2021.1951532
@@ -51,8 +49,6 @@ Other recent HEAT related publications:
 - Measurements of multiple heat flux components at the divertor target by using surface eroding thermocouples (invited), Ren et al, https://aip.scitation.org/doi/full/10.1063/5.0101719
 
 
----
-
 
 For users who want to run HEAT, you will need to download the HEAT docker container from dockerhub.  There is no longer support for the Linux appImage, as the docker container is OS agnostic and achieves equal speeds as the appImage.  Users must download the docker container to get the HEAT environment.  The HEAT docker container has been tested on Linux, MacOS, and Windows.  See the tutorials link below for more information on installation.
 Dockerhub repo:  https://hub.docker.com/r/plasmapotential/heat
@@ -60,7 +56,6 @@ There is a companion repo to this one, which provides some HEAT pre/post process
 https://github.com/plasmapotential/HEATtools.git
 
 
----
 
 The developer is Tom Looby, a Scientist at Commonwealth Fusion Systems.
 
