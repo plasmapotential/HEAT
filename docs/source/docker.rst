@@ -191,7 +191,7 @@ To start HEAT using the terminal user interface, perform the following steps:
 
   3) In the docker directory, make sure the last line appears as follows:
 
-.. code-block:: yaml
+  .. code-block:: yaml
 
     #run docker compose
     #docker-compose up
@@ -201,9 +201,9 @@ To start HEAT using the terminal user interface, perform the following steps:
 
   4) Run docker compose from within the docker directory:
 
-.. code-block:: bash
+  .. code-block:: bash
 
-    docker-compose up 
+    docker-compose up
 
 
   5) Running docker-compose in terminal mode launches a bash terminal inside the
