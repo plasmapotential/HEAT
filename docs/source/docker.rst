@@ -189,12 +189,16 @@ To start HEAT using the terminal user interface, perform the following steps:
           - <batchModePath>:/root/terminal
      where <batchModePath> is the directory where your batchFile lives.
 
-  3) In the docker directory, make sure the last line appears as follows::
+  3) In the docker directory, make sure the last line appears as follows:
+
+.. code-block:: yaml
 
     #run docker compose
     #docker-compose up
     #run docker compose interactively (for terminal mode)
     docker-compose run HEAT /bin/bash
+
+
   4) Run docker compose from within the docker directory::
 
     docker-compose up
