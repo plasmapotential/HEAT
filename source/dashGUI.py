@@ -3863,6 +3863,7 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
         log.info("Loading User Input File")
         inputFileData['default_n_clicks'] = n_clicks
         data = inputFileData
+        defaultDiv = [dbc.Label("Loaded From File", className="text-success")]
 
     print("Updating Session Store")
     return [data.get('shot', ''),
