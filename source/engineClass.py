@@ -17,6 +17,7 @@ import openFOAMclass
 import pfcClass
 import gyroClass
 import radClass
+import ioClass
 import time
 import numpy as np
 import logging
@@ -93,6 +94,7 @@ class engineObj():
         self.OF = openFOAMclass.OpenFOAM(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
         self.GYRO = gyroClass.GYRO(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
         self.RAD = radClass.RAD(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
+        self.IO = ioClass.IO_HEAT()
 
         #set up class variables for each object
         self.MHD.allowed_class_vars()
@@ -101,6 +103,8 @@ class engineObj():
         self.OF.allowed_class_vars()
         self.GYRO.allowed_class_vars()
         self.RAD.allowed_class_vars()
+        self.IO.allowed_class_vars()
+
         return
 
     def refreshSubclasses(self):
@@ -121,11 +125,12 @@ class engineObj():
         PartsFile is path to file with parts we will calculate HF on
         IntersectFile is path to file with parts we will check for intersections on
         """
+        self.infile = self.rootDir + '/inputs/default_input.csv'
         if self.MachFlag == 'nstx':
             print('Loading NSTX-U Input Filestream')
             log.info('Loading NSTX-U Input Filestream')
-            self.infile = self.rootDir + '/inputs/NSTXU/NSTXU_input.csv'
-            self.pfcFile = self.rootDir + '/inputs/NSTXU/NSTXUpfcs.csv'
+#            self.infile = self.rootDir + '/inputs/NSTXU/NSTXU_input.csv'
+#            self.pfcFile = self.rootDir + '/inputs/NSTXU/NSTXUpfcs.csv'
             self.CAD.machPath = self.dataPath + '/NSTX'
             self.OF.meshDir = self.dataPath + '/NSTX/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/NSTX/STLs/'
@@ -134,8 +139,8 @@ class engineObj():
         elif self.MachFlag == 'st40':
             print('Loading ST40 Input Filestream')
             log.info('Loading ST40 Input Filestream')
-            self.infile = self.rootDir + '/inputs/ST40/ST40_input.csv'
-            self.pfcFile = self.rootDir + '/inputs/ST40/ST40pfcs.csv'
+#            self.infile = self.rootDir + '/inputs/ST40/ST40_input.csv'
+#            self.pfcFile = self.rootDir + '/inputs/ST40/ST40pfcs.csv'
             self.CAD.machPath = self.dataPath + '/ST40'
             self.OF.meshDir = self.dataPath + '/ST40/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/ST40/STLs/'
@@ -144,8 +149,8 @@ class engineObj():
         elif self.MachFlag == 'd3d':
             print('Loading DIII-D Input Filestream')
             log.info('Loading DIII-D Input Filestream')
-            self.infile = self.rootDir + '/inputs/D3D/D3D_input.csv'
-            self.pfcFile = self.rootDir + '/inputs/D3D/D3Dpfcs.csv'
+#            self.infile = self.rootDir + '/inputs/D3D/D3D_input.csv'
+#            self.pfcFile = self.rootDir + '/inputs/D3D/D3Dpfcs.csv'
             self.CAD.machPath = self.dataPath + '/D3D'
             self.OF.meshDir = self.dataPath + '/D3D/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/D3D/STLs/'
@@ -154,8 +159,8 @@ class engineObj():
         elif self.MachFlag == 'step':
             print('Loading STEP Input Filestream')
             log.info('Loading STEP Input Filestream')
-            self.infile = self.rootDir + '/inputs/STEP/STEP_input.csv'
-            self.pfcFile = self.rootDir + '/inputs/STEP/STEPpfcs.csv'
+#            self.infile = self.rootDir + '/inputs/STEP/STEP_input.csv'
+#            self.pfcFile = self.rootDir + '/inputs/STEP/STEPpfcs.csv'
             self.CAD.machPath = self.dataPath + '/STEP'
             self.OF.meshDir = self.dataPath + '/STEP/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/STEP/STLs/'
@@ -164,8 +169,8 @@ class engineObj():
         elif self.MachFlag == 'sparc':
             print('Loading SPARC Input Filestream')
             log.info('Loading SPARC Input Filestream')
-            self.infile = self.rootDir + '/inputs/SPARC/SPARC_input.csv'
-            self.pfcFile = self.rootDir + '/inputs/SPARC/SPARCpfcs.csv'
+#            self.infile = self.rootDir + '/inputs/SPARC/SPARC_input.csv'
+#            self.pfcFile = self.rootDir + '/inputs/SPARC/SPARCpfcs.csv'
             self.CAD.machPath = self.dataPath + '/SPARC'
             self.OF.meshDir = self.dataPath + '/SPARC/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/SPARC/STLs/'
@@ -174,8 +179,8 @@ class engineObj():
         elif self.MachFlag == 'west':
             print('Loading WEST Input Filestream')
             log.info('Loading WEST Input Filestream')
-            self.infile = self.rootDir + '/inputs/WEST/WEST_input.csv'
-            self.pfcFile = self.rootDir + '/inputs/WEST/WESTpfcs.csv'
+#            self.infile = self.rootDir + '/inputs/WEST/WEST_input.csv'
+#            self.pfcFile = self.rootDir + '/inputs/WEST/WESTpfcs.csv'
             self.CAD.machPath = self.dataPath + '/WEST'
             self.OF.meshDir = self.dataPath + '/WEST/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/WEST/STLs/'
@@ -184,8 +189,8 @@ class engineObj():
         elif self.MachFlag == 'kstar':
             print('Loading K-STAR Input Filestream')
             log.info('Loading K-STAR Input Filestream')
-            self.infile = self.rootDir + '/inputs/KSTAR/KSTAR_input.csv'
-            self.pfcFile = self.rootDir + '/inputs/KSTAR/KSTARpfcs.csv'
+#            self.infile = self.rootDir + '/inputs/KSTAR/KSTAR_input.csv'
+#            self.pfcFile = self.rootDir + '/inputs/KSTAR/KSTARpfcs.csv'
             self.CAD.machPath = self.dataPath + '/KSTAR'
             self.OF.meshDir = self.dataPath + '/KSTAR/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/KSTAR/STLs/'
@@ -194,8 +199,8 @@ class engineObj():
         else:
             print("INVALID MACHINE SELECTION!  Defaulting to NSTX-U!")
             log.info("INVALID MACHINE SELECTION!  Defaulting to NSTX-U!")
-            self.infile = self.rootDir + '/inputs/NSTXU/NSTXU_input.csv'
-            self.pfcFile = self.rootDir + '/inputs/NSTXU/NSTXUpfcs.csv'
+#            self.infile = self.rootDir + '/inputs/NSTXU/NSTXU_input.csv'
+#            self.pfcFile = self.rootDir + '/inputs/NSTXU/NSTXUpfcs.csv'
             self.CAD.machPath = self.dataPath + '/NSTX'
             self.OF.meshDir = self.dataPath + '/NSTX/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/NSTX/STLs/'
@@ -667,6 +672,22 @@ class engineObj():
         zipObj.close()
 
         return
+
+    def getIOInputs(self, list=None):
+        """
+        Loads input/output filestream inputs
+
+        if list is None (terminal mode), load IO parameters from file, else
+        list should be a list which corresponds to IO.allowed_vars
+        """
+        if list == None:
+            #file saving
+            tools.initializeInput(self.IO, infile=self.infile)
+        else:
+            self.IO.outputMasks(list)
+
+        return
+
 
     def getCADResInputs(self,gridRes=None):
         """
@@ -1189,11 +1210,22 @@ class engineObj():
         R,Z,phi = tools.xyz2cyl(ctrs[:,0],ctrs[:,1],ctrs[:,2])
         #B vector field
         PFC.Bxyz = self.MHD.Bfield_pointcloud(PFC.ep, R, Z, phi)
-        self.MHD.write_Bvec_pointcloud(ctrs,PFC.Bxyz,PFC.controlfilePath)
+
+        prefix='BfieldGlyph'
+        header = "X,Y,Z,Bx,By,Bz"
+        path = PFC.controlfilePath
+        label = 'B [T]'
+        tag = None
+        if self.IO.csvMask == True:
+            self.IO.writeGlyphCSV(ctrs,PFC.Bxyz,path,prefix,header,tag)
+        if self.IO.vtpPCMask == True:
+            self.IO.writeGlyphVTP(ctrs,PFC.Bxyz,label,prefix,path,tag)
+
+
         #B scalar point clouds
-        PFC.Bp, PFC.Bt, PFC.Br, PFC.Bz = self.MHD.B_pointclouds(PFC.ep, R, Z)
-        if paraview == True:
-            self.MHD.write_B_pointclouds(ctrs,PFC.Bp,PFC.Bt,PFC.Br,PFC.Bz,PFC.controlfilePath)
+        #PFC.Bp, PFC.Bt, PFC.Br, PFC.Bz = self.MHD.B_pointclouds(PFC.ep, R, Z)
+        #if paraview == True:
+        #    self.MHD.write_B_pointclouds(ctrs,PFC.Bp,PFC.Bt,PFC.Br,PFC.Bz,PFC.controlfilePath)
 
         return
 
@@ -1386,22 +1418,35 @@ class engineObj():
             os.remove(structOutfile)
         return
 
-
-
-
-
     def NormPC(self, PFC):
         """
         create a normal vector point cloud for mesh centers on tile surface
         """
-        self.CAD.write_normal_pointcloud(PFC.centers,PFC.norms,PFC.controlfilePath)
+        prefix='NormGlyph'
+        header = "X,Y,Z,Nx,Ny,Nz"
+        path = PFC.controlfilePath
+        tag = None
+        label = 'N'
+        if self.IO.csvMask == True:
+            self.IO.writeGlyphCSV(PFC.centers,PFC.norms,path,prefix,header,tag)
+        if self.IO.vtpPCMask == True:
+            self.IO.writeGlyphVTP(PFC.centers,PFC.norms,label,prefix,path,tag)
         return
 
     def shadowPC(self, PFC):
         """
         create a pointcloud for mesh center locations where 1=shadowed, 0=not shadowed
         """
-        PFC.write_shadow_pointcloud(PFC.centers,PFC.shadowed_mask,PFC.controlfilePath)
+        prefix = 'shadowMask'
+        label = 'shadowMask'
+        path = PFC.controlfilePath
+        tag = None
+        if self.IO.csvMask == True:
+            self.IO.writePointCloudCSV(PFC.centers,PFC.shadowed_mask,path,label,tag,prefix)
+        if self.IO.vtpPCMask == True:
+            self.IO.writePointCloudVTP(PFC.centers,PFC.shadowed_mask,label,prefix,path,tag)
+        if self.IO.vtpMeshMask == True:
+            self.IO.writeMeshVTP(PFC.mesh, PFC.shadowed_mask, label, prefix, path, tag)
         return
 
 
@@ -1409,7 +1454,16 @@ class engineObj():
         """
         create a pointcloud for mesh center locations for power direction
         """
-        PFC.write_powerDir_pointcloud(PFC.centers,PFC.powerDir,PFC.controlfilePath)
+        prefix = 'powerDir'
+        label = 'powerDir'
+        path = PFC.controlfilePath
+        tag = None
+        if self.IO.csvMask == True:
+            self.IO.writePointCloudCSV(PFC.centers,PFC.powerDir,path,label,tag,prefix)
+        if self.IO.vtpPCMask == True:
+            self.IO.writePointCloudVTP(PFC.centers,PFC.powerDir,label,prefix,path,tag)
+        if self.IO.vtpMeshMask == True:
+            self.IO.writeMeshVTP(PFC.mesh, PFC.powerDir, label, prefix, path, tag)
         return
 
     def bdotnPC(self, PFC):
@@ -1419,7 +1473,17 @@ class engineObj():
         normal vector
         """
         self.HF.HFincidentAngle(PFC,self.MHD)
-        PFC.write_bdotn_pointcloud(PFC.centers, PFC.bdotn, PFC.controlfilePath)
+        prefix = 'bdotn'
+        label = '$\hat{b} \cdot \hat{n}$'
+        path = PFC.controlfilePath
+        tag = None
+        if self.IO.csvMask == True:
+            self.IO.writePointCloudCSV(PFC.centers,PFC.bdotn,path,label,tag,prefix)
+        if self.IO.vtpPCMask == True:
+            self.IO.writePointCloudVTP(PFC.centers,PFC.bdotn,label,prefix,path,tag)
+        if self.IO.vtpMeshMask == True:
+            self.IO.writeMeshVTP(PFC.mesh, PFC.bdotn, label, prefix, path, tag)
+        return
 
 
     def initializeHF(self, infile=None):
@@ -1487,11 +1551,13 @@ class engineObj():
         print("HEAT RUN INITIALIZED")
         log.info("HEAT RUN INITIALIZED")
         t0 = time.time()
-        allowedOptions = ['hfOpt', 'pwrDir', 'bdotn', 'B', 'psiN', 'norm', 'hfGyro', 'hfRad']
         #make sure that something in runList can be run in this function, else return
+        allowedOptions = ['hfOpt', 'pwrDir', 'bdotn', 'B', 'psiN', 'norm', 'hfGyro', 'hfRad']
         if len([i for i in runList if i in allowedOptions]) < 1:
             print("No HEAT point cloud option to run")
             return
+        else:
+            self.runList = runList
         #set up variables for power balance calculation
         powerTesselate = np.zeros((len(self.MHD.timesteps)))
         powerTrue = np.zeros((len(self.MHD.timesteps)))
@@ -1776,7 +1842,17 @@ class engineObj():
                             q += PFC.qGyro
                         if 'hfRad' in runList:
                             q += PFC.qRad
-                        self.HF.write_heatflux_pointcloud(PFC.centers,q,PFC.controlfilePath,tag=PFC.tag,mode='all')
+                        #write hf files
+                        prefix = 'HF_allSources'
+                        label = '$MW/m^2$'
+                        path = PFC.controlfilePath
+                        if self.IO.csvMask == True:
+                            self.IO.writePointCloudCSV(PFC.centers,q,path,label,PFC.tag,prefix)
+                        if self.IO.vtpPCMask == True:
+                            self.IO.writePointCloudVTP(PFC.centers,q,label,prefix,path,PFC.tag)
+                        if self.IO.vtpMeshMask == True:
+                            self.IO.writeMeshVTP(PFC.mesh, q, label, prefix, path, PFC.tag)
+
 
         # Time Loop: postprocessing
         for tIdx,t in enumerate(self.MHD.timesteps):
@@ -1789,7 +1865,8 @@ class engineObj():
             self.combinePFCpointcloud(runList, tPath, tIdx)
             #copy each timestep's composite point clouds to central location for
             #paraview postprocessing (movies)
-            self.combineTimeSteps(runList, t)
+            if self.IO.csvMask == True:
+                self.combineTimeSteps(runList, t)
 
 
         #set tree permissions
@@ -1856,15 +1933,26 @@ class engineObj():
         PFC.qDiv = qDiv
         PFC.qOpticalList.append(PFC.qDiv)
         #Create pointclouds for paraview
-        print('\n----Creating point clouds for ParaView----')
-        log.info('\n----Creating point clouds for ParaView----')
+        print('\n----Creating Output Files----')
+        log.info('\n----Creating Output Files----')
         R,Z,phi = tools.xyz2cyl(PFC.centers[:,0],PFC.centers[:,1],PFC.centers[:,2])
-        PFC.write_shadow_pointcloud(PFC.centers,PFC.shadowed_mask,PFC.controlfilePath,PFC.tag)
-        self.HF.write_heatflux_pointcloud(PFC.centers,qDiv,PFC.controlfilePath,PFC.tag,mode='optical')
-        PFC.write_bdotn_pointcloud(PFC.centers, PFC.bdotn, PFC.controlfilePath,PFC.tag)
+
+        #write all the files
+        prefix = 'HF_optical'
+        label = '$MW/m^2$'
+        path = PFC.controlfilePath
+        if self.IO.csvMask == True:
+            self.IO.writePointCloudCSV(PFC.centers,qDiv,path,label,PFC.tag,prefix)
+            self.IO.writePointCloudCSV(PFC.centers,PFC.shadowed_mask,path,'shadowMask',PFC.tag,'shadowMask')
+        if self.IO.vtpPCMask == True:
+            self.IO.writePointCloudVTP(PFC.centers,qDiv,label,prefix,path,PFC.tag)
+            self.IO.writePointCloudVTP(PFC.centers,PFC.shadowed_mask,'shadowMask','shadowMask',path,PFC.tag)
+        if self.IO.vtpMeshMask == True:
+            self.IO.writeMeshVTP(PFC.mesh, qDiv, label, prefix, path, PFC.tag)
+            self.IO.writeMeshVTP(PFC.mesh, PFC.shadowed_mask, 'shadowMask','shadowMask', path, PFC.tag)
+
         #structOutfile = MHD.shotPath + '/' + '{:06d}/struct.csv'.format(PFC.t)
         #HF.PointCloudfromStructOutput(structOutfile)
-
         return
 
     def radPower(self,PFC, rayTriMode='open3d'):
@@ -1899,10 +1987,21 @@ class engineObj():
         """
         saves radiated power output
         """
-        self.HF.write_heatflux_pointcloud(PFC.centers,PFC.qRad,PFC.controlfilePath,tag=PFC.tag,mode='rad')
-        self.RAD.write_Prad_pointcloud(self.RAD.sources, self.RAD.sourcePower, PFC.controlfilePath)
         if saveFracs==True:
             self.RAD.savePowerFrac(PFC)
+
+        prefix = 'HF_rad'
+        label = '$MW/m^2$'
+        path = PFC.controlfilePath
+        if self.IO.csvMask == True:
+            self.IO.writePointCloudCSV(PFC.centers,PFC.qRad,path,label,PFC.tag,prefix)
+            self.IO.writePointCloudCSV(self.RAD.sources,self.RAD.sourcePower,path,'$MW$',PFC.tag,'Prad')
+        if self.IO.vtpPCMask == True:
+            self.IO.writePointCloudVTP(PFC.centers,PFC.qRad,label,prefix,path,PFC.tag)
+            self.IO.writePointCloudVTP(self.RAD.sources,self.RAD.sourcePower,'$MW$','Prad',path,PFC.tag)
+        if self.IO.vtpMeshMask == True:
+            self.IO.writeMeshVTP(PFC.mesh, PFC.qRad, label, prefix, path, PFC.tag)
+
 
         return
 
@@ -1966,9 +2065,29 @@ class engineObj():
             PFC.gyroShadowMaskList.append(PFC.gyroShadowMask)
             #Create pointcloud for paraview
             R,Z,phi = tools.xyz2cyl(PFC.centers[:,0],PFC.centers[:,1],PFC.centers[:,2])
-            self.HF.write_heatflux_pointcloud(PFC.centers,PFC.qGyro,PFC.controlfilePath,tag=PFC.tag,mode='gyro')
-            self.HF.write_heatflux_pointcloud(PFC.centers,PFC.qGyro+PFC.qDiv,PFC.controlfilePath,tag=PFC.tag,mode='all')
-            PFC.write_shadow_pointcloud(PFC.centers,PFC.gyroShadowMask,PFC.controlfilePath,PFC.tag,mode='gyro')
+
+            prefix = 'HF_gyro'
+            label = '$MW/m^2$'
+            path = PFC.controlfilePath
+
+            if 'hfRad' in self.runList:
+                qAll = PFC.qDiv + PFC.qGyro + PFC.qRad
+            else:
+                qAll = PFC.qDiv + PFC.qGyro
+
+            if self.IO.csvMask == True:
+                self.IO.writePointCloudCSV(PFC.centers,PFC.qGyro,path,label,PFC.tag,prefix)
+                self.IO.writePointCloudCSV(PFC.centers,qAll,path,label,PFC.tag,'HF_allSources')
+                self.IO.writePointCloudCSV(PFC.centers,PFC.qGyro+PFC.qDiv,path,label,PFC.tag,prefix)
+                self.IO.writePointCloudCSV(PFC.centers,PFC.gyroShadowMask,path,'shadowMask',PFC.tag,'shadowMaskGyro')
+            if self.IO.vtpPCMask == True:
+                self.IO.writePointCloudVTP(PFC.centers,PFC.qGyro,label,prefix,path,tag)
+                self.IO.writePointCloudVTP(PFC.centers,qAll,label,'HF_allSources',path,tag)
+                self.IO.writePointCloudVTP(PFC.centers,PFC.gyroShadowMask,'shadowMask','shadowMaskGyro',path,PFC.tag)
+            if self.IO.vtpMeshMask == True:
+                self.IO.writeMeshVTP(PFC.mesh, PFC.qGyro, label, prefix, path, tag)
+                self.IO.writeMeshVTP(PFC.mesh, qAll, label, 'HF_allSources', path, tag)
+                self.IO.writeMeshVTP(PFC.mesh, PFC.gyroShadowMask, 'shadowMask','shadowMaskGyro', path, PFC.tag)
 
         return
 
@@ -2215,9 +2334,17 @@ class engineObj():
     def combinePFCpointcloud(self, runList, tPath, tIdx):
         """
         Combines multiple pointclouds into a single pointcloud then saves to file
-        pcName is the name of the point cloud we are dealing with.  Run this
-        function once for each timestep
+        Run this function once for each timestep
+
+        vtpMeshMask saves a vtp file
+        vtpPCMask saves a vtk file
+        csvMask saves a csv file
+
         """
+        vtpMeshMask = self.IO.vtpMeshMask
+        vtpPCMask = self.IO.vtpPCMask
+        csvMask = self.IO.csvMask
+
         hfOptical = []
         hfGyro = []
         hfRad = []
@@ -2248,6 +2375,9 @@ class engineObj():
                 print("Skipping to next PFC...")
                 continue
 
+            mesh = self.CAD.createEmptyMesh()
+            mesh.addMesh(PFC.mesh)
+
             if 'hfOpt' in runList:
                 hfOptical.append(PFC.qOpticalList[tIdx].copy())
                 shadow.append(PFC.shadowMasks[tIdx].copy())
@@ -2276,10 +2406,10 @@ class engineObj():
                 norm = np.append(norm, PFC.norms.copy())
             if 'B' in runList:
                 bField = np.append(bField, PFC.Bxyz.copy())
-                Bt.append(PFC.Bt.copy())
-                Bp.append(PFC.Bp.copy())
-                Br.append(PFC.Br.copy())
-                Bz.append(PFC.Bz.copy())
+                #Bt.append(PFC.Bt.copy())
+                #Bp.append(PFC.Bp.copy())
+                #Br.append(PFC.Br.copy())
+                #Bz.append(PFC.Bz.copy())
             #note that I don't do the normal vector norm (its same every timestep)
             #user can just get norm individually for each tile
             Npoints += len(PFC.centers)
@@ -2321,52 +2451,133 @@ class engineObj():
             bdotnNumpy = np.append(bdotnNumpy, arr)
         for arr in psi:
             psiNumpy = np.append(psiNumpy, arr)
-        for arr in Bp:
-            BpNumpy = np.append(BpNumpy, arr)
-        for arr in Bt:
-            BtNumpy = np.append(BtNumpy, arr)
-        for arr in Br:
-            BrNumpy = np.append(BrNumpy, arr)
-        for arr in Bz:
-            BzNumpy = np.append(BzNumpy, arr)
+        #for arr in Bp:
+        #    BpNumpy = np.append(BpNumpy, arr)
+        #for arr in Bt:
+        #    BtNumpy = np.append(BtNumpy, arr)
+        #for arr in Br:
+        #    BrNumpy = np.append(BrNumpy, arr)
+        #for arr in Bz:
+        #    BzNumpy = np.append(BzNumpy, arr)
 
         tag='all'
         centers = centers.reshape(Npoints,3)
+
+        #write all the files
         if 'hfOpt' in runList:
-            self.HF.write_heatflux_pointcloud(centers,hfOpticalNumpy,tPath,tag,'optical')
-            PFC.write_shadow_pointcloud(centers,shadowNumpy,tPath,tag)
-            self.HF.write_heatflux_pointcloud(centers,hfAllNumpy,tPath,tag,'all')
+            prefix = 'HF_optical'
+            label = '$MW/m^2$'
+            if csvMask == True:
+                self.IO.writePointCloudCSV(centers,hfOpticalNumpy,tPath,label,tag,prefix)
+                self.IO.writePointCloudCSV(centers,shadowNumpy,tPath,'shadowMask',tag,'shadowMask')
+            if vtpPCMask == True:
+                self.IO.writePointCloudVTP(centers,hfOpticalNumpy,label,prefix,tPath,tag)
+                self.IO.writePointCloudVTP(centers,shadowNumpy,'shadowMask','shadowMask',tPath,tag)
+            if vtpMeshMask == True:
+                self.IO.writeMeshVTP(mesh, hfOpticalNumpy, label, prefix, tPath, tag)
+                self.IO.writeMeshVTP(mesh, shadowNumpy, 'shadowMask','shadowMask', tPath, tag)
+
         if 'hfGyro' in runList:
-            self.HF.write_heatflux_pointcloud(centers,hfGyroNumpy,tPath,tag,'gyro')
-            PFC.write_shadow_pointcloud(centers,shadowGyroNumpy,tPath,tag,'gyro')
-            if 'hfOpt' not in runList:
-                self.HF.write_heatflux_pointcloud(centers,hfAllNumpy,tPath,tag,'all')
+            prefix = 'HF_gyro'
+            label = '$MW/m^2$'
+            if csvMask == True:
+                self.IO.writePointCloudCSV(centers,hfGyroNumpy,tPath,label,tag,prefix)
+                self.IO.writePointCloudCSV(centers,shadowGyroNumpy,tPath,'shadowMask',tag,'shadowMaskGyro')
+            if vtpPCMask == True:
+                self.IO.writePointCloudVTP(centers,hfGyroNumpy,label,prefix,tPath,tag)
+                self.IO.writePointCloudVTP(centers,shadowGyroNumpy,'shadowMask','shadowMaskGyro',tPath,tag)
+            if vtpMeshMask == True:
+                self.IO.writeMeshVTP(mesh, hfGyroNumpy, label, prefix, tPath, tag)
+                self.IO.writeMeshVTP(mesh, shadowGyroNumpy, 'shadowMask','shadowMaskGyro', tPath, tag)
+
         if 'hfRad' in runList:
-            self.HF.write_heatflux_pointcloud(centers,hfRadNumpy,tPath,tag,'rad')
-            self.RAD.write_Prad_pointcloud(self.RAD.sources,self.RAD.sourcePower,tPath)
-            PFC.write_shadow_pointcloud(centers,shadowRadNumpy,tPath,tag,'rad')
-            if 'hfOpt' not in runList:
-                self.HF.write_heatflux_pointcloud(centers,hfAllNumpy,tPath,tag,'all')
+            prefix = 'HF_rad'
+            label = '$MW/m^2$'
+            if csvMask == True:
+                self.IO.writePointCloudCSV(centers,hfRadNumpy,tPath,label,tag,prefix)
+                self.IO.writePointCloudCSV(self.RAD.sources,self.RAD.sourcePower,tPath,'$MW$',tag,'Prad')
+                self.IO.writePointCloudCSV(centers,shadowRadNumpy,tPath,'shadowMask',tag,'shadowMaskRad')
+            if vtpPCMask == True:
+                self.IO.writePointCloudVTP(centers,hfRadNumpy,label,prefix,tPath,tag)
+                self.IO.writePointCloudVTP(self.RAD.sources,self.RAD.sourcePower,'$MW$','Prad',tPath,tag)
+                self.IO.writePointCloudVTP(centers,shadowRadNumpy,'shadowMask','shadowMaskRad',tPath,tag)
+            if vtpMeshMask == True:
+                self.IO.writeMeshVTP(mesh, hfRadNumpy, label, prefix, tPath, tag)
+                self.IO.writeMeshVTP(mesh, shadowRadNumpy, 'shadowMask','shadowMaskRad', tPath, tag)
+
+        #write allSources file, superposition of all fluxes
+        if 'hfOpt' in runList or 'hfGyro' in runList or 'hfRad' in runList:
+            prefix = 'HF_allSources'
+            if csvMask == True:
+                self.IO.writePointCloudCSV(centers,hfAllNumpy,tPath,label,tag,prefix)
+            if vtpPCMask == True:
+                self.IO.writePointCloudVTP(centers,hfAllNumpy,label,prefix,tPath,tag)
+            if vtpMeshMask == True:
+                self.IO.writeMeshVTP(mesh, hfAllNumpy, label, prefix, tPath, tag)
+
         if 'shadowPC' in runList:
-            PFC.write_shadow_pointcloud(centers,shadowNumpy,tPath,tag)
+            prefix = 'shadowMask'
+            label = 'shadowMask'
+            if csvMask == True:
+                self.IO.writePointCloudCSV(centers,shadowNumpy,tPath,label,tag,prefix)
+            if vtpPCMask == True:
+                self.IO.writePointCloudVTP(centers,shadowNumpy,label,prefix,tPath,tag)
+            if vtpMeshMask == True:
+                self.IO.writeMeshVTP(mesh, shadowNumpy, label, prefix, tPath, tag)
+
         if 'pwrDir' in runList:
-            PFC.write_powerDir_pointcloud(centers,powerDirNumpy,tPath,tag)
+            prefix = 'powerDir'
+            label = 'powerDir'
+            if csvMask == True:
+                self.IO.writePointCloudCSV(centers,powerDirNumpy,tPath,label,tag,prefix)
+            if vtpPCMask == True:
+                self.IO.writePointCloudVTP(centers,powerDirNumpy,label,prefix,tPath,tag)
+            if vtpMeshMask == True:
+                self.IO.writeMeshVTP(mesh, powerDirNumpy, label, prefix, tPath, tag)
+
         if 'bdotn' in runList:
-            PFC.write_bdotn_pointcloud(centers,bdotnNumpy, tPath,tag)
+            prefix = 'bdotn'
+            label = '$\hat{b} \cdot \hat{n}$'
+            if csvMask == True:
+                self.IO.writePointCloudCSV(centers,bdotnNumpy,tPath,label,tag,prefix)
+            if vtpPCMask == True:
+                self.IO.writePointCloudVTP(centers,bdotnNumpy,label,prefix,tPath,tag)
+            if vtpMeshMask == True:
+                self.IO.writeMeshVTP(mesh, bdotnNumpy, label, prefix, tPath, tag)
+
         if 'psiN' in runList:
-            self.HF.write_psiN_pointcloud(centers,psiNumpy,tPath,tag)
-            #self.HF.write_psiNThresh_pointcloud(centers,psiNumpy,tPath,tag)
+            prefix = 'psiN'
+            label = '$\psi_N$'
+            if csvMask == True:
+                self.IO.writePointCloudCSV(centers,psiNumpy,tPath,label,tag,prefix)
+            if vtpPCMask == True:
+                self.IO.writePointCloudVTP(centers,psiNumpy,label,prefix,tPath,tag)
+            if vtpMeshMask == True:
+                self.IO.writeMeshVTP(mesh, psiNumpy, label, prefix, tPath, tag)
+
         if 'norm' in runList:
+            prefix='NormGlyph'
+            header = "X,Y,Z,Nx,Ny,Nz"
             norm = norm.reshape(Npoints,3)
-            self.CAD.write_normal_pointcloud(centers,norm,tPath,tag)
+            label = "N"
+            if csvMask == True:
+                self.IO.writeGlyphCSV(centers,norm,tPath,prefix,header,tag)
+            if vtpPCMask == True:
+                self.IO.writeGlyphVTP(centers,norm,label,prefix,tPath,tag)
+
         if 'B' in runList:
             bField = bField.reshape(Npoints,3)
-            self.MHD.write_Bvec_pointcloud(centers, bField, tPath, tag)
-            self.MHD.write_B_pointclouds(centers,BpNumpy,BtNumpy,BrNumpy,BzNumpy,tPath,tag)
+            prefix='BfieldGlyph'
+            header = "X,Y,Z,Bx,By,Bz"
+            label = "B [T]"
+            if csvMask == True:
+                self.IO.writeGlyphCSV(centers,bField,tPath,prefix,header,tag)
+            if vtpPCMask == True:
+                self.IO.writeGlyphVTP(centers,bField,label,prefix,tPath,tag)
 
         print("Wrote combined pointclouds")
         log.info("Wrote combined pointclouds")
-
+        return
 
     def combineTimeSteps(self, runList, t):
         """
@@ -2386,28 +2597,28 @@ class engineObj():
             dest = movieDir + 'hfOptical_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
         if 'shadowPC' in runList:
-            src = tPath + 'shadowMask_optical_all.csv'
-            dest = movieDir + 'shadowMask_optical_{:06d}.csv'.format(t)
+            src = tPath + 'shadowMask_all.csv'
+            dest = movieDir + 'shadowMask_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
         if 'pwrDir' in runList:
             src = tPath + 'powerDir_all.csv'
             dest = movieDir + 'powerDir_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
         if 'bdotn' in runList:
-            src = tPath + 'bdotnPointCloud_all.csv'
+            src = tPath + 'bdotn_all.csv'
             dest = movieDir + 'bdotn_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
         if 'psiN' in runList:
-            src = tPath + 'psiPointCloud_all.csv'
+            src = tPath + 'psiN_all.csv'
             dest = movieDir + 'psiN_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
         if 'norm' in runList:
-            src = tPath + 'NormPointCloud_all.csv'
-            dest = movieDir + 'normals_{:06d}.csv'.format(t)
+            src = tPath + 'NormGlyph_all.csv'
+            dest = movieDir + 'NormGlyph_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
         if 'B' in runList:
-            src = tPath + 'B_pointcloud_all.csv'
-            dest = movieDir + 'Bfield_{:06d}.csv'.format(t)
+            src = tPath + 'BfieldGlyph_all.csv'
+            dest = movieDir + 'BfieldGlyph_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
         if 'hfGyro' in runList:
             src = tPath + 'HF_gyro_all.csv'
@@ -2416,8 +2627,8 @@ class engineObj():
             src = tPath + 'HF_allSources_all.csv'
             dest = movieDir + 'hfAll_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
-            src = tPath + 'shadowMask_gyro_all.csv'
-            dest = movieDir + 'shadowMask_gyro_{:06d}.csv'.format(t)
+            src = tPath + 'shadowMaskGyro_all.csv'
+            dest = movieDir + 'shadowMaskGyro_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
 
         #set tree permissions
@@ -2451,12 +2662,22 @@ class engineObj():
             self.MHD.runMAFOTlaminar(PFC.gridfile,PFC.controlfilePath,PFC.controlfile,self.NCPUs)
             self.HF.readMAFOTLaminarOutput(PFC,PFC.outputFile)
             use = np.where(PFC.psimin < 10)[0]
-            self.HF.write_psiN_pointcloud(PFC.centers,PFC.psimin,PFC.controlfilePath, PFC.tag)
             os.remove(PFC.outputFile)
         #get psi from gfile for 2D plasmas
         else:
             self.MHD.psi2DfromEQ(PFC)
-            self.HF.write_psiN_pointcloud(PFC.centers,PFC.psimin,PFC.controlfilePath, PFC.tag)
+
+        prefix = 'psiN'
+        label = '$\psi_N$'
+        path = PFC.controlfilePath
+        tag=None
+        if self.IO.csvMask == True:
+            self.IO.writePointCloudCSV(PFC.centers,PFC.psimin,path,label,tag,prefix)
+        if self.IO.vtpPCMask == True:
+            self.IO.writePointCloudVTP(PFC.centers,PFC.psimin,label,prefix,path,tag)
+        if self.IO.vtpMeshMask == True:
+            self.IO.writeMeshVTP(PFC.mesh, PFC.psimin, label, prefix, path, tag)
+
         return
 
 
@@ -3056,7 +3277,7 @@ class engineObj():
                         HFcsv = self.MHD.shotPath + '{:06d}/'.format(t) + PFC.name + '/HF_allSources.csv'
                     else:
                         HFcsv = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/HF.allSources.csv'
-                    qDiv = pd.read_csv(HFcsv)['HeatFlux'].values
+                    qDiv = pd.read_csv(HFcsv)['$MW/m^2$'].values #this is the HF column header in the CSV file
                     #OFcenters = pd.read_csv(HFcsv).iloc[:,0:3].values
                     #write boundary condition
                     print("Maximum qDiv for this PFC and time: {:f}".format(qDiv.max()))
@@ -3316,6 +3537,7 @@ class engineObj():
 
 
         return
+
 
 #==============================================================================
 #                LEGACY FUNCTIONS LEFT FOR REFERENCE (DO NOT WORK!)

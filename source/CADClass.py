@@ -890,35 +890,6 @@ class CAD:
         meshes = self.part2mesh(parts,resolution)
         return meshes, labels
 
-    def write_normal_pointcloud(self,centers,norms,dataPath, tag=None):
-        """
-        In paraview use TableToPoints => Calculator => Glyph
-        Calculator should have this formula:
-        (iHat*Nx) + (jHat*Ny) + (kHat*Nz)
-        """
-        print("Creating Normal Point Cloud")
-        log.info("Creating Normal Point Cloud")
-        if tag is None:
-            pcfile = dataPath + 'NormPointCloud.csv'
-        else:
-            pcfile = dataPath + 'NormPointCloud_' +tag+ '.csv'
-
-        pc = np.zeros((len(centers), 6))
-        pc[:,0] = centers[:,0]*1000.0
-        pc[:,1] = centers[:,1]*1000.0
-        pc[:,2] = centers[:,2]*1000.0
-        pc[:,3] = norms[:,0]
-        pc[:,4] = norms[:,1]
-        pc[:,5] = norms[:,2]
-        head = """X,Y,Z,Nx,Ny,Nz"""
-        np.savetxt(pcfile, pc, delimiter=',',fmt='%.10f', header=head)
-        #np.savetxt('points.asc', pc[:,:-1], delimiter=' ',fmt='%.10f')
-        #print("Wrote point cloud file: " + pcfile)
-
-        #Now save a vtk file for paraviewweb
-        tools.createVTKOutput(pcfile, 'glyph', 'Norm_pointcloud')
-        return
-
     def stripSTPfile(self,partfile,rawSTP,outfile=None,partsOnly=True):
         """
         Strips an stpfile down to the parts defined in the parts csv input file

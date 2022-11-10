@@ -374,6 +374,14 @@ class tools:
             log.info("PVpython subprocess complete")
         return
 
+    def createVTPoutput(self, file, prefix, points, scalar):
+        """
+        writes a VTP file created from the mesh and colored by scalar data
+        """
+
+
+        return
+
     def intersectionTestParallelKdTree(self,i):
         """
         intersection test that uses FreeCAD's interal kd-tree method

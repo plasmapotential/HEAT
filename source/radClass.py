@@ -56,10 +56,14 @@ class RAD:
         """
         set input variable types
         """
-        self.Ntor = int(self.Ntor)
-        self.Nref = int(self.Nref)
-        self.phiMin = float(self.phiMin)
-        self.phiMax = float(self.phiMax)
+        try:
+            self.Ntor = int(self.Ntor)
+            self.Nref = int(self.Nref)
+            self.phiMin = float(self.phiMin)
+            self.phiMax = float(self.phiMax)
+        except:
+            print("Could not initialize RadPower variables.  Bailing...")
+            log.info("Could not initialize RadPower variables.  Bailing...")
         return
 
     def read2DSourceFile(self, file):

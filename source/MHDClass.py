@@ -347,36 +347,6 @@ class MHD:
         return Bp, Bt, Br, Bz
 
 
-    def write_Bvec_pointcloud(self,centers,Bxyz, dataPath, tag=None):
-        """
-        In paraview use TableToPoints => Calculator => Glyph
-        Calculator should have this formula:
-        (iHat*Bx) + (jHat*By) + (kHat*Bz)
-        """
-        print("Creating B Field Point Cloud")
-        log.info("Creating B Field Point Cloud")
-        if tag is None:
-            pcfile = dataPath + 'B_pointcloud.csv'
-        else:
-            pcfile = dataPath + 'B_pointcloud_'+tag+'.csv'
-        pc = np.zeros((len(centers), 6))
-        pc[:,0] = centers[:,0]*1000.0
-        pc[:,1] = centers[:,1]*1000.0
-        pc[:,2] = centers[:,2]*1000.0
-        pc[:,3] = Bxyz[:,0]
-        pc[:,4] = Bxyz[:,1]
-        pc[:,5] = Bxyz[:,2]
-        head = "X,Y,Z,Bx,By,Bz"
-        np.savetxt(pcfile, pc, delimiter=',',fmt='%.10f', header=head)
-        #np.savetxt('points.asc', pc[:,:-1], delimiter=' ',fmt='%.10f')
-        #print("Wrote point cloud file: " + pcfile)
-        if tag is None:
-            tools.createVTKOutput(pcfile, 'glyph', 'Bdotpower_pointcloud')
-        else:
-            name = 'B_pointcloud_'+tag
-            tools.createVTKOutput(pcfile, 'glyph', name)
-        return
-
     def write_B_pointclouds(self,centers,Bp,Bt,Br,Bz,dataPath, tag=None):
         """
         writes a point cloud of poloidal and toroidal field

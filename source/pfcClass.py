@@ -237,59 +237,6 @@ class PFC:
             tools.createVTKOutput(pcfile, 'points', name)
         return
 
-    def write_powerDir_pointcloud(self,centers,scalar,dataPath,tag=None,mode=None):
-        print("Creating PowerDir Point Cloud")
-        log.info("Creating PowerDir Point Cloud")
-        prefix = 'powerDir'
-
-        if tag == None:
-            pcfile = dataPath + prefix + '.csv'
-        else:
-            pcfile = dataPath + prefix + '_'+tag+'.csv'
-        #print("Shadow point cloud filename: "+pcfile)
-        #log.info("Shadow point cloud filename: "+pcfile)
-
-        pc = np.zeros((len(centers), 4))
-        pc[:,0] = centers[:,0]*1000.0
-        pc[:,1] = centers[:,1]*1000.0
-        pc[:,2] = centers[:,2]*1000.0
-        pc[:,3] = scalar
-        head = "X,Y,Z,powerDir"
-        np.savetxt(pcfile, pc, delimiter=',',fmt='%.10f', header=head)
-
-        #Now save a vtk file for paraviewweb
-        if tag is None:
-            tools.createVTKOutput(pcfile, 'points', prefix)
-        else:
-            name = prefix+'_'+tag
-            tools.createVTKOutput(pcfile, 'points', name)
-        return
-
-
-    def write_bdotn_pointcloud(self,centers,bdotn,dataPath,tag=None):
-        print("Creating bdotn Point Cloud")
-        log.info("Creating bdotn Point Cloud")
-        if tag is None:
-            pcfile = dataPath + 'bdotnPointCloud.csv'
-        else:
-            pcfile = dataPath + 'bdotnPointCloud_'+tag+'.csv'
-        pc = np.zeros((len(centers), 4))
-        pc[:,0] = centers[:,0]*1000.0
-        pc[:,1] = centers[:,1]*1000.0
-        pc[:,2] = centers[:,2]*1000.0
-        pc[:,3] = bdotn
-        head = "X,Y,Z,bdotn"
-        np.savetxt(pcfile, pc, delimiter=',',fmt='%.10f', header=head)
-
-        #Now save a vtk file for paraviewweb
-        if tag is None:
-            tools.createVTKOutput(pcfile, 'points', 'bdotn')
-        else:
-            name = 'bdotn_'+tag
-            tools.createVTKOutput(pcfile, 'points', name)
-        return
-
-
     def buildTargetMesh(self, CAD, mode=None):
         """
         build targetPoints and targetNorms arrays from CAD object meshes.

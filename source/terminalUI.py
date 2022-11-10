@@ -111,7 +111,6 @@ class TUI():
         log.info("Number of simulations to be scheduled from batchFile: {:d}".format(self.Nsim))
         return
 
-
     def runSimulations(self):
         """
         run simulations in schedule
@@ -162,6 +161,9 @@ class TUI():
                 #note that we load HF settings (optical, gyro, rad) dynamically
                 #from input file in the self.ENG.runHEAT loop
 
+                #set up output file stream
+                self.ENG.getIOInputs()
+
                 #run HEAT
                 #note: current version of HEAT only supports single runList
                 #per tag
@@ -187,8 +189,14 @@ class TUI():
         #run openFOAM
         if 'T' in runList:
             self.loadOF()
-            #run openFOAM analysis
-            self.ENG.runOpenFOAM()
+            if self.ENG.IO.csvMask == True:
+                #run openFOAM analysis
+                self.ENG.runOpenFOAM()
+            else:
+                print("Error!  Cannot run openFOAM unless you save CSV files!")
+                print("Please turn on csv output file switch and re-run")
+                log.info("Error!  Cannot run openFOAM unless you save CSV files!")
+                log.info("Please turn on csv output file switch and re-run")
         print("Total time: {:f}".format(time.time() - t0))
         return
 

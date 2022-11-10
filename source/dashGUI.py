@@ -2374,6 +2374,8 @@ def runChildren():
                 runTabChecklist(),
                 html.H5("Traces from Points:"),
                 runTabTraces(),
+                html.H5("Output File Settings:"),
+                outputSettings(),
                 dbc.Button("Run HEAT", id="runHEAT", n_clicks=0, style={'margin':'0 10px 10px 0'}),
                 html.Div(id="hiddenDivRun")
                 ],
@@ -2469,6 +2471,29 @@ def runTabTraces():
 
             ],
             className="PCbox",
+            )
+
+def outputSettings():
+    return html.Div(
+            id="outputSettings",
+            children=[
+                dbc.Card(
+                    [dbc.CardBody(
+                        dbc.Checklist(
+                        options=[
+                            {'label': 'VTP Point Cloud / Glyphs ', 'value': 'vtpPC'},
+                            {'label': 'VTP Mesh File ', 'value': 'vtpMesh'},
+                            {'label': 'CSV File ', 'value': 'csv'},
+                        ],
+                        value=['csv', 'vtpMesh', 'vtpPC'],
+                        id='checklistOutput',
+                        switch=True,
+                        ),
+                    )],
+                    className="card100",
+                )
+            ],
+                className="PCbox",
             )
 
 #=== magnetic field line traces
@@ -2739,11 +2764,13 @@ def gyroTraceTable(filename, dataStore, uploadContents,
                State('gyroTraceTable','data'),
                State('timeSlider','value'),
                State('inputsTable', 'data'),
+               State('checklistOutput', 'value'),
                ])
 def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
             BtraceTableData,
             xOFtrace,yOFtrace,zOFtrace,
-            gyroTraceTableData, t, inputData):
+            gyroTraceTableData, t, inputData,
+            outputList):
     if n_clicks == 0:
         raise PreventUpdate
 
@@ -2754,6 +2781,9 @@ def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
     #gyro orbit trace
     if 'gyrotrace' in gyrotrace:
         gui.gyroTraceMultiple(gyroTraceTableData, t)
+
+    #set up output file stream
+    gui.getIOInputs(outputList)
 
     #run HEAT
     gui.runHEAT(runList)
