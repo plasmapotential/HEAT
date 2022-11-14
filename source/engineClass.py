@@ -2362,6 +2362,7 @@ class engineObj():
         norm = np.array([])
         bField = np.array([])
 
+        mesh = self.CAD.createEmptyMesh()
         centers = np.array([])
         Npoints = 0
         for PFC in self.PFCs:
@@ -2375,7 +2376,6 @@ class engineObj():
                 print("Skipping to next PFC...")
                 continue
 
-            mesh = self.CAD.createEmptyMesh()
             mesh.addMesh(PFC.mesh)
 
             if 'hfOpt' in runList:
