@@ -9,7 +9,7 @@ version: "3"
 
 services:
   HEAT:
-    image: "plasmapotential/heat:v3.0"
+    image: "plasmapotential/heat:v3.0.1"
     ports:
       - "8050:8050"
     volumes:

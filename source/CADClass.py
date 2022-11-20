@@ -140,7 +140,7 @@ class CAD:
         self.ROIctrs = ['None' for i in range(len(self.ROI))]
         self.ROInorms = ['None' for i in range(len(self.ROI))]
         res = timestepMap['resolution'].values
-        self.ROIresolutions = list(res)
+        self.ROIresolutions = [x.strip() for x in res]
         return
 
     def getGyroSources(self, gyroSources):
@@ -198,7 +198,10 @@ class CAD:
         """
         for idx,partnum in enumerate(self.ROI):
             if resolution == None:
-                resolution = float(self.ROIresolutions[idx])
+                if type(self.ROIresolutions[idx]) == str:
+                    resolution = self.ROIresolutions[idx]
+                else:
+                    resolution = float(self.ROIresolutions[idx])
 
             #standard meshing algorithm
             if type(resolution) == str:
@@ -278,7 +281,10 @@ class CAD:
                 if part == self.CADparts[i].Label:
                     count += 1
                     self.ROIparts[idx] = self.CADparts[i]
-                    self.ROImeshes[idx] = self.part2mesh(self.ROIparts[idx], self.ROIresolutions[idx])[0]
+                    if type(self.ROIresolutions[idx]) == str:
+                        self.ROImeshes[idx] = self.part2meshStandard(self.ROIparts[idx])[0]
+                    else:
+                        self.ROImeshes[idx] = self.part2mesh(self.ROIparts[idx], self.ROIresolutions[idx])[0]
 
             if count == 0:
                 print("Part "+part+" not found in CAD.  Cannot Mesh!")
