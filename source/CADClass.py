@@ -140,7 +140,10 @@ class CAD:
         self.ROIctrs = ['None' for i in range(len(self.ROI))]
         self.ROInorms = ['None' for i in range(len(self.ROI))]
         res = timestepMap['resolution'].values
-        self.ROIresolutions = [x.strip() for x in res]
+        if type(res[0]) == str:
+            self.ROIresolutions = [x.strip() for x in res]
+        else:
+            self.ROIresolutions = res
         return
 
     def getGyroSources(self, gyroSources):
