@@ -833,7 +833,7 @@ def loadMHD(n_clicks,shot,tmin,tmax,traceLength,dpinit,gFileList,gFileData,plasm
     MHDdata = {
         'Shot Number':shot,
         'Minimum Timestep [ms]':tmin,
-        'Maximum Timesteo [ms]':tmax,
+        'Maximum Timestep [ms]':tmax,
         'Trace Distance [degrees]':traceLength,
         'Toroidal Step Size [degrees]':dpinit,
         '3D Plasma? [0=False]':plasma3Dmask,

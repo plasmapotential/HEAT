@@ -2081,12 +2081,12 @@ class engineObj():
                 self.IO.writePointCloudCSV(PFC.centers,PFC.qGyro+PFC.qDiv,path,label,PFC.tag,prefix)
                 self.IO.writePointCloudCSV(PFC.centers,PFC.gyroShadowMask,path,'shadowMask',PFC.tag,'shadowMaskGyro')
             if self.IO.vtpPCMask == True:
-                self.IO.writePointCloudVTP(PFC.centers,PFC.qGyro,label,prefix,path,tag)
-                self.IO.writePointCloudVTP(PFC.centers,qAll,label,'HF_allSources',path,tag)
+                self.IO.writePointCloudVTP(PFC.centers,PFC.qGyro,label,prefix,path,PFC.tag)
+                self.IO.writePointCloudVTP(PFC.centers,qAll,label,'HF_allSources',path,PFC.tag)
                 self.IO.writePointCloudVTP(PFC.centers,PFC.gyroShadowMask,'shadowMask','shadowMaskGyro',path,PFC.tag)
             if self.IO.vtpMeshMask == True:
-                self.IO.writeMeshVTP(PFC.mesh, PFC.qGyro, label, prefix, path, tag)
-                self.IO.writeMeshVTP(PFC.mesh, qAll, label, 'HF_allSources', path, tag)
+                self.IO.writeMeshVTP(PFC.mesh, PFC.qGyro, label, prefix, path, PFC.tag)
+                self.IO.writeMeshVTP(PFC.mesh, qAll, label, 'HF_allSources', path, PFC.tag)
                 self.IO.writeMeshVTP(PFC.mesh, PFC.gyroShadowMask, 'shadowMask','shadowMaskGyro', path, PFC.tag)
 
         return
