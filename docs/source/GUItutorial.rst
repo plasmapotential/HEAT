@@ -16,8 +16,34 @@ the test case:
     .. raw:: html
 
         <div style="position: relative; padding-bottom: 2%; height: 0; overflow: hidden; max-width: 100%; height: auto;">
-            <iframe width="560" height="315" src="https://www.youtube.com/embed/7xDlGlWEy8g" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+            <iframe width="560" height="315" src="https://www.youtube.com/embed/8LE5inFuUhM" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
         </div>
+
+Running a gyro-orbit heat flux simulation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The following video guides you through running the test case for gyro-orbit power:
+
+
+    .. raw:: html
+
+        <div style="position: relative; padding-bottom: 2%; height: 0; overflow: hidden; max-width: 100%; height: auto;">
+            <iframe width="560" height="315" src="https://www.youtube.com/embed/Gjd7A2I3ogA" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+        </div>
+
+
+Running a radiated power heat flux simulation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The following video guides you through running the test case for radiated power:
+
+
+    .. raw:: html
+
+        <div style="position: relative; padding-bottom: 2%; height: 0; overflow: hidden; max-width: 100%; height: auto;">
+            <iframe width="560" height="315" src="https://www.youtube.com/embed/RZy3gl9p_MQ" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+        </div>
+
 
 
 Running a field line trace
@@ -59,15 +85,15 @@ are:
        user cannot assign a random IP address to HEAT.
     3) The port must allow TCP/IP traffic.
 
-To do this, include the IP address and desired port number as
-switches when executing the HEAT appImage command in a terminal::
+To do this, run HEAT in terminal mode and include include the IP address and
+desired port number as switches when executing the HEAT command in a terminal::
 
-    ./HEAT_AppImage-v1.2-beta-x86_64.AppImage -a <address> -p <port>
+    python3 launchHEAT.py --m t --f <batchFile> --a <IPaddress> --p <port#>
 
 The -a switch precedes the intended IP address and the -p switch precedes the
 port number.  For example, to run HEAT at 192.168.0.100 on port 7500, the following command would
 be used::
-    ./HEAT_AppImage-v1.2-beta-x86_64.AppImage -a 192.168.0.100 -p 7500
+    python3 launchHEAT.py --m t --f <batchFile> --a 192.168.0.100 --p 7500
 
 Then, on the client machine, HEAT can be accessed by opening a web browser and
 navigating to 192.168.0.100:7500
