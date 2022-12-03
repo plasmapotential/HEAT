@@ -34,3 +34,14 @@ for obj in sel:
 
 
 print(line)
+
+
+#hide objects by color.  Before running, select all objects to be included
+#in GUI.  define the color first
+color = (0.800000011920929, 1.0, 0.6000000238418579, 0.0)
+sel = FreeCADGui.Selection.getSelection()
+for obj in sel:
+   if obj.ViewObject.ShapeColor == color:
+      obj.ViewObject.Visibility = False
+      #to delete, uncomment this line:
+      #FreeCAD.ActiveDocument.removeObject(obj.Name)

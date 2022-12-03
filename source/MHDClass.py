@@ -14,6 +14,7 @@ import os
 import shutil
 from scipy.interpolate import RegularGridInterpolator
 from scipy.interpolate import interp1d
+import matplotlib.pyplot as plt
 
 import logging
 log = logging.getLogger(__name__)
@@ -878,7 +879,10 @@ class MHD:
             ts.append(ep.g['time'])
             RmAxisAll.append(ep.g['RmAxis'])
             ZmAxisAll.append(ep.g['ZmAxis'])
-            psiRZAll.append(ep.g['psiRZ'])
+            if ep.g['psiRZ'].shape[0] == ep.g['Xdim']:
+                psiRZAll.append(ep.g['psiRZ'])
+            else:
+                psiRZAll.append(ep.g['psiRZ'].T)
             psiAxisAll.append(ep.g['psiAxis'])
             psiSepAll.append(ep.g['psiSep'])
             Bt0All.append(ep.g['Bt0'])
@@ -888,7 +892,6 @@ class MHD:
             FFprimeAll.append(ep.g['FFprime'])
             PprimeAll.append(ep.g['Pprime'])
             qpsiAll.append(ep.g['qpsi'])
-
 
         R = EPs[0].g['R']
         Z = EPs[0].g['Z']
@@ -930,7 +933,7 @@ class MHD:
         r,z = np.meshgrid(R,Z)
         RmAxis = RmAxisInterp(newTime)
         ZmAxis = ZmAxisInterp(newTime)
-        psiRZ = psiRZInterp((r,z,newTime)).T
+        psiRZ = psiRZInterp((r,z,newTime))
         psiAxis = psiAxisInterp(newTime)
         psiSep = psiSepInterp(newTime)
         Bt0 = Bt0Interp(newTime)
@@ -941,25 +944,43 @@ class MHD:
         Pprime = PprimeInterp((psiN,newTime))
         qpsi = qpsiInterp((psiN,newTime))
 
-        #get new LCFS
-        surface = ep.getBs_FluxSur(1.0)
-        rlcfs = surface['Rs']
-        zlcfs = surface['Zs']
 
-        #with linear interpolation, infrequently RegularGridInterpolator cannot
-        #resolve the points correctly and returns NANs.  This messes up future gFile
-        #reading algorithms (although it shouldnt! come on!).  See RegularGridInterpolator
-        #python webpage for more info
-        #first do R
-        mask = np.ones(len(rlcfs), dtype=bool)
-        mask[np.argwhere(np.isnan(rlcfs))] = False
-        rlcfs = rlcfs[mask]
-        zlcfs = zlcfs[mask]
-        #then do Z
-        mask = np.ones(len(zlcfs), dtype=bool)
-        mask[np.argwhere(np.isnan(zlcfs))] = False
-        rlcfs = rlcfs[mask]
-        zlcfs = zlcfs[mask]
+        #get new lcfs
+        levels = np.linspace(psiSep-0.05,psiSep+0.05,15)
+        CS = plt.contourf(R,Z,psiRZ,levels,cmap=plt.cm.cividis)
+        lcfsCS = plt.contour(CS, levels = [psiSep])
+        #assuming plasma is approx. centered in machine here
+        zMin = ZmAxis - 0.25
+        zMax = ZmAxis + 0.25
+        for i in range(len(lcfsCS.allsegs[0])):
+            rlcfs = lcfsCS.allsegs[0][i][:,0]
+            zlcfs = lcfsCS.allsegs[0][i][:,1]
+            #this prevents us from getting locations not at midplane
+            # (ie psiSep locations around coils outside wall)
+            idx = np.where(np.logical_and(zlcfs>zMin,zlcfs<zMax))[0]
+            if len(idx)>0: #found it
+                break
+
+        ##get new LCFS
+        ##legacy method that works, but depends on ep (set in loop above)
+        #surface = ep.getBs_FluxSur(1.0)
+        #rlcfs = surface['Rs']
+        #zlcfs = surface['Zs']
+        ##with linear interpolation, infrequently RegularGridInterpolator cannot
+        ##resolve the points correctly and returns NANs.  This messes up future gFile
+        ##reading algorithms (although it shouldnt! come on!).  See RegularGridInterpolator
+        ##python webpage for more info
+        ##first do R
+        #mask = np.ones(len(rlcfs), dtype=bool)
+        #mask[np.argwhere(np.isnan(rlcfs))] = False
+        #rlcfs = rlcfs[mask]
+        #zlcfs = zlcfs[mask]
+        ##then do Z
+        #mask = np.ones(len(zlcfs), dtype=bool)
+        #mask[np.argwhere(np.isnan(zlcfs))] = False
+        #rlcfs = rlcfs[mask]
+        #zlcfs = zlcfs[mask]
+        #lcfsAll.append()
 
         #make new dictionary with all this stuff
         newEP = lambda: None #empty object
