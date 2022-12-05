@@ -2297,6 +2297,7 @@ def OFinputBoxes():
                             {'label': 'Molybdenum', 'value': 'MOLY'},
                             {'label': 'Tungsten', 'value': 'TUNG'},
                             {'label': 'Tungsten (SPARC)', 'value': 'TUNG_SPARC'},
+                            {'label': 'User Defined', 'value': 'USER'},
                         ],
                         value='SGL'
                         ),

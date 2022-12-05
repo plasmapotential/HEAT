@@ -3062,8 +3062,10 @@ class engineObj():
                 matSrc = self.OF.materialDir + '/TUNG/'
             elif self.OF.material == "TUNG_SPARC":
                 matSrc = self.OF.materialDir + '/TUNG_SPARC/'
-            else: #SGL6510
+            elif self.OF.material == "SGL": 
                 matSrc = self.OF.materialDir + '/SGLR6510/'
+            else: #SGL6510
+                matSrc = self.OF.materialDir + '/USER/'
             try:
                 shutil.copyfile(matSrc+'DT', matDst+'DT')
                 shutil.copyfile(matSrc+'thermCond', matDst+'thermCond')

@@ -104,16 +104,24 @@ class tools:
         import heatfluxClass
         import openFOAMclass
         import gyroClass
+        import radClass
+        import ioClass
+
         MHD = MHDClass.MHD(rootDir, dataPath)
         CAD = CADClass.CAD(rootDir, dataPath)
         HF = heatfluxClass.heatFlux(rootDir, dataPath)
         OF = openFOAMclass.OpenFOAM(rootDir, dataPath)
         GYRO = gyroClass.GYRO(rootDir, dataPath)
+        RAD = radClass.RAD(rootDir, dataPath)
+        IO = ioClass.IO_HEAT()
+
         MHD.allowed_class_vars()
         CAD.allowed_class_vars()
         HF.allowed_class_vars()
         OF.allowed_class_vars()
         GYRO.allowed_class_vars()
+        RAD.allowed_class_vars()
+        IO.allowed_class_vars()
 
         if path[-1] == '/':
             file = path + 'HEATinput.csv'
@@ -122,6 +130,17 @@ class tools:
         with open(file, 'w') as f:
             f.write("# Input file for HEAT\n")
             f.write("# Format is: Variable, Value\n")
+            f.write("#=============================================================")
+            f.write("#                IO Variables")
+            f.write("#=============================================================")
+            for var in IO.allowed_vars:
+                if var in data:
+                    if (data[var] == None) or (data[var] == 'None'):
+                        f.write(var + ', None \n')
+                    else:
+                        f.write(var + ', ' + str(data[var]) + '\n')
+                else:
+                    f.write(var + ', None \n')
             f.write("#=============================================================\n")
             f.write("#                CAD Variables\n")
             f.write("#=============================================================\n")
