@@ -1623,8 +1623,8 @@ class engineObj():
                     #PFC.powerDir = np.sign(PFC.bdotn)*np.sign(PFC.bdotphi)*-1.0
                     print('\n')
                     print("*"*20)
-                    print('PFC Name: '+ PFC.name)
-                    log.info('PFC Name: '+ PFC.name)
+                    print('PFC Name: '+ PFC.name+', timestep: {:d}'.format(t))
+                    log.info('PFC Name: '+ PFC.name+', timestep: {:d}'.format(t))
                     if 'hfOpt' in runList:
                         #load HF settings for this timestep if applicable (terminal mode)
                         try:
@@ -3062,7 +3062,7 @@ class engineObj():
                 matSrc = self.OF.materialDir + '/TUNG/'
             elif self.OF.material == "TUNG_SPARC":
                 matSrc = self.OF.materialDir + '/TUNG_SPARC/'
-            elif self.OF.material == "SGL": 
+            elif self.OF.material == "SGL":
                 matSrc = self.OF.materialDir + '/SGLR6510/'
             else: #SGL6510
                 matSrc = self.OF.materialDir + '/USER/'
