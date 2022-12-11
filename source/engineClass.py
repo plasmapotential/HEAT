@@ -907,7 +907,7 @@ class engineObj():
                     fracUI,fracUO,fracLI,fracLO,
                     lqCNmode,lqCFmode,lqPNmode,lqPFmode,SMode,
                     qBG,Pinj,coreRadFrac,fG,
-                    qFilePath,qFileTag):
+                    qFilePath,qFileTag,tIdx=0):
         """
         get heat flux inputs from gui or input file
         """
@@ -968,7 +968,7 @@ class engineObj():
             log.info("Lower Outer Div Power Fraction: {:f}".format(self.HF.fracLO))
 
             #get regression parameters from MHD EQ
-            self.HF.getRegressionParams(self.MHD.ep[0])
+            self.HF.getRegressionParams(self.MHD.ep[tIdx])
 
             if hasattr(self.MHD, 'ep'):
                 self.HF.HFdataDict = self.HF.getHFtableData(self.MHD.ep[0])
@@ -1042,7 +1042,7 @@ class engineObj():
             log.info("qFileTag = "+qFileTag)
         return
 
-    def loadHFParams(self, infile=None):
+    def loadHFParams(self, infile=None, tIdx=0):
         """
         function for loading HF parameters on the fly (ie in the time loop)
         """
@@ -1075,7 +1075,8 @@ class engineObj():
                          self.HF.coreRadFrac,
                          self.HF.fG,
                          self.HF.qFilePath,
-                         self.HF.qFileTag)
+                         self.HF.qFileTag,
+                         tIdx)
         return
 
 
@@ -1628,7 +1629,7 @@ class engineObj():
                     if 'hfOpt' in runList:
                         #load HF settings for this timestep if applicable (terminal mode)
                         try:
-                            self.loadHFParams(infile=self.inputFileList[tIdx])
+                            self.loadHFParams(infile=self.inputFileList[tIdx], tIdx=tIdx)
                         except Exception as e:
                             print("Could not load HF parameters.  Expected for GUI.  Check error message:")
                             print(e)

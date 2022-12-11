@@ -413,6 +413,8 @@ class heatFlux:
             q0 = self.findScalingCoeffsMultiExp(PFC, lqCN, lqCF, lqPN, lqPF)
         else:
             q0 = self.findScalingCoeffsLimiter(PFC, lqCN, lqCF)
+        print("q0 = {:f} MW/m^2".format(q0))
+        log.info("q0 = {:f} MW/m^2".format(q0))
 
         s_hat = psiN - PFC.psiMinLCFS
         #find locations in Private vs Common flux regions
@@ -420,6 +422,8 @@ class heatFlux:
         useC = np.where(s_hat >= 0.0)[0]
         print('{:d} points in private flux region'.format(len(useP)) )
         print('{:d} points in common flux region'.format(len(useC)) )
+        log.info('{:d} points in private flux region'.format(len(useP)) )
+        log.info('{:d} points in common flux region'.format(len(useC)) )
 
         q = np.zeros(len(psiN))
         #===Brunner Profile as a function of psi
@@ -499,8 +503,12 @@ class heatFlux:
         if len(useP)>0:
             qPN_hat = np.exp( s_hat[useP] / lqPN_hat[useP])
             qPF_hat = np.exp( s_hat[useP] / lqPF_hat[useP])
-            intPN = simps(qPN_hat / B_omp[useP], psi[useP])
-            intPF = simps(qPF_hat / B_omp[useP], psi[useP])
+            #reinke method
+            #intPN = simps(qPN_hat / B_omp[useP], psi[useP])
+            #intPF = simps(qPF_hat / B_omp[useP], psi[useP])
+            #menard method
+            intPN = simps(qPN_hat, psi[useP])
+            intPF = simps(qPF_hat, psi[useP])
         else:
             qPN_hat = 0.0
             qPF_hat = 0.0
@@ -510,16 +518,28 @@ class heatFlux:
         if len(useC)>0:
             qCN_hat = np.exp(-s_hat[useC] / lqCN_hat[useC])
             qCF_hat = np.exp(-s_hat[useC] / lqCF_hat[useC])
-            intCN = simps(qCN_hat / B_omp[useC], psi[useC])
-            intCF = simps(qCF_hat / B_omp[useC], psi[useC])
+            #reinke method
+            #intCN = simps(qCN_hat / B_omp[useC], psi[useC])
+            #intCF = simps(qCF_hat / B_omp[useC], psi[useC])
+            #menard method
+            intCN = simps(qCN_hat, psi[useC])
+            intCF = simps(qCF_hat, psi[useC])
         else:
             qCN_hat = 0.0
             qCF_hat = 0.0
             intCN = 0.0
             intCF = 0.0
 
-        q0 = (self.Psol/(2*np.pi)) / (intCN*self.fracCN + intCF*self.fracCF +
+        P0 = 2*np.pi * (intCN*self.fracCN + intCF*self.fracCF +
                                       intPN*self.fracPN + intPF*self.fracPF)
+        #account for nonphysical power
+        if P0 < 0: P0 = -P0
+        #Scale to input power
+        q0 = self.Psol/P0
+
+        #old method left for reference (same math)
+        #q0 = (self.Psol/(2*np.pi)) / (intCN*self.fracCN + intCF*self.fracCF +
+        #                              intPN*self.fracPN + intPF*self.fracPF)
 
         return q0
 
@@ -580,13 +600,23 @@ class heatFlux:
         #integral in flux space
         qCN_hat = np.exp(-s_hat / lqCN_hat)
         qCF_hat = np.exp(-s_hat / lqCF_hat)
+
         #note: simps integration will fail if x variable (psi) is not monotonic
-        intCN = simps(qCN_hat / B_omp, psi)
-        intCF = simps(qCF_hat / B_omp, psi)
+        #reinke method
+        #intCN = simps(qCN_hat / B_omp, psi)
+        #intCF = simps(qCF_hat / B_omp, psi)
+        #menard method
+        intCN = simps(qCN_hat, psi)
+        intCF = simps(qCF_hat, psi)
 
-        q0 = (self.Psol/(2*np.pi)) / (intCN*self.fracCN + intCF*self.fracCF)
+        P0 = 2*np.pi * (intCN*self.fracCN + intCF*self.fracCF)
+        #account for nonphysical power
+        if P0 < 0: P0 = -P0
+        #Scale to input power
+        q0 = self.Psol/P0
 
-        print(q0)
+        #old method left for reference
+        #q0 = (self.Psol/(2*np.pi)) / (intCN*self.fracCN + intCF*self.fracCF)
 
         return q0
 
