@@ -3542,13 +3542,8 @@ class engineObj():
         return
 
 
-#==============================================================================
-#                LEGACY FUNCTIONS LEFT FOR REFERENCE (DO NOT WORK!)
-#==============================================================================
     def setupMeshPerturb(self, meshPerts, pertOpts, xT=None, yT=None, zT=None):
         """
-        Legacy function left for reference
-
         moves the mesh based upon user defined translations.
         """
         print("Setting up mesh perturbations")

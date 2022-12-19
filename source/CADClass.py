@@ -1200,3 +1200,9 @@ class CAD:
             contour = np.vstack([contour,contour[0,:]])
             contours.append(contour)
         return contours
+
+    def translateMesh(self, mesh):
+        """
+        translates a mesh by xT,yT,zT
+        """
+        return mesh
