@@ -2364,6 +2364,9 @@ class engineObj():
         bField = np.array([])
 
         mesh = self.CAD.createEmptyMesh()
+        #update mesh placement to reflect global translations
+        mesh = self.CAD.globalMeshTranslation(mesh)
+
         centers = np.array([])
         Npoints = 0
         for PFC in self.PFCs:
@@ -3537,70 +3540,4 @@ class engineObj():
                     p = p.replace("\u03bb","lq")
                 v = line['Value']
                 f.write("{}:\t{}\n".format(p,v))
-
-
         return
-
-
-    def setupMeshPerturb(self, meshPerts, pertOpts, xT=None, yT=None, zT=None):
-        """
-        moves the mesh based upon user defined translations.
-        """
-        print("Setting up mesh perturbations")
-        log.info("Setting up mesh perturbations")
-        if pertOpts is not None:
-            tools.pertOpts = pertOpts
-        else:
-            tools.pertOpts = None
-
-        if None in [xT, yT, zT]:
-            tools.meshPerturb = False
-            tools.xT = None
-            tools.yT = None
-            tools.zT = None
-        else:
-            tools.meshPerturb = True
-            tools.xT = float(xT)
-            tools.yT = float(yT)
-            tools.zT = float(zT)
-
-        if len(meshPerts) == 0:
-            tools.meshPerturb = False
-
-        for PFC in self.PFCs:
-            PFC.meshPerturb = tools.meshPerturb
-            PFC.xT = tools.xT
-            PFC.yT = tools.yT
-            PFC.zT = tools.zT
-            PFC.pertOpts = pertOpts
-
-        return
-
-    def meshPerturbPFC(self, mesh):
-        """
-        legacy function left for reference
-
-        moves mesh vertex points, then returns new normals and centers for
-        the moved geometry
-        """
-        points = []
-        norms = []
-        for face in mesh.Facets:
-            points.append(face.Points)
-            norms.append(face.Normal)
-        points = np.asarray(points)/1000.0 #scale to m
-        norms = np.asarray(norms)
-
-        #move the points and recalculate normals
-        #vertexes
-        shp = points.shape
-        collapsed = points.reshape(shp[0]*shp[1],shp[2])
-        points = tools.meshPerturbation(collapsed).reshape(shp[0],shp[1],shp[2])
-        #normals
-        distNorms = tools.faceNormals(points)
-        norms = tools.checkSignOfNorm(distNorms, norms)
-
-        #get distored centroids
-        centers = tools.getTargetCenters(points)
-
-        return centers, norms
