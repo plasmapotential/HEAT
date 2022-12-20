@@ -95,28 +95,18 @@ class CAD:
         Used for error checking input files and for initialization
 
         Here is a list of variables with description:
-        testvar         dummy for testing
-        STPfile         STEP file location (ISO 10303-21)
-        STLpath         location to save STLs
-        rootDir         Root of this HEAT run
-        ROIGridRes      max length of mesh triangle edge in [mm] on ROI
+        xT              global translation in x [mm]
+        yT              global translation in x [mm]
+        zT              global translation in x [mm]
         gridRes         max length of mesh triangle edge in [mm] not in ROI
-        FreeCADPath     path to freecad .so files on local machine
-        permute_mask    boolean indicating if CAD file had z as 'upward' direction
-                        NSTXU engineers have y as vertical coordinate for some reason
-        unitConvert     Scalar that the input vectors from STL/STP can be multiplied
-                        with to get units in meters.  If input is in inches, then
-                        unitConvert = 0.0254, if input is in meters, then
-                        unitConvert = 1.0
         """
 
 
         self.allowed_vars = [
-#                            'ROIGridRes',
+                            'gTx',
+                            'gTy',
+                            'gTz',
                             'gridRes',
-#                            'permute_mask',
-#                            'unitConvert',
-#                            'assembly_mask'
                             ]
         return
 
@@ -222,6 +212,11 @@ class CAD:
                 print("New mesh.  Creating...")
                 self.ROIobjFromPartnum(partnum,idx)
 
+
+        #global mesh translations if requested
+        for i,mesh in enumerate(self.ROImeshes):
+            self.ROImeshes[i] = self.globalMeshTranslation(mesh)
+
         #Now get face centers, normals, areas
         self.ROInorms,self.ROIctrs,self.ROIareas = self.normsCentersAreas(self.ROImeshes)
         return
@@ -246,6 +241,10 @@ class CAD:
             else:
                 print("New mesh.  Creating "+partnum)
                 self.intersectObjFromPartnum(partnum, resolution)
+
+        #global mesh translations if requested
+        for i,mesh in enumerate(self.intersectMeshes):
+            self.intersectMeshes[i] = self.globalMeshTranslation(mesh)
 
         #Now get face centers, normals, areas
         self.intersectNorms,self.intersectCtrs,self.intersectAreas = self.normsCentersAreas(self.intersectMeshes)
@@ -1201,8 +1200,37 @@ class CAD:
             contours.append(contour)
         return contours
 
-    def translateMesh(self, mesh):
+    def globalMeshTranslation(self, mesh):
         """
-        translates a mesh by xT,yT,zT
+        translates a mesh by global xyzT (in [mm]) vector
         """
+        noneList = [None, 'None', 'none', 'NA', 'na']
+        testx = self.gTx not in noneList
+        testy = self.gTy not in noneList
+        testz = self.gTz not in noneList
+
+        if np.logical_or(np.logical_or(testx,testy), testz):
+            if self.gTx != None:
+                xT = float(self.gTx)
+            else:
+                xT = 0.0
+            if self.gTy != None:
+                yT = float(self.gTy)
+            else:
+                yT = 0.0
+            if self.gTz != None:
+                zT = float(self.gTz)
+            else:
+                zT = 0.0
+
+            xyzT = np.array([xT,yT,zT])
+            mesh.Placement.move(FreeCAD.Vector(xyzT))
+
+            print("Global mesh translation:")
+            print('xT = {:f}[mm]'.format(xT))
+            print('yT = {:f}[mm]'.format(yT))
+            print('zT = {:f}[mm]'.format(zT))
+        else:
+            print("No global mesh translations defined.")
+            log.info("No global mesh translations defined.")
         return mesh
