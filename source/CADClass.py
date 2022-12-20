@@ -103,9 +103,9 @@ class CAD:
 
 
         self.allowed_vars = [
-                            'xT',
-                            'yT',
-                            'zT',
+                            'gTx',
+                            'gTy',
+                            'gTz',
                             'gridRes',
                             ]
         return
@@ -1205,14 +1205,24 @@ class CAD:
         translates a mesh by global xyzT (in [mm]) vector
         """
         noneList = [None, 'None', 'none', 'NA', 'na']
-        testx = self.xT not in noneList
-        testy = self.yT not in noneList
-        testz = self.zT not in noneList
+        testx = self.gTx not in noneList
+        testy = self.gTy not in noneList
+        testz = self.gTz not in noneList
 
         if np.logical_or(np.logical_or(testx,testy), testz):
-            xT = float(self.xT)
-            yT = float(self.yT)
-            zT = float(self.zT)
+            if self.gTx != None:
+                xT = float(self.gTx)
+            else:
+                xT = 0.0
+            if self.gTy != None:
+                yT = float(self.gTy)
+            else:
+                yT = 0.0
+            if self.gTz != None:
+                zT = float(self.gTz)
+            else:
+                zT = 0.0
+
             xyzT = np.array([xT,yT,zT])
             mesh.Placement.move(FreeCAD.Vector(xyzT))
 

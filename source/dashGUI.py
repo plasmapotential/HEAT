@@ -866,7 +866,15 @@ def buildCADbox():
             children=[
                 dbc.Label(id="gridResLabel", children="Intersect Resolution [mm]"),
                 dbc.Input(id="gridRes", className="textInput"),
-                dbc.Button("Load Res Settings", id="loadRes", style={'margin':'10px 10px 10px 10px'}),
+
+                dbc.Label("Global Translation in X direction [mm]"),
+                dbc.Input(id="gTx", className="textInput"),
+                dbc.Label("Global Translation in Y direction [mm]"),
+                dbc.Input(id="gTy", className="textInput"),
+                dbc.Label("Global Translation in Z direction [mm]"),
+                dbc.Input(id="gTz", className="textInput"),
+
+                dbc.Button("Load CAD Settings", id="loadRes", style={'margin':'10px 10px 10px 10px'}),
                 html.Div(id="hiddenDivCAD1"),
                 dbc.Label(id="STPdropLabel", children="STP File Direct Upload:"),
                 dcc.Upload(
@@ -893,13 +901,16 @@ def buildCADbox():
                Output('CADDataStorage', 'data')],
               [Input('loadRes', 'n_clicks')],
               [State('gridRes', 'value'),
+               State('gTx', 'value'),
+               State('gTy', 'value'),
+               State('gTz', 'value'),
                State('MachFlag', 'value')])
-def loadRes(n_clicks, gridRes, MachFlag):
+def loadRes(n_clicks, gridRes, gTx, gTy, gTz, MachFlag):
     if n_clicks is None:
         raise PreventUpdate
     if MachFlag is None:
         return [dbc.Label("Select a machine", style={'color':'#fc0313'})]
-    gui.getCADResInputs(gridRes)
+    gui.getCADResInputs(gridRes, gTx, gTy, gTz)
 
     CADdata = {
         'Intersect Max Edge Length [mm]':gridRes

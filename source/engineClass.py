@@ -689,7 +689,7 @@ class engineObj():
         return
 
 
-    def getCADResInputs(self,gridRes=None):
+    def getCADResInputs(self,gridRes=None,gTx=None,gTy=None,gTz=None):
         """
         Loads CAD inputs
         """
@@ -702,6 +702,10 @@ class engineObj():
                 self.CAD.gridRes = gridRes
             else:
                 self.CAD.gridRes = "standard"
+
+        self.CAD.gTx = gTx
+        self.CAD.gTy = gTy
+        self.CAD.gTz = gTz
         return
 
     def getCAD(self,STPfile=None,STPdata=None, ts=None):
