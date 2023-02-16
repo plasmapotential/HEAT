@@ -45,3 +45,14 @@ for obj in sel:
       obj.ViewObject.Visibility = False
       #to delete, uncomment this line:
       #FreeCAD.ActiveDocument.removeObject(obj.Name)
+
+
+
+
+#to move (translate) in direction normal to face.
+#1st, select face for normal and send part to python console via right click in tree view
+#then run (where delta = distance to move)
+N = elt.normalAt(0,0)
+delta = 10.0
+move = delta*N #use negative for direction opposite normal
+obj.Placement.move(move)
