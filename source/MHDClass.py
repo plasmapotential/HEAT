@@ -487,7 +487,7 @@ class MHD:
         use = np.where(PFC.shadowed_mask == 0)[0]
         xyz = PFC.centers[use]
         R,Z,phi = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
-        PFC.psimin = PFC.ep.psiFunc.ev(R,Z)
+        PFC.psimin = PFC.ep.psiFunc.ev(R,Z) #psi_N
         return
 
     def psi2DfromEQandCtrs(self, xyz, ep):

@@ -2604,6 +2604,9 @@ class engineObj():
             src = tPath + 'HF_optical_all.csv'
             dest = movieDir + 'hfOptical_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
+            src = tPath + '/paraview/shadowMask_all_mesh.vtp'
+            dest = movieDir + 'shadowMask_mesh_{:06d}.vtp'.format(t)
+            shutil.copy(src,dest)
         if 'shadowPC' in runList:
             src = tPath + 'shadowMask_all.csv'
             dest = movieDir + 'shadowMask_{:06d}.csv'.format(t)
