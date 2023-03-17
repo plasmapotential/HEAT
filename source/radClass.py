@@ -34,6 +34,14 @@ class RAD:
         self.UID = UID
         return
 
+    def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
+        """
+        sets up pythonic string number formats for shot and timesteps
+        """
+        self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
+        self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
+        return
+
     def allowed_class_vars(self):
         """
         Writes a list of recognized class variables to HEAT object
@@ -129,9 +137,11 @@ class RAD:
         phiMin: minimum angle of phi in degrees
         phiMax: maximum angle of phi in degrees
         """
-        self.phis = np.linspace(phiMin, phiMax, Ntor)
+        self.phis = np.linspace(phiMin, phiMax, Ntor+2)[1:-1]
         self.Nphi = len(self.phis)
         self.deltaPhi = phiMax - phiMin
+        print("Radiated Power Source Angles:")
+        print(self.phis)
         return
 
 

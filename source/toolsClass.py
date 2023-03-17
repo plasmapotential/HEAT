@@ -31,6 +31,14 @@ class tools:
         self.chmod = chmod
         return
 
+    def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
+        """
+        sets up pythonic string number formats for shot and timesteps
+        """
+        self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
+        self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
+        return
+
     def initializeInput(self, obj, infile=None):
         """
         Pulls input data for Command Line Interface (CLI)
@@ -56,6 +64,7 @@ class tools:
         """
         for var in obj.allowed_vars:
             setattr(obj, var, None)
+        return
 
     def read_input_file(self, obj, infile):
         """
@@ -297,26 +306,29 @@ class tools:
             setattr(obj, var, settingsDict[var])
 
 
-    def xyz2cyl(self,x,y,z):
+    def xyz2cyl(self,x,y,z, degrees=False):
         """
         Converts x,y,z coordinates to r,z,phi
+        phi will be returned in degrees if degrees=True
         """
         x = np.asarray(x)
         y = np.asarray(y)
         z = np.asarray(z)
         r = np.sqrt(x**2 + y**2)
         phi = np.arctan2(y,x)
-        #phi = np.radians(phi)
+        if degrees==True:
+            phi = np.degrees(phi)
         return r,z,phi
 
-    def cyl2xyz(self,r,z,phi):
+    def cyl2xyz(self,r,z,phi, degrees=True):
         """
         Converts r,z,phi coordinates to x,y,z
-        phi will be converted to radians
+        phi will be converted to radians if degrees=True
         """
         r = np.asarray(r)
         z = np.asarray(z)
-        phi = np.radians(np.asarray(phi))
+        if degrees == True:
+            phi = np.radians(np.asarray(phi))
         x = r*np.cos(phi)
         y = r*np.sin(phi)
         return x,y,z
@@ -391,14 +403,6 @@ class tools:
         if verbose==True:
             print("PVpython subprocess complete")
             log.info("PVpython subprocess complete")
-        return
-
-    def createVTPoutput(self, file, prefix, points, scalar):
-        """
-        writes a VTP file created from the mesh and colored by scalar data
-        """
-
-
         return
 
     def intersectionTestParallelKdTree(self,i):
@@ -893,9 +897,9 @@ class tools:
         for t in timesteps:
             #Build timestep directory
             if dataPath[-1]!='/':
-                timeDir = dataPath + '/{:06d}/'.format(t)
+                timeDir = dataPath + self.tsFmt.format(t) + '/'
             else:
-                timeDir = dataPath + '{:06d}/'.format(t)
+                timeDir = dataPath + self.tsFmt.format(t) + '/'
 
             #don't overwrite time directories, just PFC directories
             self.makeDir(timeDir, clobberFlag=False, mode=chmod, UID=UID, GID=GID)

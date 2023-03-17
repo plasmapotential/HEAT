@@ -30,14 +30,16 @@ class PFC:
     This class also builds out the directory tree for each simulation
     rootDir is root location of python modules (where dashGUI.py lives)
     dataPath is the location where we write all output to
+    tsAll is all timesteps from the HEAT simulation 
     """
-    def __init__(self, timestepMapRow, rootDir, dataPath, CADintersectList):
+    def __init__(self, timestepMapRow, rootDir, dataPath, CADintersectList, tsAll):
         #Parse PFC input file row data into PFC object
-        self.timeStr = timestepMapRow['timesteps']
         self.name = timestepMapRow['PFCname']
-        self.timeLimits = np.asarray( self.timeStr.split(':') ).astype(int)
-        deltat = self.timeLimits[1]-self.timeLimits[0]
-        self.timesteps = np.linspace(self.timeLimits[0],self.timeLimits[1],deltat+1,dtype=int)
+        self.timeStr = timestepMapRow['timesteps']
+        tLimits = np.asarray( self.timeStr.split(':') ).astype(float)
+        use = np.where(np.logical_and(tsAll>tLimits[0], tsAll<tLimits[1]))
+        self.timesteps = tsAll[use]
+
         #name of divertor this PFC is in (ie upper outer)
         self.DivCode = timestepMapRow['DivCode']
         #names of tiles that will be checked for magnetic field line shadowing
@@ -69,6 +71,14 @@ class PFC:
         self.phiFilterSwitch = True
         #filter by poloidal flux (psi)
         self.psiFilterSwitch = True
+        return
+
+    def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
+        """
+        sets up pythonic string number formats for shot and timesteps
+        """
+        self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
+        self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
         return
 
     def allowed_class_vars(self):
@@ -164,14 +174,9 @@ class PFC:
         self.t = MHD.timesteps[self.tIndexes[0]]
         self.controlfile = '_lamCTL.dat'
         self.controlfileStruct = '_struct_CTL.dat'
-        if MHD.shotPath[-1]=='/':
-            self.controlfilePath = MHD.shotPath + '{:06d}/'.format(self.t) + self.name + '/'
-            self.gridfile = MHD.shotPath + '{:06d}/'.format(self.t) + self.name + '/grid.dat'
-            self.gridfileStruct = MHD.shotPath + '{:06d}/'.format(self.t) + self.name + '/struct_grid.dat'
-        else:
-            self.controlfilePath = MHD.shotPath + '/' + '{:06d}/'.format(self.t) + self.name + '/'
-            self.gridfile = MHD.shotPath + '/' + '{:06d}/'.format(self.t) + self.name + '/grid.dat'
-            self.gridfileStruct = MHD.shotPath + '/' + '{:06d}/'.format(self.t) + self.name + '/struct_grid.dat'
+        self.controlfilePath = MHD.shotPath + self.tsFmt.format(t) + '/' + self.name + '/'
+        self.gridfile = self.controlfilePath + 'grid.dat'
+        self.gridfileStruct = self.controlfilePath + 'struct_grid.dat'
         self.outputFile = self.controlfilePath + 'lam.dat'
         self.structOutfile = self.controlfilePath + 'struct.dat'
 

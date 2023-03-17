@@ -17,7 +17,8 @@ from dash_bootstrap_templates import template_from_url
 
 
 def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
-                    logFile=False, bg = None, xRange=None, yRange=None):
+                    logFile=False, bg = None, xRange=None, yRange=None,
+                    tsFmt="{:.6f}", shotFmt="{:06d}"):
     """
     returns a DASH object for use directly in dash app
     """
@@ -164,7 +165,7 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
 
 
     fig.update_layout(
-        title="{:06d}@{:05d}ms".format(shot,time),
+        title=shotFmt.format(shot)+"@"+tsFmt.format(time)+"s",
         xaxis_title="R [m]",
         yaxis_title="Z [m]",
         autosize=True,

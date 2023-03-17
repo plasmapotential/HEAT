@@ -53,22 +53,31 @@ print("UID: {:d}".format(UID))
 print("GID: {:d}".format(GID))
 
 #Import HEAT engine class
-from engineClass import engineObj
+import engineClass
 
 class TUI():
     def __init__(self):
         """
         intialize terminal user interface (TUI) object
         """
-        self.ENG = engineObj(logFile, rootDir, dataPath, OFbashrc, chmod, UID, GID)
+        self.ENG = engineClass.engineObj(logFile, rootDir, dataPath, OFbashrc, chmod, UID, GID)
         self.ENG.NCPUs = multiprocessing.cpu_count() - 2 #reserve 2 cores for overhead
         self.chmod = chmod
         self.GID = GID
         self.UID = UID
         #if data directory doesn't exist, create it
         tools.makeDir(dataPath, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
+        #set up number formats for file IO and printing
+        self.setupNumberFormats(self.ENG.tsSigFigs, self.ENG.shotSigFigs)
         return
 
+    def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
+        """
+        sets up pythonic string number formats for shot and timesteps
+        """
+        self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
+        self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
+        return
 
     def simulationSchedule(self, batchFile):
         """
@@ -129,12 +138,19 @@ class TUI():
                 print("# Timesteps for this machine + tag combo: {:d}".format(N_thisTag))
 
                 #get file paths associated with this tag from batchFile
-                gFileNames = tagData['GEQDSK'].values
-                gFilePaths = machInDir + gFileNames
-                CADfiles = machInDir + tagData['CAD'].values
-                PFCfiles = machInDir + tagData['PFC'].values
-                inputFiles = machInDir + tagData['Input'].values
-                runList = [x.split(":") for x in tagData['Output'].values]
+                try:
+                    shots = tagData['Shot'].values #only 1 shot per tag allowed
+                    timesteps = tagData['TimeStep'].values
+                    gFileNames = tagData['GEQDSK'].values
+                    gFilePaths = machInDir + gFileNames
+                    CADfiles = machInDir + tagData['CAD'].values
+                    PFCfiles = machInDir + tagData['PFC'].values
+                    inputFiles = machInDir + tagData['Input'].values
+                    runList = [x.split(":") for x in tagData['Output'].values]
+                except Exception as e:
+                    print("\n\nSomething is wrong with your batchFile!  Error Trace:\n")
+                    print(e.message)
+                    sys.exit()
 
                 #refresh all subclasses
                 self.ENG.refreshSubclasses()
@@ -145,8 +161,14 @@ class TUI():
                 #build the HEAT tree for this tag
                 self.prepareDirectories(mach,tag)
 
+                #load filament data 
+                self.loadFilaments(runList)
+
+                #build timesteps
+                self.loadTimeSteps(timesteps, shots[0], tag, self.ENG.FIL.tsFil)
+
                 #read GEQDSK and load into MHD object
-                self.loadMHD(mach, machInDir, gFileNames)
+                self.loadMHD(machInDir, gFileNames, timesteps)
 
                 #read CAD and initialize CAD objects
                 #note: current version of HEAT only supports single CAD file
@@ -205,9 +227,9 @@ class TUI():
         build HEAT tree for mach + tag combo
         """
         if dataPath[-1]!='/':
-            self.shotPath = dataPath + '/' + mach +"_{:06d}".format(self.ENG.MHD.shot)+"_"+tag+"/"
+            self.shotPath = dataPath + '/' + mach +"_"+self.shotFmt.format(self.ENG.MHD.shot)+"_"+tag+"/"
         else:
-            self.shotPath = dataPath + mach +"_{:06d}".format(self.ENG.MHD.shot)+"_"+tag+"/"
+            self.shotPath = dataPath + mach +"_"+self.shotFmt.format(self.ENG.MHD.shot)+"_"+tag+"/"
 
         self.ENG.MHD.shotPath = self.shotPath
 
@@ -216,8 +238,29 @@ class TUI():
 
         return
 
+    def loadFilaments(self, runList):
+        """
+        loads a filament file and build timestep array for filament tracing
+        """
+        if 'hfFil' in runList:
+            self.ENG.FIL.readFilamentFile()
+            self.ENG.FIL.setupFilamentTime()
+        else:
+            self.ENG.FIL.tsFil = None
+        return
 
-    def loadMHD(self, mach, tmpDir, gFiles):
+    def loadTimeSteps(self, ts, shot, tag, tsFil=None):
+        """
+        loads timesteps data from batchFile and filament file
+        """
+        if tsFil is not None:
+            ts = np.append(ts, tsFil)
+
+        self.ENG.setupTime(ts, shot, tag)
+        return
+
+
+    def loadMHD(self, tmpDir, gFiles, ts):
         """
         loads GEQDSK file into HEAT tree and MHD object
         """
@@ -228,7 +271,7 @@ class TUI():
             #initialize MHD
             self.ENG.MHD.tmpDir = tmpDir
             self.ENG.MHD.tree = 'EFIT02'
-            self.ENG.MHD.getGEQDSK(machine=mach,gFileList=gFiles)
+            self.ENG.MHD.getGEQDSK(ts, gFiles)
             self.ENG.MHD.makeEFITobjects()
             self.ENG.MHD.psiSepLimiter = None
             self.ENG.MHD.setTypes()

@@ -37,6 +37,14 @@ class heatFlux:
         self.UID = UID
         return
 
+    def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
+        """
+        sets up pythonic string number formats for shot and timesteps
+        """
+        self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
+        self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
+        return
+
     def allowed_class_vars(self):
         """
         Writes a list of recognized class variables to HEAT object
@@ -1023,7 +1031,7 @@ class heatFlux:
         else:
             base = self.qFilePath
 
-        f = base + '{:06d}/'.format(t) + PFC.name + '/' + self.qFileTag
+        f = base + self.tsFmt.format(t) + '/' + PFC.name + '/' + self.qFileTag
         try:
             df = pd.read_csv(f, names=['X','Y','Z','HF'], skiprows=[0])
             if len(df['HF'].values) != len(PFC.centers):

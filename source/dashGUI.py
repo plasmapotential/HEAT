@@ -475,8 +475,6 @@ def inputDragDrop(file, contents, MachFlag):
                Output('downloadInputs', 'data')],
               [Input('saveInputs','n_clicks')],
               [State('shot', 'value'),
-               State('tmin', 'value'),
-               State('tmax', 'value'),
                State('traceLength', 'value'),
                State('dpinit', 'value'),
                State('gridRes', 'value'),
@@ -538,8 +536,6 @@ def inputDragDrop(file, contents, MachFlag):
                )
 def saveGUIinputs(  n_clicks,
                     shot,
-                    tmin,
-                    tmax,
                     traceLength,
                     dpinit,
                     gridRes,
@@ -612,8 +608,6 @@ def saveGUIinputs(  n_clicks,
     data['gridRes'] = gridRes
     #mhd variables
     data['shot'] = shot
-    data['tmin'] = tmin
-    data['tmax'] = tmax
     data['traceLength'] = traceLength
     data['dpinit'] = dpinit
     data['dataPath'] = dataLoc
@@ -702,10 +696,6 @@ def buildMHDbox():
             children=[
                 dbc.Label(id="shotLabel", children="Shot Number  "),
                 dbc.Input(id="shot"),
-                dbc.Label(id="tMinLabel", children="Minimum Timestep [ms]"),
-                dbc.Input(id="tmin"),
-                dbc.Label(id="tMaxLabel", children="Maximum Timestep [ms]"),
-                dbc.Input(id="tmax"),
                 dbc.Label("Trace Distance [degrees]"),
                 dbc.Input(id="traceLength"),
                 dbc.Label("Toroidal Step Size [degrees]"),
@@ -756,8 +746,6 @@ def buildMHDbox():
                Output('MHDDataStorage', 'data')],
               [Input('loadMHD', 'n_clicks')],
               [State('shot', 'value'),
-              State('tmin', 'value'),
-              State('tmax', 'value'),
               State('traceLength', 'value'),
               State('dpinit', 'value'),
               State('gfiletable-upload', 'filename'),
@@ -766,7 +754,7 @@ def buildMHDbox():
               State('dataPath', 'value'),
               State('MachFlag', 'value')]
               )
-def loadMHD(n_clicks,shot,tmin,tmax,traceLength,dpinit,gFileList,gFileData,plasma3Dmask,dataPath,MachFlag):
+def loadMHD(n_clicks,shot,traceLength,dpinit,gFileList,gFileData,plasma3Dmask,dataPath,MachFlag):
     """
     Load MHD
     """
@@ -784,8 +772,6 @@ def loadMHD(n_clicks,shot,tmin,tmax,traceLength,dpinit,gFileList,gFileData,plasm
         raise PreventUpdate
 
     if shot is not None: shot = int(shot)
-    if tmin is not None: tmin = int(tmin)
-    if tmax is not None: tmax = int(tmax)
     if traceLength is not None:
         traceLength = float(traceLength)
     if dpinit is not None:
@@ -800,8 +786,6 @@ def loadMHD(n_clicks,shot,tmin,tmax,traceLength,dpinit,gFileList,gFileData,plasm
             gFileData = [gFileData]
 
     gui.getMHDInputs(shot=shot,
-                     tmin=tmin,
-                     tmax=tmax,
                      traceLength=traceLength,
                      dpinit=dpinit,
                      gFileList=gFileList,
@@ -813,7 +797,7 @@ def loadMHD(n_clicks,shot,tmin,tmax,traceLength,dpinit,gFileList,gFileData,plasm
     tminMHD = ts.min()
     tmaxMHD = ts.max()
     if gFileList is None:
-        tAll = np.linspace(int(tmin), int(tmax), (int(tmax)-int(tmin)+1))
+        tAll = np.linspace(int(tminMHD), int(tmaxMHD), (int(tmaxMHD)-int(tminMHD)+1))
         data = [dict([{'filename':'', 'timestep':''}][0])]
     else:
         tAll = ts
@@ -832,8 +816,6 @@ def loadMHD(n_clicks,shot,tmin,tmax,traceLength,dpinit,gFileList,gFileData,plasm
 
     MHDdata = {
         'Shot Number':shot,
-        'Minimum Timestep [ms]':tmin,
-        'Maximum Timestep [ms]':tmax,
         'Trace Distance [degrees]':traceLength,
         'Toroidal Step Size [degrees]':dpinit,
         '3D Plasma? [0=False]':plasma3Dmask,
@@ -2249,14 +2231,14 @@ def OFinputBoxes():
             children=[
             html.Div(
                 children=[
-                    dbc.Label("Start Time [ms]"),
+                    dbc.Label("Start Time [s]"),
                     dbc.Input(id="OFstartTime", className="textInput"),
                 ],
                 className="OFInput",
             ),
             html.Div(
                 children=[
-                    dbc.Label("Stop Time [ms]"),
+                    dbc.Label("Stop Time [s]"),
                     dbc.Input(id="OFstopTime", className="textInput"),
                 ],
                 className="OFInput"
@@ -3801,8 +3783,6 @@ Session storage callbacks and functions
 """
 # Load Default callback and input file drag and drop
 @app.callback([Output('shot', 'value'),
-               Output('tmin', 'value'),
-               Output('tmax', 'value'),
                Output('traceLength', 'value'),
                Output('dpinit', 'value'),
                Output('gridRes', 'value'),
@@ -3909,8 +3889,6 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
 
     print("Updating Session Store")
     return [data.get('shot', ''),
-            data.get('tmin', ''),
-            data.get('tmax', ''),
             data.get('traceLength', ''),
             data.get('dpinit', ''),
             data.get('gridRes', ''),
