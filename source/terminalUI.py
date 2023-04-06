@@ -147,6 +147,7 @@ class TUI():
                     PFCfiles = machInDir + tagData['PFC'].values
                     inputFiles = machInDir + tagData['Input'].values
                     runList = [x.split(":") for x in tagData['Output'].values]
+                    runList = np.unique([x for y in runList for x in y])
                 except Exception as e:
                     print("\n\nSomething is wrong with your batchFile!  Error Trace:\n")
                     print(e.message)
@@ -162,7 +163,7 @@ class TUI():
                 self.prepareDirectories(mach,tag)
 
                 #load filament data 
-                self.loadFilaments(runList)
+                self.loadFilaments(runList, machInDir)
 
                 #build timesteps
                 self.loadTimeSteps(timesteps, shots[0], tag, self.ENG.FIL.tsFil)
@@ -189,7 +190,7 @@ class TUI():
                 #run HEAT
                 #note: current version of HEAT only supports single runList
                 #per tag
-                self.runHEAT(inputFiles, runList[0])
+                self.runHEAT(inputFiles, runList)
 
                 print("Completed all HEAT runs\n")
                 log.info("Completed all HEAT runs\n")
@@ -238,12 +239,15 @@ class TUI():
 
         return
 
-    def loadFilaments(self, runList):
+    def loadFilaments(self, runList, path):
         """
         loads a filament file and build timestep array for filament tracing
+
+        runList is HEAT runlist of unique values
+        path is path to filament file
         """
         if 'hfFil' in runList:
-            self.ENG.FIL.readFilamentFile()
+            self.ENG.FIL.readFilamentFile(path)
             self.ENG.FIL.setupFilamentTime()
         else:
             self.ENG.FIL.tsFil = None
@@ -254,9 +258,12 @@ class TUI():
         loads timesteps data from batchFile and filament file
         """
         if tsFil is not None:
-            ts = np.append(ts, tsFil)
+            for row in tsFil:
+                ts = np.append(ts, row)
 
+        ts = np.unique(np.sort(ts))
         self.ENG.setupTime(ts, shot, tag)
+
         return
 
 

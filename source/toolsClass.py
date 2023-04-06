@@ -1105,3 +1105,29 @@ class tools:
         power flows (-1 is clockwise from above)
         """
         return np.sign(bdotn)*np.sign(Bt0)*-1.0
+
+
+    def physicsConstants(self, obj, ionMassAMU=2.515):
+        """
+        Sets up constants and saves as object vars
+
+        default mass# of deuterium is 2.014*AMU
+        default mass# of tritium is 3.016*AMU
+        default mass# of DT 50/50 is 2.515*AMU
+
+        """
+        #unit conversions
+        obj.kg2eV = 5.609e35 #1kg = 5.609e35 eV/c^2
+        obj.eV2K = 1.160e4 #1ev = 1.160e4 K
+        obj.eV2J = 1.602e-19 #1eV = 1.602e-19 J
+        #constants
+        obj.AMU = 931.494e6 #ev/c^2
+        obj.kB = 8.617e-5 #ev/K
+        obj.e = 1.602e-19 # C
+        obj.c = 299792458 #m/s
+        obj.diamag = -1 #diamagnetism = -1 for ions, 1 for electrons
+
+        obj.mass_eV = ionMassAMU * obj.AMU
+        obj.Z=1 #assuming isotopes of hydrogen here
+
+        return obj

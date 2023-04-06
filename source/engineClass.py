@@ -8,7 +8,6 @@ HEAT Engine
 Connects GUI/TUI to other HEAT classes.  Steps thru time solving for
 HF, T, etc.
 """
-
 import CADClass
 import MHDClass
 import toolsClass
@@ -1618,13 +1617,19 @@ class engineObj():
         print("HEAT RUN INITIALIZED")
         log.info("HEAT RUN INITIALIZED")
         t0 = time.time()
+
         #make sure that something in runList can be run in this function, else return
-        allowedOptions = ['hfOpt', 'pwrDir', 'bdotn', 'B', 'psiN', 'norm', 'hfGyro', 'hfRad']
+        allowedOptions = ['hfOpt', 'pwrDir', 'bdotn', 'B', 'psiN', 'norm', 'hfGyro', 'hfRad', 'hfFil']
         if len([i for i in runList if i in allowedOptions]) < 1:
-            print("No HEAT point cloud option to run")
+            print("No HEAT runList option to run.  Breaking out of engineClass runHEAT loop.")
             return
         else:
             self.runList = runList
+
+        #=========================
+        # ===== Steady State =====    
+        #=========================
+
         #set up variables for power balance calculation
         powerTesselate = np.zeros((len(self.MHD.timesteps)))
         powerTrue = np.zeros((len(self.MHD.timesteps)))
@@ -1730,6 +1735,7 @@ class engineObj():
                         if PFC.DivCode not in divCodes:
                             powerTrue[tIdx] += self.HF.Psol*PFC.powerFrac
                         divCodes.append(PFC.DivCode)
+                          
 
                     if 'hfRad' in runList:
                         #load RAD settings for this timestep if applicable (terminal mode)
@@ -1885,8 +1891,8 @@ class engineObj():
                             print("PFC array sum: {:.6f}".format(totalPowPow))
                             log.info("PFC array sum: {:.6f}".format(totalPowPow))
 
-            print("Completed all heat flux calculations\n")
-            log.info("Completed all heat flux calculations\n")
+            print("Completed all steady state heat flux calculations\n")
+            log.info("Completed all steady state heat flux calculations\n")
 
             #generating allSources heat fluxes
             if ('hfGyro' in runList) or ('hfOpt' in runList) or ('hfRad' in runList):
@@ -1916,7 +1922,7 @@ class engineObj():
                             self.IO.writeMeshVTP(PFC.mesh, q, label, prefix, path, PFC.tag)
 
 
-        # Time Loop: postprocessing
+        # Time Loop: postprocessing for steady state heat loads
         for tIdx,t in enumerate(self.MHD.timesteps):
             #path for this timestep
             tPath = self.MHD.shotPath + self.tsFmt.format(t) + '/'
@@ -1931,6 +1937,94 @@ class engineObj():
         #set tree permissions
         tools.recursivePermissions(self.MHD.shotPath, self.UID, self.GID, self.chmod)
 
+
+
+        #=========================
+        # ===== Transients =======
+        #=========================
+        #transient filament heat flux calculation
+        if 'hfFil' in runList:
+            filDict = self.FIL.filData.to_dict()
+
+            #build filament meshes
+            self.getFilMeshes()
+
+            #loop through each filament
+            for idx,ts in enumerate(self.FIL.tsFil):
+                print('\n')
+                print("-"*80)
+                log.info("-"*80)
+
+                id = filDict['id'][idx]
+                N_src_t = filDict['N_src_t'][idx]
+
+                print("Filament ID: "+id)
+                log.info("Filament ID: "+id)
+                print("-"*80)
+                log.info("-"*80)
+
+                #get the steady state timestep that precedes this transient timestep
+                both = np.intersect1d(ts, self.MHD.timesteps)
+                epIdx = np.where( np.min(both)==self.MHD.timesteps )[0][0]
+                self.FIL.initializeFilamentFromDict(filDict, idx, self.MHD.ep[epIdx])
+
+                #loop through source timesteps for this filament
+                tCount = 0
+                for tIdx,t in enumerate(ts):
+                    print('\n')
+                    print("-"*30)
+                    print("Source Timestep: "+self.tsFmt.format(t))
+                    log.info("\nSource Timestep: "+self.tsFmt.format(t))
+
+                    #set up file directory structure
+                    timeDir = self.MHD.shotPath + self.tsFmt.format(t) + '/'  
+                    self.FIL = self.MHD.setupMAFOTdirectory(timeDir, self.FIL)
+
+                    if tIdx == 0:                       
+                        #trace magnetic field at filament center at t0
+                        Btrace = self.FIL.filamentCtrBtrace(self.MHD, t)
+
+                    #build source for this timestep
+                    if tCount < N_src_t:
+                        self.getFilamentSource(t, id, Btrace)
+
+                    #loop thru ROI PFCs, tracing sources to targets
+                    for PFC in self.PFCs:
+                        if t not in PFC.timesteps:
+                            pass
+                        else:
+                            print("*"*20)
+                            print('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+                            log.info('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+
+                            pfcDir = self.MHD.shotPath + self.tsFmt.format(t) +'/'+PFC.name+'/'
+                            tools.makeDir(pfcDir, clobberFlag=False)
+                    
+                    #trace macroparticles from source at this timestep
+                    if tIdx < self.FIL.N_src_t:
+                        self.FIL.tEQ = ts[0]
+                        self.FIL.traceFilamentParticles(self.MHD)
+                        self.filamentTraceOutput(id,t)
+                    
+                    tCount += 1
+
+
+
+
+            #copy filament sources at this timestep to the paraview movie directory
+            for i,ts in enumerate(self.FIL.tsFil):
+                id = filDict['id'][i]
+                N_src_t = filDict['N_src_t'][i]
+                tCount = 0
+                for t in ts:
+                    if tCount < N_src_t: 
+                        oldPath = self.MHD.shotPath + self.tsFmt.format(t) + '/paraview/'
+                        newPath = self.MHD.shotPath + '/paraview/'
+                        name = 'filamentSource_'+id+'_' + self.tsFmt.format(t)
+                        self.combineFilTimesteps(name, oldPath, newPath)
+                    tCount +=1
+
+
         print("Total Time Elapsed: {:f}".format(time.time() - t0))
         log.info("Total Time Elapsed: {:f}".format(time.time() - t0))
         print("\nCompleted HEAT run\n")
@@ -1939,7 +2033,158 @@ class engineObj():
         #make a sound when complete
 #        os.system('spd-say -t female2 "HEAT run complete"')
 
+        #end of runHEAT
         return
+
+
+    def getFilamentSource(self, t:float, id:str, Btrace:np.ndarray):
+        """
+        generates a filament source object along a flux coordinate grid
+        saves output in csv and vtp point cloud formats
+
+        only creates N_src_t sources
+        """
+        #set up time and equilibrium
+        self.FIL.createSource(t, Btrace)
+        self.filamentSourceOutput(id, t)
+        return
+
+
+    def filamentSourceOutput(self,id,t):
+        """
+        saves filament source profile
+        """
+
+        #save filament data to file
+        tag = self.tsFmt.format(t)
+        prefix = 'filamentSource_'+id
+        label = 'Filament Source'
+        xyzData = self.FIL.xyzPts.reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p, 3)
+        scalarData = self.FIL.g_pts.reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p)
+        path = self.FIL.controlfilePath
+        if self.IO.csvMask == True:
+            self.IO.writePointCloudCSV(xyzData,scalarData,path,label,tag,prefix)
+        if self.IO.vtpPCMask == True:
+            self.IO.writePointCloudVTP(xyzData,scalarData,label,prefix,path,tag)
+
+        return
+
+    def filamentTraceOutput(self,id,t_source):
+        """
+        saves filament traces
+
+        """
+        
+        N_ts = int((self.FIL.tMax - self.FIL.tMin) / self.FIL.dt)+1
+        ts = np.linspace(self.FIL.tMin, self.FIL.tMax, N_ts)
+        path = self.MHD.shotPath 
+        for i in range(self.FIL.N_v_b):
+            for j,t in enumerate(ts):
+                #save filament data to file
+                tag = self.tsFmt.format(t)
+                prefix = 'filamentTrace_'+id+'_vS{:03d}_tsSrc'.format(i)+self.tsFmt.format(t_source)
+                label = 'Filament Trace'
+                xyzData = self.FIL.xyzSteps[i,:,j,:].reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p, 3)
+                scalarData = self.FIL.g_pts.reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p)
+                #scalarData = np.ones((self.FIL.N_b*self.FIL.N_r*self.FIL.N_p))
+#                path = self.FIL.controlfilePath
+#                if self.IO.csvMask == True:
+#                    self.IO.writePointCloudCSV(xyzData,scalarData,path,label,tag,prefix)
+                if self.IO.vtpPCMask == True:
+                    self.IO.writePointCloudVTP(xyzData,scalarData,label,prefix,path,tag, PClabel=False)
+
+        return
+
+
+    def combineFilTimesteps(self, name, oldPath, newPath):
+        """
+        combines timesteps into a single directory for movie-making in paraview
+
+        uses IO flags to determine which files to copy
+        """
+        old = oldPath + name + '_PC'
+        new = newPath + name
+        tools.makeDir(newPath, clobberFlag=False)
+
+        if self.IO.vtpPCMask == True:
+            shutil.copyfile(old+'.vtp', new+'.vtp')
+        return
+
+
+    def getFilMeshes(self):
+        """
+        sets up filament meshes, independent of timestep
+        
+        very similar to getGYROMeshes, so could probably be consolidated into single function
+        one day...
+        """
+        print("\nBuilding filament meshes and mappings")
+        log.info("\nBuilding filament meshes and mappings")
+        totalMeshCounter = 0
+        numTargetFaces = 0
+        numROIFaces = 0
+        targetPoints = []
+        targetNorms = []
+        self.FIL.CADtargetNames = []
+        self.FIL.CADROIindexes = []
+        self.FIL.CADROINames = []
+
+      
+        #build arrays for intersections
+        #first include the PFCs in the ROI
+        print("CAD ROI List:")
+        print(self.CAD.ROIList)
+
+        for i,target in enumerate(self.CAD.ROImeshes):
+            totalMeshCounter+=target.CountFacets
+            numTargetFaces += target.CountFacets
+            numROIFaces += target.CountFacets
+            #append target data
+            for face in target.Facets:
+                self.FIL.CADtargetNames.append(self.CAD.ROIList[i]) #do this for future HF reassignment
+                self.FIL.CADROIindexes.append(i)
+                self.FIL.CADROINames.append(self.CAD.ROIList[i])
+                targetPoints.append(face.Points)
+                targetNorms.append(face.Normal)
+
+        #now include PFCs in the intersection list not in ROI
+        for i,target in enumerate(self.CAD.intersectMeshes):
+            totalMeshCounter+=target.CountFacets
+            #we already have the ROI version of this PFC
+            if self.CAD.intersectList[i] in self.CAD.ROIList:
+                pass
+            else:
+                print("Adding target "+self.CAD.intersectList[i]+" to intersects with {:f} faces".format(target.CountFacets))
+                numTargetFaces += target.CountFacets
+                #append target data
+                for face in target.Facets:
+                    self.FIL.CADtargetNames.append(self.CAD.intersectList[i]) #do this for future HF reassignment
+                    targetPoints.append(face.Points)
+                    targetNorms.append(face.Normal)
+
+        #targets
+        targetPoints = np.asarray(targetPoints)/1000.0 #scale to m
+        targetNorms = np.asarray(targetNorms)
+        self.FIL.targetPoints = targetPoints
+        self.FIL.targetNorms = targetNorms
+        self.FIL.t1 = targetPoints[:,0,:] #target point 1 of mesh triangle
+        self.FIL.t2 = targetPoints[:,1,:] #target point 2 of mesh triangle
+        self.FIL.t3 = targetPoints[:,2,:] #target point 3 of mesh triangle
+        self.FIL.Nt = len(self.FIL.t1)
+        self.FIL.intersectCenters = tools.getTargetCenters(targetPoints)
+        self.FIL.intersectNorms = np.zeros(targetNorms.shape)
+        mag = np.linalg.norm(targetNorms,axis=1)
+        for i in range(len(targetNorms)):
+            self.FIL.intersectNorms[i,:] = targetNorms[i,:] / mag[i]
+        print("Total FIL Intersect Faces: {:d}".format(self.FIL.Nt))
+
+        self.FIL.N_CADROI = len(self.FIL.CADROINames)
+        #maps from Targets to ROI
+        self.FIL.CADTGT_CADROImap = np.arange(self.FIL.N_CADROI)
+
+        return
+
+
 
     def HF_PFC(self, PFC, repeatIdx=None, tag=None, rayTriMode='open3d'):
         """

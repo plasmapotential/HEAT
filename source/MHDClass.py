@@ -173,10 +173,11 @@ class MHD:
         #check if these GEQDSKs are named according to the HEAT convention g<shot>_<timestep>
         #where shot is an int and timestep can be any float (ie with or without radix)
         test1 = np.all(np.array([len(x.split("_")) for x in gFileList]) > 1)
+        test2 = np.all(np.array([type(g.split('_')[-1])==float for g in gFileList]) > 1)
         ts = []
         for i,g in enumerate(gFileList):
             #GEQDSKs are named using timesteps
-            if test1 == True:
+            if test1 == True and test2==True:
                 ts.append(float(g.split('_')[-1]))
             #GEQDSKs do not follow HEAT naming convention
             else:
@@ -383,6 +384,21 @@ class MHD:
 
         return
 
+
+    def setupMAFOTdirectory(self, controlfilePath:str, obj:object):
+        """
+        sets up necessary paths for MAFOT and saves them as object variables
+        """
+        if controlfilePath[-1]!='/': controlfilePath+='/'
+        
+        obj.controlfilePath = controlfilePath
+        obj.controlfile = '_lamCTL.dat'
+        obj.controlfileStruct = '_struct_CTL.dat'
+        obj.gridfile = obj.controlfilePath + 'grid.dat'
+        obj.gridfileStruct = obj.controlfilePath + 'struct_grid.dat'
+        obj.outputFile = obj.controlfilePath + 'lam.dat'
+        obj.structOutfile = obj.controlfilePath + 'struct.dat'
+        return obj
 
     def writeControlFile(self, name, t, mapDirection, mode='laminar'):
         """

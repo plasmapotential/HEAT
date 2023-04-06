@@ -5,11 +5,17 @@
 """
 Class for filament tracing.  Used for ELMs and other filamentary structures
 """
+import os
+import sys
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 import scipy.interpolate as interp
 import pandas as pd
+import open3d as o3d
+import time
+import shutil
+
 
 #HEAT classes
 import toolsClass
@@ -17,6 +23,8 @@ tools = toolsClass.tools()
 import ioClass
 IO = ioClass.IO_HEAT()
 
+import logging
+log = logging.getLogger(__name__)
 
 class filament:
 
@@ -32,6 +40,8 @@ class filament:
         self.chmod = chmod
         self.GID = GID
         self.UID = UID
+        tools.physicsConstants(self)
+
         return
 
     def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
@@ -51,22 +61,26 @@ class filament:
 
         filFile = path + 'filaments.csv'
         self.filData = pd.read_csv(filFile, sep=',', comment='#', skipinitialspace=True)
+        print(self.filData.columns)
+        print(self.filData.to_dict().keys())
         return
 
     def setupFilamentTime(self):
         """
         sets up filament timesteps using data from filament file
         """
-        ts = np.array([])
-        for row in self.filData:
-            tMin = row['tMin[s]']
-            tMax = row['tMax[s]']
-            dt = row['dt']
-            N_dt = int( (tMax-tMin)/dt )
-            tNew = np.linspace(tMin,tMax,N_dt+1)
-            ts = np.append(ts, tNew)
-        
-        self.tsFil = ts
+        try:
+            df = self.filData      
+            df['N_dt'] = (df['tMax[s]'] - df['tMin[s]']) / df['dt[s]']
+            df['N_dt'] = df['N_dt'].round(0)
+            df['N_dt'] = df['N_dt'].astype(int)
+            df['tNew'] = df.apply( lambda x:  np.linspace(x['tMin[s]'],x['tMax[s]'],x['N_dt']+1), axis=1)
+            self.tsFil = df['tNew'].values
+
+        except:
+            print("\n\nError setting up filament time.  Check your filament file\n\n")
+            log.info("\n\nError setting up filament time.  Check your filament file\n\n")
+            sys.exit()
         return
 
     def allowed_class_vars(self):
@@ -151,9 +165,285 @@ class filament:
         self.ep = ep
         self.xCtr = rCtr * np.cos(phi)
         self.yCtr = rCtr * np.sin(phi)
+        return
+
+    def initializeFilamentFromDict(self, filDict:dict, id:int, ep:object):
+        """
+        initializes filament from a dictionary (read from csv file in HEAT)
+
+        dictionary is originally a pandas dataframe, so each row in the filament.csv
+        HEAT file is a new id # in the dict.  each row can therefore be accessed by:
+        filDict['<parameter>'][<row#>]
+
+        ep is equilParams object
+        """
+        #initialize this filament
+        try:
+            self.rCtr = filDict['rCtr[m]'][id]
+            self.zCtr = filDict['zCtr[m]'][id]
+            self.phi = np.radians(filDict['phiCtr[deg]'][id])
+            self.xCtr = self.rCtr * np.cos(self.phi)
+            self.yCtr = self.rCtr * np.sin(self.phi)
+            self.sig_b = filDict['sig_b[m]'][id]
+            self.sig_r = filDict['sig_r[m]'][id]
+            self.sig_p = filDict['sig_p[m]'][id]
+            self.tMin = filDict['tMin[s]'][id]
+            self.tMax = filDict['tMax[s]'][id]
+            self.N_sig_r = filDict['N_sig_r'][id]
+            self.N_sig_p = filDict['N_sig_p'][id]
+            self.N_sig_b = filDict['N_sig_b'][id]
+            self.N_r = filDict['N_r'][id]
+            self.N_p = filDict['N_p'][id]
+            self.N_b = filDict['N_b'][id]
+            self.dt = filDict['dt[s]'][id]
+            self.decay_t = filDict['decay_t[s]'][id]
+            self.N_src_t = filDict['N_src_t'][id]
+            self.v_r = filDict['v_r[m/s]'][id]
+            self.v_t = filDict['v_t[m/s]'][id]
+            self.E0 = filDict['E0[J]'][id]
+            self.ep = ep
+
+        except:
+            print("\n\nCould not initialize filament.  Check your filament input file!")
+            log.info("\n\nCould not initialize filament.  Check your filament input file!")
+            sys.exit()
 
         return
 
+    def filamentCtrBtrace(self, MHD:object, t:float):
+        """
+        traces magnetic field at filament center
+
+        PFC object used to get paths
+        MHD object used for traces
+        t used for name of geqdsk for MAFOT
+        """
+        #calculate field line for filament center
+        xyz = np.array([self.xCtr,self.yCtr,self.zCtr])
+        dphi = 1.0
+        MHD.ittStruct = 360.0 #360 degree trace
+        MHD.writeMAFOTpointfile(xyz,self.gridfileStruct)
+        MHD.writeControlFile(self.controlfilePath+self.controlfileStruct, t, 0, mode='struct') #0 for both directions
+        MHD.getFieldpath(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, paraview_mask=False, tag=None)
+        Btrace = tools.readStructOutput(self.structOutfile) 
+        os.remove(self.structOutfile)
+        return Btrace
+
+    def findGuidingCenterPaths(self, pts, MHD):
+        """
+        """
+        MHD.ittStruct = 1.0
+        #forward trace
+        MHD.writeMAFOTpointfile(pts,self.gridfileStruct)
+        MHD.writeControlFile(self.controlfilePath+self.controlfileStruct, self.tEQ, 1.0, mode='struct') #0 for both directions
+        MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
+                                self.controlfileStruct)
+
+        structData = tools.readStructOutput(self.structOutfile)
+        os.remove(self.structOutfile) #clean up
+        q1 = structData[0::2,:] #even indexes are first trace point
+        q2 = structData[1::2,:] #odd indexes are second trace point
+        return q1, q2
+
+
+
+    def traceFilamentParticles(self, MHD):
+        """
+        Traces filament macro-particles
+
+        Uses Open3D to accelerate the calculation:
+        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
+        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
+        """
+        pts = self.xyzPts.reshape(self.N_b*self.N_r*self.N_p, 3)
+        N_pts = len(pts)
+        N_ts = int((self.tMax - self.tMin) / self.dt) + 1
+        ts = np.linspace(self.tMin, self.tMax, N_ts)
+
+        print('Number of target faces: {:f}'.format(self.Nt))
+        log.info('Number of target faces: {:f}'.format(self.Nt))
+        print('Number of filament source points: {:f}'.format(N_pts))
+        log.info('Number of filament source points: {:f}'.format(N_pts))
+
+        #setup velocities and velocity phase angles
+        self.setupParallelVelocities()
+        #initialize trace step matrix
+        self.xyzSteps = np.zeros((self.N_v_b, N_pts, N_ts, 3))
+        #initialize shadowMask matrix
+        shadowMask = np.zeros((N_pts))
+#        input()
+        for i in range(self.N_v_b):
+            #update time counting variables
+            tsNext = np.ones((N_pts))*ts[0]
+            t_tot = np.zeros((N_pts)) + tsNext
+            tIdxNext = np.zeros((N_pts), dtype=int)
+            vec = np.zeros((N_pts, 3))
+            frac = np.zeros((N_pts))
+            use = np.arange(N_pts)
+
+            #save macroparticle coordinates at t0
+            self.xyzSteps[i,:,tIdxNext,:] = pts
+            tIdxNext += 1
+            tsNext = ts[tIdxNext]
+
+            launchPt = pts
+    
+            #walk along field line, correcting for v_r, looking for intersections,
+            #saving coordinates at ts
+            while len(use) > 0:
+                #calculate guiding center path for one step
+                q1, q2 = self.findGuidingCenterPaths(launchPt[use], MHD)
+                #correct guiding center path using radial velocity
+                d_b = np.linalg.norm((q2-q1), axis=1) #distance along field
+                t_b = d_b / self.v_b[use] #time along field for this step
+                t_tot[use] += t_b #cumulative time along field
+                d_r = t_b * self.v_r #radial distance
+
+                #generate local radial coordinate transformation
+                R = np.sqrt(q2[:,0]**2 + q2[:,1]**2)
+                Z = q2[:,2]
+                phi = np.arctan2(q2[:,1], q2[:,0])
+                rVec = self.fluxSurfNorms(self.ep, R, Z)
+                rX, rY, rZ = tools.cyl2xyz(rVec[:,0], rVec[:,2], phi, degrees=False)
+                rVecXYZ = np.vstack((rX,rY,rZ)).T
+                rMag = np.linalg.norm(rVecXYZ, axis=1)
+                rN = rVecXYZ / rMag[:,None]
+                
+                #magnetic field line trace corrected with radial (psi) velocity component
+                q3 = q2 + np.matmul(d_r.T,rN)
+                vec[use] = q3-q1
+                frac[use] = (tsNext[use] - t_tot[use] + t_b) / t_b
+
+                if len(use) > 0:
+                    launchPt[use] = q3
+
+                #particles we need to keep tracing
+                use = np.where(t_tot < self.tMax)[0]
+
+                #For testing
+                #print(self.tMax)
+                #print(d_b)
+                #print(t_b)
+                #print(t_tot)
+                #print(d_r)
+                #print(q1)
+                #print(q2)
+                #print(q3)
+                #print(tsNext)
+                #print(self.xyzSteps)
+                #input()
+
+                #record particle locations for particles that exceeded timestep
+                use2 = np.where(t_tot > tsNext)[0] #particles that crossed a timestep
+                use3 = np.intersect1d(use,use2) #crossed a timestep and still not crossed tMax, indexed to N_pts
+                use4 = np.where(t_tot[use] > tsNext[use])[0] #crossed a timestep and still not crossed tMax, indexed to use
+                if len(use3) > 0:
+                    self.xyzSteps[i,use3,tIdxNext[use3],:] = q1[use4] + vec[use3]*frac[use3,None]
+                    tIdxNext[use3]+=1
+                    tsNext[use3] = ts[tIdxNext[use3]]
+
+            #record the final timestep       
+            self.xyzSteps[i,:,-1,:] = launchPt + vec*frac[:,None]
+
+
+
+                    #intersect_mask = self.intersectTestOpen3D(q1,q2,self.targetPoints,self.targetNorms)
+                    #shadowMask[use] = intersect_mask
+                    #use = np.where(shadowMask == 0)[0]
+
+        return
+
+
+
+    def setupParallelVelocities(self):
+        """
+        given an array of energies, in self.E, split each array element into N macro-particles, 
+        using the energy distribution function
+
+        """
+        E_eV = self.E0
+
+
+
+        N_pts = self.N_b*self.N_p*self.N_r
+        #dummy for now
+        self.v_b = np.random.random_sample(N_pts) * 100000.0 #random speeds between 0 and 10km/s
+        #self.v_b = np.ones(N_pts) * 1000.0 
+        self.N_v_b = 1
+        return
+
+    def intersectTestOpen3D(self,q1,q2,targets,targetNorms, batchSize=1000):
+        """
+        checks if any of the lines (field line traces) generated by MAFOT
+        struct program intersect any of the target mesh faces.
+
+        Uses Open3D to accelerate the calculation:
+        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
+        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
+        """
+        t0 = time.time()
+        N = len(q2)
+        Nt = len(targets)
+        print('{:d} Source Faces and {:d} Target Faces in PFC object'.format(N,Nt))
+
+        mask = np.ones((N))
+
+        #construct rays
+        r = q2-q1
+        rMag = np.linalg.norm(r, axis=1)
+        rNorm = r / rMag.reshape((-1,1))
+
+        #cast variables to 32bit for C
+        vertices = np.array(targets.reshape(Nt*3,3), dtype=np.float32)
+        triangles = np.array(np.arange(Nt*3).reshape(Nt,3), dtype=np.uint32)
+
+        #build intersection mesh and tensors for open3d
+        mesh = o3d.t.geometry.TriangleMesh()
+        scene = o3d.t.geometry.RaycastingScene()
+        mesh_id = scene.add_triangles(vertices, triangles)
+
+        #calculate size of potential arrays in RAM
+        #availableRAM = psutil.virtual_memory().available #bytes
+
+        #calculate intersections
+        rays = o3d.core.Tensor([np.hstack([np.float32(q1),np.float32(rNorm)])],dtype=o3d.core.Dtype.Float32)
+        hits = scene.cast_rays(rays)
+        #convert open3d CPU tensors back to numpy
+        hitMap = hits['primitive_ids'][0].numpy()
+        distMap = hits['t_hit'][0].numpy()
+
+        #escapes occur where we have 32 bits all set: 0xFFFFFFFF = 4294967295 base10
+        escapes = np.where(hitMap == 4294967295)[0]
+        mask[escapes] = 0.0
+
+        #when distances to target exceed the trace step, we exclude any hits
+        tooLong = np.where(distMap > rMag)[0]
+        mask[tooLong] = 0.0
+
+        print('Found {:f} shadowed faces'.format(np.sum(mask)))
+        log.info('Found {:f} shadowed faces'.format(np.sum(mask)))
+        print('Time elapsed: {:f}'.format(time.time() - t0))
+        log.info('Time elapsed: {:f}'.format(time.time() - t0))
+
+        return mask
+
+
+
+    def createSource(self, t:float, Btrace:np.ndarray):
+        """
+        creates a filament at time t
+
+        t is timestep at which we calculate filament
+        so t in gaussian is t-tMin
+
+        Btrace is magnetic field line trace from MAFOT for filament ctr
+
+        """
+        self.gridPsiThetaDistAtCtr(self.rCtr, self.zCtr, multR=10.0, multZ = 10.0)
+        #discretize filament into macroparticle sources along field line
+        self.discretizeFilament(self.N_r,self.N_p,self.N_b, Btrace, self.N_sig_r, self.N_sig_p, self.N_sig_b)
+        self.gaussianAtPts(self.ctrPts, self.xyzPts, t-self.tMin, self.v_r)       
+        return
 
     def fluxSurfNorms(self, ep: object, R:np.ndarray, Z:np.ndarray):
         """
@@ -249,10 +539,10 @@ class filament:
         print("Resolution: {:f} m".format(resolution))
         # Calculate how many total grid points we need based upon resolution and
         # total distance around curve/wall
-        numpoints = int((dist[-1] - dist[0])/resolution)
+        numpoints = int(np.ceil((dist[-1] - dist[0])/resolution))
         # Spline Interpolation (linear) - Make higher resolution wall.
         interpolator = interp.interp1d(dist, traceData, kind='slinear', axis=0)
-        alpha = np.linspace(dist[0], dist[-1], numpoints)
+        alpha = np.linspace(dist[0], dist[-1], numpoints+2)[1:-1]
         #add in raw data points so that we preserve the corners
         if addRawData == True:
             alpha = np.sort(np.hstack([alpha, dist]))
@@ -304,7 +594,7 @@ class filament:
         self.psiCtr = psiCtr
         self.thetaCtr = thetaCtr
         self.gridShape = R.shape
-        
+
         return
 
     def gaussianAtPts(self, ctrPts: np.ndarray, xyzPts: np.ndarray, t: float, v_r:float):
@@ -319,7 +609,6 @@ class filament:
         sigma_r = self.sig_r
         sigma_p = self.sig_p
 
-
         gaussian = np.zeros((xyzPts.shape[:-1]))
         dPsi = np.zeros((xyzPts.shape[:-1]))
         dTheta = np.zeros((xyzPts.shape[:-1]))
@@ -329,15 +618,18 @@ class filament:
             xyz = xyzPts[i]
             R,Z,phi = tools.xyz2cyl(xyz[:,:,0],xyz[:,:,1],xyz[:,:,2])
             psiCtr, distPsi, thetaCtr, distTheta = self.fluxCoordDistance(rCtr,zCtr,R,Z)
-            
+
             #2D gaussian
             #g = self.gaussian2D(distPsi,distTheta,self.sig_r,self.sig_p,t,v_r,self.E0)
             #3D gaussian
             g = self.gaussian3D(distPsi,distTheta,self.distB[i],self.sig_r,self.sig_p,self.sig_b,t,v_r,self.E0)
             #reshape to meshgrid shape
-            gaussian[i,:,:] = g.reshape((len(distPsi), len(distTheta)))
-            dPsi[i,:,:] = distPsi.reshape((len(distPsi), len(distTheta)))
-            dTheta[i,:,:] = distTheta.reshape((len(distPsi), len(distTheta)))
+            #gaussian[i,:,:] = g.reshape((len(distPsi), len(distTheta)))
+            #dPsi[i,:,:] = distPsi.reshape((len(distPsi), len(distTheta)))
+            #dTheta[i,:,:] = distTheta.reshape((len(distPsi), len(distTheta)))
+            gaussian[i,:,:] = g
+            dPsi[i,:,:] = distPsi
+            dTheta[i,:,:] = distTheta
 
         self.g_pts = gaussian
         self.distPsi = dPsi
@@ -492,11 +784,11 @@ class filament:
 
         #calculate points in radial (psi) direction
         rMax = N_sig_r * self.sig_r
-        r_pts = np.linspace(-rMax, rMax, N_r)
+        r_pts = np.linspace(-rMax, rMax, N_r+2)[1:-1]
 
         #calculate points in poloidal direction
         pMax = N_sig_p * self.sig_p
-        p_pts = np.linspace(-pMax, pMax, N_p)
+        p_pts = np.linspace(-pMax, pMax, N_p+2)[1:-1]
 
         #get radial (psi) vectors for each ctrPt
         R = np.sqrt(self.ctrPts[:,0]**2+self.ctrPts[:,1]**2)
@@ -525,12 +817,13 @@ class filament:
             for j in range(N_r):
                 for k in range(N_p):
                     xyzPts[i,j,k,:] = self.ctrPts[i] + r_pts[j]*rN[i] - p_pts[k]*pN[i]
-        
+
         self.xyzPts = xyzPts
         self.rN = rN
         self.pN = pN
 
         return
+
 
 
     def vectorGlyphs(self, ctrs:np.ndarray, vecs:np.ndarray, label:str, path:str, tag:str = None):
