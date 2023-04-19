@@ -11,6 +11,8 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 import scipy.interpolate as interp
+from scipy.interpolate import interp1d
+import scipy.integrate as integrate
 import pandas as pd
 import open3d as o3d
 import time
@@ -150,7 +152,7 @@ class filament:
         sigma_r: characteristic width in radial (psi) direction [m]
         sigma_p: characteristic width in poloidal direction [m]
                    (note that this is NOT the diamagnetic direction exactly)
-        E0: total filament energy at t=0 [MJ]
+        E0: total filament energy at t=0 [J]
         ep: an equilParams object
 
         """
@@ -195,12 +197,14 @@ class filament:
             self.N_r = filDict['N_r'][id]
             self.N_p = filDict['N_p'][id]
             self.N_b = filDict['N_b'][id]
+            self.N_vS = filDict['N_vS'][id]
             self.dt = filDict['dt[s]'][id]
             self.decay_t = filDict['decay_t[s]'][id]
             self.N_src_t = filDict['N_src_t'][id]
             self.v_r = filDict['v_r[m/s]'][id]
             self.v_t = filDict['v_t[m/s]'][id]
             self.E0 = filDict['E0[J]'][id]
+            self.T0 = filDict['T0[eV]'][id]
             self.ep = ep
 
         except:
@@ -246,6 +250,22 @@ class filament:
         return q1, q2
 
 
+    def buildIntersectionMesh(self):
+        """
+        builds intersection mesh for open3d ray tracing
+        """
+        Nt = len(self.t1)
+        targets = np.hstack([self.t1, self.t2, self.t3]).reshape(Nt*3,3)
+        #cast variables to 32bit for C
+        vertices = np.array(targets.reshape(Nt*3,3), dtype=np.float32)
+        triangles = np.array(np.arange(Nt*3).reshape(Nt,3), dtype=np.uint32)
+        #build intersection mesh and tensors for open3d
+        self.mesh = o3d.t.geometry.TriangleMesh()
+        self.scene = o3d.t.geometry.RaycastingScene()
+        self.mesh_id = self.scene.add_triangles(vertices, triangles)
+        return
+
+
 
     def traceFilamentParticles(self, MHD):
         """
@@ -265,14 +285,21 @@ class filament:
         print('Number of filament source points: {:f}'.format(N_pts))
         log.info('Number of filament source points: {:f}'.format(N_pts))
 
-        #setup velocities and velocity phase angles
+        #setup velocities
         self.setupParallelVelocities()
         #initialize trace step matrix
-        self.xyzSteps = np.zeros((self.N_v_b, N_pts, N_ts, 3))
+        self.xyzSteps = np.zeros((self.N_vS, N_pts, N_ts, 3))
+
+        #build intersection mesh
+        self.buildIntersectionMesh()
+        intersectRecord = np.ones((N_pts, self.N_vS))*np.nan
+        #hdotn = np.ones((N_pts))*np.nan
         #initialize shadowMask matrix
         shadowMask = np.zeros((N_pts))
-#        input()
-        for i in range(self.N_v_b):
+
+
+
+        for i in range(self.N_vS):
             #update time counting variables
             tsNext = np.ones((N_pts))*ts[0]
             t_tot = np.zeros((N_pts)) + tsNext
@@ -286,7 +313,8 @@ class filament:
             tIdxNext += 1
             tsNext = ts[tIdxNext]
 
-            launchPt = pts
+            launchPt = pts.copy()
+            v_b = self.vSlices[:,i]
     
             #walk along field line, correcting for v_r, looking for intersections,
             #saving coordinates at ts
@@ -295,7 +323,7 @@ class filament:
                 q1, q2 = self.findGuidingCenterPaths(launchPt[use], MHD)
                 #correct guiding center path using radial velocity
                 d_b = np.linalg.norm((q2-q1), axis=1) #distance along field
-                t_b = d_b / self.v_b[use] #time along field for this step
+                t_b = d_b / v_b[use] #time along field for this step
                 t_tot[use] += t_b #cumulative time along field
                 d_r = t_b * self.v_r #radial distance
 
@@ -310,25 +338,64 @@ class filament:
                 rN = rVecXYZ / rMag[:,None]
                 
                 #magnetic field line trace corrected with radial (psi) velocity component
-                q3 = q2 + np.matmul(d_r.T,rN)
+                q3 = q2 + d_r[:,np.newaxis] * rN
                 vec[use] = q3-q1
                 frac[use] = (tsNext[use] - t_tot[use] + t_b) / t_b
 
                 if len(use) > 0:
                     launchPt[use] = q3
 
+                #construct rays
+                rMag = np.linalg.norm(vec[use], axis=1)
+                rNorm = vec[use] / rMag.reshape((-1,1))
+
+                #calculate intersections
+                mask = np.ones((len(q3)))
+                rays = o3d.core.Tensor([np.hstack([np.float32(q1),np.float32(rNorm)])],dtype=o3d.core.Dtype.Float32)
+                hits = self.scene.cast_rays(rays)
+                #convert open3d CPU tensors back to numpy
+                hitMap = hits['primitive_ids'][0].numpy()
+                distMap = hits['t_hit'][0].numpy()
+
+                #escapes occur where we have 32 bits all set: 0xFFFFFFFF = 4294967295 base10
+                escapes = np.where(hitMap == 4294967295)[0]
+                mask[escapes] = 0.0
+                #when distances to target exceed the trace step, we exclude any hits
+                tooLong = np.where(distMap > rMag)[0]
+                mask[tooLong] = 0.0
+
+                if np.sum(mask)>0:
+                    #we found a hit, or multiple
+                    idxHit = np.where(mask==1)[0]
+                    intersectRecord[use[idxHit], i] = hitMap[idxHit]
+                    #hdotn[i] = np.dot(self.intersectNorms[int(intersectRecord[i])],rNorm[idxHit])
+                else:
+                    #return nan if we didnt hit anything
+                    intersectRecord[use, i] = np.nan
+                    #hdotn[i] = np.nan
+
+
+
+
                 #particles we need to keep tracing
-                use = np.where(t_tot < self.tMax)[0]
+                test1 = np.where(np.isnan(intersectRecord[use,i]) == True)[0]
+                test2 = np.where(t_tot < self.tMax)[0]
+
+                #use = np.where(np.logical_or(test1,test2)==True)[0]
+                use = np.intersect1d(test1,test2)
 
                 #For testing
                 #print(self.tMax)
-                #print(d_b)
-                #print(t_b)
+                #print(d_b[0])
+                #print(t_b[0])
                 #print(t_tot)
-                #print(d_r)
-                #print(q1)
-                #print(q2)
-                #print(q3)
+                #print(d_r[0])
+                #print(q1[0])
+                #print(q2[0])
+                #print(q3[0])
+                #print(rN[0])
+                #print(d_r.T.shape)
+                #print(rN.shape)
                 #print(tsNext)
                 #print(self.xyzSteps)
                 #input()
@@ -361,15 +428,71 @@ class filament:
         using the energy distribution function
 
         """
-        E_eV = self.E0
+        self.vSlices = np.ones((self.N_b*self.N_r*self.N_p, self.N_vS))*np.nan
+        self.energySlices = np.zeros((self.N_b*self.N_r*self.N_p, self.N_vS))
+        self.energyIntegrals = np.zeros((self.N_b*self.N_r*self.N_p, self.N_vS))
+        self.energyFracs = np.zeros((self.N_b*self.N_r*self.N_p, self.N_vS))
+        self.vBounds = np.zeros((self.N_b*self.N_r*self.N_p, self.N_vS+1))
+
+        T_eV = np.ones((self.N_b*self.N_r*self.N_p))*self.T0
+        
+        for i in range(len(T_eV)):
+            B = (self.mass_eV/self.c**2) / (2.0*T_eV[i])
+            vThermal = np.sqrt(2.0*T_eV[i]/(self.mass_eV/self.c**2))
+            #set upper bound of v*f(v) (note that this cuts off high energy particles)
+            vMax = 5 * vThermal
+            v = np.linspace(0,vMax,10000).T
+
+            #PDF for 1D v and for speed
+            pdf = lambda x: self.gaussian1D(B, x)
+            #1D (old and not correct, i think...)
+            #v_pdf = 0.5 * self.mass_eV/self.c**2 * v**2 * pdf(v)
+            #3D (Stangeby 2.12 or Chen 7.18)
+            v_pdf = 4*np.pi * (B/np.pi)**(3.0/2.0) * v**2 * pdf(v)
+            #generate the CDF
+            v_cdf = np.cumsum(v_pdf[1:])*np.diff(v)
+            v_cdf = np.insert(v_cdf, 0, 0)
+            #create bspline interpolators for the cdf and cdf inverse
+            inverseCDF = interp1d(v_cdf, v, kind='linear')
+            forwardCDF = interp1d(v, v_cdf, kind='linear')
+            #CDF location of vSlices and bin boundaries
+            cdfBounds = np.linspace(0,v_cdf[-1],self.N_vS+1)
+            #space bins uniformly, then makes vSlices center of these bins in CDF space
+            cdfSlices = np.diff(cdfBounds)/2.0 + cdfBounds[:-1]
+            #vSlices are Maxwellian distribution sample locations (@ bin centers)
+            self.vSlices[i,:] = inverseCDF(cdfSlices)
+            self.vBounds[i,:] = inverseCDF(cdfBounds)
+
+            #f_E = lambda x: x**2 * np.exp(-x / T_eV[i])
+            f_E = lambda x: 2*np.sqrt(x/np.pi) * (1.0/T_eV[i])**(3.0/2.0) * np.exp(-x / T_eV[i])
+            #energy slices that correspond to velocity slices
+            self.energySlices[i,:] = f_E(0.5 * (self.mass_eV/self.c**2) * self.vSlices[i,:]**2)
+            #energy integrals
+            for j in range(self.N_vS):
+                Elo = 0.5 * (self.mass_eV/self.c**2) * self.vBounds[i,j]**2
+                Ehi = 0.5 * (self.mass_eV/self.c**2) * self.vBounds[i,j+1]**2
+                self.energyIntegrals[i,j] = integrate.quad(f_E, Elo, Ehi)[0]
+            energyTotal = self.energyIntegrals[i,:].sum()
+            ##for testing
+            #if i==0:
+            #    print("Integral Test===")
+            #    print(energyTotal)
+            #    print(integrate.quad(f_E, 0.0, self.vMax[i])[0])
+            #energy fractions
+            for j in range(self.N_vS):
+                self.energyFracs[i,j] = self.energyIntegrals[i,j] / energyTotal
 
 
 
-        N_pts = self.N_b*self.N_p*self.N_r
-        #dummy for now
-        self.v_b = np.random.random_sample(N_pts) * 100000.0 #random speeds between 0 and 10km/s
-        #self.v_b = np.ones(N_pts) * 1000.0 
-        self.N_v_b = 1
+
+        ##dummy for testing
+        #N_pts = self.N_b*self.N_p*self.N_r
+        #self.v_b = np.random.random_sample(N_pts) * 100000.0 #random speeds between 0 and 10km/s
+        ##self.v_b = np.ones(N_pts) * 1000.0 
+        #self.N_vS = 1
+
+        #print(self.vSlices)
+        #input()
         return
 
     def intersectTestOpen3D(self,q1,q2,targets,targetNorms, batchSize=1000):
@@ -622,7 +745,7 @@ class filament:
             #2D gaussian
             #g = self.gaussian2D(distPsi,distTheta,self.sig_r,self.sig_p,t,v_r,self.E0)
             #3D gaussian
-            g = self.gaussian3D(distPsi,distTheta,self.distB[i],self.sig_r,self.sig_p,self.sig_b,t,v_r,self.E0)
+            g = self.gaussian3D(distPsi,distTheta,self.distB[i],self.sig_r,self.sig_p,self.sig_b,t,v_r)
             #reshape to meshgrid shape
             #gaussian[i,:,:] = g.reshape((len(distPsi), len(distTheta)))
             #dPsi[i,:,:] = distPsi.reshape((len(distPsi), len(distTheta)))
@@ -683,6 +806,13 @@ class filament:
 
         return psiCtr, distPsi, thetaCtr, distTheta
 
+    def gaussian1D(self, B, x):
+        """
+        returns a 1D gaussian
+        """
+        g = np.sqrt(B/np.pi) * np.exp(-B*x**2)
+        return g
+
 
     def filamentGaussian2D(self, t:float, v_r:float, distPsi:np.ndarray, distTheta:np.ndarray):
         """
@@ -695,15 +825,16 @@ class filament:
         return g
     
 
-    def gaussian2D(self, dx:np.ndarray, dy:np.ndarray , sigX:float ,sigY:float ,t: float, v_r:float, A=1.0):
+    def gaussian2D(self, dx:np.ndarray, dy:np.ndarray , sigX:float ,sigY:float ,t: float, 
+                   v_r:float, lambda_t=500e-6):
         """
         calculates gaussian function with two spatial dimensions and 1 time dimension
         """
         #placeholder for now.  decay time of 500us
-        if t==0:
-            A=1
+        if t!=0:
+            A=self.E0
         else:
-            A = 1 - t/500e-6
+            A = (1 - t/lambda_t)*self.E0
 
         exp1 = np.exp( -1.0*(dx - t*v_r)**2 / (2*sigX**2) )
         exp2 = np.exp( -1.0*(dy**2) / (2*sigY**2) )
@@ -715,27 +846,54 @@ class filament:
         calculates gaussian at time t with radial (psi) velocity v_r in three dimensions       
         """
         #calculate gaussian
-        g = self.gaussian3D(distPsi,distTheta,distB,self.sig_r,self.sig_p,self.sig_b,t,v_r,self.E0)
+        g = self.gaussian3D(distPsi,distTheta,distB,self.sig_r,self.sig_p,self.sig_b,t,v_r)
         #reshape to meshgrid shape
         g.reshape(distPsi.shape) #on grid
         return g
 
     def gaussian3D(self, dx:np.ndarray, dy:np.ndarray, dz:np.ndarray, 
                    sigX:float, sigY:float, sigZ:float, 
-                   t:float , v_r:float, A=1.0):
+                   t:float , v_r:float, A=1.0, decay_t=500e-6):
         """
         calculates gaussian function with three spatial dimensions and 1 time dimension
-        """
-        #placeholder for now.  decay time of 500us
-        if t==0:
-            A=1
-        else:
-            A = 1 - t/500e-6
 
-        exp1 = np.exp( -1.0*(dx - t*v_r)**2 / (2*sigX**2) )
-        exp2 = np.exp( -1.0*(dy**2) / (2*sigY**2) )
-        exp3 = np.exp( -1.0*(dz**2) / (2*sigZ**2) )
-        g = A  * exp1 * exp2 * exp3
+        multiplies gaussian by E0, so that 3D integral equals E0.
+
+        corresponds to advective-diffusive model
+        """
+        #A = self.E0 / ( (2*np.pi)**(3.0/2.0) * sigX*sigY*sigZ )  
+        #A =1.0 / ( (2*np.pi)**(3.0/2.0) * sigX*sigY*sigZ )  
+        #exp1 = np.exp( -1.0*(dx - t*v_r)**2 / (2*sigX**2) )
+        #exp2 = np.exp( -1.0*(dy**2) / (2*sigY**2) )
+        #exp3 = np.exp( -1.0*(dz**2) / (2*sigZ**2) )
+
+        A = self.E0
+
+        B_x = 1.0 / (2*sigX**2)
+        B_y = 1.0 / (2*sigY**2)
+        B_z = 1.0 / (2*sigZ**2)
+        #1D gaussians
+        f_x = lambda x: 2.0 * self.gaussian1D(B_x, x)
+        f_y = lambda y: 2.0 * self.gaussian1D(B_y, y)
+        f_z = lambda z: 2.0 * self.gaussian1D(B_z, z)
+        exp1 = f_x(dx - t*v_r)
+        exp2 = f_y(dy)
+        exp3 = f_z(dz)
+        exp4 = np.exp(-t / decay_t)
+        g = A * exp1 * exp2 * exp3 # * exp4
+
+
+#        print("TEST=====!!!") 
+#        intX = integrate.quad(f_x, 0, sigX*10)[0]
+#        intY = integrate.quad(f_y, 0, sigY*10)[0]
+#        intZ = integrate.quad(f_z, 0, sigZ*10)[0]
+#        print(self.E0)
+#        print(intX)
+#        print(intY)
+#        print(intZ)
+#        print(intX * intY * intZ)
+#        input()
+
         return g
 
 

@@ -2078,7 +2078,7 @@ class engineObj():
         N_ts = int((self.FIL.tMax - self.FIL.tMin) / self.FIL.dt)+1
         ts = np.linspace(self.FIL.tMin, self.FIL.tMax, N_ts)
         path = self.MHD.shotPath 
-        for i in range(self.FIL.N_v_b):
+        for i in range(self.FIL.N_vS):
             for j,t in enumerate(ts):
                 #save filament data to file
                 tag = self.tsFmt.format(t)
