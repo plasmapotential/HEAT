@@ -30,7 +30,7 @@ class PFC:
     This class also builds out the directory tree for each simulation
     rootDir is root location of python modules (where dashGUI.py lives)
     dataPath is the location where we write all output to
-    tsAll is all timesteps from the HEAT simulation 
+    tsAll is all timesteps from the HEAT simulation (filaments + MHD)
     """
     def __init__(self, timestepMapRow, rootDir, dataPath, CADintersectList, tsAll):
         #Parse PFC input file row data into PFC object

@@ -249,7 +249,6 @@ class filament:
         q2 = structData[1::2,:] #odd indexes are second trace point
         return q1, q2
 
-
     def buildIntersectionMesh(self):
         """
         builds intersection mesh for open3d ray tracing
@@ -265,9 +264,7 @@ class filament:
         self.mesh_id = self.scene.add_triangles(vertices, triangles)
         return
 
-
-
-    def traceFilamentParticles(self, MHD):
+    def traceFilamentParticles(self, MHD, ts):
         """
         Traces filament macro-particles
 
@@ -277,8 +274,7 @@ class filament:
         """
         pts = self.xyzPts.reshape(self.N_b*self.N_r*self.N_p, 3)
         N_pts = len(pts)
-        N_ts = int((self.tMax - self.tMin) / self.dt) + 1
-        ts = np.linspace(self.tMin, self.tMax, N_ts)
+        N_ts = len(ts)
 
         print('Number of target faces: {:f}'.format(self.Nt))
         log.info('Number of target faces: {:f}'.format(self.Nt))
@@ -292,7 +288,7 @@ class filament:
 
         #build intersection mesh
         self.buildIntersectionMesh()
-        intersectRecord = np.ones((N_pts, self.N_vS))*np.nan
+        intersectRecord = np.ones((self.N_vS, N_pts, N_ts))*np.nan
         #hdotn = np.ones((N_pts))*np.nan
         #initialize shadowMask matrix
         shadowMask = np.zeros((N_pts))
@@ -364,21 +360,19 @@ class filament:
                 tooLong = np.where(distMap > rMag)[0]
                 mask[tooLong] = 0.0
 
+                #put hit index in intersectRecord for tIdxNext if we hit
                 if np.sum(mask)>0:
                     #we found a hit, or multiple
                     idxHit = np.where(mask==1)[0]
-                    intersectRecord[use[idxHit], i] = hitMap[idxHit]
+                    intersectRecord[i, use[idxHit], tIdxNext[use[idxHit]]] = hitMap[idxHit]
                     #hdotn[i] = np.dot(self.intersectNorms[int(intersectRecord[i])],rNorm[idxHit])
                 else:
                     #return nan if we didnt hit anything
-                    intersectRecord[use, i] = np.nan
+                    intersectRecord[i, use, tIdxNext[use]] = np.nan
                     #hdotn[i] = np.nan
 
-
-
-
-                #particles we need to keep tracing
-                test1 = np.where(np.isnan(intersectRecord[use,i]) == True)[0]
+                #particles we need to keep tracing (didnt hit and less than tMax)
+                test1 = np.where(np.isnan(intersectRecord[i, use, tIdxNext[use]]) == True)[0]
                 test2 = np.where(t_tot < self.tMax)[0]
 
                 #use = np.where(np.logical_or(test1,test2)==True)[0]
@@ -412,11 +406,8 @@ class filament:
             #record the final timestep       
             self.xyzSteps[i,:,-1,:] = launchPt + vec*frac[:,None]
 
-
-
-                    #intersect_mask = self.intersectTestOpen3D(q1,q2,self.targetPoints,self.targetNorms)
-                    #shadowMask[use] = intersect_mask
-                    #use = np.where(shadowMask == 0)[0]
+        #record the final intersectRecord
+        self.intersectRecord = intersectRecord
 
         return
 
@@ -467,7 +458,7 @@ class filament:
             f_E = lambda x: 2*np.sqrt(x/np.pi) * (1.0/T_eV[i])**(3.0/2.0) * np.exp(-x / T_eV[i])
             #energy slices that correspond to velocity slices
             self.energySlices[i,:] = f_E(0.5 * (self.mass_eV/self.c**2) * self.vSlices[i,:]**2)
-            #energy integrals
+            #energy integrals (loop thru i unnecessary, but we do it in case in the future we dont have uniform temperature)
             for j in range(self.N_vS):
                 Elo = 0.5 * (self.mass_eV/self.c**2) * self.vBounds[i,j]**2
                 Ehi = 0.5 * (self.mass_eV/self.c**2) * self.vBounds[i,j+1]**2
@@ -481,10 +472,7 @@ class filament:
             #energy fractions
             for j in range(self.N_vS):
                 self.energyFracs[i,j] = self.energyIntegrals[i,j] / energyTotal
-
-
-
-
+            
         ##dummy for testing
         #N_pts = self.N_b*self.N_p*self.N_r
         #self.v_b = np.random.random_sample(N_pts) * 100000.0 #random speeds between 0 and 10km/s
@@ -549,8 +537,6 @@ class filament:
         log.info('Time elapsed: {:f}'.format(time.time() - t0))
 
         return mask
-
-
 
     def createSource(self, t:float, Btrace:np.ndarray):
         """
@@ -639,8 +625,6 @@ class filament:
 
         return bp
 
-
-
     def getTraceSection(self, low:float, high:float, trace:np.ndarray):
         """
         returns a section of a trace between low and high
@@ -649,7 +633,6 @@ class filament:
         idxDist = np.where(np.logical_and(dist >= low, dist <= high))[0]
         return trace[idxDist]
     
-
     def interpolateTrace(self, traceData:np.ndarray, N:int, addRawData=False):
         """
         given a trace of coordinates, interpolates to N discrete points
@@ -676,7 +659,6 @@ class filament:
      
         return interpolated_points, alpha
     
-
     def distance(self, traceData:np.ndarray):
         """
         Calculate distance along curve/wall (also called S) of ND points:
@@ -684,9 +666,6 @@ class filament:
         distance = np.cumsum(np.sqrt(np.sum(np.diff(traceData,axis=0)**2,axis=1)))
         distance = np.insert(distance, 0, 0)
         return distance
-
-
-
 
     def gridPsiThetaDistAtCtr(self, rCtr:float, zCtr:float, multR=10.0, multZ = 10.0):
         """
@@ -717,7 +696,6 @@ class filament:
         self.psiCtr = psiCtr
         self.thetaCtr = thetaCtr
         self.gridShape = R.shape
-
         return
 
     def gaussianAtPts(self, ctrPts: np.ndarray, xyzPts: np.ndarray, t: float, v_r:float):
@@ -735,6 +713,7 @@ class filament:
         gaussian = np.zeros((xyzPts.shape[:-1]))
         dPsi = np.zeros((xyzPts.shape[:-1]))
         dTheta = np.zeros((xyzPts.shape[:-1]))
+        dB = np.zeros((xyzPts.shape[:-1]))
 
         for i,ctr in enumerate(ctrPts):
             rCtr, zCtr, phiCtr = tools.xyz2cyl(ctr[0],ctr[1],ctr[2])
@@ -753,17 +732,28 @@ class filament:
             gaussian[i,:,:] = g
             dPsi[i,:,:] = distPsi
             dTheta[i,:,:] = distTheta
+            dB[i,:,:] = self.distB[i]
 
-        self.g_pts = gaussian
+        #now build weights for gaussian
+   
+        dX = np.diff(dPsi, axis=1)
+        dY = np.diff(dTheta, axis=2)
+        dZ = np.diff(dB, axis=0)
+        dX = np.pad(dX, ((0,0),(0,1),(0,0)), mode='edge')
+        dY = np.pad(dY, ((0,0),(0,0),(0,1)), mode='edge')
+        dZ = np.pad(dZ, ((0,1),(0,0),(0,0)), mode='edge')
+        self.dV = dX*dY*dZ
+        print(np.sum(gaussian * self.dV))
+        input()
+        self.g_pts = gaussian * self.dV
         self.distPsi = dPsi
         self.distTheta = dTheta
         return
 
-
     def fluxCoordDistance(self, r0:float, z0:float, R:np.ndarray, Z:np.ndarray):
         """
         calculates euclidean distance along flux coordinate surfaces (psi and poloidal)
-        from rCtr,zCtr on an R,Z grid
+        from rCtr,zCtr on an R,Z grid. 
 
         rCtr and zCtr:  coordinate to calculate flux coordinates at / distance from
         R,Z: meshgrid around rCtr,zCtr
@@ -813,7 +803,6 @@ class filament:
         g = np.sqrt(B/np.pi) * np.exp(-B*x**2)
         return g
 
-
     def filamentGaussian2D(self, t:float, v_r:float, distPsi:np.ndarray, distTheta:np.ndarray):
         """
         calculates gaussian at time t with radial (psi) velocity v_r       
@@ -824,7 +813,6 @@ class filament:
         g.reshape(distPsi.shape) #on grid
         return g
     
-
     def gaussian2D(self, dx:np.ndarray, dy:np.ndarray , sigX:float ,sigY:float ,t: float, 
                    v_r:float, lambda_t=500e-6):
         """
@@ -868,20 +856,22 @@ class filament:
         #exp3 = np.exp( -1.0*(dz**2) / (2*sigZ**2) )
 
         A = self.E0
+        #A = 1.0
 
         B_x = 1.0 / (2*sigX**2)
         B_y = 1.0 / (2*sigY**2)
         B_z = 1.0 / (2*sigZ**2)
         #1D gaussians
-        f_x = lambda x: 2.0 * self.gaussian1D(B_x, x)
-        f_y = lambda y: 2.0 * self.gaussian1D(B_y, y)
-        f_z = lambda z: 2.0 * self.gaussian1D(B_z, z)
-        exp1 = f_x(dx - t*v_r)
-        exp2 = f_y(dy)
-        exp3 = f_z(dz)
-        exp4 = np.exp(-t / decay_t)
-        g = A * exp1 * exp2 * exp3 # * exp4
+        f_x = lambda x: self.gaussian1D(B_x, x)
+        f_y = lambda y: self.gaussian1D(B_y, y)
+        f_z = lambda z: self.gaussian1D(B_z, z)
 
+        pdfX = f_x(dx - t*v_r)
+        pdfY = f_y(dy)
+        pdfZ = f_z(dz)
+
+        exp4 = np.exp(-t / decay_t)
+        g = A * pdfX * pdfY * pdfZ    # * exp4
 
 #        print("TEST=====!!!") 
 #        intX = integrate.quad(f_x, 0, sigX*10)[0]
@@ -893,6 +883,8 @@ class filament:
 #        print(intZ)
 #        print(intX * intY * intZ)
 #        input()
+
+
 
         return g
 
@@ -979,6 +971,9 @@ class filament:
         self.xyzPts = xyzPts
         self.rN = rN
         self.pN = pN
+        self.b_pts = b_pts
+        self.p_pts = p_pts
+        self.r_pts = r_pts
 
         return
 

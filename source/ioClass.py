@@ -94,7 +94,7 @@ class IO_HEAT:
 
         return
 
-    def writeMeshVTP(self, mesh, scalar, label, prefix, path, tag=None):
+    def writeMeshVTP(self, mesh, scalar, label, prefix, path, tag=None, PClabel=True):
         """
         writes a vtp mesh file
         output file contains the PFC mesh, and an array of heat flux values,
@@ -107,9 +107,15 @@ class IO_HEAT:
         path - file path where paraview folder lives
         """
         if tag is None:
-            fName = prefix + '_mesh.vtp'
+            if PClabel == True:
+                fName = prefix + '_mesh.vtp'
+            else:
+                fName = prefix + '.vtp'
         else:
-            fName = prefix + '_'+tag+'_mesh.vtp'
+            if PClabel == True:
+                fName = prefix + '_'+tag+'_mesh.vtp'
+            else:
+                fName = prefix + '_' + tag + '.vtp'
 
         VTKops = vtkOpsClass.VTKops()
         VTKops.initializeMeshScalar(mesh, scalar, label)

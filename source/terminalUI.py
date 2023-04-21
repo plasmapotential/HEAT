@@ -255,7 +255,10 @@ class TUI():
 
     def loadTimeSteps(self, ts, shot, tag, tsFil=None):
         """
-        loads timesteps data from batchFile and filament file
+        ts is timesteps in batchfile
+        tsFil is 2D list of timesteps for each filament (can be finer resolution than batchfile)
+
+        loads timesteps data from batchFile and filament file.  
         """
         if tsFil is not None:
             for row in tsFil:

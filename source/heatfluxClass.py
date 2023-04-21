@@ -1007,6 +1007,32 @@ class heatFlux:
         GYRO.gyroPowMatrix += Pgyro
         GYRO.gyroNanPower += PNaN
         return
+    
+    def filamentAddHF(self, FIL, PFC, ts):
+        """
+        assigns power from filament to targets
+
+        FIL.intersectRecord gets overwritten for each filament source timestep
+        so this function needs to be called once per filament to add 
+        the heat fluxes from each filament source timestep to the tallies on the PFC mesh
+
+        tLoc is the index of the timestep
+        """
+        E = FIL.g_pts.reshape(FIL.N_b*FIL.N_r*FIL.N_p)
+        print(np.sum(E))
+        for i in range(len(ts)):
+            for j in range(FIL.N_vS):
+                #indexes of intersect mesh that correspond to this PFC
+                idx1 = np.where(np.array(FIL.CADtargetNames) == PFC.name)[0] #this PFC indexes in target mesh
+                PFCidx = np.intersect1d(FIL.intersectRecord[j,:,i], idx1) #idxs where this PFC was hit in intersection test
+                use = np.where(np.isin(FIL.intersectRecord[j,:,i],PFCidx)==True)[0] #source macroparticles that hit a PFCidx
+                idx2 = FIL.intersectRecord[j,use,i].astype(int)
+                PFC.Edep[idx2, i] += E[use]
+        
+        PFC.qFil = PFC.Edep / PFC.areas[:,np.newaxis] / FIL.dt
+        print("Sum: {:f}".format(np.sum(PFC.Edep)))
+        input()
+        return
 
 
 #===============================================================================

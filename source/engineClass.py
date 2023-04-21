@@ -312,7 +312,11 @@ class engineObj():
 
     def setupTime(self, timesteps:np.ndarray, shot:int, tag=None, clobberFlag=True):
         """
-        sets up timesteps
+        sets up timesteps.  timesteps includes timesteps from batchfile and from
+        filament file.  
+
+        creates self.timesteps, which has all timesteps (FIL.tsFil and MHD.timesteps)
+
         """
         if tag is None:
             tag = ''
@@ -1949,6 +1953,15 @@ class engineObj():
             #build filament meshes
             self.getFilMeshes()
 
+            #loop thru ROI PFCs initializing filament HF matrix
+            for PFC in self.PFCs:
+                #initialize all self.timesteps, even if not in PFC.timesteps
+                PFC.qFil = np.zeros((len(PFC.centers), len(self.timesteps)))
+                PFC.Edep = np.zeros((len(PFC.centers), len(self.timesteps)))
+                PFC.filTimesteps = self.timesteps
+
+
+
             #loop through each filament
             for idx,ts in enumerate(self.FIL.tsFil):
                 print('\n')
@@ -1973,8 +1986,8 @@ class engineObj():
                 for tIdx,t in enumerate(ts):
                     print('\n')
                     print("-"*30)
-                    print("Source Timestep: "+self.tsFmt.format(t))
-                    log.info("\nSource Timestep: "+self.tsFmt.format(t))
+                    print("Filament Timestep: "+self.tsFmt.format(t))
+                    log.info("\nFilament Timestep: "+self.tsFmt.format(t))
 
                     #set up file directory structure
                     timeDir = self.MHD.shotPath + self.tsFmt.format(t) + '/'  
@@ -1987,23 +2000,27 @@ class engineObj():
                     #build source for this timestep
                     if tCount < N_src_t:
                         self.getFilamentSource(t, id, Btrace)
+                    #else:
+                    #    break
 
-                    #loop thru ROI PFCs, tracing sources to targets
-                    for PFC in self.PFCs:
-                        if t not in PFC.timesteps:
-                            pass
-                        else:
-                            print("*"*20)
-                            print('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
-                            log.info('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
-
-                            pfcDir = self.MHD.shotPath + self.tsFmt.format(t) +'/'+PFC.name+'/'
-                            tools.makeDir(pfcDir, clobberFlag=False)
-                    
                     #trace macroparticles from source at this timestep
                     if tIdx < self.FIL.N_src_t:
                         self.FIL.tEQ = ts[0]
-                        self.FIL.traceFilamentParticles(self.MHD)
+                        self.FIL.traceFilamentParticles(self.MHD, ts)
+                        #loop thru ROI PFCs, mapping power to targets
+                        for PFC in self.PFCs:
+                            if t not in PFC.timesteps:
+                                pass
+                            else:
+                                print("*"*20)
+                                print('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+                                log.info('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+
+                                pfcDir = self.MHD.shotPath + self.tsFmt.format(t) +'/'+PFC.name+'/'
+                                tools.makeDir(pfcDir, clobberFlag=False)
+                                self.HF.filamentAddHF(self.FIL, PFC, ts)
+                    
+
                         self.filamentTraceOutput(id,t)
                     
                     tCount += 1
@@ -2023,6 +2040,9 @@ class engineObj():
                         name = 'filamentSource_'+id+'_' + self.tsFmt.format(t)
                         self.combineFilTimesteps(name, oldPath, newPath)
                     tCount +=1
+            
+            #copy heat fluxes to the paraview movie directory
+            self.saveFilamentHFOutput(PFC)
 
 
         print("Total Time Elapsed: {:f}".format(time.time() - t0))
@@ -2080,7 +2100,7 @@ class engineObj():
         path = self.MHD.shotPath 
         for i in range(self.FIL.N_vS):
             for j,t in enumerate(ts):
-                #save filament data to file
+                #save filament trajectory data to file
                 tag = self.tsFmt.format(t)
                 prefix = 'filamentTrace_'+id+'_vS{:03d}_tsSrc'.format(i)+self.tsFmt.format(t_source)
                 label = 'Filament Trace'
@@ -2095,6 +2115,25 @@ class engineObj():
 
         return
 
+    def saveFilamentHFOutput(self, PFC):
+        """
+        saves heat fluxes calculated on PFC
+        """
+        path = self.MHD.shotPath
+        for i,t in enumerate(PFC.filTimesteps):
+            #write hf files
+            tag = self.tsFmt.format(t)
+            prefix = 'HF_filaments_'
+            label = '$MW/m^2$'
+            q = PFC.qFil[:,i]
+            #if self.IO.csvMask == True:
+            #     self.IO.writePointCloudCSV(PFC.centers,q,path+'paraview/',label,tag,prefix)
+            #if self.IO.vtpPCMask == True:
+            #    self.IO.writePointCloudVTP(PFC.centers,q,label,prefix,path,tag, PClabel=False)
+            if self.IO.vtpMeshMask == True:
+                self.IO.writeMeshVTP(PFC.mesh, q, label, prefix, path, tag, PClabel=False)
+
+        return
 
     def combineFilTimesteps(self, name, oldPath, newPath):
         """
