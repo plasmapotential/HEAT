@@ -305,6 +305,58 @@ class PFC:
         return targetPoints, targetNorms
 
 
+    def checkInsideBoundingBox(self, q2, MHD, CAD):
+        """
+        q2 contains the xyz of the endpoints of a structure trace. This function
+        finds the ones outside the bounding box and returns a mask.
+        The bounding box is given by the outermost boundary of 
+        CAD class Rmin,Rmax,Zmin,Zmax and the MHD class ep.g['wall'].
+        """
+        Rmin = np.min([CAD.Rmin, MHD.ep[0].g['wall'][:,0].min()])
+        Rmax = np.max([CAD.Rmax, MHD.ep[0].g['wall'][:,0].max()])
+        Zmin = np.min([CAD.Zmin, MHD.ep[0].g['wall'][:,1].min()])
+        Zmax = np.max([CAD.Zmax, MHD.ep[0].g['wall'][:,1].max()])
+        print('\nBounding box set to: Rmin =',Rmin,' Rmax =',Rmax,' Zmin =',Zmin,' Zmax =',Zmax)
+        
+        x = q2[:,0]
+        y = q2[:,1]
+        Z = q2[:,2]
+        R = np.sqrt(x*x + y*y)
+        inside = np.zeros(len(x), dtype=bool)
+        
+        idx = np.where((R > Rmin) & (R < Rmax) & (Z > Zmin) & (Z < Zmax))[0]
+        inside[idx] = True
+        print(np.sum(~inside),' Field lines left the bounding box','\n')
+        return inside, idx
+        
+        
+    def removeOutsideFacingFacets(self, Ctrs, Norms, MHD, threshold = -0.2):
+        """
+        Calculates the scalar product of face normal and vector from plasma (R0,Z0) to face center:
+        a = (R0 - Rcenter, 0, Z0 - Zcenter)/norm * Norms
+        Norms is an XYZ vector. Needs conversion to RphiZ vector
+        For face looking inwards to plasma this is close to 1.0
+        For face looking sideways this is close to 0
+        For face looking outwards this is close to -1
+        Set filter to a < threshold
+        """
+        R0 = MHD.ep[0].g['R0']
+        Z0 = MHD.ep[0].g['Zmid']
+        
+        R,Z,phi = tools.xyz2cyl(Ctrs[:,0],Ctrs[:,1],Ctrs[:,2])
+        nR = Norms[:,0]*np.cos(phi) + Norms[:,1]*np.sin(phi)
+        nZ = Norms[:,2]
+        facingOut = np.zeros(len(R), dtype=bool)
+        
+        norm = np.sqrt((R0-R)**2 + (Z0-Z)**2)
+        a = (R0-R)/norm * nR + (Z0-Z)/norm * nZ
+        
+        idx = np.where(a < threshold)[0]
+        facingOut[idx] = True 
+        print(np.sum(facingOut),' faces are oriented away from the plasma and are considered shadowed.')
+        return facingOut
+        
+
     def findOpticalShadowsOpen3D(self,MHD,CAD,verbose=False, shadowMaskClouds=False):
         """
         Find shadowed faces for a given PFC object using MAFOT structure.
@@ -315,9 +367,10 @@ class PFC:
         Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
         library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
         """
+        # Remove faces that cannot see the plasma
+        facingOut = self.removeOutsideFacingFacets(self.centers, self.norms, MHD)
+        self.shadowed_mask[facingOut] = 1
         use = np.where(self.shadowed_mask == 0)[0]
-        intersectMask = np.zeros((len(self.centers)))
-
 
         print("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
         log.info("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
@@ -355,35 +408,35 @@ class PFC:
             log.info("-Forward Trace-")
             mapDirectionStruct = 1.0
             startIdx = 1 #Match MAFOT sign convention for toroidal direction (CCW=+)
-            fwdUse = np.where(self.powerDir==-1)[0]
+            fwdUse = np.where(self.powerDir[use]==-1)[0]
             if len(fwdUse) != 0:
                 MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
                 #Perform first integration step
-                MHD.writeMAFOTpointfile(self.centers[fwdUse],self.gridfileStruct)
+                MHD.writeMAFOTpointfile(self.centers[use][fwdUse],self.gridfileStruct)
                 MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
                 structData = tools.readStructOutput(self.structOutfile)
                 os.remove(self.structOutfile) #clean up
                 q1[fwdUse] = structData[0::2,:] #even indexes are first trace point
                 q2[fwdUse] = structData[1::2,:] #odd indexes are second trace point
                 intersect_mask = self.intersectTestOpen3D(q1[fwdUse],q2[fwdUse],targetPoints[fwdUseTgt],targetNorms[fwdUseTgt])
-                self.shadowed_mask[fwdUse] = intersect_mask
+                self.shadowed_mask[use][fwdUse] = intersect_mask
             #run reverse mesh elements
             print("-Reverse Trace-")
             log.info("-Reverse Trace-")
             mapDirectionStruct = -1.0
             startIdx = 0 #Match MAFOT sign convention for toroidal direction
-            revUse = np.where(self.powerDir==1)[0]
+            revUse = np.where(self.powerDir[use]==1)[0]
             if len(revUse) != 0:
                 MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
                 #Perform first integration step
-                MHD.writeMAFOTpointfile(self.centers[revUse],self.gridfileStruct)
+                MHD.writeMAFOTpointfile(self.centers[use][revUse],self.gridfileStruct)
                 MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
                 structData = tools.readStructOutput(self.structOutfile)
                 os.remove(self.structOutfile) #clean up
                 q1[revUse] = structData[1::2,:] #even indexes are first trace point
                 q2[revUse] = structData[0::2,:] #odd indexes are second trace point
                 intersect_mask = self.intersectTestOpen3D(q1[revUse],q2[revUse],targetPoints[revUseTgt],targetNorms[revUseTgt])
-                self.shadowed_mask[revUse] = intersect_mask
+                self.shadowed_mask[use][revUse] = intersect_mask
 
             #this is for printing information about a specific mesh element
             #you can get the element # from paraview Point ID
@@ -500,7 +553,9 @@ class PFC:
                     os.remove(self.structOutfile) #clean up
                     q1[fwdUse] = structData[0::2,:] #odd indexes are second trace point
                     q2[fwdUse] = structData[1::2,:] #odd indexes are second trace point
-                    intersect_mask2[use2[fwdUse]] = self.intersectTestOpen3D(q1[fwdUse],q2[fwdUse],targetPoints,targetNorms)
+                    insideBndy,insideBndyIdx = self.checkInsideBoundingBox(q2[fwdUse], MHD, CAD)
+                    intersect_mask2[use2[fwdUse]][~insideBndy] = 1     # field lines outside the Bounding box are shadowed
+                    intersect_mask2[use2[fwdUse][insideBndyIdx]] = self.intersectTestOpen3D(q1[fwdUse][insideBndyIdx],q2[fwdUse][insideBndyIdx],targetPoints,targetNorms)
 
                 #run reverse mesh elements
                 print("-Reverse Trace-")
@@ -520,7 +575,9 @@ class PFC:
                     os.remove(self.structOutfile) #clean up
                     q1[revUse] = structData[1::2,:] #odd indexes are second trace point
                     q2[revUse] = structData[0::2,:] #odd indexes are second trace point
-                    intersect_mask2[use2[revUse]] = self.intersectTestOpen3D(q1[revUse],q2[revUse],targetPoints,targetNorms)
+                    insideBndy,insideBndyIdx = self.checkInsideBoundingBox(q2[revUse], MHD, CAD)
+                    intersect_mask2[use2[revUse]][~insideBndy] = 1     # field lines outside the Bounding box are shadowed
+                    intersect_mask2[use2[revUse][insideBndyIdx]] = self.intersectTestOpen3D(q1[revUse][insideBndyIdx],q2[revUse][insideBndyIdx],targetPoints,targetNorms)
 
                 #for debugging, save a shadowmask at each step up fieldline
                 if shadowMaskClouds == True:

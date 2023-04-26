@@ -333,6 +333,23 @@ class tools:
         y = r*np.sin(phi)
         return x,y,z
 
+    def xyzVec2cylVec(self,x,y,z,vx,vy,vz):
+        """
+        Converts a vector in carthesian (vx,vy,vz) to a vector in cylindrical (vr,vphi,vz)
+        """
+        _,_,phi = self.xyz2cyl(x,y,z)
+        vr = vx*np.cos(phi) + vy*np.sin(phi)
+        vphi = -vx*np.sin(phi) + vy*np.cos(phi)
+        return vr,vphi,vz
+
+    def cylVec2xyzVec(self,phi,vr,vphi,vz):
+        """
+        Converts a vector in cylindrical (vr,vphi,vz) to a vector in carthesian (vx,vy,vz)
+        """
+        vx = vr*np.cos(phi) - vphi*np.sin(phi)
+        vy = vr*np.sin(phi) + vphi*np.cos(phi)
+        return vx,vy,vz
+
     def signedVolume(self,a,b,c,d):
         """
         Calculates signed volume

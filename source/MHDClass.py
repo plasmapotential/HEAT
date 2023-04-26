@@ -172,17 +172,32 @@ class MHD:
         """
         #check if these GEQDSKs are named according to the HEAT convention g<shot>_<timestep>
         #where shot is an int and timestep can be any float (ie with or without radix)
-        test1 = np.all(np.array([len(x.split("_")) for x in gFileList]) > 1)
-        test2 = np.all(np.array([type(g.split('_')[-1])==float for g in gFileList]) > 1)
+        #test1 = np.all(np.array([len(x.split("_")) for x in gFileList]) > 1)
+        #test2 = np.all(np.array([type(g.split('_')[-1])==float for g in gFileList]) > 1)
+        useD3DtimeFmt = True
+        useHeatTimeFmt = True
+        for g in gFileList:
+            time = g.split('.')[-1]
+            try: time = float(time)
+            except: useD3DtimeFmt = False
+
+            time = g.split('_')[-1]
+            try: time = float(time)
+            except: useHeatTimeFmt = False
+        
         ts = []
         for i,g in enumerate(gFileList):
             #GEQDSKs are named using timesteps
-            if test1 == True and test2==True:
+            if useHeatTimeFmt:
                 ts.append(float(g.split('_')[-1]))
-            #GEQDSKs do not follow HEAT naming convention
+            #GEQDSKs are named by D3D naming convention
+            elif useD3DtimeFmt:
+                ts.append(float(g.split('.')[-1]))
+            #GEQDSKs do not follow HEAT or D3D naming convention
             else:
                 ts.append(i)
 
+        #print('Timesteps:', ts)
         return np.array(ts)
 
     def getGEQDSK(self, ts, gFileList):
@@ -205,7 +220,7 @@ class MHD:
             oldgfile = self.tmpDir + g
             #copy gfile for this timestep
             if self.shotPath[-1] != '/': self.shotPath += '/'
-            self.gFiles.append('g'+self.shotFmt.format(self.shot) +'_'+ self.tsFmt.format(t))
+            self.gFiles.append('g'+self.shotFmt.format(self.shot) + '.' + format(int(t), '05d'))#'_'+ self.tsFmt.format(t))
             newgfile = timeDir + self.gFiles[-1]
             shutil.copyfile(oldgfile, newgfile)
 
@@ -225,7 +240,7 @@ class MHD:
         if gfile is None:
             timeDir = self.shotPath + self.tsFmt.format(t) +'/'
             gfile = timeDir + 'g'+self.shotFmt.format(shot)+'_'+self.tsFmt.format(t)
-        self.ep = EP.equilParams(gfile, shot, t, gtype='heat')
+        self.ep = EP.equilParams(gfile)#, shot, t)#, gtype='heat')
         return
 
     def makeEFITobjects(self):
@@ -240,7 +255,7 @@ class MHD:
         for idx,t in enumerate(self.timesteps):
             timeDir = self.shotPath + self.tsFmt.format(t) +'/'
             gfile = timeDir+self.gFiles[idx]
-            self.ep[idx] = EP.equilParams(gfile, gType='heat')
+            self.ep[idx] = EP.equilParams(gfile)#, gType='heat')
         return
 
 
