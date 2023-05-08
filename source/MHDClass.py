@@ -177,13 +177,17 @@ class MHD:
         useD3DtimeFmt = True
         useHeatTimeFmt = True
         for g in gFileList:
-            time = g.split('.')[-1]
-            try: time = float(time)
-            except: useD3DtimeFmt = False
+            if ('.' in g) & ('_' not in g):
+                time = g.split('.')[-1]
+                try: time = float(time)
+                except: useD3DtimeFmt = False
+            else: useD3DtimeFmt = False
 
-            time = g.split('_')[-1]
-            try: time = float(time)
-            except: useHeatTimeFmt = False
+            if ('_' in g): 
+                time = g.split('_')[-1]
+                try: time = float(time)
+                except: useHeatTimeFmt = False
+            else: useHeatTimeFmt = False
         
         ts = []
         for i,g in enumerate(gFileList):
@@ -220,7 +224,7 @@ class MHD:
             oldgfile = self.tmpDir + g
             #copy gfile for this timestep
             if self.shotPath[-1] != '/': self.shotPath += '/'
-            self.gFiles.append('g'+self.shotFmt.format(self.shot) + '.' + format(int(t), '05d'))#'_'+ self.tsFmt.format(t))
+            self.gFiles.append('g'+self.shotFmt.format(self.shot) + '_'+ self.tsFmt.format(t))
             newgfile = timeDir + self.gFiles[-1]
             shutil.copyfile(oldgfile, newgfile)
 
@@ -429,7 +433,7 @@ class MHD:
 
             f.write('# Parameterfile for ' + self.MachFlag + ' Programs\n')
             f.write('# Shot: '+self.shotFmt.format(self.shot)+'\tTime: '+self.tsFmt.format(t)+'s\n')
-            f.write('# Path: ' + self.shotPath  +self.tsFmt.format(t) +'\n')
+            f.write('# Path: ' + self.shotPath  +self.tsFmt.format(t) + '/' + 'g'+self.shotFmt.format(self.shot) + '_'+ self.tsFmt.format(t) + '\n')
             f.write('Nphi=\t{:d}\n'.format(self.Nphi))
 
             #itt means different things depending on if we are tracing field line
