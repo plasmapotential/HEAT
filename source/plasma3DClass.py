@@ -6,7 +6,7 @@ import sys
 import pandas as pd
 import numpy as np
 import scipy.interpolate as scinter
-import os
+import os, glob
 import shutil
 import logging
 import subprocess
@@ -26,32 +26,51 @@ class plasma3D:
 	   plasma3D.launchLaminar(4, 'testrun')
 	"""
 
-	def __init__(self, shot = 123456, time = 100, gPath = None, inputFile = None):
-		self.cwd = os.getcwd()
+	def __init__(self):
 		self.R = None		# in m
 		self.phi = None		# right-handed angle in degrees
 		self.Z = None		# in m
 		self.psimin = None
 		self.Lc = None		# in km
+		self.allowed_vars = ['shot','time','tmax','gFile','itt','response','selectField','useIcoil','sigma','charge','Ekin','Lambda','Mass']
 	
-		self.allowed_vars = ['shot','time','tmax','gPath','itt','response','selectField','useIcoil','sigma','charge','Ekin','Lambda','Mass']
+	
+	def initializePlasma3D(self, shot, time, gFile = None, inputFile = None, cwd = None, inputDir = None):
+		"""
+		Set up basic input vars
+		"""
 		self.shot = tools.makeInt(shot)
 		self.time = tools.makeInt(time)
-		if gPath is None: gPath = self.cwd
-		self.gPath = gPath
+		if cwd is None: self.cwd = os.getcwd()
+		else: self.cwd = cwd
+		if inputDir is None: self.inputDir = self.cwd
+		else: self.inputDir = inputDir
+		if gFile is None: gFile = self.cwd + '/g' + format(int(self.shot),'06d') + '.' + format(int(self.time),'05d')
+		self.gFile = gFile
 		if inputFile is not None: self.read_input_file(inputFile)
 		else: self.setMAFOTctl()	# just defaults
-		if os.path.isfile(self.cwd + '/' + 'm3dc1sup.in'): self.readM3DC1supFile()
-		else: self.setM3DC1input()	# just defaults
+		self.readM3DC1supFile()
+
+
+	def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
+		"""
+		sets up pythonic string number formats for shot and timesteps
+		"""
+		self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
+		self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
+		return
 		
 		
 	def print_settings(self):
+		"""
+		Print all inputs
+		"""
 		print('#=============================================================')
 		print('#                Equilibrium Variables')
 		print('#=============================================================')
 		print('shot = ' + str(self.shot))
 		print('time = ' + str(self.time))
-		print('gPath = ' + str(self.gPath))
+		print('gFile = ' + str(self.gFile))
 		print('cwd = ' + str(self.cwd))
 		print('#=============================================================')
 		print('#                3D Plasma Variables')
@@ -69,7 +88,7 @@ class plasma3D:
 		print('response = ' + str(self.response))
 		print('selectField = ' + str(self.selectField))
 		for i in range(len(self.C1Files)):
-			print('File ' + str(i+1) + ' = ' + str(self.C1Files[i]))
+			print('File ' + str(i+1) + ' = ' + os.path.abspath(self.C1Files[i]))
 			print('   Scale = ' + str(self.C1scales[i]))
 			print('   Phase = ' + str(self.C1phases[i]))
 		
@@ -107,8 +126,13 @@ class plasma3D:
 		C1Files = []
 		scales = []
 		phases = []
+
+		if not os.path.isfile(self.inputDir + '/' + 'm3dc1sup.in'): 
+			print('m3dc1sup.in file not found!')
+			self.setM3DC1input()
+			return
 		
-		with open(self.cwd + '/' + 'm3dc1sup.in') as f:
+		with open(self.inputDir + '/' + 'm3dc1sup.in') as f:
 			lines = f.readlines()
 		
 		for line in lines:
@@ -123,9 +147,12 @@ class plasma3D:
 		
 		if len(C1Files) < 1: 
 			print('Error reading m3dc1sup.in')
+			self.setM3DC1input()
+			return
 		else:
 			self.setM3DC1input(C1Files, scales, phases)
-			print(self.cwd + '/' + 'm3dc1sup.in read successfully')
+			print(self.inputDir + '/' + 'm3dc1sup.in read successfully')
+			return
 		
 	
 	def read_input_file(self, file):
@@ -138,7 +165,6 @@ class plasma3D:
 		"""
 		if os.path.isfile(file): 
 			tools.read_input_file(self, file)
-			self.time = self.tmax
 			self.setTypes()
 			print('Input file: ' + file + ' read successfully')
 		else: 
@@ -154,6 +180,19 @@ class plasma3D:
 		floats = ['Ekin','Lambda']
 		setAllTypes(self, integers, floats)
 
+
+	def updatePoints(self, xyz):
+		"""
+		Converts xyz of centers into R,phi,Z, update class variables and write the points file
+		"""
+		if len(xyz.shape) > 1:
+			R,Z,phi = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
+		else:
+			R,Z,phi = tools.xyz2cyl(xyz[0],xyz[1],xyz[2])
+
+		phi = np.degrees(phi)
+		self.updatePoints(R, phi, Z)
+		
 	
 	def updatePoints(self, R, phi, Z):
 		"""
@@ -165,7 +204,7 @@ class plasma3D:
 		self.writePoints()
 
 	
-	def writePoints(self, filename = 'points.dat'):
+	def writePoints(self, filename = 'points3DHF.dat'):
 		"""
 		Write the points file in CWD from the class variables
 		"""
@@ -180,23 +219,27 @@ class plasma3D:
 				f.write(str(R[i]) + "\t" + str(phi[i]) + "\t" + str(Z[i]) + "\n")
 				
 				
-	def launchLaminar(self, nproc, tag = None):
+	def launchLaminar(self, nproc, tag = None, MapDirection = 0):
 		"""
 		Write all inout files and launch MAFOT
 		Read the output file when finished
 		"""
 		if tag is None: tag = ''
-		self.writeControlFile()
+		self.writeControlFile(MapDirection)
 		self.writeM3DC1supFile()
 		self.writeCoilsupFile()
 		
 		self.nproc = nproc
 		self.tag = tag
-		subprocess.call(['mpirun','-n',str(nproc),'heatlaminar_mpi','-P','points.dat','_heat.dat',tag])
-		#print('mpirun -n ' + str(nproc) + ' heatlaminar_mpi' + ' -P points.dat' + ' _heat.dat' + ' ' + tag)
+		print('-'*80)
+		print('Launching 3D plasma field line tracing')
+		#subprocess.call(['mpirun','-n',str(nproc),'heatlaminar_mpi','-P','points.dat','_lamCTL.dat',tag])
+		print('mpirun -n ' + str(nproc) + ' heatlaminar_mpi' + ' -P points3DHF.dat' + ' _lamCTL.dat' + ' ' + tag)
 		
-		self.wait2finish()
+		#self.wait2finish()
 		self.readLaminar(tag)
+		print('3D plasma field line tracing complete')
+		print('-'*80)
 		
 	
 	def readLaminar(self, tag = None):
@@ -213,16 +256,21 @@ class plasma3D:
 			self.psimin = lamdata[:,4]
 		else:
 			print('MAFOT output file: ' + file + ' not found!')
+			
+			
+	def cleanUp(self, tag = None):
+		logs = self.cwd + '/' + 'log*'
+		for f in glob.glob(logs): os.remove(f)
 
 
-	def writeControlFile(self):
+	def writeControlFile(self, MapDirection):
 		"""
 		Write MAFOT control file
 		"""
-		with open(self.cwd + '/' + '_heat.dat', 'w') as f:
+		with open(self.cwd + '/' + '_lamCTL.dat', 'w') as f:
 			f.write('# Parameterfile for HEAT Programs\n')
 			f.write('# Shot: ' + format(int(self.shot),'06d') + '\tTime: ' + format(int(self.time),'04d') + 'ms\n')
-			f.write('# Path: ' + self.gPath + '\n')			
+			f.write('# Path: ' + self.gFile + '\n')			
 			f.write('NZ=\t10\n')
 			f.write('itt=\t' + str(self.itt) + '\n')			
 			f.write('Rmin=\t1\n')
@@ -231,7 +279,7 @@ class plasma3D:
 			f.write('Zmax=\t1\n')
 			f.write('NR=\t10\n')
 			f.write('phistart(deg)=\t0\n')
-			f.write('MapDirection=\t0\n')
+			f.write('MapDirection=\t' + str(MapDirection) + '\n')
 			f.write('PlasmaResponse(0=no,>1=yes)=\t' + str(self.response) + '\n')
 			f.write('Field(-3=VMEC,-2=SIESTA,-1=gfile,M3DC1:0=Eq,1=I-coil,2=both)=\t' + str(self.selectField) + '\n')
 			f.write('target(0=cp,1=inner,2=outer,3=shelf)=\t0\n')		
@@ -255,7 +303,7 @@ class plasma3D:
 		"""
 		with open(self.cwd + '/' + 'm3dc1sup.in', 'w') as f:
 			for i in range(len(self.C1Files)):
-				f.write(self.C1Files[i] + '\t' + str(self.C1scales[i]) + '\t' + str(self.C1phases[i]) + '\n')
+				f.write(os.path.abspath(self.C1Files[i]) + '\t' + str(self.C1scales[i]) + '\t' + str(self.C1phases[i]) + '\n')
 
 
 	def writeCoilsupFile(self, machine = None):
@@ -278,7 +326,7 @@ class plasma3D:
 			
 		if not self.isComplete():
 			print('MAFOT run ended prematurely. Attempt restart...')
-			subprocess.call(['mpirun','-n',str(nproc),'heatlaminar_mpi','-P','points.dat','_heat.dat',tag])
+			subprocess.call(['mpirun','-n',str(nproc),'heatlaminar_mpi','-P','points.dat','_lamCTL.dat',tag])
 			self.wait2finish()
 		else: return
 	
@@ -325,15 +373,27 @@ class heatflux3D:
 	Example call:
 	"""
 
-	def __init__(self, Lc, psimin, ep, inputFile = None, T = None, HFS = False):
+	def __init__(self):
+		self.psimin = None
+		self.Lc = None		# in km
+		self.N = 1
+		self.q = np.zeros(self.N)
+		self.ep = None	# equilParams_class instance for EFIT equilibrium
+		self.HFS = None	# True: use high field side SOL, False: use low field side SOL
+		self.allowed_vars = ['Lcmin', 'lcfs', 'lqEich', 'S', 'Psol', 'qBG']
+
+
+	def intializeHF3D(self, Lc, psimin, ep, inputFile = None, T = None, HFS = False):
+		"""
+		Set up basic input vars
+		"""
 		self.psimin = psimin
 		self.Lc = Lc		# in km
 		self.N = len(self.Lc)
-		self.q = np.zeros(N)
+		self.q = np.zeros(self.N)
 		self.ep = ep	# equilParams_class instance for EFIT equilibrium
 		self.HFS = HFS	# True: use high field side SOL, False: use low field side SOL
-		
-		self.allowed_vars = ['Lcmin', 'lcfs', 'lqEich', 'S', 'Psol', 'qBG', '']
+
 		if inputFile is not None: self.read_input_file(inputFile)
 		else: self.setHFctl()	# just defaults
 		
@@ -357,8 +417,20 @@ class heatflux3D:
 			except:
 				raise RuntimeError('Invalid T profile data')
 
+
+	def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
+		"""
+		sets up pythonic string number formats for shot and timesteps
+		"""
+		self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
+		self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
+		return
+
 	
 	def print_settings(self):
+		"""
+		Print all inputs
+		"""
 		print('#=============================================================')
 		print('#                Optical HF Variables')
 		print('#=============================================================')
