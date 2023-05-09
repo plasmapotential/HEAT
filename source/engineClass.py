@@ -18,6 +18,7 @@ import gyroClass
 import filamentClass
 import radClass
 import ioClass
+import plasma3DClass
 import time
 import numpy as np
 import logging
@@ -103,6 +104,8 @@ class engineObj():
         self.RAD = radClass.RAD(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
         self.FIL = filamentClass.filament(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
         self.IO = ioClass.IO_HEAT()
+        self.plasma3D = plasma3DClass.plasma3D()
+        self.hf3D = plasma3DClass.heatflux3D()
 
         #set up class variables for each object
         self.MHD.allowed_class_vars()
@@ -123,6 +126,8 @@ class engineObj():
         self.RAD.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
         self.IO.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
         self.FIL.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
+        self.plasma3D.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
+        self.hf3D.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
         tools.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
 
         return
@@ -1692,8 +1697,15 @@ class engineObj():
                     #powerDir can also be calculated using dot product of phi
                     #PFC.bdotphi = np.multiply(PFC.BNorms, PFC.phiVec).sum(1)
                     #PFC.powerDir = np.sign(PFC.bdotn)*np.sign(PFC.bdotphi)*-1.0
+                    
+                    #3Dplasma setup
+                    gFile = self.MHD.shotPath + self.tsFmt.format(t) + '/' + self.MHD.gFiles[tIdx]
+                    self.plasma3D.initializePlasma3D(self.MHD.shot, t, gFile, self.inputFileList[tIdx], PFC.controlfilePath[0:-1], self.MHD.tmpDir[0:-1])   # remove / at the end of paths
                     print('\n')
-                    print("*"*20)
+                    print("*"*80)
+                    self.plasma3D.print_settings()                    
+                    print('\n')
+                    print("*"*80)
                     print('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
                     log.info('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
                     if 'hfOpt' in runList:
@@ -2254,13 +2266,17 @@ class engineObj():
 #            print("-"*70)
 #            print("MAFOT LAMINAR MODULE INITIALIZED")
 #            log.info("MAFOT LAMINAR MODULE INITIALIZED")
-            CTLfile=PFC.controlfilePath + PFC.controlfile
-            self.MHD.writeControlFile(CTLfile, PFC.t, PFC.mapDirection, mode='laminar')
-            use = np.where(PFC.shadowed_mask != 1)[0]
-            self.MHD.writeMAFOTpointfile(PFC.centers[use],PFC.gridfile)
-            self.MHD.runMAFOTlaminar(PFC.gridfile,PFC.controlfilePath,PFC.controlfile,self.NCPUs)
-            self.HF.readMAFOTLaminarOutput(PFC,PFC.outputFile)
-            os.remove(PFC.outputFile)
+#            CTLfile=PFC.controlfilePath + PFC.controlfile
+#            self.MHD.writeControlFile(CTLfile, PFC.t, PFC.mapDirection, mode='laminar')
+#            self.MHD.writeMAFOTpointfile(PFC.centers[use],PFC.gridfile)
+#            self.MHD.runMAFOTlaminar(PFC.gridfile,PFC.controlfilePath,PFC.controlfile,self.NCPUs)
+#            self.HF.readMAFOTLaminarOutput(PFC,PFC.outputFile)
+#            os.remove(PFC.outputFile)
+            use = np.where(PFC.shadowed_mask == 0)[0]
+            self.plasma3D.updatePoints(PFC.centers[use])
+            self.plasma3D.launchLaminar(self.NCPUs, tag = None, MapDirection = PFC.mapDirection)
+            self.plasma3D.cleanUp(tag = None)      # removes the MAFOT log files
+            
         #get psi from gfile for 2D plasmas
         else:
             self.MHD.psi2DfromEQ(PFC)
@@ -3003,13 +3019,17 @@ class engineObj():
         """
         #Run MAFOT laminar for 3D plasmas
         if self.MHD.plasma3Dmask==True:
-            CTLfile=PFC.controlfilePath + PFC.controlfile
-            self.MHD.writeControlFile(CTLfile, PFC.t, PFC.mapDirection, mode='laminar')
-            self.MHD.writeMAFOTpointfile(PFC.centers,PFC.gridfile)
-            self.MHD.runMAFOTlaminar(PFC.gridfile,PFC.controlfilePath,PFC.controlfile,self.NCPUs)
-            self.HF.readMAFOTLaminarOutput(PFC,PFC.outputFile)
-            use = np.where(PFC.psimin < 10)[0]
-            os.remove(PFC.outputFile)
+#            CTLfile=PFC.controlfilePath + PFC.controlfile
+#            self.MHD.writeControlFile(CTLfile, PFC.t, PFC.mapDirection, mode='laminar')
+#            self.MHD.writeMAFOTpointfile(PFC.centers,PFC.gridfile)
+#            self.MHD.runMAFOTlaminar(PFC.gridfile,PFC.controlfilePath,PFC.controlfile,self.NCPUs)
+#            self.HF.readMAFOTLaminarOutput(PFC,PFC.outputFile)
+#            use = np.where(PFC.psimin < 10)[0]
+#            os.remove(PFC.outputFile)
+            use = np.where(PFC.shadowed_mask == 0)[0]
+            self.plasma3D.updatePoints(PFC.centers[use])
+            self.plasma3D.launchLaminar(self.NCPUs, tag = None, MapDirection = PFC.mapDirection)
+            self.plasma3D.cleanUp(tag = None)      # removes the MAFOT log files
         #get psi from gfile for 2D plasmas
         else:
             self.MHD.psi2DfromEQ(PFC)
