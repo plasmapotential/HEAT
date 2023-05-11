@@ -2056,20 +2056,22 @@ class engineObj():
 
                 #print energy balance stats
                 print("\n\nTotal Energy Deposited on ROI PFCs: {:f}".format(EtotROI))
-                log.info("Total Energy Deposited on ROI PFCs: {:f}".format(EtotROI))
                 print("Total Energy Deposited on All PFCs: {:f}".format(EtotAll))
-                log.info("Total Energy Deposited on All PFCs: {:f}".format(EtotAll))
                 print("Theoretical total energy: {:f}".format(self.FIL.E0))
-                log.info("Theoretical total energy: {:f}".format(self.FIL.E0))
                 print("Energy balance: {:0.3f}%".format(EtotAll / self.FIL.E0 * 100.0))
-                
-                #print("N Particles Deposited on All PFCs: {:f}".format(np.sum(pTotAll)))
-                #log.info("N particles Deposited on All PFCs: {:f}".format(np.sum(pTotAll)))
-                #Nptcls = self.FIL.N_b*self.FIL.N_r*self.FIL.N_p*self.FIL.N_vS
-                #print("Theoretical N particles: {:f}".format(Nptcls))
-                #log.info("Theoretical N particles: {:f}".format(Nptcls))
-                #print("Particle balance: {:0.3f}%\n".format(pTotAll / Nptcls * 100.0))
+                log.info("\n\nTotal Energy Deposited on ROI PFCs: {:f}".format(EtotROI))
+                log.info("Total Energy Deposited on All PFCs: {:f}".format(EtotAll))
+                log.info("Theoretical total energy: {:f}".format(self.FIL.E0))
+                log.info("Energy balance: {:0.3f}%".format(EtotAll / self.FIL.E0 * 100.0))
 
+                #print particle balance stats
+                Nptcls = self.FIL.N_b*self.FIL.N_r*self.FIL.N_p*self.FIL.N_vS
+                print("N Particles Deposited on All PFCs: {:f}".format(np.sum(pTotAll)))
+                print("Theoretical N particles: {:f}".format(Nptcls))
+                print("Particle balance: {:0.3f}%\n".format(pTotAll / Nptcls * 100.0))
+                log.info("N Particles Deposited on All PFCs: {:f}".format(np.sum(pTotAll)))
+                log.info("Theoretical N particles: {:f}".format(Nptcls))
+                log.info("Particle balance: {:0.3f}%\n".format(pTotAll / Nptcls * 100.0))
 
 
                 #copy heat fluxes to the paraview movie directory
@@ -2106,24 +2108,30 @@ class engineObj():
         return
 
 
-    def filDepositedEnergyParticles(self, tIdx):
+    #==========================================================
+    #      runHEAT helper functions
+    #==========================================================
+
+    #--- Filaments ---
+
+    def filDepositedEnergyParticles(self, tIdx:int):
         """
         loops through intersectRecord and calculates the sum of all deposited energy
         and particles on any PFC, including PFCs outside of the ROI
         """
         density = self.FIL.density[:,:,:,tIdx].reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p)
 
-
-        E = self.FIL.density[:,:,:,tIdx].reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p)
-        energy = np.zeros(E.shape)
+        energy = np.zeros(density.shape)
         ptcls = 0.0
         for i in range(self.FIL.N_vS):
             hits = np.any(~np.isnan(self.FIL.intersectRecord[i,:,:]), axis=1)
-            ptcls +=  density * self.FIL.velocityFracs[:,i] * hits
-            energy += density * self.FIL.energyFracs[:,i] * hits
-
+            #ptcls +=  density * self.FIL.velocityFracs[:,i] * hits
+            #energy += density * self.FIL.energyFracs[:,i] * hits
             #energy += E * self.FIL.velocityFracs[:,i] * hits
             #ptcls += np.sum(hits)
+
+            ptcls += np.sum(hits)
+            energy += self.FIL.E0 * density * self.FIL.energyFracs[:,i] * hits
             
         return np.sum(energy), ptcls
 
@@ -2159,12 +2167,11 @@ class engineObj():
 
         return
 
-    def filamentTraceOutput(self, id: str, t_source: float, tIdx: int):
+    def filamentTraceOutput(self, id: str, t_source: float, tIdx: int, colorbar=True):
         """
-        saves filament traces
+        saves filament traces in CSV or VTP format
 
-        """
-        
+        """ 
         N_ts = int((self.FIL.tMax - self.FIL.tMin) / self.FIL.dt)+1
         ts = np.linspace(self.FIL.tMin, self.FIL.tMax, N_ts)
         path = self.MHD.shotPath 
@@ -2175,19 +2182,20 @@ class engineObj():
                 prefix = 'filamentTrace_'+id+'_vS{:03d}_tsSrc'.format(i)+self.tsFmt.format(t_source)
                 label = 'Filament Trace'
                 xyzData = self.FIL.xyzSteps[i,:,j,:].reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p, 3)
-                scalarData = self.FIL.density[:,:,:,tIdx].reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p) * self.FIL.energyFracs[:,i]
-                #scalarData = np.ones((self.FIL.N_b*self.FIL.N_r*self.FIL.N_p))
-#                path = self.FIL.controlfilePath
-#                if self.IO.csvMask == True:
-#                    self.IO.writePointCloudCSV(xyzData,scalarData,path,label,tag,prefix)
+                if colorbar == True:
+                    scalarData = self.FIL.density[:,:,:,tIdx].reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p) * self.FIL.energyFracs[:,i]
+                else:
+                    scalarData = np.ones((self.FIL.N_b*self.FIL.N_r*self.FIL.N_p))
+                if self.IO.csvMask == True:
+                    self.IO.writePointCloudCSV(xyzData,scalarData,path,label,tag,prefix)
                 if self.IO.vtpPCMask == True:
                     self.IO.writePointCloudVTP(xyzData,scalarData,label,prefix,path,tag, PClabel=False)
 
         return
 
-    def saveFilamentHFOutput(self, ts:np.ndarray, id:str):
+    def saveFilamentHFOutput(self, ts:np.ndarray, id:str, EdepMask=True):
         """
-        saves heat fluxes calculated on PFC
+        saves heat fluxes calculated on PFC in VTP or CSV format
         """
         path = self.MHD.shotPath
         
@@ -2220,17 +2228,21 @@ class engineObj():
             EArr = [PFC.Edep[:,i] for PFC in self.PFCs]
             Edep = np.concatenate(EArr)
 
-            #energy flux
+            #save output
             if self.IO.csvMask == True:
                  self.IO.writePointCloudCSV(ctrs,q,path+'paraview/',label,tag,prefix) #fluxes 
-                 self.IO.writePointCloudCSV(ctrs,Edep,path+'paraview/',labelE,tag,prefixE) #energies
-            #if self.IO.vtpPCMask == True:
-            #    self.IO.writePointCloudVTP(PFC.centers,q,label,prefix,path,tag, PClabel=False)
+                 if EdepMask==True:
+                     self.IO.writePointCloudCSV(ctrs,Edep,path+'paraview/',labelE,tag,prefixE) #energies
             if self.IO.vtpMeshMask == True:
                 self.IO.writeMeshVTP(mesh, q, label, prefix, path, tag, PClabel=False)
+                if EdepMask==True:
+                    self.IO.writeMeshVTP(mesh, Edep, labelE, prefix, path, tag, PClabel=False)
+            if self.IO.vtpPCMask == True:
+                self.IO.writePointCloudVTP(ctrs,q,label,prefix,path+'paraview/',tag, PClabel=True)
+                if EdepMask==True:
+                    self.IO.writePointCloudVTP(ctrs,Edep,labelE,prefix,path+'paraview/',tag, PClabel=True)
 
         return
-
 
 
     def saveFilamentParticleOutput(self, ts:np.ndarray, id:str):
@@ -2267,10 +2279,10 @@ class engineObj():
             #particle flux
             if self.IO.csvMask == True:
                  self.IO.writePointCloudCSV(ctrs,p,path+'paraview/',label,tag,prefix) #fluxes 
-            #if self.IO.vtpPCMask == True:
-            #    self.IO.writePointCloudVTP(PFC.centers,q,label,prefix,path,tag, PClabel=False)
-            #if self.IO.vtpMeshMask == True:
-            #    self.IO.writeMeshVTP(mesh, q, label, prefix, path, tag, PClabel=False)
+            if self.IO.vtpMeshMask == True:
+                self.IO.writeMeshVTP(mesh, p, label, prefix, path, tag, PClabel=False)
+            if self.IO.vtpPCMask == True:
+                self.IO.writePointCloudVTP(ctrs,p,label,prefix,path,tag, PClabel=True)
 
         return
 
@@ -2283,7 +2295,7 @@ class engineObj():
 
         uses IO flags to determine which files to copy
         """
-        old = oldPath + name + '_PC'
+        old = oldPath + 'PC_' + name
         new = newPath + name
         tools.makeDir(newPath, clobberFlag=False)
 
@@ -2365,7 +2377,7 @@ class engineObj():
 
         return
 
-
+    #--- Optical approximation ---
 
     def HF_PFC(self, PFC, repeatIdx=None, tag=None, rayTriMode='open3d'):
         """
@@ -2440,6 +2452,8 @@ class engineObj():
         #HF.PointCloudfromStructOutput(structOutfile)
         return
 
+    #--- Radiated power (photons) ---
+
     def radPower(self,PFC, rayTriMode='open3d'):
         """
         runs the radiated power calculation
@@ -2490,6 +2504,9 @@ class engineObj():
 
         return
 
+
+
+    #--- Gyro Orbits ---
 
     def gyroOrbitIntersects(self, PFC, mode='open3d'):
         """
@@ -2815,6 +2832,9 @@ class engineObj():
                     self.GYRO.writeIntersectRecord(gyroPhase,vPhase,vSlice,self.GYRO.PFCROI_HOTmap,file)
 
         return
+
+
+    #--- Generic Outputs + File Saving ---
 
     def combinePFCpointcloud(self, runList, tPath, tIdx):
         """
@@ -3170,6 +3190,8 @@ class engineObj():
         return
 
 
+    #--- Default I/O and dicts ---
+
     def getDefaultDict(self):
         """
         returns an empty dict with each inputFile parameter
@@ -3416,6 +3438,9 @@ class engineObj():
 
         return
 
+
+    #--- OpenFOAM ---
+
     def loadOF(self,OFtMin,OFtMax,OFminMeshLevel,OFmaxMeshLevel,
                       OFSTLscale, OFbashrc, OFdeltaT, OFwriteDeltaT, materialSelect):
         """
@@ -3449,7 +3474,6 @@ class engineObj():
         print("Loaded OF data")
         log.info("Loaded OF data")
         return
-
 
     def runOpenFOAM(self):
         """
@@ -3806,6 +3830,9 @@ class engineObj():
         print("openFOAM run completed.")
         log.info("openFOAM run completed.")
         return
+
+
+    #--- Plots ---
 
     def getOFMinMaxPlots(self):
         """

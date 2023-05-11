@@ -148,19 +148,22 @@ class IO_HEAT:
         """
         if tag is None:
             if PClabel == True:
-                fName = prefix + '_PC.vtp'
+                fName = 'PC_' + prefix + '.vtp'
             else:
                 fName = prefix + '.vtp'
         else:
             if PClabel == True:
-                fName = prefix + '_'+tag+'_PC.vtp'
+                fName = 'PC_' + prefix + '_'+tag+'.vtp'
             else:
                 fName = prefix + '_' + tag + '.vtp'
 
         VTKops = vtkOpsClass.VTKops()
         VTKops.initializePointCloudScalar(ctrs*1000.0, scalar, label) #scale to mm
 
-        PVdir = path + "paraview/"
+        if 'paraview' not in path:
+            PVdir = path + "paraview/"
+        else:
+            PVdir = path
         f = PVdir+fName
 
         tools.makeDir(PVdir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)

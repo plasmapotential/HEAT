@@ -18,3 +18,4 @@ pillow
 matplotlib
 tk
 vtk
+click

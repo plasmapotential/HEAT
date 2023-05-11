@@ -1010,7 +1010,8 @@ class heatFlux:
     
     def filamentHeatFlux(self, FIL, PFC, ts, tIdx):
         """
-        assigns power from filament to targets
+        assigns energy from filament to targets
+        calculates heat flux and total energy deposition
 
         FIL.intersectRecord gets overwritten for each filament source timestep
         so this function needs to be called once per filament to add 
@@ -1024,10 +1025,9 @@ class heatFlux:
         idx1 = np.where(np.array(FIL.CADtargetNames) == PFC.name)[0]
 
         # Create an array with shape (len(ts), FIL.N_vS, FIL.intersectRecord.shape[1]) and ensure it is of integer type
-        multi_ts_use = np.array([[np.where(np.isin(FIL.intersectRecord[j, :, i], idx1))[0].astype(int) for j in range(FIL.N_vS)] for i in range(len(ts))])
+        multi_ts_use = np.array([[np.where(np.isin(FIL.intersectRecord[j, :, i], idx1))[0].astype(int) for j in range(FIL.N_vS)] for i in range(len(ts))], dtype=object)
 
-
-        # Iterate over the combinations of time and vS
+        # Iterate over the combinations of time and velocity samples (vS)
         for i in range(len(ts)):
             for j in range(FIL.N_vS):
                 use = multi_ts_use[i, j]
@@ -1036,7 +1036,7 @@ class heatFlux:
                     idx3 = FIL.intersectRecord[j, use, i].astype(int)
                     #map location in target mesh to relative index on this PFC
                     idxTGT = np.searchsorted(idx1, idx3) 
-                    #scale energy by the v_|| bin frac
+                    #scale energy by the v_|| energy bin frac
                     E_scaled = E[use] * FIL.energyFracs[use, j]
                     #add the sum for this mesh triangle
                     np.add.at(PFC.Edep[:, i], idxTGT, E_scaled)
@@ -1083,16 +1083,27 @@ class heatFlux:
                 #for particle balance
                 ptclSum += len(use)
 
+        #heat flux is energy deposited per unit area per unit time
         PFC.qFil = PFC.Edep / PFC.areas[:,np.newaxis] / FIL.dt
         N_pts = FIL.N_vS*len(FIL.intersectRecord[0,:,0])
+
+        #printing
         print("Theoretical total energy: {:f} [J]".format(FIL.E0))
-        print("Energy Sum on Mesh: {:f} [J]".format(np.sum(PFC.Edep)))
+        print("Energy Deposited on Mesh: {:f} [J]".format(np.sum(PFC.Edep)))
         print("Energy balance: {:0.3f}%".format(np.sum(PFC.Edep) / FIL.E0 * 100.0))
         print('Peak flux: {:1.8e} [W/m^2]'.format(np.max(PFC.qFil)))
         print('Total number of particles: {:d}'.format(N_pts))
         print('Number of particles landed on this PFC: {:d}'.format(ptclSum))
         print('Particle balance: {:0.3f}%'.format(ptclSum / N_pts*100.0))
-        
+        log.info("Theoretical total energy: {:f} [J]".format(FIL.E0))
+        log.info("Energy Deposited on Mesh: {:f} [J]".format(np.sum(PFC.Edep)))
+        log.info("Energy balance: {:0.3f}%".format(np.sum(PFC.Edep) / FIL.E0 * 100.0))
+        log.info('Peak flux: {:1.8e} [W/m^2]'.format(np.max(PFC.qFil)))
+        log.info('Total number of particles: {:d}'.format(N_pts))
+        log.info('Number of particles landed on this PFC: {:d}'.format(ptclSum))
+        log.info('Particle balance: {:0.3f}%'.format(ptclSum / N_pts*100.0))
+
+
         return
 
 
@@ -1111,7 +1122,7 @@ class heatFlux:
         idx1 = np.where(np.array(FIL.CADtargetNames) == PFC.name)[0]
 
         # Create an array with shape (len(ts), FIL.N_vS, FIL.intersectRecord.shape[1]) and ensure it is of integer type
-        multi_ts_use = np.array([[np.where(np.isin(FIL.intersectRecord[j, :, i], idx1))[0].astype(int) for j in range(FIL.N_vS)] for i in range(len(ts))])
+        multi_ts_use = np.array([[np.where(np.isin(FIL.intersectRecord[j, :, i], idx1))[0].astype(int) for j in range(FIL.N_vS)] for i in range(len(ts))], dtype=object)
 
         # Iterate over the combinations of time and vS
         for i in range(len(ts)):
@@ -1131,6 +1142,7 @@ class heatFlux:
                 #for particle balance
                 ptclSum += len(use)
 
+        #particle flux is particles deposited per area per time
         PFC.ptclFluxFil = PFC.ptclDep / PFC.areas[:,np.newaxis] / FIL.dt
         N_pts = FIL.N_vS*len(FIL.intersectRecord[0,:,0])
 
@@ -1138,7 +1150,14 @@ class heatFlux:
         print('Total number of particles: {:d}'.format(N_pts))
         print('Number of particles landed on this PFC: {:d}'.format(ptclSum))
         print('Particle balance: {:0.3f}%'.format(ptclSum / N_pts*100.0))
-        
+        print('Peak flux: {:1.8e} [1/m^2/s]'.format(np.max(PFC.ptclFluxFil)))
+        log.info('Particle deposition fraction: {:f}'.format(np.sum(PFC.ptclDep)))
+        log.info('Total number of particles: {:d}'.format(N_pts))
+        log.info('Number of particles landed on this PFC: {:d}'.format(ptclSum))
+        log.info('Particle balance: {:0.3f}%'.format(ptclSum / N_pts*100.0))
+        log.info('Peak flux: {:1.8e} [1/m^2/s]'.format(np.max(PFC.ptclFluxFil)))
+
+
         return
 
 
