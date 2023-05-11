@@ -9,8 +9,13 @@ import GUIscripts.vtkOpsClass as vtkOpsClass
 import logging
 log = logging.getLogger(__name__)
 
+import toolsClass
+tools = toolsClass.tools()
 class IO_HEAT:
-    def __init__(self):
+    def __init__(self, chmod=None, GID=None, UID=None):
+        self.chmod = chmod
+        self.GID = GID
+        self.UID = UID
         return
 
     def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
@@ -122,8 +127,9 @@ class IO_HEAT:
 
         PVdir = path + "paraview/"
         f = PVdir+fName
-        if not os.path.exists(PVdir):
-            os.makedirs(PVdir)
+
+
+        tools.makeDir(PVdir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
 
         VTKops.writeMeshVTP(f)
         return
@@ -156,8 +162,8 @@ class IO_HEAT:
 
         PVdir = path + "paraview/"
         f = PVdir+fName
-        if not os.path.exists(PVdir):
-            os.makedirs(PVdir)
+
+        tools.makeDir(PVdir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
 
         VTKops.writePointCloudVTP(f)
         return
@@ -184,8 +190,7 @@ class IO_HEAT:
 
         PVdir = path + "paraview/"
         f = PVdir+fName
-        if not os.path.exists(PVdir):
-            os.makedirs(PVdir)
+        tools.makeDir(PVdir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
 
         VTKops.writeGlyphVTP(f)
         return

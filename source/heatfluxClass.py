@@ -1008,30 +1008,137 @@ class heatFlux:
         GYRO.gyroNanPower += PNaN
         return
     
-    def filamentAddHF(self, FIL, PFC, ts):
+    def filamentHeatFlux(self, FIL, PFC, ts, tIdx):
         """
         assigns power from filament to targets
 
         FIL.intersectRecord gets overwritten for each filament source timestep
         so this function needs to be called once per filament to add 
         the heat fluxes from each filament source timestep to the tallies on the PFC mesh
-
-        tLoc is the index of the timestep
         """
-        E = FIL.g_pts.reshape(FIL.N_b*FIL.N_r*FIL.N_p)
-        print(np.sum(E))
+        E = FIL.density[:,:,:,tIdx].reshape(FIL.N_b*FIL.N_r*FIL.N_p) * FIL.E0
+        ptclSum = 0
+        Esum = 0
+
+        #this PFC indexes in target mesh
+        idx1 = np.where(np.array(FIL.CADtargetNames) == PFC.name)[0]
+
+        # Create an array with shape (len(ts), FIL.N_vS, FIL.intersectRecord.shape[1]) and ensure it is of integer type
+        multi_ts_use = np.array([[np.where(np.isin(FIL.intersectRecord[j, :, i], idx1))[0].astype(int) for j in range(FIL.N_vS)] for i in range(len(ts))])
+
+
+        # Iterate over the combinations of time and vS
         for i in range(len(ts)):
             for j in range(FIL.N_vS):
-                #indexes of intersect mesh that correspond to this PFC
-                idx1 = np.where(np.array(FIL.CADtargetNames) == PFC.name)[0] #this PFC indexes in target mesh
-                PFCidx = np.intersect1d(FIL.intersectRecord[j,:,i], idx1) #idxs where this PFC was hit in intersection test
-                use = np.where(np.isin(FIL.intersectRecord[j,:,i],PFCidx)==True)[0] #source macroparticles that hit a PFCidx
-                idx2 = FIL.intersectRecord[j,use,i].astype(int)
-                PFC.Edep[idx2, i] += E[use]
-        
+                use = multi_ts_use[i, j]
+                if len(use) > 0:
+                    #get indexes where there was a hit from intersectRecord
+                    idx3 = FIL.intersectRecord[j, use, i].astype(int)
+                    #map location in target mesh to relative index on this PFC
+                    idxTGT = np.searchsorted(idx1, idx3) 
+                    #scale energy by the v_|| bin frac
+                    E_scaled = E[use] * FIL.energyFracs[use, j]
+                    #add the sum for this mesh triangle
+                    np.add.at(PFC.Edep[:, i], idxTGT, E_scaled)
+
+
+#        # Iterate over the combinations of time and vS
+#        for i in range(len(ts)):
+#            for j in range(FIL.N_vS):
+#                use = multi_ts_use[i, j]
+#                if len(use) > 0:
+#                    #get indexes where there was a hit from intersectRecord
+#                    idx3 = FIL.intersectRecord[j, use, i].astype(int)
+#                    #map location in target mesh to relative index on this PFC
+#                    idxTGT = np.searchsorted(idx1, idx3) 
+#                    #scale energy by the v_|| bin frac
+#                    E_scaled = E[use] * FIL.velocityFracs[use, j]
+#                    #add the sum for this mesh triangle
+#                    np.add.at(PFC.Edep[:, i], idxTGT, E_scaled)
+
+
+#        #OLD METHOD (slow)
+#        for i in range(len(ts)):
+#            for j in range(FIL.N_vS):
+#                #indexes of intersect mesh that correspond to this PFC
+#                idx1 = np.where(np.array(FIL.CADtargetNames) == PFC.name)[0] 
+#                PFCidx = np.intersect1d(FIL.intersectRecord[j,:,i], idx1) #idxs where this PFC was hit in intersection test
+#                use = np.where(np.isin(FIL.intersectRecord[j,:,i],PFCidx)==True)[0] #list of source macroparticles that hit this PFC
+#                
+#                #vectorized method
+#                idx3 = FIL.intersectRecord[j,use,i].astype(int)
+#                if len(use) > 0:
+#                    idxTGT = idx1.searchsorted(idx3)
+#                    print(idxTGT)
+#                    E_scaled = E[use] * FIL.velocityFracs[use, j]
+#                    np.add.at(PFC.Edep[:,i], idxTGT, E_scaled)
+#
+#                #loop method
+#                #for k in range(len(use)):
+#                #    idx3 = FIL.intersectRecord[j,use[k],i].astype(int)
+#                #    idxTGT = np.where(idx1 == idx3)[0] #map location in target mesh to relative index on this PFC
+#                #    PFC.Edep[idxTGT,i] += E[use[k]] * FIL.velocityFracs[use[k], j]
+#
+#               
+                #for particle balance
+                ptclSum += len(use)
+
         PFC.qFil = PFC.Edep / PFC.areas[:,np.newaxis] / FIL.dt
-        print("Sum: {:f}".format(np.sum(PFC.Edep)))
-        input()
+        N_pts = FIL.N_vS*len(FIL.intersectRecord[0,:,0])
+        print("Theoretical total energy: {:f} [J]".format(FIL.E0))
+        print("Energy Sum on Mesh: {:f} [J]".format(np.sum(PFC.Edep)))
+        print("Energy balance: {:0.3f}%".format(np.sum(PFC.Edep) / FIL.E0 * 100.0))
+        print('Peak flux: {:1.8e} [W/m^2]'.format(np.max(PFC.qFil)))
+        print('Total number of particles: {:d}'.format(N_pts))
+        print('Number of particles landed on this PFC: {:d}'.format(ptclSum))
+        print('Particle balance: {:0.3f}%'.format(ptclSum / N_pts*100.0))
+        
+        return
+
+
+    def filamentParticleFlux(self, FIL, PFC, ts, tIdx):
+        """
+        assigns particles from filament to targets
+
+        FIL.intersectRecord gets overwritten for each filament source timestep
+        so this function needs to be called once per filament to add 
+        the particles from each filament source timestep to the tallies on the PFC mesh
+        """
+        density = FIL.density[:,:,:,tIdx].reshape(FIL.N_b*FIL.N_r*FIL.N_p) * FIL.E0
+        ptclSum = 0
+
+        #this PFC indexes in target mesh
+        idx1 = np.where(np.array(FIL.CADtargetNames) == PFC.name)[0]
+
+        # Create an array with shape (len(ts), FIL.N_vS, FIL.intersectRecord.shape[1]) and ensure it is of integer type
+        multi_ts_use = np.array([[np.where(np.isin(FIL.intersectRecord[j, :, i], idx1))[0].astype(int) for j in range(FIL.N_vS)] for i in range(len(ts))])
+
+        # Iterate over the combinations of time and vS
+        for i in range(len(ts)):
+            for j in range(FIL.N_vS):
+                use = multi_ts_use[i, j]
+                if len(use) > 0:
+                    #get indexes where there was a hit from intersectRecord
+                    idx3 = FIL.intersectRecord[j, use, i].astype(int)
+                    #map location in target mesh to relative index on this PFC
+                    idxTGT = np.searchsorted(idx1, idx3) 
+                    #scale energy by the v_|| bin frac
+                    den_scaled = density[use] * FIL.velocityFracs[use, j]
+                    #add the sum for this mesh triangle
+                    np.add.at(PFC.ptclDep[:, i], idxTGT, den_scaled)
+
+
+                #for particle balance
+                ptclSum += len(use)
+
+        PFC.ptclFluxFil = PFC.ptclDep / PFC.areas[:,np.newaxis] / FIL.dt
+        N_pts = FIL.N_vS*len(FIL.intersectRecord[0,:,0])
+
+        print('Particle deposition fraction: {:f}'.format(np.sum(PFC.ptclDep)))
+        print('Total number of particles: {:d}'.format(N_pts))
+        print('Number of particles landed on this PFC: {:d}'.format(ptclSum))
+        print('Particle balance: {:0.3f}%'.format(ptclSum / N_pts*100.0))
+        
         return
 
 

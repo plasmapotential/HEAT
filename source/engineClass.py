@@ -36,7 +36,7 @@ log = logging.getLogger(__name__)
 tools = toolsClass.tools()
 
 class engineObj():
-    def __init__(self, logFile, rootDir, dataPath, OFbashrc, chmod, UID, GID, tsSigFigs=6, shotSigFigs=6):
+    def __init__(self, logFile, rootDir, dataPath, OFbashrc, chmod, UID, GID, tsSigFigs=9, shotSigFigs=6):
         #number of significant figures after radix for timesteps
         print(tsSigFigs)
         self.tsSigFigs=tsSigFigs
@@ -102,7 +102,7 @@ class engineObj():
         self.GYRO = gyroClass.GYRO(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
         self.RAD = radClass.RAD(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
         self.FIL = filamentClass.filament(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
-        self.IO = ioClass.IO_HEAT()
+        self.IO = ioClass.IO_HEAT(self.chmod, self.UID, self.GID)
 
         #set up class variables for each object
         self.MHD.allowed_class_vars()
@@ -376,7 +376,7 @@ class engineObj():
         self.timesteps = self.MHD.getGEQDSKtimesteps(gFileList)
 
         #make tree branch for this shot
-        self.setupTime(self.timesteps, shot)
+        self.setupTime(self.timesteps, shot, clobberFlag=False)
         self.MHD.shotPath = self.shotPath
 
         self.MHD.getGEQDSK(self.timesteps,gFileList)
@@ -1630,6 +1630,11 @@ class engineObj():
         else:
             self.runList = runList
 
+
+        #paraview movie dir
+        PVdir = self.MHD.shotPath + "paraview/"
+        tools.makeDir(PVdir, clobberFlag=True, mode=self.chmod, UID=self.UID, GID=self.GID)
+
         #=========================
         # ===== Steady State =====    
         #=========================
@@ -1958,6 +1963,7 @@ class engineObj():
                 #initialize all self.timesteps, even if not in PFC.timesteps
                 PFC.qFil = np.zeros((len(PFC.centers), len(self.timesteps)))
                 PFC.Edep = np.zeros((len(PFC.centers), len(self.timesteps)))
+                PFC.ptclDep = np.zeros((len(PFC.centers), len(self.timesteps)))
                 PFC.filTimesteps = self.timesteps
 
 
@@ -1976,10 +1982,17 @@ class engineObj():
                 print("-"*80)
                 log.info("-"*80)
 
+                EtotROI = 0.0
+                pTotROI = 0.0
+                EtotAll = 0.0
+                pTotAll = 0.0
+
                 #get the steady state timestep that precedes this transient timestep
                 both = np.intersect1d(ts, self.MHD.timesteps)
                 epIdx = np.where( np.min(both)==self.MHD.timesteps )[0][0]
                 self.FIL.initializeFilamentFromDict(filDict, idx, self.MHD.ep[epIdx])
+                self.FIL.ts = ts
+
 
                 #loop through source timesteps for this filament
                 tCount = 0
@@ -1999,14 +2012,14 @@ class engineObj():
 
                     #build source for this timestep
                     if tCount < N_src_t:
-                        self.getFilamentSource(t, id, Btrace)
+                        self.getFilamentSource(t, id, Btrace, tIdx)
                     #else:
                     #    break
 
                     #trace macroparticles from source at this timestep
                     if tIdx < self.FIL.N_src_t:
                         self.FIL.tEQ = ts[0]
-                        self.FIL.traceFilamentParticles(self.MHD, ts)
+                        self.FIL.traceFilamentParticles(self.MHD, ts, tIdx)
                         #loop thru ROI PFCs, mapping power to targets
                         for PFC in self.PFCs:
                             if t not in PFC.timesteps:
@@ -2014,21 +2027,60 @@ class engineObj():
                             else:
                                 print("*"*20)
                                 print('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+                                log.info("*"*20)
                                 log.info('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
 
                                 pfcDir = self.MHD.shotPath + self.tsFmt.format(t) +'/'+PFC.name+'/'
                                 tools.makeDir(pfcDir, clobberFlag=False)
-                                self.HF.filamentAddHF(self.FIL, PFC, ts)
-                    
+                                self.HF.filamentHeatFlux(self.FIL, PFC, ts, tIdx)
+                                self.HF.filamentParticleFlux(self.FIL, PFC, ts, tIdx)
+                                pTotROI += np.sum(PFC.ptclDep)
+                                EtotROI += np.sum(PFC.Edep)
 
-                        self.filamentTraceOutput(id,t)
-                    
+                        #energy balance calculation
+                        energy, particles = self.filDepositedEnergyParticles(tIdx)
+                        EtotAll += energy
+                        pTotAll += particles
+
+                        print("Generating trace output")
+                        log.info("Generating trace output")
+                        self.filamentTraceOutput(id,t,tIdx)
+
+                    else:
+                        print("No more source timesteps to trace.  Breaking loop.")
+                        log.info("No more source timesteps to trace.  Breaking loop.")
+                        break
+
                     tCount += 1
 
 
+                #print energy balance stats
+                print("\n\nTotal Energy Deposited on ROI PFCs: {:f}".format(EtotROI))
+                log.info("Total Energy Deposited on ROI PFCs: {:f}".format(EtotROI))
+                print("Total Energy Deposited on All PFCs: {:f}".format(EtotAll))
+                log.info("Total Energy Deposited on All PFCs: {:f}".format(EtotAll))
+                print("Theoretical total energy: {:f}".format(self.FIL.E0))
+                log.info("Theoretical total energy: {:f}".format(self.FIL.E0))
+                print("Energy balance: {:0.3f}%".format(EtotAll / self.FIL.E0 * 100.0))
+                
+                #print("N Particles Deposited on All PFCs: {:f}".format(np.sum(pTotAll)))
+                #log.info("N particles Deposited on All PFCs: {:f}".format(np.sum(pTotAll)))
+                #Nptcls = self.FIL.N_b*self.FIL.N_r*self.FIL.N_p*self.FIL.N_vS
+                #print("Theoretical N particles: {:f}".format(Nptcls))
+                #log.info("Theoretical N particles: {:f}".format(Nptcls))
+                #print("Particle balance: {:0.3f}%\n".format(pTotAll / Nptcls * 100.0))
+
+
+
+                #copy heat fluxes to the paraview movie directory
+                print("Copying HF to PV movieDir")
+                log.info("Copying HF to PV movieDir")
+                self.saveFilamentHFOutput(ts, id)
+                self.saveFilamentParticleOutput(ts, id)
 
 
             #copy filament sources at this timestep to the paraview movie directory
+            print("\nBuilding paraview movie directory...can take some time")
             for i,ts in enumerate(self.FIL.tsFil):
                 id = filDict['id'][i]
                 N_src_t = filDict['N_src_t'][i]
@@ -2040,11 +2092,8 @@ class engineObj():
                         name = 'filamentSource_'+id+'_' + self.tsFmt.format(t)
                         self.combineFilTimesteps(name, oldPath, newPath)
                     tCount +=1
+
             
-            #copy heat fluxes to the paraview movie directory
-            self.saveFilamentHFOutput(PFC)
-
-
         print("Total Time Elapsed: {:f}".format(time.time() - t0))
         log.info("Total Time Elapsed: {:f}".format(time.time() - t0))
         print("\nCompleted HEAT run\n")
@@ -2057,7 +2106,28 @@ class engineObj():
         return
 
 
-    def getFilamentSource(self, t:float, id:str, Btrace:np.ndarray):
+    def filDepositedEnergyParticles(self, tIdx):
+        """
+        loops through intersectRecord and calculates the sum of all deposited energy
+        and particles on any PFC, including PFCs outside of the ROI
+        """
+        density = self.FIL.density[:,:,:,tIdx].reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p)
+
+
+        E = self.FIL.density[:,:,:,tIdx].reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p)
+        energy = np.zeros(E.shape)
+        ptcls = 0.0
+        for i in range(self.FIL.N_vS):
+            hits = np.any(~np.isnan(self.FIL.intersectRecord[i,:,:]), axis=1)
+            ptcls +=  density * self.FIL.velocityFracs[:,i] * hits
+            energy += density * self.FIL.energyFracs[:,i] * hits
+
+            #energy += E * self.FIL.velocityFracs[:,i] * hits
+            #ptcls += np.sum(hits)
+            
+        return np.sum(energy), ptcls
+
+    def getFilamentSource(self, t:float, id:str, Btrace:np.ndarray, tIdx: int):
         """
         generates a filament source object along a flux coordinate grid
         saves output in csv and vtp point cloud formats
@@ -2066,11 +2136,11 @@ class engineObj():
         """
         #set up time and equilibrium
         self.FIL.createSource(t, Btrace)
-        self.filamentSourceOutput(id, t)
+        self.filamentSourceOutput(id, t, tIdx)
         return
 
 
-    def filamentSourceOutput(self,id,t):
+    def filamentSourceOutput(self,id: str, t: float, tIdx: int):
         """
         saves filament source profile
         """
@@ -2080,7 +2150,7 @@ class engineObj():
         prefix = 'filamentSource_'+id
         label = 'Filament Source'
         xyzData = self.FIL.xyzPts.reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p, 3)
-        scalarData = self.FIL.g_pts.reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p)
+        scalarData = self.FIL.density[:,:,:,tIdx].reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p)
         path = self.FIL.controlfilePath
         if self.IO.csvMask == True:
             self.IO.writePointCloudCSV(xyzData,scalarData,path,label,tag,prefix)
@@ -2089,7 +2159,7 @@ class engineObj():
 
         return
 
-    def filamentTraceOutput(self,id,t_source):
+    def filamentTraceOutput(self, id: str, t_source: float, tIdx: int):
         """
         saves filament traces
 
@@ -2105,7 +2175,7 @@ class engineObj():
                 prefix = 'filamentTrace_'+id+'_vS{:03d}_tsSrc'.format(i)+self.tsFmt.format(t_source)
                 label = 'Filament Trace'
                 xyzData = self.FIL.xyzSteps[i,:,j,:].reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p, 3)
-                scalarData = self.FIL.g_pts.reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p)
+                scalarData = self.FIL.density[:,:,:,tIdx].reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p) * self.FIL.energyFracs[:,i]
                 #scalarData = np.ones((self.FIL.N_b*self.FIL.N_r*self.FIL.N_p))
 #                path = self.FIL.controlfilePath
 #                if self.IO.csvMask == True:
@@ -2115,25 +2185,97 @@ class engineObj():
 
         return
 
-    def saveFilamentHFOutput(self, PFC):
+    def saveFilamentHFOutput(self, ts:np.ndarray, id:str):
         """
         saves heat fluxes calculated on PFC
         """
         path = self.MHD.shotPath
-        for i,t in enumerate(PFC.filTimesteps):
+        
+        #create mesh
+        mesh = self.CAD.createEmptyMesh()
+        #update mesh placement to reflect global translations
+        mesh = self.CAD.globalMeshTranslation(mesh)
+        [mesh.addMesh(PFC.mesh) for PFC in self.PFCs]
+        c = [PFC.centers for PFC in self.PFCs]
+        ctrs = np.concatenate(c)
+
+        #create heat fluxes
+        for i,t in enumerate(ts):
             #write hf files
             tag = self.tsFmt.format(t)
-            prefix = 'HF_filaments_'
-            label = '$MW/m^2$'
-            q = PFC.qFil[:,i]
-            #if self.IO.csvMask == True:
-            #     self.IO.writePointCloudCSV(PFC.centers,q,path+'paraview/',label,tag,prefix)
+            print("Adding PV movieDir timestep: " + tag)
+            log.info("Adding PV movieDir timestep: " + tag)
+
+            prefix = 'HF_filaments_all_'+id+'_'
+            label = '$W/m^2$'
+            prefixE = 'Edep_filaments_all_'+id+'_'
+            labelE = '$J$'
+            q = np.array([])
+            #for PFC in self.PFCs:
+            #    q = np.append(q, PFC.qFil[:,i])
+            #    mesh.addMesh(PFC.mesh)
+            #trying to be faster
+            qArr = [PFC.qFil[:,i] for PFC in self.PFCs]
+            q = np.concatenate(qArr)
+            EArr = [PFC.Edep[:,i] for PFC in self.PFCs]
+            Edep = np.concatenate(EArr)
+
+            #energy flux
+            if self.IO.csvMask == True:
+                 self.IO.writePointCloudCSV(ctrs,q,path+'paraview/',label,tag,prefix) #fluxes 
+                 self.IO.writePointCloudCSV(ctrs,Edep,path+'paraview/',labelE,tag,prefixE) #energies
             #if self.IO.vtpPCMask == True:
             #    self.IO.writePointCloudVTP(PFC.centers,q,label,prefix,path,tag, PClabel=False)
             if self.IO.vtpMeshMask == True:
-                self.IO.writeMeshVTP(PFC.mesh, q, label, prefix, path, tag, PClabel=False)
+                self.IO.writeMeshVTP(mesh, q, label, prefix, path, tag, PClabel=False)
 
         return
+
+
+
+    def saveFilamentParticleOutput(self, ts:np.ndarray, id:str):
+        """
+        saves particle fluxes calculated on PFC
+        """
+        path = self.MHD.shotPath
+        
+        #create mesh
+        mesh = self.CAD.createEmptyMesh()
+        #update mesh placement to reflect global translations
+        mesh = self.CAD.globalMeshTranslation(mesh)
+        [mesh.addMesh(PFC.mesh) for PFC in self.PFCs]
+        c = [PFC.centers for PFC in self.PFCs]
+        ctrs = np.concatenate(c)
+
+        #particle fluxes
+        for i,t in enumerate(ts):
+            #write hf files
+            tag = self.tsFmt.format(t)
+            print("Adding PV movieDir timestep: " + tag)
+            log.info("Adding PV movieDir timestep: " + tag)
+
+            prefix = 'Particles_filaments_all_'+id+'_'
+            label = '$Particles$'
+            p = np.array([])
+            #for PFC in self.PFCs:
+            #    q = np.append(q, PFC.qFil[:,i])
+            #    mesh.addMesh(PFC.mesh)
+            #trying to be faster
+            pArr = [PFC.ptclDep[:,i] for PFC in self.PFCs]
+            p = np.concatenate(pArr)
+
+            #particle flux
+            if self.IO.csvMask == True:
+                 self.IO.writePointCloudCSV(ctrs,p,path+'paraview/',label,tag,prefix) #fluxes 
+            #if self.IO.vtpPCMask == True:
+            #    self.IO.writePointCloudVTP(PFC.centers,q,label,prefix,path,tag, PClabel=False)
+            #if self.IO.vtpMeshMask == True:
+            #    self.IO.writeMeshVTP(mesh, q, label, prefix, path, tag, PClabel=False)
+
+        return
+
+
+
 
     def combineFilTimesteps(self, name, oldPath, newPath):
         """
