@@ -71,6 +71,8 @@ class PFC:
         self.phiFilterSwitch = True
         #filter by poloidal flux (psi)
         self.psiFilterSwitch = True
+        if 'outsideFacingThreshold' in timestepMapRow: self.outsideFacingThreshold = float(timestepMapRow['outsideFacingThreshold'])
+        else: self.outsideFacingThreshold = -1   # value typically between 0 and -1; value <= -1 and the filter does nothing
         return
 
     def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
@@ -340,6 +342,8 @@ class PFC:
         For face looking outwards this is close to -1
         Set filter to a < threshold
         """
+        if threshold > -1: print('Outside Facing filter threshold is set to: ' + str(threshold))
+        else: print('Outside Facing filter is not used)
         R0 = MHD.ep[0].g['R0']
         Z0 = MHD.ep[0].g['Zmid']
         
@@ -353,7 +357,9 @@ class PFC:
         
         idx = np.where(a < threshold)[0]
         facingOut[idx] = True 
-        print(np.sum(facingOut),' faces are oriented away from the plasma and are considered shadowed.')
+        Nfiltered = np.sum(facingOut)
+        print(Nfiltered,' faces are oriented away from the plasma and are considered shadowed.')
+        if (threshold <= -1) & (Nfiltered > 0): print('WARNING: Outside Facing filter should not filter anything, but it does')
         return facingOut
         
 
@@ -368,7 +374,7 @@ class PFC:
         library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
         """
         # Remove faces that cannot see the plasma
-        facingOut = self.removeOutsideFacingFacets(self.centers, self.norms, MHD)
+        facingOut = self.removeOutsideFacingFacets(self.centers, self.norms, MHD, threshold = self.outsideFacingThreshold)
         self.shadowed_mask[facingOut] = 1
         use = np.where(self.shadowed_mask == 0)[0]
 
