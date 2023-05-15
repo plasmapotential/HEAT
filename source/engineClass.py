@@ -374,7 +374,7 @@ class engineObj():
             self.MHD.writeGfileData(gFileList, gFileData)
 
         if plasma3Dmask is not None:
-            self.MHD.plasma3Dmask = plasma3Dmask
+            self.plasma3D.plasma3Dmask = plasma3Dmask
 
         self.MHD.tree = 'EFIT02'
 
@@ -398,7 +398,7 @@ class engineObj():
         log.info('psiSep0 = {:f}'.format(self.MHD.ep[0].g['psiSep']))
         log.info('psiAxis0 = {:f}'.format(self.MHD.ep[0].g['psiAxis']))
         log.info('Nlcfs0: {:f}'.format(self.MHD.ep[0].g['Nlcfs']))
-        if self.MHD.plasma3Dmask==1:
+        if self.plasma3D.plasma3Dmask:
             print('Solving for 3D plasmas with MAFOT')
             log.info('Solving for 3D plasmas with MAFOT')
         else:
@@ -2261,7 +2261,7 @@ class engineObj():
         print("Intersection calculation took {:f} [s]\n".format(time.time() - t0))
 
         #Run MAFOT laminar for 3D plasmas
-        if self.MHD.plasma3Dmask==True:
+        if self.plasma3D.plasma3Dmask:
 #            print('\n')
 #            print("-"*70)
 #            print("MAFOT LAMINAR MODULE INITIALIZED")
@@ -2272,13 +2272,17 @@ class engineObj():
 #            self.MHD.runMAFOTlaminar(PFC.gridfile,PFC.controlfilePath,PFC.controlfile,self.NCPUs)
 #            self.HF.readMAFOTLaminarOutput(PFC,PFC.outputFile)
 #            os.remove(PFC.outputFile)
+            print('Solving for 3D plasmas with MAFOT')
+            log.info('Solving for 3D plasmas with MAFOT')
             use = np.where(PFC.shadowed_mask == 0)[0]
-            self.plasma3D.updatePoints(PFC.centers[use])
-            self.plasma3D.launchLaminar(self.NCPUs, tag = None, MapDirection = PFC.mapDirection)
+            self.plasma3D.updatePointsFromCenters(PFC.centers[use])
+            self.plasma3D.launchLaminar(self.NCPUs, tag = None)   # use MapDirection = 0. If problem, then we need to split here into fwd and bwd direction separately
             self.plasma3D.cleanUp(tag = None)      # removes the MAFOT log files
             
         #get psi from gfile for 2D plasmas
         else:
+            print('Solving for 2D plasmas with EFIT')
+            log.info('Solving for 2D plasmas with EFIT')
             self.MHD.psi2DfromEQ(PFC)
 
         #Create Heat Flux Profile
@@ -3018,7 +3022,7 @@ class engineObj():
         get psi all over the PFC (including shadowed regions).
         """
         #Run MAFOT laminar for 3D plasmas
-        if self.MHD.plasma3Dmask==True:
+        if self.plasma3D.plasma3Dmask:
 #            CTLfile=PFC.controlfilePath + PFC.controlfile
 #            self.MHD.writeControlFile(CTLfile, PFC.t, PFC.mapDirection, mode='laminar')
 #            self.MHD.writeMAFOTpointfile(PFC.centers,PFC.gridfile)
@@ -3026,12 +3030,16 @@ class engineObj():
 #            self.HF.readMAFOTLaminarOutput(PFC,PFC.outputFile)
 #            use = np.where(PFC.psimin < 10)[0]
 #            os.remove(PFC.outputFile)
+            print('Solving for 3D plasmas with MAFOT')
+            log.info('Solving for 3D plasmas with MAFOT')
             use = np.where(PFC.shadowed_mask == 0)[0]
-            self.plasma3D.updatePoints(PFC.centers[use])
-            self.plasma3D.launchLaminar(self.NCPUs, tag = None, MapDirection = PFC.mapDirection)
+            self.plasma3D.updatePointsFromCenters(PFC.centers[use])
+            self.plasma3D.launchLaminar(self.NCPUs, tag = None)
             self.plasma3D.cleanUp(tag = None)      # removes the MAFOT log files
         #get psi from gfile for 2D plasmas
         else:
+            print('Solving for 2D plasmas with EFIT')
+            log.info('Solving for 2D plasmas with EFIT')
             self.MHD.psi2DfromEQ(PFC)
 
         prefix = 'psiN'

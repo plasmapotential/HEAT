@@ -32,12 +32,16 @@ class plasma3D:
 		self.Z = None		# in m
 		self.psimin = None
 		self.Lc = None		# in km
-		self.allowed_vars = ['shot','time','tmax','gFile','itt','response','selectField','useIcoil','sigma','charge','Ekin','Lambda','Mass']
+		self.allowed_vars = ['plasma3Dmask','shot','time','tmax','gFile','itt','response','selectField','useIcoil','sigma','charge','Ekin','Lambda','Mass']
 	
 	
 	def initializePlasma3D(self, shot, time, gFile = None, inputFile = None, cwd = None, inputDir = None):
 		"""
 		Set up basic input vars
+		gfile should include the full path and file name
+		inputFile is the main .csv file with input variables
+		cwd is the HEAT data folder for this shot and pfc, typically ~/HEAT/data/<machine>_<shot>_<tag>/<time>/<pfcName>
+		inputDir is the folder with input files, typically /root/terminal/<machine>
 		"""
 		self.shot = tools.makeInt(shot)
 		self.time = tools.makeInt(time)
@@ -75,6 +79,7 @@ class plasma3D:
 		print('#=============================================================')
 		print('#                3D Plasma Variables')
 		print('#=============================================================')
+		print('plasma3Dmask = ' + str(self.plasma3Dmask))
 		print('itt = ' + str(self.itt))
 		print('useIcoil = ' + str(self.useIcoil))
 		print('sigma = ' + str(self.sigma))
@@ -88,7 +93,7 @@ class plasma3D:
 		print('response = ' + str(self.response))
 		print('selectField = ' + str(self.selectField))
 		for i in range(len(self.C1Files)):
-			print('File ' + str(i+1) + ' = ' + os.path.abspath(self.C1Files[i]))
+			print('File ' + str(i+1) + ' = ' + self.C1Files[i])
 			print('   Scale = ' + str(self.C1scales[i]))
 			print('   Phase = ' + str(self.C1phases[i]))
 		
@@ -140,7 +145,9 @@ class plasma3D:
 			if len(line) < 1: continue
 			if line[0] == '#': continue
 			words = line.split()
-			C1Files.append(words[0])
+			c1file = words[0]
+			if ('./' in c1file): c1file = c1file.replace('./', self.inputDir + '/')
+			C1Files.append(c1file)
 			scales.append(tools.makeFloat(words[1]))
 			if len(words) > 2: phases.append(tools.makeFloat(words[2]))
 			else: phases.append(0)
@@ -151,7 +158,7 @@ class plasma3D:
 			return
 		else:
 			self.setM3DC1input(C1Files, scales, phases)
-			print(self.inputDir + '/' + 'm3dc1sup.in read successfully')
+			print('M3D-C1: ' + self.inputDir + '/' + 'm3dc1sup.in read successfully')
 			return
 		
 	
@@ -176,12 +183,12 @@ class plasma3D:
 		"""
 		Set variable types for the stuff that isnt a string from the input file
 		"""
-		integers = ['shot','time','tmax','itt','response','selectField','useIcoil','sigma','charge','Mass']
+		integers = ['plasma3Dmask','shot','time','tmax','itt','response','selectField','useIcoil','sigma','charge','Mass']
 		floats = ['Ekin','Lambda']
-		setAllTypes(self, integers, floats)
+		setAllTypes(self, integers, floats)     # this is not a typo, but the correct syntax for this call
 
 
-	def updatePoints(self, xyz):
+	def updatePointsFromCenters(self, xyz):
 		"""
 		Converts xyz of centers into R,phi,Z, update class variables and write the points file
 		"""
@@ -233,10 +240,10 @@ class plasma3D:
 		self.tag = tag
 		print('-'*80)
 		print('Launching 3D plasma field line tracing')
-		#subprocess.call(['mpirun','-n',str(nproc),'heatlaminar_mpi','-P','points.dat','_lamCTL.dat',tag])
-		print('mpirun -n ' + str(nproc) + ' heatlaminar_mpi' + ' -P points3DHF.dat' + ' _lamCTL.dat' + ' ' + tag)
+		subprocess.call(['mpirun','-n',str(nproc),'heatlaminar_mpi','-P','points.dat','_lamCTL.dat',tag])
+		#print('mpirun -n ' + str(nproc) + ' heatlaminar_mpi' + ' -P points3DHF.dat' + ' _lamCTL.dat' + ' ' + tag)
 		
-		#self.wait2finish()
+		#self.wait2finish(nproc, tag)
 		self.readLaminar(tag)
 		print('3D plasma field line tracing complete')
 		print('-'*80)
@@ -246,8 +253,8 @@ class plasma3D:
 		"""
 		Read the MAFOT outputfile and set psimin and Lc class variables
 		"""
-		if tag is None: tag = ''
-		else: tag = '_' + tag
+		if tag is None: tag = ''    # this tag has len(tag) = 0
+		if len(tag) > 0: tag = '_' + tag
 		
 		file = self.cwd + '/' + 'lam' + tag + '.dat'
 		if os.path.isfile(file): 
@@ -303,7 +310,7 @@ class plasma3D:
 		"""
 		with open(self.cwd + '/' + 'm3dc1sup.in', 'w') as f:
 			for i in range(len(self.C1Files)):
-				f.write(os.path.abspath(self.C1Files[i]) + '\t' + str(self.C1scales[i]) + '\t' + str(self.C1phases[i]) + '\n')
+				f.write(self.C1Files[i] + '\t' + str(self.C1scales[i]) + '\t' + str(self.C1phases[i]) + '\n')
 
 
 	def writeCoilsupFile(self, machine = None):
@@ -316,7 +323,7 @@ class plasma3D:
 		return
 		
 	
-	def wait2finish(self):
+	def wait2finish(self, nproc, tag):
 		import time
 		print ('Waiting for job to finish...', end='')
 		time.sleep(5)	# wait 5 seconds
@@ -327,7 +334,7 @@ class plasma3D:
 		if not self.isComplete():
 			print('MAFOT run ended prematurely. Attempt restart...')
 			subprocess.call(['mpirun','-n',str(nproc),'heatlaminar_mpi','-P','points.dat','_lamCTL.dat',tag])
-			self.wait2finish()
+			self.wait2finish(nproc, tag)
 		else: return
 	
 	
