@@ -343,7 +343,7 @@ class PFC:
         Set filter to a < threshold
         """
         if threshold > -1: print('Outside Facing filter threshold is set to: ' + str(threshold))
-        else: print('Outside Facing filter is not used)
+        else: print('Outside Facing filter is not used')
         R0 = MHD.ep[0].g['R0']
         Z0 = MHD.ep[0].g['Zmid']
         
@@ -358,8 +358,8 @@ class PFC:
         idx = np.where(a < threshold)[0]
         facingOut[idx] = True 
         Nfiltered = np.sum(facingOut)
-        print(Nfiltered,' faces are oriented away from the plasma and are considered shadowed.')
-        if (threshold <= -1) & (Nfiltered > 0): print('WARNING: Outside Facing filter should not filter anything, but it does')
+        if threshold > -1: print(Nfiltered,'faces are oriented away from the plasma and are considered shadowed.')
+        if (threshold <= -1) & (Nfiltered > 0): print('WARNING: Outside Facing filter should not filter anything, but it does.', Nfiltered, 'faces are neglected')
         return facingOut
         
 
