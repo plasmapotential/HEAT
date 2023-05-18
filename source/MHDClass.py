@@ -227,7 +227,7 @@ class MHD:
             self.gFiles.append('g'+self.shotFmt.format(self.shot) + '_'+ self.tsFmt.format(t))
             newgfile = timeDir + self.gFiles[-1]
             shutil.copyfile(oldgfile, newgfile)
-
+            #shutil.copyfile(oldgfile, timeDir + g)
         return
 
 
@@ -434,6 +434,7 @@ class MHD:
             f.write('# Parameterfile for ' + self.MachFlag + ' Programs\n')
             f.write('# Shot: '+self.shotFmt.format(self.shot)+'\tTime: '+self.tsFmt.format(t)+'s\n')
             f.write('# Path: ' + self.shotPath  +self.tsFmt.format(t) + '/' + 'g'+self.shotFmt.format(self.shot) + '_'+ self.tsFmt.format(t) + '\n')
+            #f.write('# Path: ' + self.shotPath  +self.tsFmt.format(t) + '/' + '\n')
             f.write('Nphi=\t{:d}\n'.format(self.Nphi))
 
             #itt means different things depending on if we are tracing field line
@@ -593,6 +594,8 @@ class MHD:
         args.append(gridfile)
         #args 5 is the MAFOT control file
         args.append(controlfile)
+        #args 6 is the tag, if not None
+        if tag is not None: args.append(tag)
         #Copy the current environment (important when in appImage mode)
         current_env = os.environ.copy()
         #run MAFOT structure for points in gridfile
@@ -605,7 +608,8 @@ class MHD:
             #write it out as a CSV.  Because this is a serial function that is only
             #called for special cases, we arent too concerned about speed or memory
             #so this works instead of making a more efficient pipeline
-            readfile = controlfilePath + 'struct.dat'
+            if tag is None: readfile = controlfilePath + 'struct.dat'
+            else: readfile = controlfilePath + 'struct_' + tag + '.dat'
             structdata = np.genfromtxt(readfile,comments='#')
 
             xyz = np.zeros((len(structdata),3))
