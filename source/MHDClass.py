@@ -458,11 +458,11 @@ class MHD:
             f.write('target(0=useSwall)=\t{:d}\n'.format(self.target))
             f.write('createPoints(2=target)=\t{:d}\n'.format(self.createPoints))    # This must be entry index 12
             #f.write('useFcoil(0=no,1=yes)=\t{:d}\n'.format(self.useFcoil))
-			#f.write('useCcoil(0=no,1=yes)=\t{:d}\n'.format(self.useCcoil))
-			#f.write('useIcoil(0=no,1=yes)=\t{:d}\n'.format(self.useIcoil))
-			f.write('unused=\t0\n')
-			f.write('unused=\t0\n')
-			f.write('unused=\t0\n')
+            #f.write('useCcoil(0=no,1=yes)=\t{:d}\n'.format(self.useCcoil))
+            #f.write('useIcoil(0=no,1=yes)=\t{:d}\n'.format(self.useIcoil))
+            f.write('unused=\t0\n')
+            f.write('unused=\t0\n')
+            f.write('unused=\t0\n')
             f.write('ParticleDirection(1=co-pass,-1=ctr-pass,0=field-lines)=\t{:d}\n'.format(self.ParticleDirection))   # This must be entry index 16
             f.write('PartileCharge(-1=electrons,>=1=ions)=\t{:d}\n'.format(self.ParticleCharge))
             f.write('Ekin[keV]=\t{:2f}\n'.format(self.Ekin))
