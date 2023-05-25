@@ -236,11 +236,15 @@ class plasma3D:
 		self.writeM3DC1supFile()
 		self.writeCoilsupFile()
 		
+		if nproc > 20: nproc = 20
 		self.nproc = nproc
 		self.tag = tag
 		print('-'*80)
 		print('Launching 3D plasma field line tracing')
-		subprocess.call(['mpirun','-n',str(nproc),'heatlaminar_mpi','-P','points.dat','_lamCTL.dat',tag])
+		
+		args = ['mpirun','-n',str(nproc),'heatlaminar_mpi','-P','points3DHF.dat','_lamCTL.dat',tag]
+		current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
+		subprocess.run(args, env=current_env, cwd=self.cwd)
 		#print('mpirun -n ' + str(nproc) + ' heatlaminar_mpi' + ' -P points3DHF.dat' + ' _lamCTL.dat' + ' ' + tag)
 		
 		#self.wait2finish(nproc, tag)
@@ -254,9 +258,8 @@ class plasma3D:
 		Read the MAFOT outputfile and set psimin and Lc class variables
 		"""
 		if tag is None: tag = ''    # this tag has len(tag) = 0
-		if len(tag) > 0: tag = '_' + tag
 		
-		file = self.cwd + '/' + 'lam' + tag + '.dat'
+		file = self.cwd + '/' + 'lam_' + tag + '.dat'
 		if os.path.isfile(file): 
 			lamdata = np.genfromtxt(file,comments='#')
 			self.Lc = lamdata[:,3]
@@ -277,9 +280,9 @@ class plasma3D:
 		with open(self.cwd + '/' + '_lamCTL.dat', 'w') as f:
 			f.write('# Parameterfile for HEAT Programs\n')
 			f.write('# Shot: ' + format(int(self.shot),'06d') + '\tTime: ' + format(int(self.time),'04d') + 'ms\n')
-			f.write('# Path: ' + self.gFile + '\n')			
+			f.write('# Path: ' + self.gFile + '\n')
 			f.write('NZ=\t10\n')
-			f.write('itt=\t' + str(self.itt) + '\n')			
+			f.write('itt=\t' + str(self.itt) + '\n')
 			f.write('Rmin=\t1\n')
 			f.write('Rmax=\t2\n')
 			f.write('Zmin=\t-1\n')
@@ -289,16 +292,19 @@ class plasma3D:
 			f.write('MapDirection=\t' + str(MapDirection) + '\n')
 			f.write('PlasmaResponse(0=no,>1=yes)=\t' + str(self.response) + '\n')
 			f.write('Field(-3=VMEC,-2=SIESTA,-1=gfile,M3DC1:0=Eq,1=I-coil,2=both)=\t' + str(self.selectField) + '\n')
-			f.write('target(0=cp,1=inner,2=outer,3=shelf)=\t0\n')		
-			f.write('createPoints(0=setR,3=setpsi)=\t0\n')
-			f.write('useIcoil(0=no,1=yes)=\t' + str(self.useIcoil) + '\n')
-			f.write('useFilament(0=no)=\t0\n')
-			f.write('useOther(0=no)=\t0\n')
-			f.write('ParticleDirection(1=co-pass,-1=ctr-pass,0=field-lines)=\t' + str(self.sigma) + '\n')
+			f.write('target(0=cp,1=inner,2=outer,3=shelf)=\t0\n')
+			f.write('createPoints(0=setR,3=setpsi)=\t0\n')    # This must be entry index 12
+			f.write('unused=\t0\n')
+			f.write('unused=\t0\n')
+			f.write('unused=\t0\n')
+			f.write('ParticleDirection(1=co-pass,-1=ctr-pass,0=field-lines)=\t' + str(self.sigma) + '\n')   # This must be entry index 16
 			f.write('PartileCharge(-1=electrons,>=1=ions)=\t' + str(self.charge) + '\n')
 			f.write('Ekin[keV]=\t' + str(self.Ekin) + '\n')
 			f.write('lambda=\t' + str(self.Lambda) + '\n')
-			f.write('Mass=\t' + str(self.Mass) + '\n')
+			f.write('Mass=\t' + str(self.Mass) + '\n')    # This must be entry index 20
+			f.write('unused=\t0\n')
+			f.write('unused=\t0\n')
+			f.write('dpinit=\t1.0\n')   # This must be entry index 23
 			f.write('pi=\t3.141592653589793\n')
 			f.write('2*pi=\t6.283185307179586\n')
 
