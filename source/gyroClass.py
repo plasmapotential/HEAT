@@ -359,6 +359,8 @@ class GYRO:
         BtraceXYZ is the points of the Bfield trace that we will gyrate about
         """
         print("Calculating gyro trace...")
+        log.info("Calculating gyro trace...")
+        log.info(omegaGyro)
         #Loop thru B field trace while tracing gyro orbit
         helixTrace = None
         for i in range(len(BtraceXYZ)-1):
@@ -393,8 +395,8 @@ class GYRO:
             w = w / np.sqrt(w.dot(w))
             xfm = np.vstack([u,v,w]).T
             #get helix path along (proxy) z axis reference frame
-            x_helix = self.rGyro*np.cos(self.omegaGyro*t + gyroPhase)
-            y_helix = self.diamag*self.rGyro*np.sin(self.omegaGyro*t + gyroPhase)
+            x_helix = rGyro*np.cos(omegaGyro*t + gyroPhase)
+            y_helix = self.diamag*rGyro*np.sin(omegaGyro*t + gyroPhase)
             z_helix = np.zeros((len(t)))
             #perform rotation to field line reference frame
             helix = np.vstack([x_helix,y_helix,z_helix]).T
@@ -406,7 +408,7 @@ class GYRO:
             helix_rot[:,1] += yGC
             helix_rot[:,2] += zGC
             #update gyroPhase variable so next iteration starts here
-            gyroPhase = self.omegaGyro*t[-1] + gyroPhase
+            gyroPhase = omegaGyro*t[-1] + gyroPhase
             #append to helix trace
             if helixTrace is None:
                 helixTrace = helix_rot
@@ -435,6 +437,14 @@ class GYRO:
             print("Number of gyro points = {:f}".format(len(helixTrace)))
             print("Longitudinal dist between gyro points = {:f} [m]".format(magP/float(Nsteps)))
             print("Each line segment length ~ {:f} [m]".format(magP))
+            log.info("\nV_perp = {:f} [m/s]".format(vPerp))
+            log.info("V_parallel = {:f} [m/s]".format(vParallel))
+            log.info("Cyclotron Freq = {:f} [rad/s]".format(self.omegaGyro[0]))
+            log.info("Cyclotron Freq = {:f} [Hz]".format(self.fGyro[0]))
+            log.info("Gyro Radius = {:f} [m]".format(self.rGyro[0][0]))
+            log.info("Number of gyro points = {:f}".format(len(helixTrace)))
+            log.info("Longitudinal dist between gyro points = {:f} [m]".format(magP/float(Nsteps)))
+            log.info("Each line segment length ~ {:f} [m]".format(magP))
         return
 
     def buildHelixParallel(self, i):
