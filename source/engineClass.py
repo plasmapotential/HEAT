@@ -31,6 +31,7 @@ import EFIT.equilParams_class as EP
 import GUIscripts.plotlyGUIplots as pgp
 import trimesh
 import multiprocessing
+import open3d as o3d
 
 log = logging.getLogger(__name__)
 tools = toolsClass.tools()
@@ -1359,9 +1360,9 @@ class engineObj():
         BR = ep.BRFunc.ev(R,Z)
         BZ = ep.BZFunc.ev(R,Z)
         B = np.sqrt(BR**2 + Bt**2 + BZ**2)
-        Bmag = np.sign(ep.g['Bt0'])
+        Bsign = np.sign(ep.g['Bt0'])
         #Calculate frequencies and gyro radius
-        self.GYRO.setupFreqs(B)
+        self.GYRO.setupFreqs(B*Bsign)
         self.GYRO.setupRadius(vPerp)
         #trace helix and save to CSV and VTK formats
         self.GYRO.singleGyroTrace(vPerp,vParallel,float(gPhase),float(N_helix),BtraceXYZ,controlfilePath,
@@ -2054,7 +2055,7 @@ class engineObj():
                 #setup gyroPhase angle
                 self.GYRO.uniformGyroPhaseAngle()
                 #setup frequencies
-                self.GYRO.setupFreqs(PFC.Bmag[PFC.PFC_GYROmap,-1])
+                self.GYRO.setupFreqs(PFC.Bmag[PFC.PFC_GYROmap,-1]*PFC.Bsign)
                 #self.HF.gyroHF(self.GYRO, PFC)
                 self.HF.gyroHF2(self.GYRO, PFC)
 
@@ -3106,7 +3107,8 @@ class engineObj():
             #if the standard mesh for this part doesn't exist, create it using freecad
             #in the HEAT CAD module
             if os.path.exists(stlfile)==True:
-                pass
+                print("Mesh already exists.")
+                log.info("Mesh already exists.")
             else:
                 partIdx = np.where(self.CAD.ROI == PFC.name)[0][0]
                 part = self.CAD.ROIparts[partIdx]
@@ -3120,23 +3122,43 @@ class engineObj():
 
             #create hard link to STL
             os.link(stlfile,triSurfaceLocation)
+            #shutil.copy(stlfile, triSurfaceLocation)
 
-            #Test STL to make sure it is watertight
-            meshInQuestion = trimesh.load(stlfile)
-            validMesh = meshInQuestion.is_watertight
+            #Test STL to make sure it is watertight (open3d)
+            #meshInQuestion = o3d.io.read_triangle_mesh(stlfile)
+            #validMesh = meshInQuestion.is_watertight()
+            #Test STL to make sure it is watertight (freecad)
+            partIdx = np.where(self.CAD.ROI == PFC.name)[0][0]
+            part = self.CAD.ROIparts[partIdx]
+            meshInQuestion = self.CAD.readMesh(stlfile)
+            validMesh = meshInQuestion.isSolid()
+
             if validMesh == True:
                 print("STL file for "+PFC.name+" is watertight")
                 log.info("STL file for "+PFC.name+" is watertight")
             else:
-                print("\n=====================================================")
-                print("WARNING!!!  STL file for "+PFC.name+"is NOT watertight.")
-                print("OpenFOAM thermal analysis will probably fail")
-                print("=====================================================\n")
-                log.info("\n=====================================================")
-                log.info("WARNING!!!  STL file for "+PFC.name+"is NOT watertight.")
-                log.info("OpenFOAM thermal analysis will probably fail")
-                print("=====================================================\n")
+                #try to repair
+                print("Trying to repair leaky mesh...")
+                log.info("Trying to repair leaky mesh...")
+                p = partDir+'/constant/triSurface/'
+                meshName = PFC.OFpart +".stl"
+                #validMesh = self.CAD.repairMeshOpen3D(p, meshName, meshName, part, 'dummySTP.step')
+                validMesh = self.CAD.repairMeshFreeCAD(p, meshName, PFC.name, meshInQuestion)
+                if validMesh == True:
+                    print("repaired mesh...")
+                    log.info("repaired mesh...")                   
 
+                else:
+                    print("\n=====================================================")
+                    print("WARNING!!!  STL file for "+PFC.name+" is NOT watertight.")
+                    print("OpenFOAM thermal analysis will probably fail")
+                    print("=====================================================\n")
+                    log.info("\n=====================================================")
+                    log.info("WARNING!!!  STL file for "+PFC.name+" is NOT watertight.")
+                    log.info("OpenFOAM thermal analysis will probably fail")
+                    print("=====================================================\n")
+
+                
             #update blockmesh bounds for each PFC and
             # give 10mm of clearance on each side
             self.OF.xMin = (PFC.centers[:,0].min() - 0.01)*1000.0
@@ -3167,13 +3189,21 @@ class engineObj():
             targetPoints = []
             partIdx = np.where(self.CAD.ROI == PFC.name)[0][0]
             part = self.CAD.ROImeshes[partIdx]
+            norms = PFC.norms
+            ctrs = PFC.centers
+
+            #partIdx = np.where(np.array(self.CAD.intersectList) == PFC.name)[0][0]
+            #part = self.CAD.intersectMeshes[partIdx]
+            #norms = self.CAD.intersectNorms[partIdx]
+            #ctrs = self.CAD.intersectCtrs[partIdx]/1000.0
+
             for face in part.Facets:
                 targetPoints.append(face.Points)
             targetPoints = np.asarray(targetPoints) / 1000.0 #scale to m
             targetPoints = targetPoints[1:,:] #omit launch point face
             #find all intersections with self along inverse normal
-            tools.q1 = PFC.centers[0,:]
-            tools.q2 = PFC.centers[0,:] -10.0 * PFC.norms[0,:]
+            tools.q1 = ctrs[0,:]
+            tools.q2 = ctrs[0,:] -10.0 * norms[0,:]            
             tools.p1 = targetPoints[:,0,:] #point 1 of mesh triangle
             tools.p2 = targetPoints[:,1,:] #point 2 of mesh triangle
             tools.p3 = targetPoints[:,2,:] #point 3 of mesh triangle
@@ -3181,17 +3211,21 @@ class engineObj():
             mask = tools.intersectTestSingleRay()
             use = np.where(mask == True)[0] + 1 #account for face we deleted above (index 0)
             #find which one of these intersection faces is closest
-            dist = np.linalg.norm(PFC.centers[0,:] - PFC.centers[use,:], axis=1)
+            dist = np.linalg.norm(ctrs[0,:] - ctrs[use,:], axis=1)           
             #smallStep = dist[closest] / 2.0
             closest = use[np.argmin(dist)]
             #find the distance that face is along the inverse normal
-            distAlongNorm = np.dot((PFC.centers[0,:] - PFC.centers[closest,:]), PFC.norms[0,:])
+            distAlongNorm = np.dot((ctrs[0,:] - ctrs[closest,:]), norms[0,:])
             #put a point between those two planes
             smallStep = distAlongNorm / 2.0
+
             #place midpoint between index 0 and the closest intersection face along inverse normal
-            self.OF.xMid = (PFC.centers[0,0] - smallStep*PFC.norms[0,0])*1000.0
-            self.OF.yMid = (PFC.centers[0,1] - smallStep*PFC.norms[0,1])*1000.0
-            self.OF.zMid = (PFC.centers[0,2] - smallStep*PFC.norms[0,2])*1000.0
+            self.OF.xMid = (ctrs[0,0] - smallStep*norms[0,0])*1000.0
+            self.OF.yMid = (ctrs[0,1] - smallStep*norms[0,1])*1000.0
+            self.OF.zMid = (ctrs[0,2] - smallStep*norms[0,2])*1000.0
+            print(self.OF.xMid)
+            print(self.OF.yMid)
+            print(self.OF.zMid)
 
 #            #setup openfoam environment
 #            try:
