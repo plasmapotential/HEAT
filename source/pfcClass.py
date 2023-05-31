@@ -659,7 +659,7 @@ class PFC:
         #setup gyroPhase angle
         GYRO.uniformGyroPhaseAngle()
         #setup frequencies
-        GYRO.setupFreqs(self.Bmag[self.PFC_GYROmap,-1])
+        GYRO.setupFreqs(self.Bmag[self.PFC_GYROmap,-1]*self.Bsign)
 
         #Walk downstream along GC path tracing helices and looking for intersections
         if "allROI" in GYRO.gyroSources:
@@ -902,7 +902,7 @@ class PFC:
         #setup gyroPhase angle
         GYRO.uniformGyroPhaseAngle()
         #setup frequencies
-        GYRO.setupFreqs(self.Bmag[self.PFC_GYROmap,-1])
+        GYRO.setupFreqs(self.Bmag[self.PFC_GYROmap,-1]*self.Bsign)
 
         #Walk downstream along GC path tracing helices and looking for intersections
         if "allROI" in GYRO.gyroSources:
@@ -1317,7 +1317,7 @@ class PFC:
         #setup gyroPhase angle
         GYRO.uniformGyroPhaseAngle()
         #setup frequencies
-        GYRO.setupFreqs(self.Bmag[self.PFC_GYROmap,-1])
+        GYRO.setupFreqs(self.Bmag[self.PFC_GYROmap,-1]*self.Bsign)
 
         #Walk downstream along GC path tracing helices and looking for intersections
         if "allROI" in GYRO.gyroSources:
