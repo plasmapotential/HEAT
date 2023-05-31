@@ -297,7 +297,10 @@ class OpenFOAM():
             #source OF bashrc if in dev mode (already sourced in appImage)
             if inAppImage == False:
                 f.write(self.cmdSourceOF + '\n')
-            f.write('surfaceFeatureExtract | tee -a ' + logFile + '\n')
+
+            #for tricky meshes, extract features
+            #f.write('surfaceFeatureExtract | tee -a ' + logFile + '\n')
+
             f.write('blockMesh | tee -a ' + logFile + '\n')
             #f.write('blockMesh > ' + logFile + '\n')
             #single core meshing

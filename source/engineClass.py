@@ -31,7 +31,6 @@ import EFIT.equilParams_class as EP
 import GUIscripts.plotlyGUIplots as pgp
 import trimesh
 import multiprocessing
-import open3d as o3d
 
 log = logging.getLogger(__name__)
 tools = toolsClass.tools()
