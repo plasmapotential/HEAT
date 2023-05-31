@@ -3222,9 +3222,6 @@ class engineObj():
             self.OF.xMid = (ctrs[0,0] - smallStep*norms[0,0])*1000.0
             self.OF.yMid = (ctrs[0,1] - smallStep*norms[0,1])*1000.0
             self.OF.zMid = (ctrs[0,2] - smallStep*norms[0,2])*1000.0
-            print(self.OF.xMid)
-            print(self.OF.yMid)
-            print(self.OF.zMid)
 
 #            #setup openfoam environment
 #            try:
