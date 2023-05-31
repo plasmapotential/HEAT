@@ -40,6 +40,9 @@ tools = toolsClass.tools()
 import logging
 log = logging.getLogger(__name__)
 
+import open3d as o3d
+
+
 class CAD:
     """
     General CAD class
@@ -186,6 +189,13 @@ class CAD:
         return
 
 
+    def readMesh(self, file):
+        """
+        reads a mesh file, returns mesh object
+        """
+        mesh = Mesh.Mesh(file)
+        return mesh
+
     def getROImeshes(self, resolution=None):
         """
         Checks to see if STLs at desired resolution exist.  If they do, load em.
@@ -203,7 +213,7 @@ class CAD:
                 name = self.STLpath + partnum + "___"+resolution+".stl".format(resolution)
             #mefisto meshing algorithm
             else:
-                name = self.STLpath + partnum + "___{:.2f}mm.stl".format(resolution)
+                name = self.STLpath + partnum + "___{:.6f}mm.stl".format(resolution)
 
             if os.path.exists(name) and self.overWriteMask == False:
                 print("Mesh exists, loading...")
@@ -233,7 +243,7 @@ class CAD:
                 name = self.STLpath + partnum + "___"+resolution+".stl".format(resolution)
             #mefisto meshing algorithm
             else:
-                name = self.STLpath + partnum + "___{:.2f}mm.stl".format(resolution)
+                name = self.STLpath + partnum + "___{:.6f}mm.stl".format(resolution)
 
             if os.path.exists(name) and self.overWriteMask == False:
                 print("Mesh exists, loading...")
@@ -565,7 +575,7 @@ class CAD:
                 filename = path + label[i] + "___"+resolution[i]+".stl"
             #mefisto meshing algorithm
             else:
-                filename = path + label[i] + "___{:.2f}mm.stl".format(float(resolution[i]))
+                filename = path + label[i] + "___{:.6f}mm.stl".format(float(resolution[i]))
             if os.path.exists(filename) and self.overWriteMask == False:
                 print("Not clobbering mesh file...")
             else:
@@ -1234,3 +1244,184 @@ class CAD:
             print("No global mesh translations defined.")
             log.info("No global mesh translations defined.")
         return mesh
+
+
+    def repairMeshFreeCAD(self, p:str, stlOut:str, name:str, mesh:object):
+        """
+        fixes broken meshes using freecad.  saves new mesh in file
+        """       
+        mesh.fixSelfIntersections()
+        mesh.fixDegenerations(0.000000)
+        mesh.removeDuplicatedPoints()
+        mesh.harmonizeNormals()
+        mesh.removeNonManifolds()
+
+        self.writeMesh2file(mesh, name, 'standard', path=p)
+        mesh = Mesh.Mesh(p+stlOut)
+
+        return mesh.isSolid()
+
+    def repairMeshOpen3D(self, path:str, stlIn:str, stlOut, part: object, stpName:str):
+        """
+        an attempt to repair leaky meshes.
+
+        First, tries to repair the mesh by using open3d utilities.
+        If that doesn't work, then it 
+            1) steps out the individual part object (using freecad) \n
+            2) loads the part using gmsh  \n
+            3) meshes the part with gmsh  \n
+            4) uses open3d to repair any mesh defects  \n
+            5) saves repaired mesh  
+        
+        Future versions of this function could use different libraries
+
+        arguments
+        path: string that contains path to stl and where future stl/stp will be saved
+        stlIn: name of stl file to read / save
+        stlOut: name of stl file to read / save
+        part: freecad part object that was originally used to create the leaky mesh
+        stpName: name of stp file to save
+        
+        """
+        fIn = path + stlIn
+        fOut = path + stlOut
+        fOut2 = path + 'repair.ply'
+        fStep = path + stpName
+        m = o3d.io.read_triangle_mesh(fIn)
+        #first test the mesh
+        testList = self.checkMeshProperties(m)
+
+        if testList[-2] != True:
+            print("Repair attempt 1 using open3D...")
+            log.info("Repair attempt 1 using open3D...")
+            m = self.open3dRemoveMeshDefects(m)
+            testList = self.checkMeshProperties(m)
+        
+            if testList[-2] == True:
+                print("Mesh Repaired...writing")
+                log.info("Mesh Repaired...writing")
+            
+            else:
+                #first save an stp file of this part
+                print("Mesh repair attempt 1 failed.  Trying another method")
+                log.info("Mesh repair attempt 1 failed.  Trying another method")
+
+            #legacy code sort of works.  leave for ideas
+            #    print("Writing STP file for new mesh generation...")
+            #    log.info("Writing STP file for new mesh generation...")
+            #    os.remove(fOut)
+            #    self.saveSTEP(fStep, [part])
+            #    now mesh using gmsh
+            #    import gmsh
+            #    gmsh.initialize()
+            #    gmsh.model.occ.importShapes(fStep)
+            #    gmsh.model.occ.synchronize()
+            #    gmsh.model.mesh.generate(3)
+            #    gmsh.write(fOut)
+            #    gmsh.finalize()
+            #    m = o3d.io.read_triangle_mesh(fOut)
+            #    m = self.open3dRemoveMeshDefects(m)
+            #    testList = self.checkMeshProperties(m)
+            #    if testList[-2] == True:
+            #        print("Mesh repaired during attempt 2.")
+            #        log.info("Mesh repaired during attempt 2.")
+            #    else:
+            #        print("WARNING: could not repair mesh")
+            #        log.info("WARNING: could not repair mesh")
+
+        #regardless of repair state, write mesh file
+        os.remove(fOut)
+        o3d.io.write_triangle_mesh(fOut, m)
+        m = o3d.io.read_triangle_mesh(fOut)
+        testList = self.checkMeshProperties(m)
+
+        return testList[-2]
+
+
+    def open3dRemoveMeshDefects(self, m:object):
+        """
+        removes mesh defects using open3d
+
+        m is an open3d mesh object
+        returns updated mesh object
+        """
+        m.remove_degenerate_triangles()
+        m.remove_duplicated_triangles()
+        m.remove_duplicated_vertices()
+        m.remove_non_manifold_edges()
+        m.compute_triangle_normals()
+        m.compute_vertex_normals()
+        return m
+
+
+    def checkMeshProperties(self, mesh:object, visualize=False):
+        """
+        checks mesh properties of an open3D mesh object
+
+        mesh must be an open3d object
+        if visualize is true, renders a visualization of the object
+        with defects colored
+        """
+        mesh.compute_vertex_normals()
+        edge_manifold = mesh.is_edge_manifold(allow_boundary_edges=True)
+        edge_manifold_boundary = mesh.is_edge_manifold(allow_boundary_edges=False)
+        vertex_manifold = mesh.is_vertex_manifold()
+        self_intersecting = mesh.is_self_intersecting()
+        watertight = mesh.is_watertight()
+        orientable = mesh.is_orientable()
+        print(f"  edge_manifold:          {edge_manifold}")
+        print(f"  edge_manifold_boundary: {edge_manifold_boundary}")
+        print(f"  vertex_manifold:        {vertex_manifold}")
+        print(f"  self_intersecting:      {self_intersecting}")
+        print(f"  watertight:             {watertight}")
+        print(f"  orientable:             {orientable}")
+
+        testList = [edge_manifold, edge_manifold_boundary,
+                    vertex_manifold, self_intersecting,
+                    watertight, orientable]
+
+        if visualize == True:
+            geoms = [mesh]
+            if not edge_manifold:
+                edges = mesh.get_non_manifold_edges(allow_boundary_edges=True)
+                geoms.append(self.edges_to_lineset(mesh, edges, (1, 0, 0)))
+            if not edge_manifold_boundary:
+                edges = mesh.get_non_manifold_edges(allow_boundary_edges=False)
+                geoms.append(self.edges_to_lineset(mesh, edges, (0, 1, 0)))
+            if not vertex_manifold:
+                verts = np.asarray(mesh.get_non_manifold_vertices())
+                pcl = o3d.geometry.PointCloud(
+                    points=o3d.utility.Vector3dVector(np.asarray(mesh.vertices)[verts]))
+                pcl.paint_uniform_color((1, 0, 1))
+                geoms.append(pcl)
+            if self_intersecting:
+                intersecting_triangles = np.asarray(
+                    mesh.get_self_intersecting_triangles())
+                intersecting_triangles = intersecting_triangles[0:1]
+                intersecting_triangles = np.unique(intersecting_triangles)
+                print("  # visualize self-intersecting triangles")
+                triangles = np.asarray(mesh.triangles)[intersecting_triangles]
+                edges = [
+                    np.vstack((triangles[:, i], triangles[:, j]))
+                    for i, j in [(0, 1), (1, 2), (2, 0)]
+                ]
+                edges = np.hstack(edges).T
+                edges = o3d.utility.Vector2iVector(edges)
+                geoms.append(self.edges_to_lineset(mesh, edges, (1, 0, 1)))
+            o3d.visualization.draw_geometries(geoms, mesh_show_back_face=True)
+        return testList
+
+    def edges_to_lineset(self, mesh, edges, color):
+        """
+        creates lineset from list of edges
+
+        taken from open3d tutorials: open3d_tutorial.py
+        """
+
+        ls = o3d.geometry.LineSet()
+        ls.points = mesh.vertices
+        ls.lines = edges
+        colors = np.empty((np.asarray(edges).shape[0], 3))
+        colors[:] = color
+        ls.colors = o3d.utility.Vector3dVector(colors)
+        return ls
