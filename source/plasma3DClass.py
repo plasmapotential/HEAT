@@ -32,6 +32,13 @@ class plasma3D:
 		self.Z = None		# in m
 		self.psimin = None
 		self.Lc = None		# in km
+		
+		# Boundary Box limits
+		self.bbRmin = None	
+		self.bbRmax = None
+		self.bbZmin = None
+		self.bbZmax = None
+		
 		self.allowed_vars = ['plasma3Dmask','shot','time','tmax','gFile','itt','response','selectField','useIcoil','sigma','charge','Ekin','Lambda','Mass']
 	
 	
@@ -88,6 +95,13 @@ class plasma3D:
 		print('Lambda = ' + str(self.Lambda))
 		print('Mass = ' + str(self.Mass))
 		print('#=============================================================')
+		print('#                Boundary Box Variables')
+		print('#=============================================================')
+		print('Rmin = ' + str(self.bbRmin))
+		print('Rmax = ' + str(self.bbRmax))
+		print('Zmin = ' + str(self.bbZmin))
+		print('Zmax = ' + str(self.bbZmax))
+		print('#=============================================================')
 		print('#                M3D-C1 Variables')
 		print('#=============================================================')
 		print('response = ' + str(self.response))
@@ -112,6 +126,13 @@ class plasma3D:
 		self.Ekin = tools.makeFloat(Ekin) 					# Particle Kinetic Energy in keV
 		self.Lambda = tools.makeFloat(Lambda) 				# Ratio of perpendicular to parallel velocity
 		self.Mass = tools.makeInt(Mass) 					# Particle Ion Mass (H=1, D=2, He=4)
+
+
+	def setBoundaryBox(self, MHD, CAD):
+		self.bbRmin = np.min([CAD.Rmin, MHD.ep[0].g['wall'][:,0].min()])
+		self.bbRmax = np.max([CAD.Rmax, MHD.ep[0].g['wall'][:,0].max()])
+		self.bbZmin = np.min([CAD.Zmin, MHD.ep[0].g['wall'][:,1].min()])
+		self.bbZmax = np.max([CAD.Zmax, MHD.ep[0].g['wall'][:,1].max()])
 
 
 	def setM3DC1input(self, C1Files = ['./C1.h5'], scales = [1], phases = None):
@@ -242,7 +263,8 @@ class plasma3D:
 		print('-'*80)
 		print('Launching 3D plasma field line tracing')
 		
-		args = ['mpirun','-n',str(nproc),'heatlaminar_mpi','-P','points3DHF.dat','_lamCTL.dat',tag]
+		bbLimits = str(self.bbRmin) + ',' + str(self.bbRmax) + ',' + str(self.bbZmin) + ',' + str(self.bbZmax)
+		args = ['mpirun','-n',str(nproc),'heatlaminar_mpi','-P','points3DHF.dat','-B',bbLimits,'_lamCTL.dat',tag]
 		current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
 		subprocess.run(args, env=current_env, cwd=self.cwd)
 		#print('mpirun -n ' + str(nproc) + ' heatlaminar_mpi' + ' -P points3DHF.dat' + ' _lamCTL.dat' + ' ' + tag)

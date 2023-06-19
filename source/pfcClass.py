@@ -318,7 +318,7 @@ class PFC:
         Rmax = np.max([CAD.Rmax, MHD.ep[0].g['wall'][:,0].max()])
         Zmin = np.min([CAD.Zmin, MHD.ep[0].g['wall'][:,1].min()])
         Zmax = np.max([CAD.Zmax, MHD.ep[0].g['wall'][:,1].max()])
-        print('\nBounding box set to: Rmin =',Rmin,' Rmax =',Rmax,' Zmin =',Zmin,' Zmax =',Zmax)
+        print('\nBounding box Filter limits set to: Rmin =',Rmin,' Rmax =',Rmax,' Zmin =',Zmin,' Zmax =',Zmax)
         
         x = q2[:,0]
         y = q2[:,1]

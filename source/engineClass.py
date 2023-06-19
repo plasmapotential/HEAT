@@ -1701,6 +1701,7 @@ class engineObj():
                     #3Dplasma setup
                     gFile = self.MHD.shotPath + self.tsFmt.format(t) + '/' + self.MHD.gFiles[tIdx]
                     self.plasma3D.initializePlasma3D(self.MHD.shot, t, gFile, self.inputFileList[tIdx], PFC.controlfilePath[0:-1], self.MHD.tmpDir[0:-1])   # remove / at the end of paths
+                    self.plasma3D.setBoundaryBox(self.MHD, self.CAD)
                     print('\n')
                     print("*"*80)
                     self.plasma3D.print_settings()                    
@@ -2278,6 +2279,7 @@ class engineObj():
             self.plasma3D.updatePointsFromCenters(PFC.centers[use])
             self.plasma3D.launchLaminar(self.NCPUs, tag = None)   # use MapDirection = 0. If problem, then we need to split here into fwd and bwd direction separately
             self.plasma3D.cleanUp(tag = None)      # removes the MAFOT log files
+            PFC.psimin = self.plasma3D.psimin
             
         #get psi from gfile for 2D plasmas
         else:
