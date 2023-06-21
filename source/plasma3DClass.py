@@ -288,6 +288,18 @@ class plasma3D:
 			self.psimin = lamdata[:,4]
 		else:
 			print('MAFOT output file: ' + file + ' not found!')
+		return
+		
+		
+	def checkValidOutput(self):
+		""" 
+		Check for invalid points in the laminar run: psimin == 10
+		"""
+		idx = np.where(self.psimin == 10)[0]
+		invalid = np.zeros(len(self.psimin), dtype=bool)
+		invalid[idx] = True
+		print('Number of points for which Laminar run could not compute psimin:', np.sum(invalid))
+		return invalid
 			
 			
 	def cleanUp(self, tag = None):

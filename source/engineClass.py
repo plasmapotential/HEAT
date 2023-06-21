@@ -2277,9 +2277,15 @@ class engineObj():
             log.info('Solving for 3D plasmas with MAFOT')
             use = np.where(PFC.shadowed_mask == 0)[0]
             self.plasma3D.updatePointsFromCenters(PFC.centers[use])
-            self.plasma3D.launchLaminar(self.NCPUs, tag = None)   # use MapDirection = 0. If problem, then we need to split here into fwd and bwd direction separately
-            self.plasma3D.cleanUp(tag = None)      # removes the MAFOT log files
-            PFC.psimin = self.plasma3D.psimin
+            self.plasma3D.launchLaminar(self.NCPUs, tag = 'opticalHF')   # use MapDirection = 0. If problem, then we need to split here into fwd and bwd direction separately
+            self.plasma3D.cleanUp(tag = 'opticalHF')      # removes the MAFOT log files
+            invalid = self.plasma3D.checkValidOutput()    # this does not update self.plasma3D.psimin
+            PFC.shadowed_mask[use[invalid]] = 1
+            PFC.psimin = self.plasma3D.psimin[~invalid]     # this defines and declares PFC.psimin
+            
+            use = np.where(PFC.shadowed_mask == 0)[0]
+            if (len(PFC.centers[use]) != len(PFC.psimin)): 
+                raise ValueError('psimin array does not match PFC centers. Abort!')
             
         #get psi from gfile for 2D plasmas
         else:
@@ -3034,10 +3040,17 @@ class engineObj():
 #            os.remove(PFC.outputFile)
             print('Solving for 3D plasmas with MAFOT')
             log.info('Solving for 3D plasmas with MAFOT')
-            use = np.where(PFC.shadowed_mask == 0)[0]
-            self.plasma3D.updatePointsFromCenters(PFC.centers[use])
-            self.plasma3D.launchLaminar(self.NCPUs, tag = None)
-            self.plasma3D.cleanUp(tag = None)      # removes the MAFOT log files
+            self.plasma3D.updatePointsFromCenters(PFC.centers)
+            self.plasma3D.launchLaminar(self.NCPUs, tag = 'psiOnly')
+            self.plasma3D.cleanUp(tag = 'psiOnly')      # removes the MAFOT log files
+            invalid = self.plasma3D.checkValidOutput()    # this does not update self.plasma3D.psimin
+            if(np.sum(invalid) > 0): 
+                print('****** WARNING *******')
+                print('psimin could not be computed for all points.')
+                print('Failed points will have psimin = 10.')
+                print('Reason: they are most likely outside the M3D-C1 simulation domain.\n')
+            PFC.psimin = self.plasma3D.psimin     # this defines and declares PFC.psimin
+            
         #get psi from gfile for 2D plasmas
         else:
             print('Solving for 2D plasmas with EFIT')
