@@ -427,25 +427,24 @@ class heatflux3D:
 		self.q = np.zeros(self.N)
 		self.ep = None	# equilParams_class instance for EFIT equilibrium
 		self.HFS = None	# True: use high field side SOL, False: use low field side SOL
-		self.allowed_vars = ['Lcmin', 'lcfs', 'lqEich', 'S', 'Psol', 'qBG']
+		self.teProfileData = None
+		self.neProfileData = None
+		self.allowed_vars = ['Lcmin', 'lcfs', 'lqCN', 'S', 'Pinj', 'qBG', 'teProfileData', 'neProfileData', 'kappa', 'model']
 
 
-	def intializeHF3D(self, Lc, psimin, ep, inputFile = None, T = None, HFS = False):
+	def initializeHF3D(self, ep, inputFile = None):
 		"""
 		Set up basic input vars
 		"""
-		self.psimin = psimin
-		self.Lc = Lc		# in km
-		self.N = len(self.Lc)
-		self.q = np.zeros(self.N)
+		#self.N = len(self.Lc)
+		#self.q = np.zeros(self.N)
 		self.ep = ep	# equilParams_class instance for EFIT equilibrium
-		self.HFS = HFS	# True: use high field side SOL, False: use low field side SOL
 
 		if inputFile is not None: self.read_input_file(inputFile)
-		else: self.setHFctl()	# just defaults
-		
-		self.good = self.isGoodPoint()
-		self.pfr = self.isPFR()
+		else: self.setHFctl()	# just defaults	
+			
+		T = self.teProfileData
+		ne = self.neProfileData
 
 		# set T profile
 		if T is None: T = 2							# temperature at top of pedestal in keV
@@ -453,16 +452,33 @@ class heatflux3D:
 			TData = np.loadtxt(T)
 			psiT = TData[:,0]
 			T = TData[:,1]
-			self.fT = scinter.UnivariateSpline(psiT, T, s = 0)
+			self.fT = scinter.UnivariateSpline(psiT, T, s = 0, ext = 'const')
 		elif isinstance(T, np.ndarray):				# array of T data assuming psi = [0, 1.1]
 			psiT = np.linspace(0, 1.1, len(T))
-			self.fT = scinter.UnivariateSpline(psiT, T, s = 0)
+			self.fT = scinter.UnivariateSpline(psiT, T, s = 0, ext = 'const')
 		else:										# any other option
 			try:
 				T = float(T)						# temperature at top of pedestal in keV
 				self.fT = lambda x: Tprofile(x, T)	# generic temperature profile
 			except:
 				raise RuntimeError('Invalid T profile data')
+
+		# set density profile
+		if ne is None: ne = 0.5							# electron density at top of pedestal in 1e-20/m^3
+		if isinstance(ne, str):							# file name for density profile data
+			neData = np.loadtxt(ne)
+			nePsi = neData[:,0]
+			ne = neData[:,1]
+			self.fn = scinter.UnivariateSpline(nePsi, ne, s = 0, ext = 'const')
+		elif isinstance(ne, np.ndarray):				# array of density data assuming psi = [0, 1.1]
+			nePsi = np.linspace(0, 1.1, len(ne))
+			self.fn = scinter.UnivariateSpline(nePsi, ne, s = 0, ext = 'const')
+		else:											# any other option
+			try:
+				ne = float(ne)							# density at top of pedestal in 1e-20/m^3
+				self.fn = lambda x: ne + x*0					# generic density profile
+			except:
+				raise RuntimeError('Invalid density profile data')
 
 
 	def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
@@ -481,27 +497,35 @@ class heatflux3D:
 		print('#=============================================================')
 		print('#                Optical HF Variables')
 		print('#=============================================================')
-		print('lqEich = ' + str(self.lqEich))
+		print('lqCN = ' + str(self.lqCN))
 		print('S = ' + str(self.S))
-		print('Psol = ' + str(self.Psol))
+		print('Pinj = ' + str(self.Pinj))
 		print('qBG = ' + str(self.qBG))
+		print('kappa = ' + str(self.kappa))
 		print('#=============================================================')
 		print('#                3D Plasma Variables')
 		print('#=============================================================')
 		print('Lcmin = ' + str(self.Lcmin))
 		print('lcfs = ' + str(self.lcfs))
+		print('teProfileData = ' + str(self.teProfileData))
+		print('neProfileData = ' + str(self.neProfileData))
+		print('model = ' + str(self.model))
 		
 
-	def setHFctl(self, Lcmin = 0.075, lcfs = 0.97, lqEich = 5, S = 2, Psol = 10, qBG = 0):
+	def setHFctl(self, Lcmin = 0.075, lcfs = 0.97, lqCN = 5, S = 2, Pinj = 10, qBG = 0, kappa = 2000):
 		"""
 		Set the specific class variables
 		"""
 		self.Lcmin = tools.makeFloat(Lcmin) 		# minimum connection length in SOL to separateout the PFR, in km
 		self.lcfs = tools.makeFloat(lcfs) 			# psi of the Last Closed Flux Surface inside the stochastic layer
-		self.lqEich = tools.makeFloat(lqEich) 		# heat flux layer width for Eich profile, in mm
+		self.lqCN = tools.makeFloat(lqCN) 		# heat flux layer width for Eich profile, in mm
 		self.S = tools.makeFloat(S) 				# heat flux layer extension width in PFR, in mm
-		self.Psol = tools.makeFloat(Psol) 			# total power into SOL, in MW
+		self.Pinj = tools.makeFloat(Pinj) 			# total power into SOL, in MW
 		self.qBG = tools.makeFloat(qBG) 			# background heat flux in MW/m^2
+		self.kappa = tools.makeFloat(kappa) 		# electron heat conductivity in W/m/eV^3.5
+		self.teProfileData = None
+		self.neProfileData = None
+		self.model = None
 	
 	
 	def read_input_file(self, file):
@@ -514,21 +538,51 @@ class heatflux3D:
 		"""
 		if os.path.isfile(file): 
 			tools.read_input_file(self, file)
-			self.time = self.tmax
 			self.setTypes()
 			print('Input file: ' + file + ' read successfully')
 		else: 
 			print('Input file: ' + file + ' not found!')
 			self.setHFctl()	# just defaults
-
+		
 
 	def setTypes(self):
 		"""
 		Set variable types for the stuff that isnt a string from the input file
 		"""
 		integers = []
-		floats = ['Lcmin', 'lcfs', 'lqEich', 'S', 'Psol', 'qBG']
+		floats = ['Lcmin', 'lcfs', 'lqCN', 'S', 'Pinj', 'qBG', 'kappa']
 		setAllTypes(self, integers, floats)
+		
+		# data is an array or list
+		if self.teProfileData is not None:
+			if '[' in self.teProfileData:
+				from ast import literal_eval
+				self.teProfileData = self.teProfileData.replace(' ',',')
+				self.teProfileData = np.array(literal_eval(self.teProfileData))
+		if self.neProfileData is not None:
+			if '[' in self.neProfileData:
+				from ast import literal_eval
+				self.neProfileData = self.neProfileData.replace(' ',',')
+				self.neProfileData = np.array(literal_eval(self.neProfileData))
+		
+		# check if data is just a float
+		try: self.teProfileData = float(self.teProfileData)
+		except: pass	# data is a file name and remains a string or None
+		try: self.neProfileData = float(self.neProfileData)
+		except: pass	# data is a file name and remains a string or None
+			
+		
+	def updateLaminarData(self, psimin, Lc):
+		"""
+		updates member variables for psimin, connection length, 
+		checks for invalid points and finds private flux region points
+		"""
+		self.psimin = psimin
+		self.Lc = Lc
+		self.N = len(self.psimin)
+		self.q = np.zeros(self.N)
+		self.good = self.isGoodPoint()
+		self.pfr = self.isPFR()
 		
 		
 	def isGoodPoint(self):
@@ -550,9 +604,27 @@ class heatflux3D:
 		False: point in SOL or lobes
 		"""
 		mask = np.zeros(self.N, dtype = bool)
-		pfr = np.where((self.psimin < 1) & (self.Lc < Lcmin))
+		pfr = np.where((self.psimin < 1) & (self.Lc < self.Lcmin))
 		mask[pfr] = True
 		return mask
+		
+	
+	def heatflux(self, HFS = False):
+		"""
+		computes self.q for the chosen model
+		zeroes out invalid points
+		updates self.q
+		"""
+		if self.model in ['Layer', 'layer', 'eich', 'Eich', 'heuristic']:
+			self.HFS = HFS	# True: use high field side SOL, False: use low field side SOL
+			q = self.getq_layer()
+		elif self.model in ['conduct', 'conductive']:
+			L = np.mean(self.Lc[self.psimin > self.lcfs])*1e3	# average connection length in open field line area in m
+			q = self.getq_conduct(kappa = self.kappa, L = L)
+		else:
+			raise('No valid model selected')
+			
+		self.q[self.good] = q[self.good]
 
 
 	def getq_conduct(self, kappa = 2000, T0 = 0, L = 1, limit = True, Tpfr = 0.01):
@@ -560,26 +632,28 @@ class heatflux3D:
 		Input:
 		  kappa = electron heat conductivity in W/m/eV^3.5
 		  T0 = electron temperature at sheath entrance near target in keV
-		  L = conduction distance between target and LCFS in km
+		  L = conduction distance between target and LCFS in m
 		Output:
 		  updates self.q		
 		"""
-		T = self.fT(psimin)			# this is now temperature in keV
+		T = self.fT(self.psimin)			# this is now temperature in keV
 		
 		if limit: 
 			T[self.psimin < self.lcfs] = self.fT(self.lcfs)
 		T[self.pfr] = Tpfr	# 10 eV in private flux region
 		
-		self.q = 2.0/7.0 * kappa/L * (T**3.5 - T0**3.5) * (1e+3)**3.5/1e+6   # in MW/m^2
+		q = 2.0/7.0 * kappa/L * (T**3.5 - T0**3.5) * (1e+3)**3.5/1e+6   # in MW/m^2
+		return q
 
 
-	def getq_eich(self):
+	def getq_layer(self):
 		"""
-		Computes heat flux based on an Eich profile with lobes
+		Computes heat flux based on an Eich profile and lobes
 		updates self.q		
 		"""
-		self.q, q0 = self.set_layer(self.psimin, self.lqEich, self.S, lcfs = self.lcfs, lobes = True)
-		self.q[self.pfr],_ = self.set_layer(self.psimin[self.pfr], self.lqEich, self.S, q0 = q0)
+		q, q0 = self.set_layer(self.psimin, self.lqCN, self.S, lcfs = self.lcfs, lobes = True)
+		if np.sum(self.pfr > 0): q[self.pfr],_ = self.set_layer(self.psimin[self.pfr], self.lqCN, self.S, q0 = q0)
+		return q
 
 	
 	def set_layer(self, psi, lq, S, lcfs = 1.0, q0 = 1, lobes = False):
@@ -617,7 +691,7 @@ class heatflux3D:
 		qsep = eich_profile(xsep, lq, S, x0, q0 = 1, qBG = self.qBG, fx = 1)
 		
 		if lobes:
-			q[psi < psilcfs] = qmax
+			q[psi < lcfs] = qmax
 		
 		return q/q.max()*q0, qsep/q.max()*q0
 
