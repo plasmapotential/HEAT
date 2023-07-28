@@ -1702,6 +1702,7 @@ class engineObj():
                     gFile = self.MHD.shotPath + self.tsFmt.format(t) + '/' + self.MHD.gFiles[tIdx]
                     self.plasma3D.initializePlasma3D(self.MHD.shot, t, gFile, self.inputFileList[tIdx], PFC.controlfilePath[0:-1], self.MHD.tmpDir[0:-1])   # remove / at the end of paths
                     self.plasma3D.setBoundaryBox(self.MHD, self.CAD)
+                    self.hf3D.intializeHF3D(PFC.ep, self.inputFileList[tIdx])
                     print('\n')
                     print("*"*80)
                     self.plasma3D.print_settings()                    
@@ -3017,7 +3018,7 @@ class engineObj():
         you need to have run the cad, mhd, and hf initialization processes
         before running this function
         """
-        PFC.shadowed_mask = np.zeros((len(PFC.shadowed_mask)))
+        #PFC.shadowed_mask = np.zeros((len(PFC.shadowed_mask)))
         self.getPsiEverywhere(PFC, PFC.tag)
 
         print("Completed psiN calculation")
@@ -3055,6 +3056,7 @@ class engineObj():
         else:
             print('Solving for 2D plasmas with EFIT')
             log.info('Solving for 2D plasmas with EFIT')
+            PFC.shadowed_mask = np.zeros((len(PFC.shadowed_mask)))
             self.MHD.psi2DfromEQ(PFC)
 
         prefix = 'psiN'
