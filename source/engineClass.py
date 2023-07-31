@@ -1706,6 +1706,7 @@ class engineObj():
                     print('\n')
                     print("*"*80)
                     self.plasma3D.print_settings()                    
+                    self.hf3D.print_settings()                    
                     print('\n')
                     print("*"*80)
                     print('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
@@ -2264,40 +2265,47 @@ class engineObj():
 
         #Run MAFOT laminar for 3D plasmas
         if self.plasma3D.plasma3Dmask:
-#            print('\n')
-#            print("-"*70)
-#            print("MAFOT LAMINAR MODULE INITIALIZED")
-#            log.info("MAFOT LAMINAR MODULE INITIALIZED")
-#            CTLfile=PFC.controlfilePath + PFC.controlfile
-#            self.MHD.writeControlFile(CTLfile, PFC.t, PFC.mapDirection, mode='laminar')
-#            self.MHD.writeMAFOTpointfile(PFC.centers[use],PFC.gridfile)
-#            self.MHD.runMAFOTlaminar(PFC.gridfile,PFC.controlfilePath,PFC.controlfile,self.NCPUs)
-#            self.HF.readMAFOTLaminarOutput(PFC,PFC.outputFile)
-#            os.remove(PFC.outputFile)
             print('Solving for 3D plasmas with MAFOT')
             log.info('Solving for 3D plasmas with MAFOT')
             use = np.where(PFC.shadowed_mask == 0)[0]
             self.plasma3D.updatePointsFromCenters(PFC.centers[use])
             self.plasma3D.launchLaminar(self.NCPUs, tag = 'opticalHF')   # use MapDirection = 0. If problem, then we need to split here into fwd and bwd direction separately
             self.plasma3D.cleanUp(tag = 'opticalHF')      # removes the MAFOT log files
-            invalid = self.plasma3D.checkValidOutput()    # this does not update self.plasma3D.psimin
-            PFC.shadowed_mask[use[invalid]] = 1
-            PFC.psimin = self.plasma3D.psimin[~invalid]     # this defines and declares PFC.psimin
             
+            # check for invalid points (psimin = 10) and remove; there should be none, but just in case
+            invalid = self.plasma3D.checkValidOutput()    # this does NOT change self.plasma3D.psimin
+            PFC.shadowed_mask[use[invalid]] = 1
             use = np.where(PFC.shadowed_mask == 0)[0]
-            if (len(PFC.centers[use]) != len(PFC.psimin)): 
+            if (len(PFC.centers[use]) != len(self.plasma3D.psimin[~invalid])): 
                 raise ValueError('psimin array does not match PFC centers. Abort!')
             
+            # define and update psimin and Lc in PFC class
+            PFC.psimin = np.zeros(PFC.centers[:,0].shape)
+            PFC.Lc = np.zeros(PFC.centers[:,0].shape)
+            PFC.psimin[use] = self.plasma3D.psimin[~invalid]
+            PFC.Lc[use] = self.plasma3D.Lc[~invalid]
+            
+            print('----Calculating Heat Flux Profile----')
+            log.info('----Calculating Heat Flux Profile----')
+            self.hf3D.updateLaminarData(PFC.psimin[use],PFC.Lc[use])
+            self.hf3D.heatflux(PFC.DivCode)
+            PFC.powerFrac = self.HF.getDivertorPowerFraction(PFC.DivCode)
+
+            q = np.zeros(PFC.centers[:,0].shape)
+            q[use] = self.hf3D.q * PFC.powerFrac       # this is the parallel heat flux q||
+
         #get psi from gfile for 2D plasmas
         else:
             print('Solving for 2D plasmas with EFIT')
             log.info('Solving for 2D plasmas with EFIT')
             self.MHD.psi2DfromEQ(PFC)
 
-        #Create Heat Flux Profile
-        print('----Calculating Heat Flux Profile----')
-        log.info('----Calculating Heat Flux Profile----')
-        q = self.HF.getHFprofile(PFC)
+            #Create Heat Flux Profile
+            print('----Calculating Heat Flux Profile----')
+            log.info('----Calculating Heat Flux Profile----')
+            q = self.HF.getHFprofile(PFC)   # this is q||
+        
+        # get the incident heat flux
         qDiv = self.HF.q_div(PFC, self.MHD, q) * self.HF.elecFrac
 
         #Save data to class variable for future use

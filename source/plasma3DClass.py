@@ -6,6 +6,7 @@ import sys
 import pandas as pd
 import numpy as np
 import scipy.interpolate as scinter
+import scipy.integrate as integ
 import os, glob
 import shutil
 import logging
@@ -429,7 +430,7 @@ class heatflux3D:
 		self.HFS = None	# True: use high field side SOL, False: use low field side SOL
 		self.teProfileData = None
 		self.neProfileData = None
-		self.allowed_vars = ['Lcmin', 'lcfs', 'lqCN', 'S', 'Pinj', 'qBG', 'teProfileData', 'neProfileData', 'kappa', 'model']
+		self.allowed_vars = ['Lcmin', 'lcfs', 'lqCN', 'S', 'Pinj', 'coreRadFrac', 'qBG', 'teProfileData', 'neProfileData', 'kappa', 'model']
 
 
 	def initializeHF3D(self, ep, inputFile = None):
@@ -442,6 +443,7 @@ class heatflux3D:
 
 		if inputFile is not None: self.read_input_file(inputFile)
 		else: self.setHFctl()	# just defaults	
+		self.Psol = (1 - self.coreRadFrac) * self.Pinj
 			
 		T = self.teProfileData
 		ne = self.neProfileData
@@ -500,6 +502,7 @@ class heatflux3D:
 		print('lqCN = ' + str(self.lqCN))
 		print('S = ' + str(self.S))
 		print('Pinj = ' + str(self.Pinj))
+		print('coreRadFrac = ' + str(self.coreRadFrac))
 		print('qBG = ' + str(self.qBG))
 		print('kappa = ' + str(self.kappa))
 		print('#=============================================================')
@@ -512,15 +515,16 @@ class heatflux3D:
 		print('model = ' + str(self.model))
 		
 
-	def setHFctl(self, Lcmin = 0.075, lcfs = 0.97, lqCN = 5, S = 2, Pinj = 10, qBG = 0, kappa = 2000):
+	def setHFctl(self, Lcmin = 0.075, lcfs = 0.97, lqCN = 5, S = 2, Pinj = 10, coreRadFrac = 0.0, qBG = 0, kappa = 2000):
 		"""
 		Set the specific class variables
 		"""
 		self.Lcmin = tools.makeFloat(Lcmin) 		# minimum connection length in SOL to separateout the PFR, in km
 		self.lcfs = tools.makeFloat(lcfs) 			# psi of the Last Closed Flux Surface inside the stochastic layer
-		self.lqCN = tools.makeFloat(lqCN) 		# heat flux layer width for Eich profile, in mm
+		self.lqCN = tools.makeFloat(lqCN) 		    # heat flux layer width for Eich profile, in mm
 		self.S = tools.makeFloat(S) 				# heat flux layer extension width in PFR, in mm
 		self.Pinj = tools.makeFloat(Pinj) 			# total power into SOL, in MW
+		self.coreRadFrac = tools.makeFloat(coreRadFrac)  # fraction of radiated power
 		self.qBG = tools.makeFloat(qBG) 			# background heat flux in MW/m^2
 		self.kappa = tools.makeFloat(kappa) 		# electron heat conductivity in W/m/eV^3.5
 		self.teProfileData = None
@@ -550,7 +554,7 @@ class heatflux3D:
 		Set variable types for the stuff that isnt a string from the input file
 		"""
 		integers = []
-		floats = ['Lcmin', 'lcfs', 'lqCN', 'S', 'Pinj', 'qBG', 'kappa']
+		floats = ['Lcmin', 'lcfs', 'lqCN', 'S', 'Pinj', 'coreRadFrac', 'qBG', 'kappa']
 		setAllTypes(self, integers, floats)
 		
 		# data is an array or list
@@ -609,42 +613,68 @@ class heatflux3D:
 		return mask
 		
 	
-	def heatflux(self, HFS = False):
+	def heatflux(self, DivCode):
 		"""
 		computes self.q for the chosen model
 		zeroes out invalid points
 		updates self.q
 		"""
 		if self.model in ['Layer', 'layer', 'eich', 'Eich', 'heuristic']:
+			if 'O' in DivCode: HFS = False		# an Outer divertor is on low-field-side
+			elif 'I' in DivCode: HFS = True		# an Inner divertor is on High-Field-Side
+			else: raise ValueError('PFC Divertor Code cannot be identified. Check your PFC input file')
 			self.HFS = HFS	# True: use high field side SOL, False: use low field side SOL
-			q = self.getq_layer()
+			q = self.getq_layer()	# normalized to qmax = 1
+			q0 = self.scale_layer(self.lqCN, self.S, self.Psol)
+			q *= q0
 		elif self.model in ['conduct', 'conductive']:
 			L = np.mean(self.Lc[self.psimin > self.lcfs])*1e3	# average connection length in open field line area in m
-			q = self.getq_conduct(kappa = self.kappa, L = L)
+			ratio = self.lqCN/self.S
+			q = self.getq_conduct(self.psimin, kappa = self.kappa, L = L, pfr = self.pfr, ratio = ratio)
+			q0 = self.scale_conduct(self.Psol, self.kappa, L, ratio)
+			q *= q0
 		else:
-			raise('No valid model selected')
+			raise ValueError('No valid model selected')
 			
 		self.q[self.good] = q[self.good]
+		self.q += self.qBG
 
 
-	def getq_conduct(self, kappa = 2000, T0 = 0, L = 1, limit = True, Tpfr = 0.01):
+	def getq_conduct(self, psi, kappa = 2000, T0 = 0, L = 1, limit = True, pfr = None, ratio = 3):
 		"""
 		Input:
 		  kappa = electron heat conductivity in W/m/eV^3.5
 		  T0 = electron temperature at sheath entrance near target in keV
 		  L = conduction distance between target and LCFS in m
+		  scale: estimate of SOL/PFR spreading, like lq/S for Eich profiles
 		Output:
 		  updates self.q		
 		"""
-		T = self.fT(self.psimin)			# this is now temperature in keV
+		T = self.fT(psi)			# this is now temperature in keV
 		
 		if limit: 
-			T[self.psimin < self.lcfs] = self.fT(self.lcfs)
-		T[self.pfr] = Tpfr	# 10 eV in private flux region
+			T[psi < self.lcfs] = self.fT(self.lcfs)
+		if pfr is not None: T[pfr] = self.fT(1 + ratio*(1-psi[pfr]))	# treat T in PFR as if in SOL: map psi<1 to psi>1 with ratio * dpsi
 		
 		q = 2.0/7.0 * kappa/L * (T**3.5 - T0**3.5) * (1e+3)**3.5/1e+6   # in MW/m^2
 		return q
-
+		
+		
+	def scale_conduct(self, P, kappa, L, ratio, T0 = 0):
+		psi = np.linspace(0.9, 1.2, 1000)
+		T = self.fT(psi)			# this is now temperature in keV
+		
+		pfr = psi < 1.0
+		T[pfr] = self.fT(1 + ratio*(1-psi[pfr]))	# treat T in PFR as if in SOL: map psi<1 to psi>1 with ratio * dpsi
+		
+		q_hat = 2.0/7.0 * kappa/L * (T**3.5 - T0**3.5) * (1e+3)**3.5/1e+6   # in MW/m^2
+		P0 = 2*np.pi * integ.simps(q_hat, psi)
+		#account for nonphysical power
+		if P0 < 0: P0 = -P0
+		#Scale to input power
+		q0 = P/P0
+		return q0
+		
 
 	def getq_layer(self):
 		"""
@@ -666,6 +696,7 @@ class heatflux3D:
 		x = self.map_R_psi(psi)
 		xsep = self.map_R_psi(1.0)
 
+		# this only needs to resolve the peak well, no need to cover the entire profile, in case lq and S are large
 		if lobes:
 			s0 = self.map_R_psi(lcfs)
 			s = self.map_R_psi(np.linspace(lcfs-0.05,lcfs+0.1,10000))
@@ -673,7 +704,7 @@ class heatflux3D:
 			s0 = self.map_R_psi(1.0)
 			s = self.map_R_psi(np.linspace(0.95,1.1,10000))
 			
-		qref = eich_profile(s, lq, S, s0, q0 = 1, qBG = self.qBG, fx = 1)
+		qref = eich_profile(s, lq, S, s0, q0 = 1, qBG = 0, fx = 1)
 		idx = qref.argmax()
 		smax = s[idx]
 		qmax = qref[idx]
@@ -687,8 +718,8 @@ class heatflux3D:
 		else:
 			x0 = s0 - (smax-s0)	# now the peak amplitude is at psi = lcfs; qlcfs = qmax too
 					
-		q = eich_profile(x, lq, S, x0, q0 = 1, qBG = self.qBG, fx = 1)
-		qsep = eich_profile(xsep, lq, S, x0, q0 = 1, qBG = self.qBG, fx = 1)
+		q = eich_profile(x, lq, S, x0, q0 = 1, qBG = 0, fx = 1)
+		qsep = eich_profile(xsep, lq, S, x0, q0 = 1, qBG = 0, fx = 1)
 		
 		if lobes:
 			q[psi < lcfs] = qmax
@@ -696,13 +727,14 @@ class heatflux3D:
 		return q/q.max()*q0, qsep/q.max()*q0
 
 
-	def map_R_psi(self, psi):
+	def map_R_psi(self, psi, HFS = None):
 		"""
 		Map normalized poloidal flux psi to R at midplane (Z = 0)
 		psi is flat array
 		return R(psi)
 		"""
-		if self.HFS:
+		if HFS is None: HFS = self.HFS
+		if HFS:
 			R = np.linspace(self.ep.g['RmAxis'], self.ep.g['R1'], 100)
 		else:
 			R = np.linspace(self.ep.g['RmAxis'], self.ep.g['R1'] + self.ep.g['Xdim'], 100)
@@ -713,6 +745,43 @@ class heatflux3D:
 		f = scinter.UnivariateSpline(p, R, s = 0, ext = 'const')	# psi outside of spline domain return the boundary value
 		return f(psi)
 	
+	
+	def scale_layer(self, lq, S, P):
+		"""
+		scales HF using Eich profile
+
+		Get scale factor q||0 (q0) for heat flux via power balance:
+		(input MW = output MW)
+		Ignores wall psi and just creates a profile at OMP
+		Creates a dense (1000pts) grid at the midplane to get higher resolution
+		integral.  Integrates q_hat with respect to psi.
+		q||0 = P_div / ( 2*pi* integral(q_hat dPsi ))
+
+		return q0
+		"""		
+		# Get a psi range that fully covers the profile for integration. Peak location does not matter, so use s0 from psi = 1.0
+		Rlcfs = self.ep.g['lcfs'][:,0].max()
+		Rmin = Rlcfs - 10.0*S*(1e-3)		#in m
+		if Rmin < self.ep.g['RmAxis']: Rmin = self.ep.g['RmAxis']	#if Rmin is inside the magnetic axis, psi would increase again, so cap at axis
+		Rmax = Rlcfs + 20.0*lq*(1e-3)		#in m
+		if Rmax > max(self.ep.g['R']): Rmax = max(self.ep.g['R'])	#if Rmax is outside EFIT grid, cap at maximum R of grid
+
+		psimin = self.ep.psiFunc.ev(Rmin,self.ep.g['ZmAxis'])
+		psimax = self.ep.psiFunc.ev(Rmax,self.ep.g['ZmAxis'])
+		psi = np.linspace(psimin,psimax,1000)
+
+		#Get q|| profile then integrate in Psi
+		s = self.map_R_psi(psi, HFS = False)
+		s0 = self.map_R_psi(1.0, HFS = False)
+		q_hat = eich_profile(s, lq, S, s0, q0 = 1, qBG = 0, fx = 1)
+
+		#Menard's method
+		P0 = 2*np.pi * integ.simps(q_hat, psi)
+		#account for nonphysical power
+		if P0 < 0: P0 = -P0
+		#Scale to input power
+		q0 = P/P0
+		return q0
 
 
 #==========================================================================================================================
