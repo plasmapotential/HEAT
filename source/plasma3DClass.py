@@ -261,7 +261,6 @@ class plasma3D:
 		if nproc > 20: nproc = 20
 		self.nproc = nproc
 		self.tag = tag
-		print('-'*80)
 		print('Launching 3D plasma field line tracing')
 		
 		bbLimits = str(self.bbRmin) + ',' + str(self.bbRmax) + ',' + str(self.bbZmin) + ',' + str(self.bbZmax)
@@ -273,7 +272,6 @@ class plasma3D:
 		#self.wait2finish(nproc, tag)
 		self.readLaminar(tag)
 		print('3D plasma field line tracing complete')
-		print('-'*80)
 		
 	
 	def readLaminar(self, tag = None):
@@ -433,13 +431,16 @@ class heatflux3D:
 		self.allowed_vars = ['Lcmin', 'lcfs', 'lqCN', 'S', 'Pinj', 'coreRadFrac', 'qBG', 'teProfileData', 'neProfileData', 'kappa', 'model']
 
 
-	def initializeHF3D(self, ep, inputFile = None):
+	def initializeHF3D(self, ep, inputFile = None, inputDir = None):
 		"""
 		Set up basic input vars
 		"""
 		#self.N = len(self.Lc)
 		#self.q = np.zeros(self.N)
 		self.ep = ep	# equilParams_class instance for EFIT equilibrium
+		
+		if inputDir is None: self.inputDir = os.getcwd()
+		else: self.inputDir = inputDir
 
 		if inputFile is not None: self.read_input_file(inputFile)
 		else: self.setHFctl()	# just defaults	
@@ -451,7 +452,12 @@ class heatflux3D:
 		# set T profile
 		if T is None: T = 2							# temperature at top of pedestal in keV
 		if isinstance(T, str):						# file name for T profile data
-			TData = np.loadtxt(T)
+			if ('./' in T) | ('/' not in T): path = self.inputDir + '/'
+			else: path = ''
+			if not os.path.isfile(path + T): 
+				raise RuntimeError(path + T + ' file not found!')
+			print ('Loading T profile data from: ' + path + T)
+			TData = np.loadtxt(path + T)
 			psiT = TData[:,0]
 			T = TData[:,1]
 			self.fT = scinter.UnivariateSpline(psiT, T, s = 0, ext = 'const')
@@ -468,7 +474,12 @@ class heatflux3D:
 		# set density profile
 		if ne is None: ne = 0.5							# electron density at top of pedestal in 1e-20/m^3
 		if isinstance(ne, str):							# file name for density profile data
-			neData = np.loadtxt(ne)
+			if ('./' in ne) | ('/' not in ne): path = self.inputDir + '/'
+			else: path = ''
+			if not os.path.isfile(path + ne): 
+				raise RuntimeError(path + ne + ' file not found!')
+			print ('Loading ne profile data from: ' + path + ne)
+			neData = np.loadtxt(path + ne)
 			nePsi = neData[:,0]
 			ne = neData[:,1]
 			self.fn = scinter.UnivariateSpline(nePsi, ne, s = 0, ext = 'const')
@@ -619,23 +630,33 @@ class heatflux3D:
 		zeroes out invalid points
 		updates self.q
 		"""
+		print('3D Heat flux model type: ' + self.model)
 		if self.model in ['Layer', 'layer', 'eich', 'Eich', 'heuristic']:
 			if 'O' in DivCode: HFS = False		# an Outer divertor is on low-field-side
 			elif 'I' in DivCode: HFS = True		# an Inner divertor is on High-Field-Side
 			else: raise ValueError('PFC Divertor Code cannot be identified. Check your PFC input file')
 			self.HFS = HFS	# True: use high field side SOL, False: use low field side SOL
+			print ('Layer width lq =', self.lqCN)
+			print ('PFR spread S =', self.S)
+			print ('LCFS at', self.lcfs)
+			print ('Is on HFS:', self.HFS)
 			q = self.getq_layer()	# normalized to qmax = 1
 			q0 = self.scale_layer(self.lqCN, self.S, self.Psol)
 			q *= q0
+
 		elif self.model in ['conduct', 'conductive']:
 			L = np.mean(self.Lc[self.psimin > self.lcfs])*1e3	# average connection length in open field line area in m
 			ratio = self.lqCN/self.S
+			print ('Conduction length L =', format(L,'.3f'), 'm')
+			print ('Ratio of SOL/PFR spread:', format(L,'.1f'))
+			print ('LCFS at', self.lcfs)
 			q = self.getq_conduct(self.psimin, kappa = self.kappa, L = L, pfr = self.pfr, ratio = ratio)
 			q0 = self.scale_conduct(self.Psol, self.kappa, L, ratio)
 			q *= q0
 		else:
 			raise ValueError('No valid model selected')
 			
+		print ('Background qBG =', self.qBG)
 		self.q[self.good] = q[self.good]
 		self.q += self.qBG
 
@@ -661,6 +682,15 @@ class heatflux3D:
 		
 		
 	def scale_conduct(self, P, kappa, L, ratio, T0 = 0):
+		"""
+		Get scale factor q||0 (q0) for heat flux via power balance:
+		(input MW = output MW)
+		Ignores wall psi and just creates a profile at OMP
+		Creates a dense (1000pts) grid at the midplane to get higher resolution
+		integral.  Integrates q_hat with respect to psi.
+		q||0 = P_div / ( 2*pi* integral(q_hat dPsi ))
+		return q0		
+		"""
 		psi = np.linspace(0.9, 1.2, 1000)
 		T = self.fT(psi)			# this is now temperature in keV
 		
@@ -748,15 +778,13 @@ class heatflux3D:
 	
 	def scale_layer(self, lq, S, P):
 		"""
-		scales HF using Eich profile
-
+		scales HF using a 2D profile, as if lcfs = 1.0
 		Get scale factor q||0 (q0) for heat flux via power balance:
 		(input MW = output MW)
 		Ignores wall psi and just creates a profile at OMP
 		Creates a dense (1000pts) grid at the midplane to get higher resolution
 		integral.  Integrates q_hat with respect to psi.
 		q||0 = P_div / ( 2*pi* integral(q_hat dPsi ))
-
 		return q0
 		"""		
 		# Get a psi range that fully covers the profile for integration. Peak location does not matter, so use s0 from psi = 1.0

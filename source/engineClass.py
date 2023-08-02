@@ -1698,19 +1698,20 @@ class engineObj():
                     #PFC.bdotphi = np.multiply(PFC.BNorms, PFC.phiVec).sum(1)
                     #PFC.powerDir = np.sign(PFC.bdotn)*np.sign(PFC.bdotphi)*-1.0
                     
-                    #3Dplasma setup
-                    gFile = self.MHD.shotPath + self.tsFmt.format(t) + '/' + self.MHD.gFiles[tIdx]
-                    self.plasma3D.initializePlasma3D(self.MHD.shot, t, gFile, self.inputFileList[tIdx], PFC.controlfilePath[0:-1], self.MHD.tmpDir[0:-1])   # remove / at the end of paths
-                    self.plasma3D.setBoundaryBox(self.MHD, self.CAD)
-                    self.hf3D.intializeHF3D(PFC.ep, self.inputFileList[tIdx])
-                    print('\n')
-                    print("*"*80)
-                    self.plasma3D.print_settings()                    
-                    self.hf3D.print_settings()                    
                     print('\n')
                     print("*"*80)
                     print('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
                     log.info('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+                    print("*"*80)
+                    print('\n')
+                    
+                    #3Dplasma setup
+                    gFile = self.MHD.shotPath + self.tsFmt.format(t) + '/' + self.MHD.gFiles[tIdx]
+                    self.plasma3D.initializePlasma3D(self.MHD.shot, t, gFile, self.inputFileList[tIdx], PFC.controlfilePath[0:-1], self.MHD.tmpDir[0:-1])   # remove / at the end of paths
+                    self.plasma3D.setBoundaryBox(self.MHD, self.CAD)
+                    self.hf3D.initializeHF3D(PFC.ep, self.inputFileList[tIdx], self.MHD.tmpDir[0:-1])
+                    self.plasma3D.print_settings()
+                    self.hf3D.print_settings()
                     if 'hfOpt' in runList:
                         #load HF settings for this timestep if applicable (terminal mode)
                         try:
@@ -2265,8 +2266,9 @@ class engineObj():
 
         #Run MAFOT laminar for 3D plasmas
         if self.plasma3D.plasma3Dmask:
-            print('Solving for 3D plasmas with MAFOT')
-            log.info('Solving for 3D plasmas with MAFOT')
+            print('-'*80)
+            print('\n----Solving for 3D plasmas with MAFOT----')
+            log.info('\n----Solving for 3D plasmas with MAFOT----')
             use = np.where(PFC.shadowed_mask == 0)[0]
             self.plasma3D.updatePointsFromCenters(PFC.centers[use])
             self.plasma3D.launchLaminar(self.NCPUs, tag = 'opticalHF')   # use MapDirection = 0. If problem, then we need to split here into fwd and bwd direction separately
@@ -2285,24 +2287,27 @@ class engineObj():
             PFC.psimin[use] = self.plasma3D.psimin[~invalid]
             PFC.Lc[use] = self.plasma3D.Lc[~invalid]
             
-            print('----Calculating Heat Flux Profile----')
-            log.info('----Calculating Heat Flux Profile----')
+            print('\n' + '-'*80)
+            print('\n----Calculating 3D Heat Flux Profile----')
+            log.info('\n----Calculating 3D Heat Flux Profile----')
             self.hf3D.updateLaminarData(PFC.psimin[use],PFC.Lc[use])
             self.hf3D.heatflux(PFC.DivCode)
             PFC.powerFrac = self.HF.getDivertorPowerFraction(PFC.DivCode)
+            print("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
+            log.info("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
 
             q = np.zeros(PFC.centers[:,0].shape)
             q[use] = self.hf3D.q * PFC.powerFrac       # this is the parallel heat flux q||
 
         #get psi from gfile for 2D plasmas
         else:
-            print('Solving for 2D plasmas with EFIT')
-            log.info('Solving for 2D plasmas with EFIT')
+            print('\n----Solving for 2D plasmas with EFIT----')
+            log.info('\n----Solving for 2D plasmas with EFIT----')
             self.MHD.psi2DfromEQ(PFC)
 
             #Create Heat Flux Profile
-            print('----Calculating Heat Flux Profile----')
-            log.info('----Calculating Heat Flux Profile----')
+            print('\n----Calculating Heat Flux Profile----')
+            log.info('\n----Calculating Heat Flux Profile----')
             q = self.HF.getHFprofile(PFC)   # this is q||
         
         # get the incident heat flux
