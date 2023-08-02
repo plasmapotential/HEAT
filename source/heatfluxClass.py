@@ -314,6 +314,40 @@ class heatFlux:
 #===============================================================================
 #                   Heat flux profiles
 #===============================================================================
+    def tophat_profile_fluxspace(self,PFC,lq,R,Bp,psiN):
+        """
+        creates a flattop heat flux profile lq [mm] wide
+
+        lq is flattop width at midplane in mm
+        lq_hat is heat flux width in flux coordinates
+        s_hat is a flux coordinate
+
+
+        R and Bp should be at OMP, where flattop function is defined
+
+        psiN is indexed to match PFCs
+
+        """
+        psiaxis = PFC.ep.g['psiAxis']
+        psiedge = PFC.ep.g['psiSep']
+        deltaPsi = np.abs(psiedge - psiaxis)
+        R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
+        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
+        s_hat = psiN - PFC.psiMinLCFS
+        # Gradient
+        gradPsi = Bp*R
+        xfm = gradPsi / deltaPsi
+        # Decay width mapped to flux coordinates
+        lq_hat = lq * xfm * 1e-3 # Convert to meters
+        #===flattop profile
+        test = np.logical_and(s_hat > 0.0, s_hat < lq_hat)
+        use = np.where(test==True)[0]
+        q = np.zeros((psiN.shape))
+
+        q[use] = 1.0 #heaviside function
+
+        return q
+    
     def eich_profile_fluxspace(self, PFC, lq, S, R, Bp, psiN):
         """
         Based on the paper: T.Eich et al.,PRL 107, 215001 (2011)
@@ -447,6 +481,67 @@ class heatFlux:
         q[nan_locations] = 0.0
         q[inf_locations] = 0.0
         return q
+
+    def findScalingCoeffEich(self, PFC, lqEich, S, P):
+        """
+        scales HF using Eich profile
+
+        Get scale factor q||0 (q0) for heat flux via power balance:
+        (input MW = output MW)
+        Ignores wall psi and just creates a profile at OMP
+        Creates a dense (1000pts) grid at the midplane to get higher resolution
+        integral.  Integrates q_hat / B_omp with respect to psi.
+        q||0 = P_div / ( 2*pi* integral(q_hat / B_omp)dPsi )
+
+        return q0
+        """
+        # Get R and Z vectors at the midplane
+        R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
+        R_omp_min = R_omp_sol - 5.0*lqEich*(1e-3) #in meters now
+        R_omp_max = R_omp_sol + 20.0*lqEich*(1e-3) #in meters now
+        #if R_omp_max is outside EFIT grid, cap at maximum R of grid
+        if R_omp_max > max(PFC.ep.g['R']):
+            R_omp_max = max(PFC.ep.g['R']) #in meters now
+        R_omp = np.linspace(R_omp_min, R_omp_max, 1000)
+        Z_omp = np.zeros(R_omp.shape)
+        #Calculate flux at midplane using gfile
+        psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
+        psi = psiN * (PFC.ep.g['psiSep']-PFC.ep.g['psiAxis']) + PFC.ep.g['psiAxis']
+        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
+        s_hat = psiN - PFC.psiMinLCFS
+        # Evaluate B at outboard midplane
+        Bp_omp = PFC.ep.BpFunc.ev(R_omp,Z_omp)
+        Bt_omp = PFC.ep.BtFunc.ev(R_omp,Z_omp)
+        B_omp = np.sqrt(Bp_omp**2 + Bt_omp**2)
+
+
+        psiaxis = PFC.ep.g['psiAxis']
+        psiedge = PFC.ep.g['psiSep']
+        deltaPsi = np.abs(psiedge - psiaxis)
+        
+        # Gradient
+        #Bp_omp_sol = PFC.ep.BpFunc.ev(R_omp_sol,PFC.ep.g['ZmAxis'])
+        #gradPsi = Bp_omp*R_omp
+        #xfm = gradPsi / deltaPsi
+
+
+        #Get q|| profile then integrate in Psi
+        q_hat = self.eich_profile_fluxspace(PFC, lqEich, S, R_omp, Bp_omp, psiN)
+
+        #Menard's method (also see qDiv function)
+        #P0 = 2*np.pi * simps(q_hat, psi)
+        #Reinke's Method (also see qDiv function)
+        P0 = 2*np.pi * simps(q_hat / B_omp, psi)
+
+        #account for nonphysical power
+        if P0 < 0: P0 = -P0
+        #Scale to input power
+        q0 = P/P0
+
+        print("Eich q0 = {:f}[MW/m^2]".format(q0))
+        log.info("Eich q0 = {:f}[MW/m^2]".format(q0))
+   
+        return q0
 
     def findScalingCoeffsMultiExp(self, PFC, lqCN, lqCF, lqPN, lqPF):
         """
@@ -620,6 +715,56 @@ class heatFlux:
 
         return q0
 
+
+    def findScalingCoeffTopHat(self,PFC,lq_mm,P):
+        """
+        calculates scaling coefficient for an arbitrary q profile
+        """
+        lq = lq_mm*1e-3 #[in m now]
+        R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
+        area = lq*2*np.pi*R_omp_sol #convert to [m]
+        q0 = P / area
+
+
+        # Get R and Z vectors at the midplane
+        R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
+        R_omp_min = R_omp_sol #already in m
+        R_omp_max = R_omp_sol + lq #already in m
+        #if R_omp_max is outside EFIT grid, cap at maximum R of grid
+        if R_omp_max > max(PFC.ep.g['R']):
+            R_omp_max = max(PFC.ep.g['R']) #in meters now
+        R_omp = np.linspace(R_omp_min, R_omp_max, 1000)
+        Z_omp = np.zeros(R_omp.shape)
+
+
+        # Evaluate B at outboard midplane
+        Bp_omp = PFC.ep.BpFunc.ev(R_omp,Z_omp)
+        Bt_omp = PFC.ep.BtFunc.ev(R_omp,Z_omp)
+        B_omp = np.sqrt(Bp_omp**2 + Bt_omp**2)
+
+        #Find coordinate transformation vector at midplane
+        psiaxis = PFC.ep.g['psiAxis']
+        psiedge = PFC.ep.g['psiSep']
+        deltaPsi = np.abs(psiedge - psiaxis)
+        gradPsi = Bp_omp*R_omp
+        xfm = gradPsi / deltaPsi
+        # transform hf width into flux space
+        lq_hat = lq*xfm
+
+        #Calculate flux at midplane using gfile
+        psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
+        psi = psiN*(psiedge - psiaxis) + psiaxis
+        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
+        s_hat = psiN - PFC.psiMinLCFS
+
+        q_hat = self.tophat_profile_fluxspace(PFC,lq_mm,R_omp,Bp_omp,psiN)
+        #Menard's method (also see qDiv function)
+        #P0 = 2*np.pi * simps(q_hat, psi)
+        #Reinke's method (also see qDiv function)
+        P0 = 2*np.pi * simps(q_hat/B_omp, psi)
+        q0 = np.abs(P / P0)
+        return q0
+
     def getDivertorPowerFraction(self, DivCode):
         """
         assigns a fraction to each PFC object, for power sharing between divertors
@@ -676,7 +821,7 @@ class heatFlux:
         """
         Calculates heat flux profile from psi.  Default is an Eich profile.
 
-        mode can be 'eich', 'multiExp', 'limiter'
+        mode can be 'eich', 'multiExp', 'limiter', 'tophat
 
         """
         psi = PFC.psimin
@@ -722,19 +867,38 @@ class heatFlux:
                 print("lqCF: {}".format(self.lqCF))
                 print("lqPN: {}".format(self.lqPN))
                 print("lqPF: {}".format(self.lqPF))
+                log.info("lqCN: {}".format(self.lqCN))
+                log.info("lqCF: {}".format(self.lqCF))
+                log.info("lqPN: {}".format(self.lqPN))
+                log.info("lqPF: {}".format(self.lqPF))
             elif self.hfMode == 'limiter':
                 print("lqCN: {}".format(self.lqCN))
                 print("lqCF: {}".format(self.lqCF))
+                log.info("lqCN: {}".format(self.lqCN))
+                log.info("lqCF: {}".format(self.lqCF))
+
+        #tophat profile
+        elif self.hfMode == 'tophat':
+            q0 = self.findScalingCoeffTopHat(PFC,self.lqCN,self.Psol)
+            print("TopHat q0 = {:f}[MW/m^2]".format(q0))
+            log.info("TopHat q0 = {:f}[MW/m^2]".format(q0))
+            q[use] = self.tophat_profile_fluxspace(PFC,self.lqCN,R_omp,Bp_omp,psi)
+            q *= q0
+            print("Tophat lqCN: {}".format(self.lqCN))
+            log.info("Tophat lqCN: {}".format(self.lqCN))
+
 
         #Eich Profile
         else:
-            q0 = self.scaleHF_fluxspace(PFC,self.lqCN,self.S,self.Psol)
+            q0 = self.findScalingCoeffEich(PFC,self.lqCN,self.S,self.Psol)
             q[use] = self.eich_profile_fluxspace(PFC, self.lqCN, self.S, R_omp, Bp_omp, psi)
             q *= q0
             q += self.qBG
             print("lqCN: {} [mm]".format(self.lqCN))
             print("S: {} [mm]".format(self.S))
-            print("q0 {} [MW/m^2]".format(q0))
+            log.info("lqCN: {} [mm]".format(self.lqCN))
+            log.info("S: {} [mm]".format(self.S))
+
 
         #Scale by fraction of power going to this PFC's divertor
         PFC.powerFrac = self.getDivertorPowerFraction(PFC.DivCode)
@@ -744,51 +908,6 @@ class heatFlux:
 
         return q
 
-
-    def scaleHF_fluxspace(self, PFC, lqEich, S, P):
-        """
-        scales HF using Eich profile
-
-        Get scale factor q||0 (q0) for heat flux via power balance:
-        (input MW = output MW)
-        Ignores wall psi and just creates a profile at OMP
-        Creates a dense (1000pts) grid at the midplane to get higher resolution
-        integral.  Integrates q_hat / B_omp with respect to psi.
-        q||0 = P_div / ( 2*pi* integral(q_hat / B_omp)dPsi )
-
-        return q0
-        """
-        # Get R and Z vectors at the midplane
-        R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
-        R_omp_min = R_omp_sol - 5.0*lqEich*(1e-3) #in meters now
-        R_omp_max = R_omp_sol + 20.0*lqEich*(1e-3) #in meters now
-        #if R_omp_max is outside EFIT grid, cap at maximum R of grid
-        if R_omp_max > max(PFC.ep.g['R']):
-            R_omp_max = max(PFC.ep.g['R']) #in meters now
-        R_omp = np.linspace(R_omp_min, R_omp_max, 1000)
-        Z_omp = np.zeros(R_omp.shape)
-        #Calculate flux at midplane using gfile
-        psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
-        psi = psiN * (PFC.ep.g['psiSep']-PFC.ep.g['psiAxis']) + PFC.ep.g['psiAxis']
-        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
-        s_hat = psiN - PFC.psiMinLCFS
-        # Evaluate B at outboard midplane
-        Bp_omp = PFC.ep.BpFunc.ev(R_omp,Z_omp)
-        Bt_omp = PFC.ep.BtFunc.ev(R_omp,Z_omp)
-        B_omp = np.sqrt(Bp_omp**2 + Bt_omp**2)
-
-        #Get q|| profile then integrate in Psi
-        q_hat = self.eich_profile_fluxspace(PFC, lqEich, S, R_omp, Bp_omp, psiN)
-
-        #Menard's method
-        P0 = 2*np.pi * simps(q_hat, psi)
-        #Matt's Method
-#        P0 = 2*np.pi * simps(q_hat / B_omp, psi)
-        #account for nonphysical power
-        if P0 < 0: P0 = -P0
-        #Scale to input power
-        q0 = P/P0
-        return q0
 
     def HFincidentAngle(self,PFC, MHD):
         """
@@ -849,10 +968,10 @@ class heatFlux:
         q_div = np.zeros((len(xyz)))
         use = np.where(PFC.shadowed_mask == 0)[0]
 
-        #Matt's method
-#        q_div[use] = q[use] * B_div[use]/B_omp * PFC.bdotn[use]
-        #Menard's Method
-        q_div[use] = q[use] * B_div[use] * PFC.bdotn[use]
+        #Menard's Method (also see integral in scaling coeffs)
+        #q_div[use] = q[use] * B_div[use] * PFC.bdotn[use]
+        #Reinke's method (also see integral in scaling coeffs)
+        q_div[use] = q[use] * B_div[use]/B_omp[use] * PFC.bdotn[use]
 
         #for i in range(len(q_div)):
         #	if q_div[i] > 8.0: q_div[i] = 0.0
@@ -1225,6 +1344,10 @@ class heatFlux:
                 HFdict['Greenwald Density Fraction'] = 'Only used for Makowski S Mode'
             HFdict['S [mm]'] = self.S
             HFdict['Background Heat Flux'] = self.qBG
+
+        elif self.hfMode == 'tophat':
+            HFdict["\u03BB Mode"] = 'TopHat'
+            HFdict["Heat Flux Width (\u03BBq) [mm]"] = self.lqCN           
 
         if self.hfMode != 'qFile':
             HFdict["Power Injected (Pinj) [MW]"] = self.Pinj
