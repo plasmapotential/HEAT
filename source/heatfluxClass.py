@@ -177,12 +177,13 @@ class heatFlux:
         Cr = 0.04
         Cb = -0.92
         Ca = 0.42
+
         # Evaluate Bp at outboard midplane
         Z_omp_sol = 0.0
         Bp = abs(ep.BpFunc.ev(Rmax,Z_omp_sol))
+        Bt = abs(ep.BtFunc.ev(ep.g['RmAxis'],ep.g['ZmAxis']))
         #Evaluate lq
         self.lqEich = C * self.Psol**Cp * Rgeo**Cr * Bp**Cb * aspect**Ca # in mm
-        Bt = abs(ep.BtFunc.ev(ep.g['RmAxis'],ep.g['ZmAxis']))
         if verbose==True:
             print("Poloidal Field at midplane: {:f}".format(Bp))
             print("Toroidal Field at axis: {:f}".format(Bt))
@@ -332,8 +333,9 @@ class heatFlux:
         psiedge = PFC.ep.g['psiSep']
         deltaPsi = np.abs(psiedge - psiaxis)
         R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
-        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
+        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,PFC.ep.g['ZmAxis'])
         s_hat = psiN - PFC.psiMinLCFS
+        #s_hat = psiN - psiedge
         # Gradient
         gradPsi = Bp*R
         xfm = gradPsi / deltaPsi
@@ -343,9 +345,7 @@ class heatFlux:
         test = np.logical_and(s_hat > 0.0, s_hat < lq_hat)
         use = np.where(test==True)[0]
         q = np.zeros((psiN.shape))
-
         q[use] = 1.0 #heaviside function
-
         return q
     
     def eich_profile_fluxspace(self, PFC, lq, S, R, Bp, psiN):
@@ -734,7 +734,7 @@ class heatFlux:
         if R_omp_max > max(PFC.ep.g['R']):
             R_omp_max = max(PFC.ep.g['R']) #in meters now
         R_omp = np.linspace(R_omp_min, R_omp_max, 1000)
-        Z_omp = np.zeros(R_omp.shape)
+        Z_omp = np.zeros(R_omp.shape) + PFC.ep.g['ZmAxis']
 
 
         # Evaluate B at outboard midplane
@@ -763,6 +763,7 @@ class heatFlux:
         #Reinke's method (also see qDiv function)
         P0 = 2*np.pi * simps(q_hat/B_omp, psi)
         q0 = np.abs(P / P0)
+
         return q0
 
     def getDivertorPowerFraction(self, DivCode):
@@ -817,34 +818,42 @@ class heatFlux:
         f = scinter.UnivariateSpline(p, R, s = 0, ext = 'const')	# psi outside of spline domain return the boundary value
         return f(psi)
 
-    def getHFprofile(self, PFC):
+    def getHFprofile(self, PFC, mafotPsi=False):
         """
         Calculates heat flux profile from psi.  Default is an Eich profile.
 
         mode can be 'eich', 'multiExp', 'limiter', 'tophat
 
+        is mafotPsi is true, uses psi from MAFOT calculation
         """
-        psi = PFC.psimin
+        xyz = PFC.centers
+        R_div,Z_div,phi_div = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
+        use = np.where(PFC.shadowed_mask == 0)[0]
+
+        if mafotPsi==True:
+            #use the psi from MAFOT
+            psi = PFC.psimin
+        else:
+            #Calculate psi using gfile
+            psi = PFC.ep.psiFunc.ev(R_div[use],Z_div[use])
+
         R_omp = self.map_R_psi(psi,PFC)
         Z_omp = np.zeros(R_omp.shape)
         # Evaluate B at midplane
         Bp_omp = PFC.ep.BpFunc.ev(R_omp,Z_omp)
         Bt_omp = PFC.ep.BtFunc.ev(R_omp,Z_omp)
         B_omp = np.sqrt(Bp_omp**2 + Bt_omp**2)
-        xyz = PFC.centers
-        R_div,Z_div,phi_div = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
+
         print('phi_divMin = {:f}'.format(phi_div.min()))
         print('phi_divMax = {:f}'.format(phi_div.max()))
         # Evaluate B at Target Plate neglecting shadowed points
         Bp_div = PFC.ep.BpFunc.ev(R_div,Z_div)
         Bt_div = PFC.ep.BtFunc.ev(R_div,Z_div)
         B_div = np.sqrt(Bp_div**2 + Bt_div**2)
-        #Calculate psi using gfile for scaling coefficient
-        psi_EQ = PFC.ep.psiFunc.ev(R_div,Z_div)
+
         #Calculate poloidal flux expansion
         #fx = R_div*Bp_div / (R_omp*Bp_omp)
         q = np.zeros(PFC.centers[:,0].shape)
-        use = np.where(PFC.shadowed_mask == 0)[0]
 
         #handle various heat flux regressions if user selected that in GUI
         if self.lqCNmode == 'eich':
@@ -927,7 +936,7 @@ class heatFlux:
         incident angle.  This takes an already calculated vector, q||, and
         applies it to the divertor tile.
         """
-        psi = PFC.psimin
+        psi = PFC.psimin #read from MAFOT output
         xyz = PFC.centers
 
         R_div,Z_div,phi_div = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
@@ -971,7 +980,7 @@ class heatFlux:
         #Menard's Method (also see integral in scaling coeffs)
         #q_div[use] = q[use] * B_div[use] * PFC.bdotn[use]
         #Reinke's method (also see integral in scaling coeffs)
-        q_div[use] = q[use] * B_div[use]/B_omp[use] * PFC.bdotn[use]
+        q_div[use] = q[use] * B_div[use]/B_omp * PFC.bdotn[use]
 
         #for i in range(len(q_div)):
         #	if q_div[i] > 8.0: q_div[i] = 0.0
