@@ -691,13 +691,15 @@ class heatflux3D:
 		q||0 = P_div / ( 2*pi* integral(q_hat dPsi ))
 		return q0		
 		"""
-		psi = np.linspace(0.9, 1.2, 1000)
+		psi = np.linspace(0.9, 1.2, 1000)	# this is normalized
 		T = self.fT(psi)			# this is now temperature in keV
 		
 		pfr = psi < 1.0
 		T[pfr] = self.fT(1 + ratio*(1-psi[pfr]))	# treat T in PFR as if in SOL: map psi<1 to psi>1 with ratio * dpsi
 		
 		q_hat = 2.0/7.0 * kappa/L * (T**3.5 - T0**3.5) * (1e+3)**3.5/1e+6   # in MW/m^2
+		
+		psi = psi * (self.ep.g['psiSep']-self.ep.g['psiAxis']) + self.ep.g['psiAxis']	# this is flux
 		P0 = 2*np.pi * integ.simps(q_hat, psi)
 		#account for nonphysical power
 		if P0 < 0: P0 = -P0
@@ -708,7 +710,7 @@ class heatflux3D:
 
 	def getq_layer(self):
 		"""
-		Computes heat flux based on an Eich profile and lobes
+		Computes heat flux based on the flux layer profile with lobes
 		updates self.q		
 		"""
 		q, q0 = self.set_layer(self.psimin, self.lqCN, self.S, lcfs = self.lcfs, lobes = True)
@@ -776,7 +778,21 @@ class heatflux3D:
 		return f(psi)
 	
 	
-	def scale_layer(self, lq, S, P):
+	def fluxConversion(self, R):
+		"""
+		Returns the transformation factor xfm between the midplane distance s and the divertor flux psi.
+		This also accounts for the flux expansion.
+		"""
+		if isinstance(R, np.ndarray): Z = self.ep.g['ZmAxis']*np.ones(R.shape)
+		else: Z = self.ep.g['ZmAxis']
+		Bp = self.ep.BpFunc.ev(R,Z)
+		deltaPsi = np.abs(self.ep.g['psiSep'] - self.ep.g['psiAxis'])
+		gradPsi = Bp*R
+		xfm = gradPsi / deltaPsi
+		return xfm
+	
+	
+	def scale_layer(self, lq, S, P, HFS = False):
 		"""
 		scales HF using a 2D profile, as if lcfs = 1.0
 		Get scale factor q||0 (q0) for heat flux via power balance:
@@ -788,22 +804,28 @@ class heatflux3D:
 		return q0
 		"""		
 		# Get a psi range that fully covers the profile for integration. Peak location does not matter, so use s0 from psi = 1.0
-		Rlcfs = self.ep.g['lcfs'][:,0].max()
-		Rmin = Rlcfs - 10.0*S*(1e-3)		#in m
-		if Rmin < self.ep.g['RmAxis']: Rmin = self.ep.g['RmAxis']	#if Rmin is inside the magnetic axis, psi would increase again, so cap at axis
-		Rmax = Rlcfs + 20.0*lq*(1e-3)		#in m
-		if Rmax > max(self.ep.g['R']): Rmax = max(self.ep.g['R'])	#if Rmax is outside EFIT grid, cap at maximum R of grid
+		if HFS:
+			Rlcfs = self.ep.g['lcfs'][:,0].min()
+			Rmin = Rlcfs - 20.0*lq*(1e-3)		#in m
+			if Rmin < min(self.ep.g['R']): Rmin = min(self.ep.g['R'])	#if Rmin outside EFIT grid, cap at minimum R of grid
+			Rmax = Rlcfs + 20.0*S*(1e-3)		#in m
+			if Rmax > self.ep.g['RmAxis']: Rmax = self.ep.g['RmAxis']	#if Rmax is outside the magnetic axis, psi would increase again, so cap at axis
+		else:
+			Rlcfs = self.ep.g['lcfs'][:,0].max()
+			Rmin = Rlcfs - 20.0*S*(1e-3)		#in m
+			if Rmin < self.ep.g['RmAxis']: Rmin = self.ep.g['RmAxis']	#if Rmin is inside the magnetic axis, psi would increase again, so cap at axis
+			Rmax = Rlcfs + 20.0*lq*(1e-3)		#in m
+			if Rmax > max(self.ep.g['R']): Rmax = max(self.ep.g['R'])	#if Rmax is outside EFIT grid, cap at maximum R of grid
 
-		psimin = self.ep.psiFunc.ev(Rmin,self.ep.g['ZmAxis'])
-		psimax = self.ep.psiFunc.ev(Rmax,self.ep.g['ZmAxis'])
-		psi = np.linspace(psimin,psimax,1000)
-
-		#Get q|| profile then integrate in Psi
-		s = self.map_R_psi(psi, HFS = False)
-		s0 = self.map_R_psi(1.0, HFS = False)
-		q_hat = eich_profile(s, lq, S, s0, q0 = 1, qBG = 0, fx = 1)
-
+		R = np.linspace(Rmin,Rmax,1000)
+		Z = self.ep.g['ZmAxis']*np.ones(R.shape)
+		psiN = self.ep.psiFunc.ev(R,Z)	# this is normalized
+		
+		xfm = self.fluxConversion(R)
+		q_hat = eich_profile(psiN, lq, S, 1.0, q0 = 1, qBG = 0, fx = xfm)	# becomes profile of psi by using xfm factor
+		
 		#Menard's method
+		psi = psiN * (self.ep.g['psiSep']-self.ep.g['psiAxis']) + self.ep.g['psiAxis']	# this is flux
 		P0 = 2*np.pi * integ.simps(q_hat, psi)
 		#account for nonphysical power
 		if P0 < 0: P0 = -P0
@@ -859,7 +881,7 @@ def setAllTypes(obj, integers, floats):
 					#log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
 
 
-def eich_profile(x, lq, S, s0, q0, qBG = 0, fx = 1):
+def eich_profile(s, lq, S, s0, q0, qBG = 0, fx = 1):
 	"""
 	Based on the paper: T.Eich et al.,PRL 107, 215001 (2011)
 	lq is heat flux width at midplane in mm
@@ -868,10 +890,10 @@ def eich_profile(x, lq, S, s0, q0, qBG = 0, fx = 1):
 	q0 is the amplitude
 	qBG is the background heat flux
 	fx is the flux expansion between outer midplane and target plate
-	x is in m
-	return function q(x)
+	s is in m
+	return function q(s)
 	
-	in Eich paper: s (here x) and s0 are distances along target, mapped from midplane using flux expansion,
+	in Eich paper: s and s0 are distances along target, mapped from midplane using flux expansion fx,
 	so: s = s_midplane * fx; same for s0, with s0 the position of strikeline on target
 	Here, use s_midplane directly, so set fx = 1 and identify s = s_midplane = R and s0 = Rsep
 	"""
@@ -881,7 +903,7 @@ def eich_profile(x, lq, S, s0, q0, qBG = 0, fx = 1):
 	a = lq*fx
 	b = 0.5*S/lq
 	c = S*fx
-	q = 0.5 * q0 * np.exp(b**2 - (x-s0)/a) * erfc(b - (x-s0)/c) + qBG
+	q = 0.5 * q0 * np.exp(b**2 - (s-s0)/a) * erfc(b - (s-s0)/c) + qBG
 	return q
 
 
