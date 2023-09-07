@@ -1015,7 +1015,7 @@ class MHD:
         #return ep that can be written to file (note its not a real EP as defined by equilParams class)
         return newEP
 
-    def gFileInterpolateByS(self, newS):
+    def gFileInterpolateByS(self, newS, transposePsi=True, transposeFpol=True):
         """
         interpolates gfiles as a function of MHD.Spols at newS
 
@@ -1038,9 +1038,14 @@ class MHD:
 
         EPs = self.ep
         for ep in EPs:
+            if transposePsi==True:
+                psiRZAll.append(ep.g['psiRZ'].T)
+            else:
+                psiRZAll.append(ep.g['psiRZ'])
+                
+
             RmAxisAll.append(ep.g['RmAxis'])
             ZmAxisAll.append(ep.g['ZmAxis'])
-            psiRZAll.append(ep.g['psiRZ'])
             psiAxisAll.append(ep.g['psiAxis'])
             psiSepAll.append(ep.g['psiSep'])
             Bt0All.append(ep.g['Bt0'])
@@ -1062,11 +1067,18 @@ class MHD:
         psiSepAll = np.array(psiSepAll)
         Bt0All = np.array(Bt0All)
         IpAll = np.array(IpAll)
-        FpolAll = np.array(FpolAll).T
-        PresAll = np.array(PresAll).T
-        FFprimeAll = np.array(FFprimeAll).T
-        PprimeAll = np.array(PprimeAll).T
-        qpsiAll = np.array(qpsiAll).T
+        if transposeFpol==True:
+            FpolAll = np.array(FpolAll).T
+            PresAll = np.array(PresAll).T
+            FFprimeAll = np.array(FFprimeAll).T
+            PprimeAll = np.array(PprimeAll).T
+            qpsiAll = np.array(qpsiAll).T
+        else:
+            FpolAll = np.array(FpolAll)
+            PresAll = np.array(PresAll)
+            FFprimeAll = np.array(FFprimeAll)
+            PprimeAll = np.array(PprimeAll)
+            qpsiAll = np.array(qpsiAll)            
 #       FpolAll = np.dstack(FpolAll)
 #       FFprimeAll = np.dstack(FFprimeAll)
 #       PprimeAll = np.dstack(PprimeAll)
@@ -1075,7 +1087,6 @@ class MHD:
         #Set up interpolators
         RmAxisInterp = interp1d(Spols,RmAxisAll)
         ZmAxisInterp = interp1d(Spols,ZmAxisAll)
-
         psiRZInterp = RegularGridInterpolator((R, Z, Spols), psiRZAll)
         psiAxisInterp = interp1d(Spols, psiAxisAll)
         psiSepInterp = interp1d(Spols, psiSepAll)
@@ -1092,7 +1103,10 @@ class MHD:
         r,z = np.meshgrid(R,Z)
         RmAxis = RmAxisInterp(newS)
         ZmAxis = ZmAxisInterp(newS)
-        psiRZ = psiRZInterp((r,z,newS)).T
+        if transposePsi==True:
+            psiRZ = psiRZInterp((r,z,newS))
+        else:
+            psiRZ = psiRZInterp((r,z,newS)).T
         psiAxis = psiAxisInterp(newS)
         psiSep = psiSepInterp(newS)
         Bt0 = Bt0Interp(newS)

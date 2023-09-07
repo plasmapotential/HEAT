@@ -52,7 +52,10 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
 #    if height==None:
 #        height=1000
     if height is not None:
-        aspect = (z.max()-z.min()) / (r.max()-r.min())
+        if yRange == None:
+            aspect = (z.max()-z.min()) / (r.max()-r.min())
+        else:
+            aspect = (max(yRange) - min(yRange)) / (max(xRange) - min(xRange))
         width = (1.0/aspect)*height
 
 

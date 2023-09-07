@@ -1044,6 +1044,9 @@ class engineObj():
             print("qFileTag = "+qFileTag)
             log.info("qFilePath = "+qFilePath)
             log.info("qFileTag = "+qFileTag)
+        elif hfMode == 'tophat':
+            print("lqCN = {:f}".format(self.HF.lqCN))
+            log.info("lqCN = {:f}".format(self.HF.lqCN))
         return
 
     def loadHFParams(self, infile=None, tIdx=0):
@@ -2604,6 +2607,9 @@ class engineObj():
             src = tPath + 'HF_optical_all.csv'
             dest = movieDir + 'hfOptical_{:06d}.csv'.format(t)
             shutil.copy(src,dest)
+            src = tPath + '/paraview/HF_optical_all_mesh.vtp'
+            dest = movieDir + 'hfOptical_mesh_{:06d}.vtp'.format(t)
+            shutil.copy(src,dest)            
             src = tPath + '/paraview/shadowMask_all_mesh.vtp'
             dest = movieDir + 'shadowMask_mesh_{:06d}.vtp'.format(t)
             shutil.copy(src,dest)
@@ -2780,6 +2786,7 @@ class engineObj():
                     'lqCF': self.HF.lqCF,
                     'lqPN': self.HF.lqPN,
                     'lqPF': self.HF.lqPF,
+                    'lqTopHat': self.HF.lqCN,
                     'lqCNmode': self.HF.lqCNmode,
                     'lqCFmode': self.HF.lqCFmode,
                     'lqPNmode': self.HF.lqPNmode,
@@ -2844,6 +2851,7 @@ class engineObj():
                     'lqCF': self.HF.lqCF,
                     'lqPN': self.HF.lqPN,
                     'lqPF': self.HF.lqPF,
+                    'lqTopHat': self.HF.lqCN,
                     'lqCNmode': self.HF.lqCNmode,
                     'lqCFmode': self.HF.lqCFmode,
                     'lqPNmode': self.HF.lqPNmode,
@@ -3066,16 +3074,34 @@ class engineObj():
             print("Material Selection: "+self.OF.material)
             matDst = partDir + '/constant/'
             if self.OF.material == "ATJ":
+                print("Using ATJ Material Template")
+                log.info("Using ATJ Material Template")
                 matSrc = self.OF.materialDir + '/ATJ/'
             elif self.OF.material == "MOLY":
+                print("Using MOLY Material Template")
+                log.info("Using MOLY Material Template")
                 matSrc = self.OF.materialDir + '/MOLY/'
             elif self.OF.material == "TUNG":
+                print("Using TUNG Material Template")
+                log.info("Using TUNG Material Template")
                 matSrc = self.OF.materialDir + '/TUNG/'
             elif self.OF.material == "TUNG_SPARC":
+                print("Using TUNG_SPARC Material Template")
+                log.info("Using TUNG_SPARC Material Template")
                 matSrc = self.OF.materialDir + '/TUNG_SPARC/'
+            elif self.OF.material == "WHA":
+                print("Using WHA Material Template")
+                log.info("Using WHA Material Template")                
+                matSrc = self.OF.materialDir + '/WHA/'
             elif self.OF.material == "SGL":
+                print("Using SGL Material Template")
+                log.info("Using SGL Material Template")                
                 matSrc = self.OF.materialDir + '/SGLR6510/'
             else: #SGL6510
+                print("COULD NOT FIND MATERIAL!")
+                log.info("COULD NOT FIND MATERIAL!")
+                print("Using USER Material Template")
+                log.info("Using USER Material Template")                
                 matSrc = self.OF.materialDir + '/USER/'
             try:
                 shutil.copyfile(matSrc+'DT', matDst+'DT')
@@ -3157,7 +3183,6 @@ class engineObj():
                     log.info("OpenFOAM thermal analysis will probably fail")
                     print("=====================================================\n")
 
-                
             #update blockmesh bounds for each PFC and
             # give 10mm of clearance on each side
             self.OF.xMin = (PFC.centers[:,0].min() - 0.01)*1000.0

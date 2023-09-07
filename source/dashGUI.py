@@ -495,6 +495,7 @@ def inputDragDrop(file, contents, MachFlag):
                State('lqCF', 'value'),
                State('lqPN', 'value'),
                State('lqPF', 'value'),
+               State('lqTopHat', 'value'),
                State('fracCN', 'value'),
                State('fracCF', 'value'),
                State('fracPN', 'value'),
@@ -558,6 +559,7 @@ def saveGUIinputs(  n_clicks,
                     lqCF,
                     lqPN,
                     lqPF,
+                    lqTopHat,
                     fracCN,
                     fracCF,
                     fracPN,
@@ -651,6 +653,10 @@ def saveGUIinputs(  n_clicks,
         data['lqCNmode'] = eichlqCNmode
         data['S'] = S
         data['SMode'] = eichSMode
+
+    elif hfMode == 'tophat':
+        data['lqCN'] = lqTopHat
+        data['lqCNmode'] = 'user'
 
     data['fracUI'] = fracUI
     data['fracUO'] = fracUO
@@ -951,6 +957,7 @@ def buildHFbox():
                     {'label': 'Gaussian Spreading', 'value': 'eich'},
                     {'label': 'Multi-Exponential', 'value': 'multiExp'},
                     {'label': 'Limiter', 'value': 'limiter'},
+                    {'label': 'Top Hat', 'value': 'tophat'},
                     {'label': 'From qFiles', 'value': 'qFile'}
                     ],
                 value=None,
@@ -1042,17 +1049,20 @@ def loadHFSettings(mode=None, hidden=False, sessionData=None):
     #do this hidden business so that we can always load defaults into these id's
     #hideMask corresponds to the following parameters:
     #[eichProfile, commonRegion, privateRegion]
-    hideMask = ['hiddenBox','hiddenBox','hiddenBox','hiddenBox']
+    hideMask = ['hiddenBox','hiddenBox','hiddenBox','hiddenBox', 'hiddenBox']
     if mode=='eich':
-        hideMask = ['hfInput','hiddenBox','hiddenBox','hiddenBox']
+        hideMask = ['hfInput','hiddenBox','hiddenBox','hiddenBox','hiddenBox']
     elif mode=='limiter':
-        hideMask = ['hiddenBox','hiddenBox','hfInput','hiddenBox'] #common flux region
+        hideMask = ['hiddenBox','hiddenBox','hfInput','hiddenBox','hiddenBox'] #common flux region
     elif mode=='multiExp':
-        hideMask = ['hiddenBox','hfInput','hiddenBox','hiddenBox'] #common + private flux region
+        hideMask = ['hiddenBox','hfInput','hiddenBox','hiddenBox','hiddenBox'] #common + private flux region
     elif mode=='qFile':
-        hideMask = ['hiddenBox','hiddenBox','hiddenBox','hfInput'] #common + private flux region
+        hideMask = ['hiddenBox','hiddenBox','hiddenBox','hfInput','hiddenBox'] #common + private flux region
+    elif mode=='tophat':
+        hideMask = ['hiddenBox','hiddenBox','hiddenBox', 'hiddenBox','hfInput'] #common + private flux region
+
     if hidden==True or mode==None:
-        hideMask=['hiddenBox','hiddenBox','hiddenBox','hiddenBox']
+        hideMask=['hiddenBox','hiddenBox','hiddenBox','hiddenBox','hiddenBox']
 
 
     #if we are using qFile, hide Psol inputs
@@ -1117,6 +1127,13 @@ def loadHFSettings(mode=None, hidden=False, sessionData=None):
                     #className=hideMask[2],
                     children=[
                         qFileParameters(hideMask[3], sessionData),
+                        ]
+                ),
+                #tophat
+                html.Div(
+                    #className=hideMask[0],
+                    children=[
+                        tophatParameters(hideMask[4], sessionData),
                         ]
                 ),
                 PsolInput(hidden, sessionData),
@@ -1482,6 +1499,33 @@ def  qFileParameters(className, data):
     return div
 
 
+def  tophatParameters(className, data):
+    #return if this div is supposed to be hidden to prevent duplicate IDs
+    #if className== 'hiddenBox':
+    #    return
+
+    row1 = html.Div(
+        className="rowBox",
+        children = [
+            html.Div(
+            className="colBox",
+                children=[
+                    dbc.Label("Heat Flux Width [mm]:"),
+                    dbc.Input(id="lqTopHat", value=data['lqCN']),
+                ]),
+
+            ]
+            )
+
+    div = html.Div(
+        className=className,
+        children=[
+            row1,
+            ]
+        )
+    return div
+
+
 #def commonRegionParameters():
 #    """
 #    near and far heat flux widths and power sharing fractions
@@ -1535,6 +1579,7 @@ def  qFileParameters(className, data):
                State('lqCF', 'value'),
                State('lqPN', 'value'),
                State('lqPF', 'value'),
+               State('lqTopHat', 'value'),
                State('fracCN', 'value'),
                State('fracCF', 'value'),
                State('fracPN', 'value'),
@@ -1563,7 +1608,7 @@ def  qFileParameters(className, data):
                State('qFileTag', 'value'),
                ])
 def loadHF(n_clicks,hfMode,MachFlag,
-            lqEich,S,lqCN,lqCF,lqPN,lqPF,
+            lqEich,S,lqCN,lqCF,lqPN,lqPF,lqTopHat,
             fracCN,fracCF,fracPN,fracPF,
             fracUI,fracUO,fracLI,fracLO,
             eichlqCNmode,SMode,
@@ -1614,6 +1659,18 @@ def loadHF(n_clicks,hfMode,MachFlag,
             lqPN = 0.0
             lqPF = 0.0
             SMode = SMode
+        elif hfMode == 'tophat':
+            lqCNmode = 'user'
+            lqCFmode = None
+            lqPNmode = None
+            lqPFmode = None
+            lqCN = lqTopHat
+            lqCF = 0.0
+            lqPN = 0.0
+            lqPF = 0.0          
+            Smode = None 
+            qFileTag = None
+            qFilePath = None            
         else: #eich mode is default
             lqCNmode = eichlqCNmode
             lqCFmode = None
@@ -3821,6 +3878,7 @@ Session storage callbacks and functions
                Output('lqCF', 'value'),
                Output('lqPN', 'value'),
                Output('lqPF', 'value'),
+               Output('lqTopHat', 'value'),
                Output('limlqCN', 'value'),
                Output('limlqCF', 'value'),
                Output('limfracCN', 'value'),
@@ -3929,6 +3987,7 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('lqCF', ''),
             data.get('lqPN', ''),
             data.get('lqPF', ''),
+            data.get('lqCN', ''), #tophat
             data.get('lqCN', ''), #lim
             data.get('lqCF', ''), #lim
             data.get('fracCN', ''), #lim
