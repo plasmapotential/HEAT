@@ -305,23 +305,35 @@ class plasma3D:
 
 	def copyAndRead(self, path, tag = None):
 		"""
-		Write all input files and copy MAFOT laminar data from path into self.cwd
+		Copy all input files and MAFOT laminar data from path into self.cwd
 		Read the output file when finished
 		"""
 		if tag is None: tag = ''    # this tag has len(tag) = 0
-		self.writeControlFile(MapDirection)
-		self.writeM3DC1supFile()
-		self.writeCoilsupFile()
 		
-		file = path + '/' + 'lam_' + tag + '.dat'
-		print('Load 3D MAFOT Laminar data from file: ' + file)
-		log.info('Load 3D MAFOT Laminar data from file: ' + file)
-		if os.path.isfile(file): 
-			shutil.copy(file, 'lam_' + tag + '.dat')
+		#self.writeControlFile(MapDirection)
+		src = path + '/' + '_lamCTL.dat'
+		dst = self.cwd + '/' + '_lamCTL.dat'
+		if os.path.isfile(src): 
+			shutil.copy(src, dst)
+
+		#self.writeM3DC1supFile()
+		src = path + '/' + 'm3dc1sup.in'
+		dst = self.cwd + '/' + 'm3dc1sup.in'
+		if os.path.isfile(src): 
+			shutil.copy(src, dst)
+
+		#self.writeCoilsupFile()
+		
+		src = path + '/' + 'lam_' + tag + '.dat'
+		dst = self.cwd + '/' + 'lam_' + tag + '.dat'
+		if os.path.isfile(src): 
+			shutil.copy(src, dst)
 		else:
-			print('MAFOT output file: ' + file + ' not found!')
-			log.info('MAFOT output file: ' + file + ' not found!')
+			print('MAFOT output file: ' + src + ' not found!')
+			log.info('MAFOT output file: ' + src + ' not found!')
 		
+		print('Copy and load 3D MAFOT Laminar data from file: ' + src)
+		log.info('Copy and load 3D MAFOT Laminar data from file: ' + src)
 		self.readLaminar(tag)
 		return
 		
