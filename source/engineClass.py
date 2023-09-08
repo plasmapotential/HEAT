@@ -1709,7 +1709,7 @@ class engineObj():
                     gFile = self.MHD.shotPath + self.tsFmt.format(t) + '/' + self.MHD.gFiles[tIdx]
                     self.plasma3D.initializePlasma3D(self.MHD.shot, t, gFile, self.inputFileList[tIdx], PFC.controlfilePath[0:-1], self.MHD.tmpDir[0:-1])   # remove / at the end of paths
                     self.plasma3D.setBoundaryBox(self.MHD, self.CAD)
-                    self.hf3D.initializeHF3D(PFC.ep, self.inputFileList[tIdx], self.MHD.tmpDir[0:-1])
+                    self.hf3D.initializeHF3D(PFC.ep, self.inputFileList[tIdx], PFC.controlfilePath[0:-1], self.MHD.tmpDir[0:-1])
                     self.plasma3D.print_settings()
                     self.hf3D.print_settings()
                     if 'hfOpt' in runList:
@@ -2248,18 +2248,23 @@ class engineObj():
         """
         #Check for intersections with MAFOT struct
         t0 = time.time()
-        #check if this is a repeated MHD EQ
-        #and that the inputs have not changed
-        if (repeatIdx == None) or (self.newInputsFlag == True):
-            if rayTriMode=='open3d':
-                #newer ray-triangle calcs using Open3D
-                PFC.findOpticalShadowsOpen3D(self.MHD,self.CAD)
-            else:
-                #original HEAT homebrew MT ray-triangle method
-                PFC.findShadows_structure(self.MHD, self.CAD)
+        val = -1
+        if self.plasma3D.loadHF:
+            f = self.plasma3D.loadBasePath + '/' + self.HF.tsFmt.format(PFC.t) + '/' + PFC.name + '/shadowMask.csv'
+            val = plasma3DClass.readShadowFile(f, PFC)
+        if val == -1:
+            #check if this is a repeated MHD EQ
+            #and that the inputs have not changed
+            if (repeatIdx == None) or (self.newInputsFlag == True):
+                if rayTriMode=='open3d':
+                    #newer ray-triangle calcs using Open3D
+                    PFC.findOpticalShadowsOpen3D(self.MHD,self.CAD)
+                else:
+                    #original HEAT homebrew MT ray-triangle method
+                    PFC.findShadows_structure(self.MHD, self.CAD)
 
-        else:
-            PFC.shadowed_mask = PFC.shadowMasks[repeatIdx].copy()
+            else:
+                PFC.shadowed_mask = PFC.shadowMasks[repeatIdx].copy()
 
         #PFC.findIntersectionFreeCADKDTree(self.MHD,self.CAD)
         print("Intersection calculation took {:f} [s]\n".format(time.time() - t0))
@@ -2271,8 +2276,12 @@ class engineObj():
             log.info('\n----Solving for 3D plasmas with MAFOT----')
             use = np.where(PFC.shadowed_mask == 0)[0]
             self.plasma3D.updatePointsFromCenters(PFC.centers[use])
-            self.plasma3D.launchLaminar(self.NCPUs, tag = 'opticalHF')   # use MapDirection = 0. If problem, then we need to split here into fwd and bwd direction separately
-            self.plasma3D.cleanUp(tag = 'opticalHF')      # removes the MAFOT log files
+            if self.plasma3D.loadHF:
+                f = self.plasma3D.loadBasePath + '/' + self.HF.tsFmt.format(PFC.t) + '/' + PFC.name
+                self.plasma3D.copyAndRead(path = f, tag = 'opticalHF')
+            else: 
+                self.plasma3D.launchLaminar(self.NCPUs, tag = 'opticalHF')   # use MapDirection = 0. If problem, then we need to split here into fwd and bwd direction separately
+                self.plasma3D.cleanUp(tag = 'opticalHF')      # removes the MAFOT log files
             
             # check for invalid points (psimin = 10) and remove; there should be none, but just in case
             invalid = self.plasma3D.checkValidOutput()    # this does NOT change self.plasma3D.psimin
@@ -2291,8 +2300,8 @@ class engineObj():
             print('\n----Calculating 3D Heat Flux Profile----')
             log.info('\n----Calculating 3D Heat Flux Profile----')
             self.hf3D.updateLaminarData(PFC.psimin[use],PFC.Lc[use])
-            self.hf3D.heatflux(PFC.DivCode)
             PFC.powerFrac = self.HF.getDivertorPowerFraction(PFC.DivCode)
+            self.hf3D.heatflux(PFC.DivCode, PFC.powerFrac)
             print("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
             log.info("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
 
