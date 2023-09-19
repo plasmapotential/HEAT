@@ -14,6 +14,39 @@ import json
 import matplotlib.pyplot as plt
 import logging
 from dash_bootstrap_templates import template_from_url
+from skimage import measure
+
+
+def extract_contours(R, Z, psi, levels):
+    """
+    Extract the contours of psi for given levels using skimage's measure.find_contours.
+
+    Parameters:
+    - R: 2D array of R coordinates
+    - Z: 2D array of Z coordinates
+    - psi: 2D array of scalar values
+    - levels: list of scalar values at which to extract contours
+
+    Returns:
+    - Dictionary where keys are levels and values are lists of contours.
+      Each contour is represented as an array of (R, Z) coordinates.
+    """
+    contours_dict = {}
+
+    for level in levels:
+        contours = measure.find_contours(psi, level)
+        contours_for_level = []
+        
+        for contour in contours:
+            r_indices = contour[:, 1]  # because of the way find_contours returns y, x
+            z_indices = contour[:, 0]
+            r_values = np.interp(r_indices, np.arange(R.shape[1]), R[0, :])
+            z_values = np.interp(z_indices, np.arange(Z.shape[0]), Z[:, 0])
+            contours_for_level.append(np.vstack([r_values,z_values]).T)
+            
+        contours_dict[level] = contours_for_level
+
+    return contours_dict
 
 
 def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
@@ -92,36 +125,35 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
             )
 
     #white lines around separatrix
-    levelsAtLCFS = np.linspace(0.95,1.05,15)
-    CS = plt.contourf(R,Z,psi,levelsAtLCFS,cmap=plt.cm.cividis)
-    for i in range(len(levelsAtLCFS)):
-        levelsCS = plt.contour(R,Z,psi,levels=[levelsAtLCFS[i]])
-        for j in range(len(levelsCS.allsegs[0])):
-            r = levelsCS.allsegs[0][j][:,0]
-            z = levelsCS.allsegs[0][j][:,1]
+    levelsAtLCFS = np.linspace(0.95,1.05,16)
+    contours = extract_contours(R, Z, psi, levelsAtLCFS)
+    print(contours)
+    for c in contours:
+        for i in range(len(contours[c])):
+            r = contours[c][i][:,0]
+            z = contours[c][i][:,1]
             fig.add_trace(
                 go.Scatter(
                     x=r,
                     y=z,
+                    name="{:.4f}".format(c),
                     mode="lines",
                     line=dict(
                         color="white",
                         width=1,
                         dash='dot',
                             )
+                    )
                 )
-            )
 
-    #Seperatrix in red.  Sometimes this fails if psi is negative
-    #so we try and except.
-    #if try fails, just plot using rbdry,zbdry from gfile
-    try:
-        CS = plt.contourf(R,Z,psi,levels,cmap=plt.cm.cividis)
-        lcfsCS = plt.contour(CS, levels = [1.0])
-        for i in range(len(lcfsCS.allsegs[0])):
-            rlcfs = lcfsCS.allsegs[0][i][:,0]
-            zlcfs = lcfsCS.allsegs[0][i][:,1]
 
+    #Seperatrix in red.
+    contours = extract_contours(R, Z, psi, [1.0])
+    print(contours)
+    for c in contours:
+        for i in range(len(contours[c])):
+            rlcfs = contours[c][i][:,0]
+            zlcfs = contours[c][i][:,1]
             fig.add_trace(
                 go.Scatter(
                     x=rlcfs,
@@ -131,32 +163,9 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
                     line=dict(
                         color="red",
                         width=4,
-
                             )
                     )
                     )
-    except:
-        print("Could not create contour plot.  Psi levels must be increasing.")
-        print("Try flipping psi sign and replotting.")
-        print("plotting rbdry, zbdry from gfile (not contour)")
-        if logFile is True:
-            log.info("Could not create contour plot.  Psi levels must be increasing.")
-            log.info("Try flipping psi sign and replotting.")
-            log.info("plotting rbdry, zbdry from gfile (not contour)")
-
-        fig.add_trace(
-            go.Scatter(
-                x=rbdry,
-                y=zbdry,
-                mode="lines",
-                name="LCFS",
-                line=dict(
-                    color="red",
-                    width=4,
-
-                        )
-                )
-                )
 
     #set bkgrd color if not default (clear)
 #    if bg is None:
@@ -271,16 +280,13 @@ def writePlotlyEQ(shot, time, outFile, MachFlag, ep=None, gfile=None, logFile=Fa
             )
             )
 
-    #Seperatrix in red.  Sometimes this fails if psi is negative
-    #so we try and except.
-    #if try fails, just plot using rbdry,zbdry from gfile
-    try:
-        CS = plt.contourf(R,Z,psi,levels,cmap=plt.cm.cividis)
-        lcfsCS = plt.contour(CS, levels = [1.0])
-        for i in range(len(lcfsCS.allsegs[0])):
-            rlcfs = lcfsCS.allsegs[0][i][:,0]
-            zlcfs = lcfsCS.allsegs[0][i][:,1]
-
+    #Seperatrix in red.
+    contours = extract_contours(R, Z, psi, [1.0])
+    print(contours)
+    for c in contours:
+        for i in range(len(contours[c])):
+            rlcfs = contours[c][i][:,0]
+            zlcfs = contours[c][i][:,1]
             fig.add_trace(
                 go.Scatter(
                     x=rlcfs,
@@ -290,33 +296,9 @@ def writePlotlyEQ(shot, time, outFile, MachFlag, ep=None, gfile=None, logFile=Fa
                     line=dict(
                         color="red",
                         width=4,
-
                             )
                     )
                     )
-    except:
-        print("Could not create contour plot.  Psi levels must be increasing.")
-        print("Try flipping psi sign and replotting.")
-        print("plotting rbdry, zbdry from gfile (not contour)")
-        if logFile is True:
-            log.info("Could not create contour plot.  Psi levels must be increasing.")
-            log.info("Try flipping psi sign and replotting.")
-            log.info("plotting rbdry, zbdry from gfile (not contour)")
-
-        fig.add_trace(
-            go.Scatter(
-                x=rbdry,
-                y=zbdry,
-                mode="lines",
-                name="LCFS",
-                line=dict(
-                    color="red",
-                    width=4,
-
-                        )
-                )
-                )
-
 
     fig.update_layout(
         title="{:06d}@{:05d}ms".format(shot,time),
