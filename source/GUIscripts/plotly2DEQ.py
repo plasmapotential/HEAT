@@ -11,7 +11,6 @@ import EFIT.equilParams_class as EP
 from scipy import interpolate
 from scipy.interpolate import interp1d
 import json
-import matplotlib.pyplot as plt
 import logging
 from dash_bootstrap_templates import template_from_url
 from skimage import measure
