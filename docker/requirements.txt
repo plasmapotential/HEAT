@@ -15,6 +15,7 @@ psutil
 trimesh
 pandas
 pillow
+matplotlib
 tk
 vtk
 click
@@ -22,5 +23,6 @@ h5py
 netCDF4
 mpi4py
 gmsh
+scikit-image
 
 

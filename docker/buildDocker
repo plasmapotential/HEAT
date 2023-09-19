@@ -2,7 +2,7 @@
 #Engineer: T Looby
 #Date: 01/27/2022
 #Description:  prepares docker context, then creates docker container
-#              from ORNL dev machine
+#              from dev machine
 
 # remove previous build
 rm -rf dockerDir
@@ -80,7 +80,11 @@ cp runDockerCompose /home/tom/source/HEAT/github/docker/
 echo "Building docker image..."
 cd dockerDir
 
+#build for linux
 docker build -t plasmapotential/heat .
+
+#cross platform build (for apple silicon)
+#docker buildx build --platform linux/amd64,linux/arm64 -t plasmapotential/heat -f ./Dockerfile . --push
 
 #after creating image, tag it using the following command
 # docker tag plasmapotential/heat:latest plasmapotential/heat:<tag>

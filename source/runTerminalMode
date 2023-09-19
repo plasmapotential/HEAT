@@ -1,0 +1,2 @@
+#!/bin/bash
+python3 launchHEAT.py --m t --f /root/terminal/batchFile.dat

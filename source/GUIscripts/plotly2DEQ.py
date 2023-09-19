@@ -129,7 +129,6 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
     #white lines around separatrix
     levelsAtLCFS = np.linspace(0.95,1.05,16)
     contours = extract_contours(R, Z, psi, levelsAtLCFS)
-    print(contours)
     for c in contours:
         for i in range(len(contours[c])):
             r = contours[c][i][:,0]
@@ -151,7 +150,6 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
 
     #Seperatrix in red.
     contours = extract_contours(R, Z, psi, [1.0])
-    print(contours)
     for c in contours:
         for i in range(len(contours[c])):
             rlcfs = contours[c][i][:,0]
@@ -284,7 +282,6 @@ def writePlotlyEQ(shot, time, outFile, MachFlag, ep=None, gfile=None, logFile=Fa
 
     #Seperatrix in red.
     contours = extract_contours(R, Z, psi, [1.0])
-    print(contours)
     for c in contours:
         for i in range(len(contours[c])):
             rlcfs = contours[c][i][:,0]

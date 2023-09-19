@@ -8,6 +8,7 @@
 #otherwise, files will be saved as root and may not be accessible to
 #users not in the docker group or with correct username
 #
+#for root user mode
 #check for docker group and load into ${dockerGID}
 if [ $(getent group docker) ]; then
   echo "docker group exists. setting dockerGID env var..."
@@ -17,6 +18,7 @@ else
   echo "If you continue HEAT files will be saved under root group!"
   echo "It is recommended (but not required) that you create group"
   echo "'docker' and add yourself to it before running HEAT."
+  echo "using your primary groupid"
 fi
 #get user id
 if [ $(getent group docker) ]; then
@@ -27,7 +29,12 @@ else
   echo "files will be saved as root:root !"
 fi
 
+#for heatuser mode
+export UID=$(id -u)
+export GID=$(id -g)
+#export USER=$(whoami)
+
 #run docker compose
 #docker-compose up
 #run docker compose interactively (for terminal mode)
-docker-compose run HEAT /bin/bash
+docker compose run HEAT /bin/bash

@@ -95,8 +95,8 @@ def loadEnviron():
 
         ### FREECAD
         #docker ubuntu repo freecad path
-        #FreeCADPath = '/usr/lib/freecad-python3/lib'
-        FreeCADPath = '/usr/lib/freecad-daily/lib'
+        FreeCADPath = '/usr/lib/freecad-python3/lib'
+        #FreeCADPath = '/usr/lib/freecad-daily/lib'
 
         ### ORNL EFIT CLASS
         #default source code location (EFIT class should be here)

@@ -5,11 +5,11 @@
 #             requires user to have the volumes below locally on host
 #             if not, comment out the line for the dir you don't have
 #             if so, change paths to match your machine
-version: "3"
+version: "3.3"
 
 services:
   HEAT:
-    image: "plasmapotential/heat:v3.0.1"
+    image: "plasmapotential/heat:v3.2"
     ports:
       - "8050:8050"
     volumes:
@@ -17,7 +17,7 @@ services:
       #format is: /host/path:/container/path
       #user should not edit container paths
       #
-      # HEAT data directory on this machine (if exists)
+      # HEAT data directory on this machine (need to replace with absolute path on Windows)
       - ${HOME}/HEAT:/root/HEAT
 #      # HEAT source code from github
 #      - /home/tom/source/HEAT/github/source:/root/source/HEAT
@@ -33,17 +33,15 @@ services:
 #      - /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/bin:/root/opt/swak4foam/bin
 #      - /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/lib:/root/opt/swak4foam/lib
 #      # Batch mode directory
-#      - /home/tom/HEATruns/SPARC/sweep7_T4:/root/terminal
+#      - /home/tom/HEATruns/SPARC/MEQscans:/root/terminal
     stdin_open: true # docker run -i
     tty: true        # docker run -t
     #if you want to set env vars, do it here:
-    #environment:
-    #- dockerUID=$dockerUID
-    #- dockerGID=$dockerGID
-    #- UID=$dockerUID
-    #- GID=$dockerGID
-
-
+#    environment:
+#    - dockerUID=$dockerUID
+#    - dockerGID=$dockerGID
+#    - UID=$dockerUID
+#    - GID=$dockerGID
 
 #NOTES:
 #to run HEAT in batch mode, first bind mount the /root/terminal directory to your
