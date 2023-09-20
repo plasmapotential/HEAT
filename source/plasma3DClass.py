@@ -52,8 +52,8 @@ class plasma3D:
 		Set up basic input vars
 		gfile should include the full path and file name
 		inputFile is the main .csv file with input variables
-		cwd is the HEAT data folder for this shot and pfc, typically ~/HEAT/data/<machine>_<shot>_<tag>/<time>/<pfcName>
-		inputDir is the folder with input files, typically /root/terminal/<machine>
+		cwd is the HEAT data folder on the host machine for this shot and pfc, typically ~/HEAT/data/<machine>_<shot>_<tag>/<time>/<pfcName>
+		inputDir is the folder in the docker container with input files, typically $HEAT_HOME/terminal/<machine>
 		"""
 		self.shot = tools.makeInt(shot)
 		self.time = tools.makeInt(time)
