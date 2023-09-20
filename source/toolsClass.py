@@ -89,14 +89,23 @@ class tools:
         for i in range(len(data)):
             if data['Var'][i] in obj.allowed_vars:
                 noneList = ['none', None, 'None', 'NONE', '', 'na', 'NA', 'Na', 'nan', 'NaN', 'NAN', 'Nan']
+                TrueList = ['True', 'true', 'T', 't']
+                FalseList = ['False','false','F', 'f']
                 #handle Nones
                 if type(data['Val'][i]) == str:
                     if (data['Val'][i].strip() in noneList):
                         setattr(obj, data['Var'][i], None)
+                    elif (data['Val'][i].strip() in TrueList):
+                        setattr(obj, data['Var'][i], True)
+                    elif (data['Val'][i].strip() in FalseList):
+                        setattr(obj, data['Var'][i], False)
                     else:
                         setattr(obj, data['Var'][i], data['Val'][i].strip())
                 else:
-                    setattr(obj, data['Var'][i], data['Val'][i])
+                    if np.isnan(data['Val'][i]): 
+                        setattr(obj, data['Var'][i], None)
+                    else:
+                        setattr(obj, data['Var'][i], data['Val'][i])
             else:
                 pass
                 #print("Caution! Unrecognized variable in input file: "+data['Var'][i])
