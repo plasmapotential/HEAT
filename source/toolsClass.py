@@ -95,10 +95,10 @@ class tools:
                 if type(data['Val'][i]) == str:
                     if (data['Val'][i].strip() in noneList):
                         setattr(obj, data['Var'][i], None)
-                    elif (data['Val'][i].strip() in TrueList):
-                        setattr(obj, data['Var'][i], True)
-                    elif (data['Val'][i].strip() in FalseList):
-                        setattr(obj, data['Var'][i], False)
+                    #elif (data['Val'][i].strip() in TrueList):
+                    #    setattr(obj, data['Var'][i], True)
+                    #elif (data['Val'][i].strip() in FalseList):
+                    #    setattr(obj, data['Var'][i], False)
                     else:
                         setattr(obj, data['Var'][i], data['Val'][i].strip())
                 else:
@@ -1084,6 +1084,19 @@ class tools:
                 newVar = int(float(var))
             except:
                 newVar = var
+        return newVar
+
+    def makeBool(self, var):
+        """
+        converts var to boolean
+        if var is None, returns None
+        """
+        if var == None:
+            newVar = None
+        else:
+            if var in ['t','T','true','True','TRUE','Tru','TRU','1']: newVar = True
+            elif var in ['f','F','false','False','FALSE','Fal','FAL','0']: newVar = False
+            else: raise ValueError('Input variable ' + str(var) + ' needs to be of type boolean')
         return newVar
 
     def meshPerturbation(self, points):

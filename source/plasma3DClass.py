@@ -44,7 +44,9 @@ class plasma3D:
 		self.loadHF = False
 		self.loadBasePath = None
 		
-		self.allowed_vars = ['plasma3Dmask','shot','time','tmax','gFile','itt','response','selectField','useIcoil','sigma','charge','Ekin','Lambda','Mass','loadHF','loadBasePath']
+		self.allowed_vars = ['plasma3Dmask','shot','time','tmax','gFile','itt','response',
+				'selectField','useIcoil','sigma','charge','Ekin','Lambda','Mass','loadHF',
+				'loadBasePath']
 	
 	
 	def initializePlasma3D(self, shot, time, gFile = None, inputFile = None, cwd = None, inputDir = None):
@@ -216,7 +218,8 @@ class plasma3D:
 		"""
 		integers = ['plasma3Dmask','shot','time','tmax','itt','response','selectField','useIcoil','sigma','charge','Mass']
 		floats = ['Ekin','Lambda']
-		setAllTypes(self, integers, floats)     # this is not a typo, but the correct syntax for this call
+		bools = ['loadHF']
+		setAllTypes(self, integers, floats, bools)     # this is not a typo, but the correct syntax for this call
 
 
 	def updatePointsFromCenters(self, xyz):
@@ -477,7 +480,8 @@ class heatflux3D:
 		self.HFS = None	# True: use high field side SOL, False: use low field side SOL
 		self.teProfileData = None
 		self.neProfileData = None
-		self.allowed_vars = ['Lcmin', 'lcfs', 'lqCN', 'S', 'Pinj', 'coreRadFrac', 'qBG', 'teProfileData', 'neProfileData', 'kappa', 'model']
+		self.allowed_vars = ['Lcmin', 'lcfs', 'lqCN', 'S', 'Pinj', 'coreRadFrac', 'qBG', 
+				'teProfileData', 'neProfileData', 'kappa', 'model']
 
 
 	def initializeHF3D(self, ep, inputFile = None, cwd = None, inputDir = None):
@@ -620,7 +624,8 @@ class heatflux3D:
 		"""
 		integers = []
 		floats = ['Lcmin', 'lcfs', 'lqCN', 'S', 'Pinj', 'coreRadFrac', 'qBG', 'kappa']
-		setAllTypes(self, integers, floats)
+		bools = []
+		setAllTypes(self, integers, floats, bools)
 		
 		# data is an array or list
 		if self.teProfileData is not None:
@@ -1064,7 +1069,7 @@ def Tprofile(psi, Tped, deriv = False):
 	else: return T
 
 
-def setAllTypes(obj, integers, floats):
+def setAllTypes(obj, integers, floats, bools):
 	"""
 	Set data types for variales in obj
 	"""
@@ -1083,6 +1088,12 @@ def setAllTypes(obj, integers, floats):
 				except:
 					print("Error with input file var "+var+".  Perhaps you have invalid input values?")
 					log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
+	for var in bools:
+		try:
+			setattr(obj, var, tools.makeBool(getattr(obj, var)))
+		except:
+			print("Error with input file var "+var+".  Perhaps you have invalid input values?")
+			log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
 
 
 def eich_profile(s, lq, S, s0, q0, qBG = 0, fx = 1):
