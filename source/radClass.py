@@ -253,7 +253,24 @@ class RAD:
         powerFrac = np.zeros((self.Ni,self.Nj))
         Psum = np.zeros((self.Nj))
         self.hullPower = np.zeros((self.Ni))
+
+        print("Building radiation scene...")
+        #build mesh and tensors for open3d
+        mesh = o3d.io.read_triangle_mesh(self.meshFile)
+        mesh.compute_vertex_normals()
+        mesh = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
+        scene = o3d.t.geometry.RaycastingScene()
+        mesh_id = scene.add_triangles(mesh)
+        print("Scene building took {:f} [s]".format(time.time() - t0))
+
+
         for i in range(self.Ni):
+            if i%1000 == 0:
+                if i==0:
+                    t1 = time.time()
+                print("Source point {:d}.  1k time: {:f}".format(i, time.time() - t1))
+                t1 = time.time()
+
             r_ij = np.zeros((self.Nj,3))
             r_ij = self.targetCtrs - self.sources[i]
             #r_ij *= 1000.0
@@ -262,41 +279,36 @@ class RAD:
             rdotn = np.sum(rNorm*self.targetNorms, axis=1)
             q1 = np.tile(self.sources[i]*1000.0,(self.Nj,1))
 
-            #build mesh and tensors for open3d
-            mesh = o3d.io.read_triangle_mesh(self.meshFile)
-            mesh.compute_vertex_normals()
-            mesh = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
-            scene = o3d.t.geometry.RaycastingScene()
-            mesh_id = scene.add_triangles(mesh)
-
             #calculate intersections
             rays = o3d.core.Tensor([np.hstack([q1,rNorm])],dtype=o3d.core.Dtype.Float32)
             hits = scene.cast_rays(rays)
-
             #convert open3d CPU tensors back to numpy
             hitMap = hits['primitive_ids'][0].numpy()
             distMap = hits['t_hit'][0].numpy()
 
+            powerFrac[i,:] = np.abs(rdotn)*self.targetAreas/(4*np.pi*rMag**2)
+            condition = hitMap == np.arange(self.Nj)
+            Psum += condition * self.sourcePower[i] * powerFrac[i, :]
 
-            for j in range(self.Nj):
-                powerFrac[i,j] = np.abs(rdotn[j])*self.targetAreas[j]/(4*np.pi*rMag[j]**2)
-                #assign power
-                #if hitMap[i,j] == j and distMap[i,j] >= rMag[i,j]:
-                if hitMap[j] == j:
-                    Psum[j] += self.sourcePower[i]*powerFrac[i,j]
-                else:
-                    Psum[j] += 0.0
-
-                #for testing
-                idxTest=None
-                if j==idxTest:
-                    print('\n===')
-                    print(i)
-                    print(self.targetCtrs[j])
-                    print(rNorm[j]*rMag[j])
-                    print(hitMap[j])
-                    print(self.sourcePower[i])
-                    print(powerFrac[i,j])
+#            for j in range(self.Nj):
+#                powerFrac[i,j] = np.abs(rdotn[j])*self.targetAreas[j]/(4*np.pi*rMag[j]**2)
+#                #assign power
+#                #if hitMap[i,j] == j and distMap[i,j] >= rMag[i,j]:
+#                if hitMap[j] == j:
+#                    Psum[j] += self.sourcePower[i]*powerFrac[i,j]
+#                else:
+#                    Psum[j] += 0.0
+#
+#                #for testing
+#                idxTest=None
+#                if j==idxTest:
+#                    print('\n===')
+#                    print(i)
+#                    print(self.targetCtrs[j])
+#                    print(rNorm[j]*rMag[j])
+#                    print(hitMap[j])
+#                    print(self.sourcePower[i])
+#                    print(powerFrac[i,j])
 
             #compute convex hull on unit sphere around point i and calculate
             #power balance via ratio of hull area to sphere area
