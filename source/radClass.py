@@ -290,26 +290,6 @@ class RAD:
             condition = hitMap == np.arange(self.Nj)
             Psum += condition * self.sourcePower[i] * powerFrac[i, :]
 
-#            for j in range(self.Nj):
-#                powerFrac[i,j] = np.abs(rdotn[j])*self.targetAreas[j]/(4*np.pi*rMag[j]**2)
-#                #assign power
-#                #if hitMap[i,j] == j and distMap[i,j] >= rMag[i,j]:
-#                if hitMap[j] == j:
-#                    Psum[j] += self.sourcePower[i]*powerFrac[i,j]
-#                else:
-#                    Psum[j] += 0.0
-#
-#                #for testing
-#                idxTest=None
-#                if j==idxTest:
-#                    print('\n===')
-#                    print(i)
-#                    print(self.targetCtrs[j])
-#                    print(rNorm[j]*rMag[j])
-#                    print(hitMap[j])
-#                    print(self.sourcePower[i])
-#                    print(powerFrac[i,j])
-
             #compute convex hull on unit sphere around point i and calculate
             #power balance via ratio of hull area to sphere area
             #calculate spherical coordinates for each target point, with i as (0,0,0)
