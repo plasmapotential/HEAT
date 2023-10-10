@@ -113,7 +113,7 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
             ncontours=20,
         ))
 
-    #Wall in green
+    #Wall in green (accesible for colorblind)
     fig.add_trace(
         go.Scatter(
             x=rlim,
@@ -121,7 +121,7 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
             mode="markers+lines",
             name="Wall",
             line=dict(
-                color="#19fa1d"
+                color="#1AFF1A",
                     ),
             )
             )
@@ -148,7 +148,7 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
                 )
 
 
-    #Seperatrix in red.
+    #Seperatrix in purple (accessible for colorblind)
     contours = extract_contours(R, Z, psi, [1.0])
     for c in contours:
         for i in range(len(contours[c])):
@@ -161,7 +161,7 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
                     mode="lines",
                     name="LCFS",
                     line=dict(
-                        color="red",
+                        color="#4B0092",
                         width=4,
                             )
                     )
