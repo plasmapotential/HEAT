@@ -1711,12 +1711,13 @@ class engineObj():
                     print('\n')
                     
                     #3Dplasma setup
-                    gFile = self.MHD.shotPath + self.tsFmt.format(t) + '/' + self.MHD.gFiles[tIdx]
-                    self.plasma3D.initializePlasma3D(self.MHD.shot, t, gFile, self.inputFileList[tIdx], PFC.controlfilePath[0:-1], self.MHD.tmpDir[0:-1])   # remove / at the end of paths
-                    self.plasma3D.setBoundaryBox(self.MHD, self.CAD)
-                    self.hf3D.initializeHF3D(PFC.ep, self.inputFileList[tIdx], PFC.controlfilePath[0:-1], self.MHD.tmpDir[0:-1])
-                    self.plasma3D.print_settings()
-                    self.hf3D.print_settings()
+                    if self.MHD.plasma3Dmask == 1:
+                        gFile = self.MHD.shotPath + self.tsFmt.format(t) + '/' + self.MHD.gFiles[tIdx]
+                        self.plasma3D.initializePlasma3D(self.MHD.shot, t, gFile, self.inputFileList[tIdx], PFC.controlfilePath[0:-1], self.MHD.tmpDir[0:-1])   # remove / at the end of paths
+                        self.plasma3D.setBoundaryBox(self.MHD, self.CAD)
+                        self.hf3D.initializeHF3D(PFC.ep, self.inputFileList[tIdx], PFC.controlfilePath[0:-1], self.MHD.tmpDir[0:-1])
+                        self.plasma3D.print_settings()
+                        self.hf3D.print_settings()
                     if 'hfOpt' in runList:
                         #load HF settings for this timestep if applicable (terminal mode)
                         try:
@@ -2424,7 +2425,7 @@ class engineObj():
         print("Intersection calculation took {:f} [s]\n".format(time.time() - t0))
 
         #Run MAFOT laminar for 3D plasmas
-        if self.plasma3D.plasma3Dmask:
+        if self.MHD.plasma3Dmask:
             print('-'*80)
             print('\n----Solving for 3D plasmas with MAFOT----')
             log.info('\n----Solving for 3D plasmas with MAFOT----')
