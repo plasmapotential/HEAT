@@ -89,14 +89,23 @@ class tools:
         for i in range(len(data)):
             if data['Var'][i] in obj.allowed_vars:
                 noneList = ['none', None, 'None', 'NONE', '', 'na', 'NA', 'Na', 'nan', 'NaN', 'NAN', 'Nan']
+                TrueList = ['True', 'true', 'T', 't']
+                FalseList = ['False','false','F', 'f']
                 #handle Nones
                 if type(data['Val'][i]) == str:
                     if (data['Val'][i].strip() in noneList):
                         setattr(obj, data['Var'][i], None)
+                    #elif (data['Val'][i].strip() in TrueList):
+                    #    setattr(obj, data['Var'][i], True)
+                    #elif (data['Val'][i].strip() in FalseList):
+                    #    setattr(obj, data['Var'][i], False)
                     else:
                         setattr(obj, data['Var'][i], data['Val'][i].strip())
                 else:
-                    setattr(obj, data['Var'][i], data['Val'][i])
+                    if np.isnan(data['Val'][i]): 
+                        setattr(obj, data['Var'][i], None)
+                    else:
+                        setattr(obj, data['Var'][i], data['Val'][i])
             else:
                 pass
                 #print("Caution! Unrecognized variable in input file: "+data['Var'][i])
@@ -332,6 +341,23 @@ class tools:
         x = r*np.cos(phi)
         y = r*np.sin(phi)
         return x,y,z
+
+    def xyzVec2cylVec(self,x,y,z,vx,vy,vz):
+        """
+        Converts a vector in carthesian (vx,vy,vz) to a vector in cylindrical (vr,vphi,vz)
+        """
+        _,_,phi = self.xyz2cyl(x,y,z)
+        vr = vx*np.cos(phi) + vy*np.sin(phi)
+        vphi = -vx*np.sin(phi) + vy*np.cos(phi)
+        return vr,vphi,vz
+
+    def cylVec2xyzVec(self,phi,vr,vphi,vz):
+        """
+        Converts a vector in cylindrical (vr,vphi,vz) to a vector in carthesian (vx,vy,vz)
+        """
+        vx = vr*np.cos(phi) - vphi*np.sin(phi)
+        vy = vr*np.sin(phi) + vphi*np.cos(phi)
+        return vx,vy,vz
 
     def signedVolume(self,a,b,c,d):
         """
@@ -1058,6 +1084,19 @@ class tools:
                 newVar = int(float(var))
             except:
                 newVar = var
+        return newVar
+
+    def makeBool(self, var):
+        """
+        converts var to boolean
+        if var is None, returns None
+        """
+        if var == None:
+            newVar = None
+        else:
+            if var in ['t','T','true','True','TRUE','Tru','TRU','1']: newVar = True
+            elif var in ['f','F','false','False','FALSE','Fal','FAL','0']: newVar = False
+            else: raise ValueError('Input variable ' + str(var) + ' needs to be of type boolean')
         return newVar
 
     def meshPerturbation(self, points):

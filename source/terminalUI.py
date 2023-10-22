@@ -133,6 +133,11 @@ class TUI():
                 print("-"*70)
                 print(" "*20 + "Machine: "+mach+"   Tag: "+tag)
                 print("-"*70)
+                log.info('\n')
+                log.info("-"*70)
+                log.info(" "*20 + "Machine: "+mach+"   Tag: "+tag)
+                log.info("-"*70)
+
                 tagData = data[data["Tag"]==tag]
                 N_thisTag = len(tagData)
                 print("# Timesteps for this machine + tag combo: {:d}".format(N_thisTag))
@@ -194,6 +199,7 @@ class TUI():
 
                 print("Completed all HEAT runs\n")
                 log.info("Completed all HEAT runs\n")
+                shutil.copy(logFile, self.shotPath + 'HEATlog.txt')
 
 
 

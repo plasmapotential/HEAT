@@ -172,17 +172,36 @@ class MHD:
         """
         #check if these GEQDSKs are named according to the HEAT convention g<shot>_<timestep>
         #where shot is an int and timestep can be any float (ie with or without radix)
-        test1 = np.all(np.array([len(x.split("_")) for x in gFileList]) > 1)
-        test2 = np.all(np.array([type(g.split('_')[-1])==float for g in gFileList]) > 1)
+        #test1 = np.all(np.array([len(x.split("_")) for x in gFileList]) > 1)
+        #test2 = np.all(np.array([type(g.split('_')[-1])==float for g in gFileList]) > 1)
+        useD3DtimeFmt = True
+        useHeatTimeFmt = True
+        for g in gFileList:
+            if ('.' in g) & ('_' not in g):
+                time = g.split('.')[-1]
+                try: time = float(time)
+                except: useD3DtimeFmt = False
+            else: useD3DtimeFmt = False
+
+            if ('_' in g): 
+                time = g.split('_')[-1]
+                try: time = float(time)
+                except: useHeatTimeFmt = False
+            else: useHeatTimeFmt = False
+        
         ts = []
         for i,g in enumerate(gFileList):
             #GEQDSKs are named using timesteps
-            if test1 == True and test2==True:
+            if useHeatTimeFmt:
                 ts.append(float(g.split('_')[-1]))
-            #GEQDSKs do not follow HEAT naming convention
+            #GEQDSKs are named by D3D naming convention
+            elif useD3DtimeFmt:
+                ts.append(float(g.split('.')[-1]))
+            #GEQDSKs do not follow HEAT or D3D naming convention
             else:
                 ts.append(i)
 
+        #print('Timesteps:', ts)
         return np.array(ts)
 
     def getGEQDSK(self, ts, gFileList):
@@ -205,10 +224,10 @@ class MHD:
             oldgfile = self.tmpDir + g
             #copy gfile for this timestep
             if self.shotPath[-1] != '/': self.shotPath += '/'
-            self.gFiles.append('g'+self.shotFmt.format(self.shot) +'_'+ self.tsFmt.format(t))
+            self.gFiles.append('g'+self.shotFmt.format(self.shot) + '_'+ self.tsFmt.format(t))
             newgfile = timeDir + self.gFiles[-1]
             shutil.copyfile(oldgfile, newgfile)
-
+            #shutil.copyfile(oldgfile, timeDir + g)
         return
 
 
@@ -225,7 +244,7 @@ class MHD:
         if gfile is None:
             timeDir = self.shotPath + self.tsFmt.format(t) +'/'
             gfile = timeDir + 'g'+self.shotFmt.format(shot)+'_'+self.tsFmt.format(t)
-        self.ep = EP.equilParams(gfile, shot, t, gtype='heat')
+        self.ep = EP.equilParams(gfile)#, shot, t)#, gtype='heat')
         return
 
     def makeEFITobjects(self):
@@ -240,7 +259,7 @@ class MHD:
         for idx,t in enumerate(self.timesteps):
             timeDir = self.shotPath + self.tsFmt.format(t) +'/'
             gfile = timeDir+self.gFiles[idx]
-            self.ep[idx] = EP.equilParams(gfile, gType='heat')
+            self.ep[idx] = EP.equilParams(gfile)#, gType='heat')
         return
 
 
@@ -412,10 +431,11 @@ class MHD:
 
         with open(save_location, 'w') as f:
 
-            f.write('# Parameterfile for ' + self.MachFlag + ' Programs\n')
+            f.write('# Parameterfile for HEAT Programs\n')
             f.write('# Shot: '+self.shotFmt.format(self.shot)+'\tTime: '+self.tsFmt.format(t)+'s\n')
-            f.write('# Path: ' + self.shotPath  +self.tsFmt.format(t) +'\n')
-            f.write('Nphi=\t{:d}\n'.format(self.Nphi))
+            f.write('# Path: ' + self.shotPath  +self.tsFmt.format(t) + '/' + 'g'+self.shotFmt.format(self.shot) + '_'+ self.tsFmt.format(t) + '\n')
+            #f.write('# Path: ' + self.shotPath  +self.tsFmt.format(t) + '/' + '\n')
+            f.write('Nphi=\t{:d}\n'.format(self.Nphi))    # This must be entry index 0
 
             #itt means different things depending on if we are tracing field line
             #or running full MAFOT laminar
@@ -425,70 +445,36 @@ class MHD:
                 f.write('itt=\t{:f}\n'.format(self.ittGyro))
             else:
                 f.write('itt=\t{:f}\n'.format(self.ittStruct))
-            #f.write('Smin=\t{:2f}\n'.format(self.Smin))
-            #f.write('Smax=\t{:2f}\n'.format(self.Smax))
-            f.write('Rmin=\t{:2f}\n'.format(self.Rmin))
+                
+            f.write('Rmin=\t{:2f}\n'.format(self.Rmin))    # This must be entry index 2
             f.write('Rmax=\t{:2f}\n'.format(self.Rmax))
             f.write('Zmin=\t{:2f}\n'.format(self.Zmin))
             f.write('Zmax=\t{:2f}\n'.format(self.Zmax))
-            #f.write('phimin=\t{:2f}\n'.format(self.phimin))
-            #f.write('phimax=\t{:2f}\n'.format(self.phimax))
             f.write('Nswall=\t{:d}\n'.format(self.Nswall))
-
             f.write('phistart(deg)=\t{:2f}\n'.format(self.phistart))
             f.write('MapDirection=\t{:f}\n'.format(mapDirection))
-            #We check here to see if we defined a multiplier for MAFOT trace direction
-            #because MAFOT assumes increasing monotonic psiN (cant be decreasing)
-#            if (self.structMapDirMultiply >= 0.0) or (self.structMapDirMultiply is None):
-#                f.write('MapDirection=\t{:f}\n'.format(mapDirection))
-#                print("Writing CTL file with mapDir = {:f}".format(mapDirection))
-#                log.info("Writing CTL file with mapDir = {:f}".format(mapDirection))
-#            else:
-#                f.write('MapDirection=\t{:f}\n'.format(mapDirection*-1.0))
-#                print("Writing CTL file with mapDir = {:f}".format(mapDirection*-1.0))
-#                log.info("Writing CTL file with mapDir = {:f}".format(mapDirection*-1.0))
-            f.write('PlasmaResponse(0=no,>1=yes)=\t{:d}\n'
-                    .format(self.PlasmaResponse))
-            f.write('Field(-3=VMEC,-2=SIESTA,-1=gfile,M3DC1:0=Eq,1=I-coil,2=both)=\t'
-                    '{:d}\n'.format(self.Field))
-
+            f.write('PlasmaResponse(0=no,>1=yes)=\t{:d}\n'.format(self.PlasmaResponse))
+            f.write('Field(-3=VMEC,-2=SIESTA,-1=gfile,M3DC1:0=Eq,1=I-coil,2=both)=\t{:d}\n'.format(self.Field))
             f.write('target(0=useSwall)=\t{:d}\n'.format(self.target))
-            f.write('createPoints(2=target)=\t{:d}\n'.format(self.createPoints))
-
-            if(self.MachFlag == 'iter'):
-                f.write('useIcoil(0=no,1=yes)=\t{:d}\n'.format(self.useIcoil))
-            elif(self.MachFlag == 'nstx'):
-                f.write('useECcoil(0=no,1=yes)=\t{:d}\n'.format(self.useECcoil))
-            elif(self.MachFlag == 'mast'):
-                f.write('useCcoil(0=no,1=yes)=\t{:d}\n'.format(self.useCcoil))
-                f.write('useIcoil(0=no,1=yes)=\t{:d}\n'.format(self.useIcoil))
-            elif(self.MachFlag == 'd3d'):
-                f.write('useFcoil(0=no,1=yes)=\t{:d}\n'.format(self.useFcoil))
-                f.write('useCcoil(0=no,1=yes)=\t{:d}\n'.format(self.useCcoil))
-                f.write('useIcoil(0=no,1=yes)=\t{:d}\n'.format(self.useIcoil))
-            else:
-                f.write('useECcoil(0=no,1=yes)=\t{:d}\n'.format(self.useECcoil))
-
-            if self.MachFlag in self.machineList:
-                f.write('useFilament(0=no)=\t{:d}\n'.format(self.useFilament))
-                f.write('useTe_profile(0=no)=	{:d}\n'.format(self.useTe_profile))
-
-            f.write('ParticleDirection(1=co-pass,-1=ctr-pass,0=field-lines)=\t{:d}\n'
-                    .format(self.ParticleDirection))
-            f.write('PartileCharge(-1=electrons,>=1=ions)=\t{:d}\n'
-                    .format(self.ParticleCharge))
+            f.write('createPoints(2=target)=\t{:d}\n'.format(self.createPoints))    # This must be entry index 12
+            #f.write('useFcoil(0=no,1=yes)=\t{:d}\n'.format(self.useFcoil))
+            #f.write('useCcoil(0=no,1=yes)=\t{:d}\n'.format(self.useCcoil))
+            #f.write('useIcoil(0=no,1=yes)=\t{:d}\n'.format(self.useIcoil))
+            f.write('unused=\t0\n')
+            f.write('unused=\t0\n')
+            f.write('unused=\t0\n')
+            f.write('ParticleDirection(1=co-pass,-1=ctr-pass,0=field-lines)=\t{:d}\n'.format(self.ParticleDirection))   # This must be entry index 16
+            f.write('PartileCharge(-1=electrons,>=1=ions)=\t{:d}\n'.format(self.ParticleCharge))
             f.write('Ekin[keV]=\t{:2f}\n'.format(self.Ekin))
             f.write('lambda=\t{:2f}\n'.format(self.Lambda))
-            f.write('Mass=\t{:2f}\n'.format(self.Mass))
-
-            if self.MachFlag in ['dt']:
-                f.write('useFilament(0=no)=\t{:d}\n'.format(self.useFilament))
-                f.write('useBusError(0=no,1=yes)=\t{:d}\n'.format(self.useBus))
-                f.write('useBcoilError(0=no,1=yes)=\t{:d}\n'.format(self.useBcoil))
+            f.write('Mass=\t{:2f}\n'.format(self.Mass))    # This must be entry index 20
+            #f.write('useFilament(0=no)=\t{:d}\n'.format(self.useFilament))
+            #f.write('useECcoil(0=no,1=yes)=\t{:d}\n'.format(self.useECcoil))
+            f.write('unused=\t0\n')
+            f.write('unused=\t0\n')
+            f.write('dpinit=\t{:f}\n'.format(self.dpinit)) # This must be entry index 23
             f.write('pi=\t3.141592653589793\n')
-            f.write('2*pi=\t6.283185307179586\n')
-            #toroidal step size for HEAT
-            f.write('dpinit=\t{:f}\n'.format(self.dpinit))
+            f.write('2*pi=\t6.283185307179586\n')           
             return
 
     def psi2DfromEQ(self, PFC):
@@ -574,6 +560,8 @@ class MHD:
         args.append(gridfile)
         #args 5 is the MAFOT control file
         args.append(controlfile)
+        #args 6 is the tag, if not None
+        if tag is not None: args.append(tag)
         #Copy the current environment (important when in appImage mode)
         current_env = os.environ.copy()
         #run MAFOT structure for points in gridfile
@@ -586,7 +574,8 @@ class MHD:
             #write it out as a CSV.  Because this is a serial function that is only
             #called for special cases, we arent too concerned about speed or memory
             #so this works instead of making a more efficient pipeline
-            readfile = controlfilePath + 'struct.dat'
+            if tag is None: readfile = controlfilePath + 'struct.dat'
+            else: readfile = controlfilePath + 'struct_' + tag + '.dat'
             structdata = np.genfromtxt(readfile,comments='#')
 
             xyz = np.zeros((len(structdata),3))
