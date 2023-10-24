@@ -3158,7 +3158,7 @@ class engineObj():
             dest = movieDir + 'hfOptical_'+tStr+'.csv'
             shutil.copy(src,dest)
             src = tPath + '/paraview/HF_optical_all_mesh.vtp'
-            dest = movieDir + 'hfOptical_mesh_{:06d}.vtp'.format(t)
+            dest = movieDir + 'hfOptical_mesh_'+tStr+'.vtp'.format(t)
             shutil.copy(src,dest)            
             src = tPath + '/paraview/shadowMask_all_mesh.vtp'
             dest = movieDir + 'shadowMask_mesh_'+tStr+'.vtp'
