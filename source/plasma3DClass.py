@@ -326,7 +326,17 @@ class plasma3D:
 			shutil.copy(src, dst)
 
 		#self.writeCoilsupFile()
-		
+
+		#HFS and LFS midplane profile data
+		src = path + '/../' + 'lam_' + 'hfs_mp' + '.dat'
+		dst = self.cwd + '/../' + 'lam_' + 'hfs_mp' + '.dat'
+		if (not os.path.isfile(dst)) & os.path.isfile(src): 
+			shutil.copy(src, dst)
+		src = path + '/../' + 'lam_' + 'lfs_mp' + '.dat'
+		dst = self.cwd + '/../' + 'lam_' + 'lfs_mp' + '.dat'
+		if (not os.path.isfile(dst)) & os.path.isfile(src): 
+			shutil.copy(src, dst)
+				
 		src = path + '/' + 'lam_' + tag + '.dat'
 		dst = self.cwd + '/' + 'lam_' + tag + '.dat'
 		if os.path.isfile(src): 
@@ -800,19 +810,24 @@ class heatflux3D:
 		# get q_hat from laminar		
 		if self.HFS: tag = 'hfs_mp'
 		else: tag = 'lfs_mp'
-		file = self.inputDir + '/' + 'lam_' + tag + '.dat'
+		file = self.cwd + '/../' + 'lam_' + tag + '.dat'
 		if os.path.isfile(file): runLaminar = False
 
 		if runLaminar:
-			with open(self.inputDir + '/' + 'points_' + tag + '.dat','w') as f:
+			with open(self.cwd + '/' + 'points_' + tag + '.dat','w') as f:
 				for i in range(len(R)):
 					f.write(str(R[i]) + '\t' + str(0.0) + '\t' + str(Z[i]) + '\n')
 					
 			nproc = 10
 			args = ['mpirun','-n',str(nproc),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-			subprocess.run(args, env=current_env, cwd=self.inputDir)
-			for f in glob.glob(self.inputDir + '/' + 'log*'): os.remove(f)		#cleanup
+			subprocess.run(args, env=current_env, cwd=self.cwd)
+			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
+			# move one folder down
+			src = self.cwd + '/' + 'lam_' + tag + '.dat'
+			dst = self.cwd + '/../' + 'lam_' + tag + '.dat'
+			if os.path.isfile(src): 
+				shutil.move(src, dst)
 		
 		if os.path.isfile(file): 
 			lamdata = np.genfromtxt(file,comments='#')
@@ -930,15 +945,17 @@ class heatflux3D:
 		# Get a psi range that fully covers the profile for integration. Peak location does not matter, so use s0 from psi = 1.0
 		Rlcfs = self.map_R_psi(self.lcfs)
 		if self.HFS:
-			Rmin = Rlcfs - 20.0*lq*(1e-3)		#in m
-			if Rmin < min(self.ep.g['R']): Rmin = min(self.ep.g['R'])	#if Rmin outside EFIT grid, cap at minimum R of grid
+			Rmin = min(self.ep.g['R']) + 0.01
+			#Rmin = Rlcfs - 20.0*lq*(1e-3)		#in m
+			#if Rmin < min(self.ep.g['R']): Rmin = min(self.ep.g['R'])	#if Rmin outside EFIT grid, cap at minimum R of grid
 			Rmax = Rlcfs + 20.0*S*(1e-3)		#in m
 			if Rmax > self.ep.g['RmAxis']: Rmax = self.ep.g['RmAxis']	#if Rmax is outside the magnetic axis, psi would increase again, so cap at axis
 		else:
 			Rmin = Rlcfs - 20.0*S*(1e-3)		#in m
 			if Rmin < self.ep.g['RmAxis']: Rmin = self.ep.g['RmAxis']	#if Rmin is inside the magnetic axis, psi would increase again, so cap at axis
-			Rmax = Rlcfs + 20.0*lq*(1e-3)		#in m
-			if Rmax > max(self.ep.g['R']): Rmax = max(self.ep.g['R'])	#if Rmax is outside EFIT grid, cap at maximum R of grid
+			#Rmax = Rlcfs + 20.0*lq*(1e-3)		#in m
+			#if Rmax > max(self.ep.g['R']): Rmax = max(self.ep.g['R'])	#if Rmax is outside EFIT grid, cap at maximum R of grid
+			Rmax = max(self.ep.g['R']) - 0.01
 
 		R = np.linspace(Rmin,Rmax,1000)
 		Z = self.ep.g['ZmAxis']*np.ones(R.shape)
@@ -946,19 +963,24 @@ class heatflux3D:
 		# get q_hat from laminar		
 		if self.HFS: tag = 'hfs_mp'
 		else: tag = 'lfs_mp'
-		file = self.inputDir + '/' + 'lam_' + tag + '.dat'
+		file = self.cwd + '/../' + 'lam_' + tag + '.dat'
 		if os.path.isfile(file): runLaminar = False
 
 		if runLaminar:
-			with open(self.inputDir + '/' + 'points_' + tag + '.dat','w') as f:
+			with open(self.cwd + '/' + 'points_' + tag + '.dat','w') as f:
 				for i in range(len(R)):
 					f.write(str(R[i]) + '\t' + str(0.0) + '\t' + str(Z[i]) + '\n')
 					
 			nproc = 10
 			args = ['mpirun','-n',str(nproc),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-			subprocess.run(args, env=current_env, cwd=self.inputDir)
-			for f in glob.glob(self.inputDir + '/' + 'log*'): os.remove(f)		#cleanup
+			subprocess.run(args, env=current_env, cwd=self.cwd)
+			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
+			# move one folder down
+			src = self.cwd + '/' + 'lam_' + tag + '.dat'
+			dst = self.cwd + '/../' + 'lam_' + tag + '.dat'
+			if os.path.isfile(src): 
+				shutil.move(src, dst)
 		
 		if os.path.isfile(file): 
 			lamdata = np.genfromtxt(file,comments='#')
