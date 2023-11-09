@@ -34,6 +34,7 @@ class plasma3D:
 		self.Z = None		# in m
 		self.psimin = None
 		self.Lc = None		# in km
+		self.NCPUs = 100
 		
 		# Boundary Box limits
 		self.bbRmin = None	
@@ -46,7 +47,7 @@ class plasma3D:
 		
 		self.allowed_vars = ['plasma3Dmask','shot','time','tmax','gFile','itt','response',
 				'selectField','useIcoil','sigma','charge','Ekin','Lambda','Mass','loadHF',
-				'loadBasePath']
+				'loadBasePath','NCPUs']
 	
 	
 	def initializePlasma3D(self, shot, time, gFile = None, inputFile = None, cwd = None, inputDir = None):
@@ -216,7 +217,7 @@ class plasma3D:
 		"""
 		Set variable types for the stuff that isnt a string from the input file
 		"""
-		integers = ['plasma3Dmask','shot','time','tmax','itt','response','selectField','useIcoil','sigma','charge','Mass']
+		integers = ['plasma3Dmask','shot','time','tmax','itt','response','selectField','useIcoil','sigma','charge','Mass','NCPUs']
 		floats = ['Ekin','Lambda']
 		bools = ['loadHF']
 		setAllTypes(self, integers, floats, bools)     # this is not a typo, but the correct syntax for this call
@@ -260,7 +261,7 @@ class plasma3D:
 				f.write(str(R[i]) + "\t" + str(phi[i]) + "\t" + str(Z[i]) + "\n")
 				
 				
-	def launchLaminar(self, nproc, tag = None, MapDirection = 0):
+	def launchLaminar(self, NCPUs = None, tag = None, MapDirection = 0):
 		"""
 		Write all input files and launch MAFOT
 		Read the output file when finished
@@ -270,19 +271,17 @@ class plasma3D:
 		self.writeM3DC1supFile()
 		self.writeCoilsupFile()
 		
-		if nproc > 20: nproc = 20
-		self.nproc = nproc
 		self.tag = tag
-		print('Launching 3D plasma field line tracing')
-		log.info('Launching 3D plasma field line tracing')
+		print('Launching 3D plasma field line tracing on ' + str(self.NCPUs) + ' cores')
+		log.info('Launching 3D plasma field line tracing ' + str(self.NCPUs) + ' cores')
 		
 		bbLimits = str(self.bbRmin) + ',' + str(self.bbRmax) + ',' + str(self.bbZmin) + ',' + str(self.bbZmax)
-		args = ['mpirun','-n',str(nproc),'heatlaminar_mpi','-P','points3DHF.dat','-B',bbLimits,'_lamCTL.dat',tag]
+		args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points3DHF.dat','-B',bbLimits,'_lamCTL.dat',tag]
 		current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
 		subprocess.run(args, env=current_env, cwd=self.cwd)
-		#print('mpirun -n ' + str(nproc) + ' heatlaminar_mpi' + ' -P points3DHF.dat' + ' _lamCTL.dat' + ' ' + tag)
+		#print('mpirun -n ' + str(self.NCPUs) + ' heatlaminar_mpi' + ' -P points3DHF.dat' + ' _lamCTL.dat' + ' ' + tag)
 		
-		#self.wait2finish(nproc, tag)
+		#self.wait2finish(self.NCPUs, tag)
 		self.readLaminar(tag)
 		print('3D plasma field line tracing complete')
 		log.info('3D plasma field line tracing complete')
@@ -328,15 +327,16 @@ class plasma3D:
 		#self.writeCoilsupFile()
 
 		#HFS and LFS midplane profile data
-		src = path + '/../' + 'lam_' + 'hfs_mp' + '.dat'
-		dst = self.cwd + '/../' + 'lam_' + 'hfs_mp' + '.dat'
-		if (not os.path.isfile(dst)) & os.path.isfile(src): 
-			shutil.copy(src, dst)
-		src = path + '/../' + 'lam_' + 'lfs_mp' + '.dat'
-		dst = self.cwd + '/../' + 'lam_' + 'lfs_mp' + '.dat'
-		if (not os.path.isfile(dst)) & os.path.isfile(src): 
-			shutil.copy(src, dst)
-				
+		#src = path + '/../' + 'lam_' + 'hfs_mp' + '.dat'
+		#dst = self.cwd + '/../' + 'lam_' + 'hfs_mp' + '.dat'
+		#if (not os.path.isfile(dst)) & os.path.isfile(src): 
+		#	shutil.copy(src, dst)
+		#src = path + '/../' + 'lam_' + 'lfs_mp' + '.dat'
+		#dst = self.cwd + '/../' + 'lam_' + 'lfs_mp' + '.dat'
+		#if (not os.path.isfile(dst)) & os.path.isfile(src): 
+		#	shutil.copy(src, dst)
+		
+		# main data
 		src = path + '/' + 'lam_' + tag + '.dat'
 		dst = self.cwd + '/' + 'lam_' + tag + '.dat'
 		if os.path.isfile(src): 
@@ -424,7 +424,7 @@ class plasma3D:
 		return
 		
 	
-	def wait2finish(self, nproc, tag):
+	def wait2finish(self, NCPUs, tag):
 		import time
 		print ('Waiting for job to finish...', end='')
 		time.sleep(5)	# wait 5 seconds
@@ -434,8 +434,8 @@ class plasma3D:
 			
 		if not self.isComplete():
 			print('MAFOT run ended prematurely. Attempt restart...')
-			subprocess.call(['mpirun','-n',str(nproc),'heatlaminar_mpi','-P','points.dat','_lamCTL.dat',tag])
-			self.wait2finish(nproc, tag)
+			subprocess.call(['mpirun','-n',str(NCPUs),'heatlaminar_mpi','-P','points.dat','_lamCTL.dat',tag])
+			self.wait2finish(NCPUs, tag)
 		else: return
 	
 	
@@ -485,13 +485,14 @@ class heatflux3D:
 		self.psimin = None
 		self.Lc = None		# in km
 		self.N = 1
+		self.NCPUs = 100
 		self.q = np.zeros(self.N)
 		self.ep = None	# equilParams_class instance for EFIT equilibrium
 		self.HFS = None	# True: use high field side SOL, False: use low field side SOL
 		self.teProfileData = None
 		self.neProfileData = None
 		self.allowed_vars = ['Lcmin', 'lcfs', 'lqCN', 'S', 'Pinj', 'coreRadFrac', 'qBG', 
-				'teProfileData', 'neProfileData', 'kappa', 'model']
+				'teProfileData', 'neProfileData', 'kappa', 'model','NCPUs']
 
 
 	def initializeHF3D(self, ep, inputFile = None, cwd = None, inputDir = None):
@@ -632,7 +633,7 @@ class heatflux3D:
 		"""
 		Set variable types for the stuff that isnt a string from the input file
 		"""
-		integers = []
+		integers = ['NCPUs']
 		floats = ['Lcmin', 'lcfs', 'lqCN', 'S', 'Pinj', 'coreRadFrac', 'qBG', 'kappa']
 		bools = []
 		setAllTypes(self, integers, floats, bools)
@@ -818,8 +819,8 @@ class heatflux3D:
 				for i in range(len(R)):
 					f.write(str(R[i]) + '\t' + str(0.0) + '\t' + str(Z[i]) + '\n')
 					
-			nproc = 10
-			args = ['mpirun','-n',str(nproc),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
+			#nproc = 10
+			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
 			subprocess.run(args, env=current_env, cwd=self.cwd)
 			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
@@ -880,12 +881,8 @@ class heatflux3D:
 		xsep = self.map_R_psi(1.0)
 
 		# this only needs to resolve the peak well, no need to cover the entire profile, in case lq and S are large
-		if lobes:
-			s0 = self.map_R_psi(lcfs)
-			s = self.map_R_psi(np.linspace(lcfs-0.05,lcfs+0.1,10000))
-		else:
-			s0 = self.map_R_psi(1.0)
-			s = self.map_R_psi(np.linspace(0.95,1.1,10000))
+		s0 = self.map_R_psi(lcfs)
+		s = self.map_R_psi(np.linspace(lcfs-0.05,lcfs+0.1,10000))
 			
 		qref = eich_profile(s, lq, S, s0, q0 = 1, qBG = 0, fx = 1)
 		idx = qref.argmax()
@@ -929,7 +926,7 @@ class heatflux3D:
 		return f(psi)
 	
 	
-	def scale_layer(self, lq, S, P, pfr = 1.0):
+	def scale_layer(self, lq, S, P):
 		"""
 		scales HF using a R-profile along the midplane at phi = 0
 		q-profile is obtained using laminar and apply the heat flux layer to psimin
@@ -940,10 +937,10 @@ class heatflux3D:
 		q||0 = P_div / ( 2*pi* integral(q_hat dPsi ))
 		return q0
 		"""		
-		if pfr is None: pfr = self.lcfs
 		runLaminar = True
 		# Get a psi range that fully covers the profile for integration. Peak location does not matter, so use s0 from psi = 1.0
 		Rlcfs = self.map_R_psi(self.lcfs)
+		dR = 0.0001		#(20*lq + 20*S)*(1e-6)		# 1000 points over the range of Rlcfs-20*lq <-> Rlcfs+20*S
 		if self.HFS:
 			Rmin = min(self.ep.g['R']) + 0.01
 			#Rmin = Rlcfs - 20.0*lq*(1e-3)		#in m
@@ -957,7 +954,7 @@ class heatflux3D:
 			#if Rmax > max(self.ep.g['R']): Rmax = max(self.ep.g['R'])	#if Rmax is outside EFIT grid, cap at maximum R of grid
 			Rmax = max(self.ep.g['R']) - 0.01
 
-		R = np.linspace(Rmin,Rmax,1000)
+		R = np.arange(Rmin,Rmax,dR)
 		Z = self.ep.g['ZmAxis']*np.ones(R.shape)
 		
 		# get q_hat from laminar		
@@ -970,9 +967,9 @@ class heatflux3D:
 			with open(self.cwd + '/' + 'points_' + tag + '.dat','w') as f:
 				for i in range(len(R)):
 					f.write(str(R[i]) + '\t' + str(0.0) + '\t' + str(Z[i]) + '\n')
-					
-			nproc = 10
-			args = ['mpirun','-n',str(nproc),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
+			
+			#nproc = 10
+			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
 			subprocess.run(args, env=current_env, cwd=self.cwd)
 			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
@@ -989,14 +986,14 @@ class heatflux3D:
 			print('File', file, 'not found') 
 			log.info('File ' + file + ' not found') 
 
-		idx = np.abs(psimin - pfr).argmin()
-		mask = np.zeros(len(R), dtype = bool)
-		if self.HFS: pfr = np.where(R > R[idx])[0]
-		else: pfr = np.where(R < R[idx])[0]
-		mask[pfr] = True
+		#idx = np.abs(psimin - pfr).argmin()
+		#mask = np.zeros(len(R), dtype = bool)
+		#if self.HFS: pfr = np.where(R > R[idx])[0]
+		#else: pfr = np.where(R < R[idx])[0]
+		#mask[pfr] = True
 		
-		q_hat, q0tmp = self.set_layer(psimin, lq, S, lcfs = self.lcfs, lobes = True)
-		if np.sum(mask > 0): q_hat[mask],_ = self.set_layer(psimin[mask], lq, S, q0 = q0tmp)
+		q_hat, _ = self.set_layer(psimin, lq, S, lcfs = self.lcfs)
+		#if np.sum(mask > 0): q_hat[mask],_ = self.set_layer(psimin[mask], lq, S, q0 = q0tmp)
 		
 		#Menard's method
 		psiN = self.ep.psiFunc.ev(R,Z)	# this is normalized
@@ -1006,7 +1003,7 @@ class heatflux3D:
 		if P0 < 0: P0 = -P0
 		#Scale to input power
 		q0 = P/P0
-		return q0 #, q_hat,R,psiN,psi
+		return q0	#, q_hat,R,psiN,psi
 
 
 	def fluxConversion(self, R):
