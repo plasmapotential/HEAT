@@ -903,7 +903,7 @@ class heatflux3D:
 		if lobes:
 			q[psi < lcfs] = qmax
 		
-		else: return q*q0, qsep*q0
+		return q*q0, qsep*q0
 
 
 	def map_R_psi(self, psi, HFS = None):
