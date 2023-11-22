@@ -925,8 +925,166 @@ class heatflux3D:
 		return f(psi)
 
 
+
 	def scale_layer(self, lq, S, P, DivCode):
 		"""
+		scales HF using a part of the limiter outline in the g-file 
+		q-profile is obtained using laminar and apply the heat flux layer to psimin
+		Get scale factor q||0 (q0) for heat flux via power balance:
+		(input MW = output MW)
+		Finds strike point on surface and sets a dense grid around it
+		Integrates q_perp along surface and assumes axisymmetry.
+		q||0 = P_div / ( 2*pi integral(R(s) * q_perp * ds))
+		return q0
+		"""
+		# Parameter
+		srange = 0.3
+		ds = 0.0001
+		Nphi = 5
+		
+		# strike lines
+		d = self.ep.strikeLines()
+		if d is None: 		
+			# this means inner wall limited
+			s0 = 0	# inner wall at Z = Zaxis 						!!!!!!! this needs to be computed properly !!!!!!!!!
+			swall = np.arange(s0-srange, s0+srange, ds)
+		else:				
+			# find strike point for DivCode (this is to double check and prevent missmatches)
+			if 'Rin2' in d: N = 4
+			else: N = 2
+			Rstr = np.zeros(N)
+			Zstr = np.zeros(N)
+			Sstr = np.zeros(N)
+			keys = ['in','out','in2','out2']
+			for i in range(N):
+				Rstr[i] = d['R' + keys[i]]
+				Zstr[i] = d['Z' + keys[i]]
+				Sstr[i] = d['swall' + keys[i]]
+		
+			if 'L' in DivCode:					# Lower divertor, always 2 strike points
+				Rtmp = Rstr[Zstr < 0]
+				Ztmp = Zstr[Zstr < 0]
+				Stmp = Sstr[Zstr < 0]
+			elif 'U' in DivCode:				# Upper divertor
+				Rtmp = Rstr[Zstr > 0]
+				Ztmp = Zstr[Zstr > 0]
+				Stmp = Sstr[Zstr > 0]
+		
+			if len(Rtmp) < 2: 
+				raise RuntimeError('No strike points found for divertor ' + DivCode)
+	
+			# s0 is the strike point and s1 is the "other" strike point we don't want
+			if 'I' in DivCode:
+				if Rtmp[0] < Rtmp[1]: s0,s1 = Stmp[0],Stmp[1]
+				else: s0,s1 = Stmp[1],Stmp[0]
+			elif 'O' in DivCode:
+				if Rtmp[0] < Rtmp[1]: s0,s1 = Stmp[1],Stmp[0]
+				else: s0,s1 = Stmp[0],Stmp[1]
+
+			# set swall range
+			if s0 < s1:		# swall goes ccw for inner and cw for outer
+				dpfr = s1 - s0
+				swall = np.arange(s0 - srange, s0 + 0.4*dpfr, ds)
+			else:
+				dpfr = s0 - s1
+				swall = np.arange(s0 - 0.4*dpfr, s0 + srange, ds)
+
+		# get R,Z and write points file
+		R,Z,nR,nZ = self.ep.all_points_along_wall(swall, get_normal = True)
+
+		# Use MAFOT to get psimin
+		runLaminar = True
+		tag = DivCode
+		file = self.cwd + '/../' + 'lam_' + tag + '.dat'
+		if os.path.isfile(file): runLaminar = False		# MAFOT data already available
+
+		if runLaminar:
+			# write points file
+			with open(self.cwd + '/' + 'points_' + tag + '.dat','w') as f:
+				for j in range(Nphi):
+					phi = j*(360.0/Nphi)
+					for i in range(len(R)):
+						f.write(str(R[i]) + '\t' + str(phi) + '\t' + str(Z[i]) + '\n')
+			
+			# set bounding box
+			bbRmin = min([R.min()-0.1, self.ep.g['wall'][:,0].min()-0.1])
+			bbRmax = max([R.max()+0.1, self.ep.g['wall'][:,0].max()+0.1])
+			bbZmin = min([Z.min()-0.1, self.ep.g['wall'][:,1].min()-0.1])
+			bbZmax = max([Z.max()+0.1, self.ep.g['wall'][:,1].max()+0.1])
+			bbLimits = str(bbRmin) + ',' + str(bbRmax) + ',' + str(bbZmin) + ',' + str(bbZmax)
+			
+			# call MAFOT
+			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','-B',bbLimits,'_lamCTL.dat',tag]
+			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
+			subprocess.run(args, env=current_env, cwd=self.cwd)
+			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
+			
+			# move one folder down
+			src = self.cwd + '/' + 'lam_' + tag + '.dat'
+			dst = self.cwd + '/../' + 'lam_' + tag + '.dat'
+			if os.path.isfile(src): 
+				shutil.move(src, dst)
+		
+		# Read MAFOT data
+		if os.path.isfile(file): 
+			lamdata = np.genfromtxt(file,comments='#')
+			Lc = lamdata[:,3]
+			psimin = lamdata[:,4]
+		else:
+			print('File', file, 'not found') 
+			log.info('File ' + file + ' not found') 
+
+		# Find PFR
+		mask = np.zeros(len(psimin), dtype = bool)
+		pfr = np.where((psimin < 1) & (Lc < self.Lcmin))
+		mask[pfr] = True
+
+		# get parallel heat flux
+		qpar, q0tmp = self.set_layer(psimin, lq, S, lcfs = self.lcfs, lobes = True)
+		if np.sum(mask > 0): qpar[mask],_ = self.set_layer(psimin[mask], lq, S, q0 = q0tmp)
+
+		# average over the toroidal angles
+		qpar = qpar.reshape(Nphi,len(R))
+		qpar = qpar.mean(0)
+		
+		# get incident angle
+		BR = self.ep.BRFunc.ev(R,Z)
+		Bt = self.ep.BtFunc.ev(R,Z)
+		BZ = self.ep.BZFunc.ev(R,Z)
+		B = np.sqrt(BR**2 + Bt**2 + BZ**2)
+		nB = np.abs(nR*BR + nZ*BZ)/B
+		
+		# perpendicular heat flux
+		q = qpar*nB
+		
+		# Integrate along line and along toroidal angle (axisymm) to get total power
+		P0 = 2*np.pi * integ.simps(R*q, swall)
+		#account for nonphysical power
+		if P0 < 0: P0 = -P0
+		#Scale to input power
+		q0 = P/P0
+		return q0	#, q,mask,nB,qpar
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	def scale_layer_circle(self, lq, S, P, DivCode):
+		"""
+		DEPRECATED
+		This gives inconsistent results depending on where surface is placed
 		scales HF using a circular surface 5cm below/above lower/upper x-point 
 		q-profile is obtained using laminar and apply the heat flux layer to psimin
 		Get scale factor q||0 (q0) for heat flux via power balance:
@@ -1049,18 +1207,6 @@ class heatflux3D:
 		#Scale to input power
 		q0 = P/P0
 		return q0	#, q,mask,nB,qpar
-
-
-
-
-
-
-
-
-
-
-
-
 
 	
 	def scale_layer_mp(self, lq, S, P, pfr = 1.0):
