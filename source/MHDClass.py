@@ -806,6 +806,42 @@ class MHD:
 
         return
 
+    def writeNetCDF(self, data_dict, filename):
+        """
+        Write a dictionary containing numpy arrays to a NetCDF file.
+
+        :param data_dict: Dictionary containing numpy arrays.
+        :param filename: Name of the NetCDF file to write to.
+        """
+        import netCDF4 as nc
+        with nc.Dataset(filename, 'w') as ds:
+            for key, value in data_dict.items():
+                if isinstance(value, np.ndarray):
+                    # Create dimensions
+                    for i, dim_size in enumerate(value.shape):
+                        dim_name = f"{key}_dim_{i}"
+                        ds.createDimension(dim_name, dim_size)
+
+                    # Create the variable and assign data
+                    var = ds.createVariable(key, value.dtype, tuple(f"{key}_dim_{i}" for i in range(value.ndim)))
+                    var[:] = value
+
+                elif isinstance(value, str):
+                    # Handle string values
+                    str_dim = f"{key}_strlen"
+                    ds.createDimension(str_dim, len(value))
+                    var = ds.createVariable(key, "S1", (str_dim,))
+                    # Assign the string as a sequence of individual characters
+                    var[:] = nc.stringtochar(np.array(list(value), 'S1'))
+
+                elif isinstance(value, (int, float)):
+                    # Handle scalar numeric values
+                    var = ds.createVariable(key, type(value))
+                    var[:] = value
+
+        return
+
+
     def writeGfile(self, file, shot=None, time=None, ep=None):
         """
         writes a new gfile.  for use with the cleaner script.  user must supply
