@@ -2275,7 +2275,8 @@ class engineObj():
             print('\n----Solving for 3D plasmas with MAFOT----')
             log.info('\n----Solving for 3D plasmas with MAFOT----')
             use = np.where(PFC.shadowed_mask == 0)[0]
-            self.plasma3D.updatePointsFromCenters(PFC.centers[use])
+            #self.plasma3D.updatePointsFromCenters(PFC.centers[use])
+            self.plasma3D.updatePointsFromVertices(PFC.vertices['x'][use,:], PFC.vertices['y'][use,:], PFC.vertices['z'][use,:], PFC.centers[use])
             if self.plasma3D.loadHF:
                 f = self.plasma3D.loadBasePath + '/' + self.HF.tsFmt.format(PFC.t) + '/' + PFC.name
                 self.plasma3D.copyAndRead(path = f, tag = 'opticalHF')

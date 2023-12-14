@@ -35,6 +35,7 @@ class plasma3D:
 		self.psimin = None
 		self.Lc = None		# in km
 		self.NCPUs = 100
+		self.useVertices = False
 		
 		# Boundary Box limits
 		self.bbRmin = None	
@@ -223,6 +224,22 @@ class plasma3D:
 		setAllTypes(self, integers, floats, bools)     # this is not a typo, but the correct syntax for this call
 
 
+	def updatePointsFromVertices(self, xvertices, yvertices, zvertices, centers):
+		"""
+		Converts xyz of vertices and centers into R,phi,Z, update class variables and write the points file
+		"""
+		self.useVertices = True
+		N = len(centers[:,0])
+		R,Z,phi = np.zeros(N,4),np.zeros(N,4),np.zeros(N,4)
+		R[:,0],Z[:,0],phi[:,0] = tools.xyz2cyl(centers[:,0],centers[:,1],centers[:,2])
+		R[:,1],Z[:,1],phi[:,1] = tools.xyz2cyl(xvertices[:,0],yvertices[:,0],zvertices[:,0])
+		R[:,2],Z[:,2],phi[:,2] = tools.xyz2cyl(xvertices[:,1],yvertices[:,1],zvertices[:,1])
+		R[:,3],Z[:,3],phi[:,3] = tools.xyz2cyl(xvertices[:,2],yvertices[:,2],zvertices[:,2])
+		R,Z,phi = R.flatten(),Z.flatten(),phi.flatten()
+		phi = np.degrees(phi)
+		self.updatePoints(R, phi, Z)
+
+
 	def updatePointsFromCenters(self, xyz):
 		"""
 		Converts xyz of centers into R,phi,Z, update class variables and write the points file
@@ -297,8 +314,17 @@ class plasma3D:
 		file = path + '/' + 'lam_' + tag + '.dat'
 		if os.path.isfile(file): 
 			lamdata = np.genfromtxt(file,comments='#')
-			self.Lc = lamdata[:,3]
-			self.psimin = lamdata[:,4]
+			if self.useVertices:
+				Lc = lamdata[:,3]
+				psimin = lamdata[:,4]
+				N = len(Lc)/4
+				Lc = Lc.reshape(N,4)
+				psimin = psimin.reshape(N,4)
+				self.Lc = Lc.mean(1)
+				self.psimin = psimin.mean(1)
+			else:
+				self.Lc = lamdata[:,3]
+				self.psimin = lamdata[:,4]
 		else:
 			print('MAFOT output file: ' + file + ' not found!')
 			log.info('MAFOT output file: ' + file + ' not found!')
@@ -350,9 +376,9 @@ class plasma3D:
 		
 	def checkValidOutput(self):
 		""" 
-		Check for invalid points in the laminar run: psimin == 10
+		Check for invalid points in the laminar run: psimin > 2
 		"""
-		idx = np.where(self.psimin == 10)[0]
+		idx = np.where(self.psimin > 2.0)[0]
 		invalid = np.zeros(len(self.psimin), dtype=bool)
 		invalid[idx] = True
 		print('Number of points for which Laminar run could not compute psimin:', np.sum(invalid))
@@ -940,7 +966,7 @@ class heatflux3D:
 		# Parameter
 		srange = 0.3
 		ds = 0.0001
-		Nphi = 5
+		Nphi = 36
 		
 		# strike lines
 		d = self.ep.strikeLines()
@@ -1208,6 +1234,90 @@ class heatflux3D:
 		q0 = P/P0
 		return q0	#, q,mask,nB,qpar
 
+
+	def scale_layer_mpVar(self, lq, S, P):
+		"""
+		DEPRECATED
+		scales HF using a R-profile along the midplane at phi = 0
+		q-profile is obtained using laminar and apply the heat flux layer to psimin
+		Get scale factor q||0 (q0) for heat flux via power balance:
+		(input MW = output MW)
+		Creates a dense (1000pts) R-grid at the midplane (Z = Zaxis) to get higher resolution
+		integral.  Integrates q_hat with respect to psi.
+		q||0 = P_div / ( 2*pi* integral(q_hat dPsi ))
+		return q0
+		"""		
+		# Parameter
+		dR = 0.0001		#(20*lq + 20*S)*(1e-6)		# 1000 points over the range of Rlcfs-20*lq <-> Rlcfs+20*S
+		Nphi = 5
+
+		# Get a psi range that fully covers the profile for integration. Peak location does not matter, so use s0 from psi = 1.0
+		Rlcfs = self.map_R_psi(self.lcfs)
+		if self.HFS:
+			Rmin = min(self.ep.g['R']) + 0.01
+			#Rmin = Rlcfs - 20.0*lq*(1e-3)		#in m
+			#if Rmin < min(self.ep.g['R']): Rmin = min(self.ep.g['R'])	#if Rmin outside EFIT grid, cap at minimum R of grid
+			Rmax = Rlcfs + 20.0*S*(1e-3)		#in m
+			if Rmax > self.ep.g['RmAxis']: Rmax = self.ep.g['RmAxis']	#if Rmax is outside the magnetic axis, psi would increase again, so cap at axis
+		else:
+			Rmin = Rlcfs - 20.0*S*(1e-3)		#in m
+			if Rmin < self.ep.g['RmAxis']: Rmin = self.ep.g['RmAxis']	#if Rmin is inside the magnetic axis, psi would increase again, so cap at axis
+			#Rmax = Rlcfs + 20.0*lq*(1e-3)		#in m
+			#if Rmax > max(self.ep.g['R']): Rmax = max(self.ep.g['R'])	#if Rmax is outside EFIT grid, cap at maximum R of grid
+			Rmax = max(self.ep.g['R']) - 0.01
+
+		R = np.arange(Rmin,Rmax,dR)
+		Z = self.ep.g['ZmAxis']*np.ones(R.shape)
+		
+		# get q_hat from laminar		
+		runLaminar = True
+		if self.HFS: tag = 'hfs_mp'
+		else: tag = 'lfs_mp'
+		file = self.cwd + '/../' + 'lam_' + tag + '.dat'
+		if os.path.isfile(file): runLaminar = False
+
+		if runLaminar:
+			with open(self.cwd + '/' + 'points_' + tag + '.dat','w') as f:
+				for j in range(Nphi):
+					phi = j*(360.0/Nphi)
+					for i in range(len(R)):
+						f.write(str(R[i]) + '\t' + str(phi) + '\t' + str(Z[i]) + '\n')
+			
+			#nproc = 10
+			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
+			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
+			subprocess.run(args, env=current_env, cwd=self.cwd)
+			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
+			# move one folder down
+			src = self.cwd + '/' + 'lam_' + tag + '.dat'
+			dst = self.cwd + '/../' + 'lam_' + tag + '.dat'
+			if os.path.isfile(src): 
+				shutil.move(src, dst)
+		
+		if os.path.isfile(file): 
+			lamdata = np.genfromtxt(file,comments='#')
+			psimin = lamdata[:,4]
+		else:
+			print('File', file, 'not found') 
+			log.info('File ' + file + ' not found') 
+
+		
+		qpar,_ = self.set_layer(psimin, lq, S, lcfs = self.lcfs)
+
+		# average over the toroidal angles
+		qpar = qpar.reshape(Nphi,len(R))
+		qpar = qpar.mean(0)
+		
+		#Menard's method
+		psiN = self.ep.psiFunc.ev(R,Z)	# this is normalized
+		psi = psiN * (self.ep.g['psiSep']-self.ep.g['psiAxis']) + self.ep.g['psiAxis']	# this is flux
+		P0 = 2*np.pi * integ.simps(qpar, psi)
+		#account for nonphysical power
+		if P0 < 0: P0 = -P0
+		#Scale to input power
+		q0 = P/P0
+		return q0	#, q_hat,R,psiN,psi
+
 	
 	def scale_layer_mp(self, lq, S, P, pfr = 1.0):
 		"""
@@ -1277,7 +1387,7 @@ class heatflux3D:
 		else: pfr = np.where(R < R[idx])[0]
 		mask[pfr] = True
 		
-		q_hat, q0tmp = self.set_layer(psimin, lq, S, lcfs = self.lcfs)
+		q_hat, q0tmp = self.set_layer(psimin, lq, S, lcfs = self.lcfs, lobes = True)
 		if np.sum(mask > 0): q_hat[mask],_ = self.set_layer(psimin[mask], lq, S, q0 = q0tmp)
 		
 		#Menard's method

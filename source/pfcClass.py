@@ -134,6 +134,7 @@ class PFC:
         self.areas = CAD.ROIareas[ROIidx] / (1000.0**2) #convert to meters^2
         self.mesh = CAD.ROImeshes[ROIidx]
         self.Nfaces = self.mesh.CountFacets
+        self.vertices = self.getVertices(CAD)	# in meters; uses self.mesh and self.Nfaces
         self.qDiv = np.zeros((len(self.centers)))
         R,Z,phi = tools.xyz2cyl(self.centers[:,0],self.centers[:,1],self.centers[:,2])
         PFC.phiMin = phi.min()
@@ -183,6 +184,28 @@ class PFC:
         self.structOutfile = self.controlfilePath + 'struct.dat'
 
         return
+
+
+    def getVertices(self, CAD):
+        """
+        Store the triangle vertices for the PFC mesh. Converted to meters.
+        """
+        x = np.zeros((self.Nfaces,3))
+        y = np.zeros((self.Nfaces,3))
+        z = np.zeros((self.Nfaces,3))
+
+        for i,facet in enumerate(self.mesh.Facets):
+            #mesh points
+            for j in range(3):
+                x[i][j] = facet.Points[j][0]
+                y[i][j] = facet.Points[j][1]
+                z[i][j] = facet.Points[j][2]
+
+        # scale and permute if necessary
+        x,y,z = CAD.scale_and_permute(x,y,z, unitConvert = 1e-3)
+        vertices = {'x':x, 'y':y, 'z':z}
+        return vertices
+
 
     def resetPFCeps(self, MHD):
         """
