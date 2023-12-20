@@ -230,7 +230,7 @@ class plasma3D:
 		"""
 		self.useVertices = True
 		N = len(centers[:,0])
-		R,Z,phi = np.zeros(N,4),np.zeros(N,4),np.zeros(N,4)
+		R,Z,phi = np.zeros((N,4)),np.zeros((N,4)),np.zeros((N,4))
 		R[:,0],Z[:,0],phi[:,0] = tools.xyz2cyl(centers[:,0],centers[:,1],centers[:,2])
 		R[:,1],Z[:,1],phi[:,1] = tools.xyz2cyl(xvertices[:,0],yvertices[:,0],zvertices[:,0])
 		R[:,2],Z[:,2],phi[:,2] = tools.xyz2cyl(xvertices[:,1],yvertices[:,1],zvertices[:,1])
@@ -317,7 +317,7 @@ class plasma3D:
 			if self.useVertices:
 				Lc = lamdata[:,3]
 				psimin = lamdata[:,4]
-				N = len(Lc)/4
+				N = int(len(Lc)/4)
 				Lc = Lc.reshape(N,4)
 				psimin = psimin.reshape(N,4)
 				self.Lc = Lc.mean(1)

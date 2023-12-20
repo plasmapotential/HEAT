@@ -202,8 +202,8 @@ class PFC:
                 z[i][j] = facet.Points[j][2]
 
         # scale and permute if necessary
-        x,y,z = CAD.scale_and_permute(x,y,z, unitConvert = 1e-3)
-        vertices = {'x':x, 'y':y, 'z':z}
+        x,y,z = CAD.scale_and_permute(x,y,z)
+        vertices = {'x':x / (1000.0), 'y':y / (1000.0), 'z':z / (1000.0)} # convert to meters
         return vertices
 
 
