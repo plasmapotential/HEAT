@@ -154,6 +154,8 @@ class IO_HEAT:
         tag - name tag for file (<tag>.vtp)
         path - file path where paraview folder lives
         """
+        print("Creating Glyph "+prefix)
+        log.info("Creating Glyph "+prefix)        
         if tag is None:
             fName = prefix + '.vtp'
         else:
