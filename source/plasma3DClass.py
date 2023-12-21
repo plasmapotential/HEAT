@@ -1056,6 +1056,9 @@ class heatflux3D:
 			lamdata = np.genfromtxt(file,comments='#')
 			Lc = lamdata[:,3]
 			psimin = lamdata[:,4]
+			#BR = lamdata[:,6]
+			#BZ = lamdata[:,7]
+			#Bt = lamdata[:,8]
 		else:
 			print('File', file, 'not found') 
 			log.info('File ' + file + ' not found') 
@@ -1077,6 +1080,11 @@ class heatflux3D:
 		BR = self.ep.BRFunc.ev(R,Z)
 		Bt = self.ep.BtFunc.ev(R,Z)
 		BZ = self.ep.BZFunc.ev(R,Z)
+		
+		#BR = BR.reshape(Nphi,len(R)); BR = BR.mean(0)
+		#BZ = BZ.reshape(Nphi,len(R)); BZ = BZ.mean(0)
+		#Bt = Bt.reshape(Nphi,len(R)); Bt = Bt.mean(0)
+
 		B = np.sqrt(BR**2 + Bt**2 + BZ**2)
 		nB = np.abs(nR*BR + nZ*BZ)/B
 		

@@ -2302,12 +2302,14 @@ class engineObj():
             log.info('\n----Calculating 3D Heat Flux Profile----')
             self.hf3D.updateLaminarData(PFC.psimin[use],PFC.Lc[use])
             PFC.powerFrac = self.HF.getDivertorPowerFraction(PFC.DivCode)
-            self.hf3D.heatflux(PFC.DivCode, PFC.powerFrac)
+            self.hf3D.heatflux(PFC.DivCode, PFC.powerFrac)                # heat flux is scaled by power fraction here
             print("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
             log.info("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
 
             q = np.zeros(PFC.centers[:,0].shape)
-            q[use] = self.hf3D.q * PFC.powerFrac       # this is the parallel heat flux q||
+            q[use] = self.hf3D.q                                          # this is the parallel heat flux q||
+            qDiv = np.zeros(PFC.centers[:,0].shape)
+            qDiv[use] = q[use] * PFC.bdotn[use] * self.HF.elecFrac        # this is the incident heat flux
 
         #get psi from gfile for 2D plasmas
         else:
@@ -2320,8 +2322,8 @@ class engineObj():
             log.info('\n----Calculating Heat Flux Profile----')
             q = self.HF.getHFprofile(PFC)   # this is q||
         
-        # get the incident heat flux
-        qDiv = self.HF.q_div(PFC, self.MHD, q) * self.HF.elecFrac
+            # get the incident heat flux
+            qDiv = self.HF.q_div(PFC, self.MHD, q) * self.HF.elecFrac
 
         #Save data to class variable for future use
         PFC.q = q
