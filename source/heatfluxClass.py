@@ -378,6 +378,8 @@ class heatFlux:
         xfm = gradPsi / deltaPsi
         # Decay width mapped to flux coordinates
         lq_hat = lq * xfm
+        print("Average lq_hat: {:f}".format(np.average(lq_hat)))
+        log.info("Average lq_hat: {:f}".format(np.average(lq_hat)))
         rho = s_hat/lq_hat
         rho_0 = S/(2.0*lq)
         #===Eich Profile as a function of psi
@@ -496,14 +498,16 @@ class heatFlux:
         return q0
         """
         # Get R and Z vectors at the midplane
-        R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
+        R_omp_sol = self.map_R_psi(1.0,PFC)
+        #R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
         R_omp_min = R_omp_sol - 5.0*lqEich*(1e-3) #in meters now
         R_omp_max = R_omp_sol + 20.0*lqEich*(1e-3) #in meters now
         #if R_omp_max is outside EFIT grid, cap at maximum R of grid
         if R_omp_max > max(PFC.ep.g['R']):
             R_omp_max = max(PFC.ep.g['R']) #in meters now
         R_omp = np.linspace(R_omp_min, R_omp_max, 1000)
-        Z_omp = np.zeros(R_omp.shape)
+        Z_omp = np.zeros(R_omp.shape) + PFC.ep.g['ZmAxis']
+
         #Calculate flux at midplane using gfile
         psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
         psi = psiN * (PFC.ep.g['psiSep']-PFC.ep.g['psiAxis']) + PFC.ep.g['psiAxis']
@@ -513,7 +517,6 @@ class heatFlux:
         Bp_omp = PFC.ep.BpFunc.ev(R_omp,Z_omp)
         Bt_omp = PFC.ep.BtFunc.ev(R_omp,Z_omp)
         B_omp = np.sqrt(Bp_omp**2 + Bt_omp**2)
-
 
         psiaxis = PFC.ep.g['psiAxis']
         psiedge = PFC.ep.g['psiSep']
@@ -540,7 +543,14 @@ class heatFlux:
 
         print("Eich q0 = {:f}[MW/m^2]".format(q0))
         log.info("Eich q0 = {:f}[MW/m^2]".format(q0))
-   
+
+        BpOmpLCFS = PFC.ep.BpFunc.ev(R_omp_sol,PFC.ep.g['ZmAxis'])
+        BtOmpLCFS = PFC.ep.BtFunc.ev(R_omp_sol, PFC.ep.g['ZmAxis'])
+        BOmpLCFS = np.sqrt(BpOmpLCFS**2 + BtOmpLCFS**2)
+        q0_simple = P / (2*np.pi*R_omp_sol*lqEich*1e-3) * BOmpLCFS / BpOmpLCFS
+        print("Simple q0 = {:f}[MW/m^2]".format(q0_simple))
+        log.info("Simple q0 = {:f}[MW/m^2]".format(q0_simple))
+
         return q0
 
     def findScalingCoeffsMultiExp(self, PFC, lqCN, lqCF, lqPN, lqPF):
@@ -557,14 +567,15 @@ class heatFlux:
 
         """
         # Get R and Z vectors at the midplane
-        R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
+        R_omp_sol = self.map_R_psi(1.0,PFC)
+        #R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
         R_omp_min = R_omp_sol - 5.0*(lqPN + lqPF) #already in m
         R_omp_max = R_omp_sol + 20.0*(lqCN + lqCF) #already in m
         #if R_omp_max is outside EFIT grid, cap at maximum R of grid
         if R_omp_max > max(PFC.ep.g['R']):
             R_omp_max = max(PFC.ep.g['R']) #in meters now
         R_omp = np.linspace(R_omp_min, R_omp_max, 1000)
-        Z_omp = np.zeros(R_omp.shape)
+        Z_omp = np.zeros(R_omp.shape) + PFC.ep.g['ZmAxis']
 
 
         # Evaluate B at outboard midplane
@@ -599,11 +610,11 @@ class heatFlux:
             qPN_hat = np.exp( s_hat[useP] / lqPN_hat[useP])
             qPF_hat = np.exp( s_hat[useP] / lqPF_hat[useP])
             #reinke method
-            #intPN = simps(qPN_hat / B_omp[useP], psi[useP])
-            #intPF = simps(qPF_hat / B_omp[useP], psi[useP])
+            intPN = simps(qPN_hat / B_omp[useP], psi[useP])
+            intPF = simps(qPF_hat / B_omp[useP], psi[useP])
             #menard method
-            intPN = simps(qPN_hat, psi[useP])
-            intPF = simps(qPF_hat, psi[useP])
+            #intPN = simps(qPN_hat, psi[useP])
+            #intPF = simps(qPF_hat, psi[useP])
         else:
             qPN_hat = 0.0
             qPF_hat = 0.0
@@ -614,11 +625,11 @@ class heatFlux:
             qCN_hat = np.exp(-s_hat[useC] / lqCN_hat[useC])
             qCF_hat = np.exp(-s_hat[useC] / lqCF_hat[useC])
             #reinke method
-            #intCN = simps(qCN_hat / B_omp[useC], psi[useC])
-            #intCF = simps(qCF_hat / B_omp[useC], psi[useC])
+            intCN = simps(qCN_hat / B_omp[useC], psi[useC])
+            intCF = simps(qCF_hat / B_omp[useC], psi[useC])
             #menard method
-            intCN = simps(qCN_hat, psi[useC])
-            intCF = simps(qCF_hat, psi[useC])
+            #intCN = simps(qCN_hat, psi[useC])
+            #intCF = simps(qCF_hat, psi[useC])
         else:
             qCN_hat = 0.0
             qCF_hat = 0.0
@@ -635,6 +646,9 @@ class heatFlux:
         #old method left for reference (same math)
         #q0 = (self.Psol/(2*np.pi)) / (intCN*self.fracCN + intCF*self.fracCF +
         #                              intPN*self.fracPN + intPF*self.fracPF)
+
+        print("MultiExp q0 = {:f}[MW/m^2]".format(q0))
+        log.info("MultiExp q0 = {:f}[MW/m^2]".format(q0))
 
         return q0
 
@@ -661,7 +675,7 @@ class heatFlux:
         if R_omp_max > max(PFC.ep.g['R']):
             R_omp_max = max(PFC.ep.g['R']) #in meters now
         R_omp = np.linspace(R_omp_min, R_omp_max, 1000)
-        Z_omp = np.zeros(R_omp.shape)
+        Z_omp = np.zeros(R_omp.shape) + PFC.ep.g['ZmAxis']
 
         # Evaluate B at outboard midplane
         Bp_omp = PFC.ep.BpFunc.ev(R_omp,Z_omp)
@@ -683,7 +697,7 @@ class heatFlux:
         #Calculate flux at midplane using gfile
         psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
         psi = psiN*(psiedge - psiaxis) + psiaxis
-        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
+        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,PFC.ep.g['ZmAxis'])
         s_hat = psiN - PFC.psiMinLCFS
 
 
@@ -698,11 +712,11 @@ class heatFlux:
 
         #note: simps integration will fail if x variable (psi) is not monotonic
         #reinke method
-        #intCN = simps(qCN_hat / B_omp, psi)
-        #intCF = simps(qCF_hat / B_omp, psi)
+        intCN = simps(qCN_hat / B_omp, psi)
+        intCF = simps(qCF_hat / B_omp, psi)
         #menard method
-        intCN = simps(qCN_hat, psi)
-        intCF = simps(qCF_hat, psi)
+        #intCN = simps(qCN_hat, psi)
+        #intCF = simps(qCF_hat, psi)
 
         P0 = 2*np.pi * (intCN*self.fracCN + intCF*self.fracCF)
         #account for nonphysical power
@@ -713,6 +727,9 @@ class heatFlux:
         #old method left for reference
         #q0 = (self.Psol/(2*np.pi)) / (intCN*self.fracCN + intCF*self.fracCF)
 
+        print("Limiter q0 = {:f}[MW/m^2]".format(q0))
+        log.info("Limiter q0 = {:f}[MW/m^2]".format(q0))
+
         return q0
 
 
@@ -721,7 +738,8 @@ class heatFlux:
         calculates scaling coefficient for an arbitrary q profile
         """
         lq = lq_mm*1e-3 #[in m now]
-        R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
+        R_omp_sol = self.map_R_psi(1.0,PFC)
+        #R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
         area = lq*2*np.pi*R_omp_sol #convert to [m]
         q0 = P / area
 
@@ -806,7 +824,7 @@ class heatFlux:
         return R(psi)
         """
         R = np.linspace(PFC.ep.g['RmAxis'], PFC.ep.g['R1'] + PFC.ep.g['Xdim'], 100)
-        Z = np.zeros(len(R))
+        Z = np.zeros(len(R)) + PFC.ep.g['ZmAxis']
         p = PFC.ep.psiFunc.ev(R,Z)
 
         #In case of monotonically decreasing psi, sort R, p so that p is
