@@ -1228,6 +1228,9 @@ class engineObj():
             self.IO.writeGlyphCSV(ctrs,PFC.Bxyz,path,prefix,header,tag)
         if self.IO.vtpPCMask == True:
             self.IO.writeGlyphVTP(ctrs,PFC.Bxyz,label,prefix,path,tag)
+        if self.IO.csvMask==False and self.IO.vtpPCMask == False:
+            print("To write glyphs (Normal and Bfield) you must choose a PC option")
+            log.info("To write glyphs (Normal and Bfield) you must choose a PC option")
 
 
         #B scalar point clouds
@@ -1698,6 +1701,7 @@ class engineObj():
                         log.info('Percent difference between radiation summation and hull = {:0.4f}%\n'.format(np.abs(PFC.powerSumRad[tIdx]/PFC.powerHullRad[tIdx]-1.0)*100.0))
 
                     if 'B' in runList:
+                        print('Writing Bfield Glyphs')
                         self.bfieldAtSurface(PFC,paraview=True)
                     if 'psiN' in runList:
                         self.psiPC(PFC)
@@ -1876,6 +1880,8 @@ class engineObj():
             if self.IO.csvMask == True:
                 self.combineTimeSteps(runList, t)
 
+        #copy HEAT logfile to shotpath
+        shutil.copyfile(self.logFile, self.MHD.shotPath+'HEATlog.txt')
 
         #set tree permissions
         tools.recursivePermissions(self.MHD.shotPath, self.UID, self.GID, self.chmod)
