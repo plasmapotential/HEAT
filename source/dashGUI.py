@@ -888,7 +888,7 @@ def buildCADbox():
                     id='CAD-upload',
                     children=html.Div([
                         'Drag and Drop or ',
-                        html.A('Select STP file')
+                        html.A('Select CAD file')
                     ]),
                     style={
                         'width': '60%', 'height': '60px', 'lineHeight': '60px',
@@ -1813,14 +1813,14 @@ def PFCtable(n_clicks, filename, dataStore, ts, uploadContents,
             gui.getPFCinputs(defaultMask=False)
             tD = gui.timestepMap.to_dict('records')
 
-        hiddenDiv = [html.Label("Loaded PFC Data into HEAT", className="text-success")]
+        hiddenDiv = [html.Label("Loaded PFC Data into HEAT.  Meshing complete.", className="text-success")]
 
     #file dropper
     elif filename != dataStore['PFCfilename']:
         df = parse_contents(uploadContents, filename)
         tableData = df.to_dict('records')
         tableColumns = [{"name": i, "id": i} for i in df.columns]
-        hiddenDiv = [html.Label("Loaded file: "+filename, className="text-info")]
+        hiddenDiv = [html.Label("Loaded file: "+filename+", creating meshes now...", className="text-info")]
         tD = tableData.copy()
 
     else:
