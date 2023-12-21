@@ -362,10 +362,19 @@ class CAD:
     def loadSTEP(self):
         """
         Loads CAD STEP (ISO 10303-21) file into object
+
+        (Also loads other file formats, including .FCStd)
         """
         print("Loading STEP file...")
         log.info("Loading STEP file...")
-        self.CAD = Import.open(self.STPfile)
+        
+        #check if we are loading a STEP file or a native FreeCAD file
+        _, file_extension = os.path.splitext(self.STPfile)
+        if file_extension == '.FCStd':
+            self.CAD = FreeCAD.open(self.STPfile)
+        else:
+            self.CAD = Import.open(self.STPfile)
+
         self.CADdoc = FreeCAD.ActiveDocument
         #Coordinate permutation if necessary
         if self.permute_mask=='True' or self.permute_mask == True:
