@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [ cfsMachine ]
+  pull_request:
+    branches: [ cfsMachine ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Pull Docker image
+      run: docker pull plasmapotential/heat:v3.2
+
+    - name: Run integration test
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v3.2 python3 /root/source/HEAT/tests/integrationTests/ciTest.py
+
