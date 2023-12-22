@@ -1,0 +1,3 @@
+﻿x[mm],y[mm],z[mm],T[eV],gPhase[deg],vPhase[deg],N_helix,traceDirection,Length[deg],stepSize[deg]
+496.912,284.752,-1603.29,20,0.0,45.0,20,1,30,0.25
+496.912,284.752,-1603.29,10,0.0,15.0,8,1,30,0.25
