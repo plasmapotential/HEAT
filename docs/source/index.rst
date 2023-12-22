@@ -10,6 +10,7 @@ Contents
    install
    GUItutorial
    TUItutorial
+   inputFile
 
 
 

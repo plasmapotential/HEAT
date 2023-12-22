@@ -94,14 +94,21 @@ class CAD:
 
     def allowed_class_vars(self):
         """
-        Writes a list of recognized class variables to HEAT object
-        Used for error checking input files and for initialization
+        .. Writes a list of recognized class variables to HEAT object
+        .. Used for error checking input files and for initialization
 
-        Here is a list of variables with description:
-        xT              global translation in x [mm]
-        yT              global translation in x [mm]
-        zT              global translation in x [mm]
-        gridRes         max length of mesh triangle edge in [mm] not in ROI
+        CAD Variables:
+        --------------
+
+        :gridRes:  can be a number in [mm] or 'standard'.  Defines the intersection mesh
+          grid resolution.  If set to a number, uses Mefisto mesher to generate
+          a mesh with triangle edge lengths smaller than number.  If set to 
+          standard, uses the FreeCAD standard mesher.  Recommended to use standard
+          unless you know what you are doing.
+        :xT: global translation of entire ROI in x direction [mm]
+        :yT: global translation of entire ROI in y direction [mm]
+        :zT: global translation of entire ROI in z direction [mm]
+
         """
 
 

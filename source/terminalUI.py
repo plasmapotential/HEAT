@@ -21,13 +21,16 @@ import time
 
 
 #get relevant environment variables.  Needed for containers
-logFile = os.environ["logFile"]
-rootDir = os.environ["rootDir"]
-dataPath = os.environ["dataPath"]
-OFbashrc = os.environ["OFbashrc"]
-FreeCADPath = os.environ["FreeCADPath"]
-PVPath = os.environ["PVPath"]
-pvpythonCMD = os.environ["pvpythonCMD"]
+try:
+    logFile = os.environ["logFile"]
+    rootDir = os.environ["rootDir"]
+    dataPath = os.environ["dataPath"]
+    OFbashrc = os.environ["OFbashrc"]
+    FreeCADPath = os.environ["FreeCADPath"]
+    PVPath = os.environ["PVPath"]
+    pvpythonCMD = os.environ["pvpythonCMD"]
+except:
+    print("Could not properly set up environment.  Proceed with caution!")
 try:
     AppDir = os.environ["APPDIR"]
 except:
@@ -36,7 +39,7 @@ except:
 try:
     chmod = int(os.environ["HEATchmod"], 8) #convert from base 8
 except:
-    chmod = int(0o774, 8)
+    chmod = 0o774
 
 try:
     GID = int(os.environ["dockerGID"]) #group ID
@@ -74,6 +77,76 @@ class TUI():
         """
         determines what simulations need to be run and their correct grouping
         via a batchFile
+
+        The fist line of every batchFile should be:
+        MachFlag, Tag, GEQDSK, CAD, PFC, Input, Output
+
+        Column variables are defined as follows
+
+        :MachFlag: machine specific flag.
+          can be 'd3d','nstx','st40','step','sparc','west','kstar'
+
+        :Tag:  user specified tag to label the simulation by.  Tags represent
+          independent HEAT runs.  For time varying discharges with multiple
+          GEQDSK files, tag should be repeated on multiple lines with the GEQDSK
+          for each timestep in each line.
+
+        :GEQDSK: magnetic equilibrium file (ie EFIT) in GEQDSK format
+          naming convention is g<shot>.<timestep> where <shot> is the integer
+          shot number (6 digits) and timestep is the timestep in ms (5 digits).
+          For example, shot 204118 timestep 50ms would be g204118.00050
+
+        :CAD: CAD file for the tag.  Note that HEAT will use the first CAD file provided
+          in for each tag.  Subsequent lines in that tag are ignored.  In other words,
+          there can only be one CAD file per tag.
+
+        :PFC: PFC file for the tag.  Note that HEAT will use the first PFC file provided
+          in for each tag.  Subsequent lines in that tag are ignored.  In other words,
+          there can only be one PFC file per tag.
+
+        :INPUT: Input file for the tag.  Input files can be time varying, but only the
+          HF Variables will be read at each timestep.
+
+        :Output: Defines what output HEAT should calculate.  Options are:
+          :hfOpt:   optical heat flux point cloud
+          :hfGyro:  gyro orbit heat flux point cloud
+          :hfRad:   radiated power heat flux point cloud
+          :B:       magnetic field glyph cloud
+          :psiN:    normalized poloidal flux point cloud
+          :pwrDir:  powerDir point cloud
+          :bdotn:   bdotn point cloud
+          :norm:    normal vector glyph cloud
+          :T:       temperature
+
+          for multiple outputs, separate options with : (ie hfOpt:psi:T).  Note
+          that HEAT will use the first options list provided for each tag.
+          Subsequent lines in that tag are ignored.  In other words, there can
+          only be one set of options per tag.
+
+
+        Once you have a batchFile, you need to save all input files in the following
+        directory structure, where <path> is wherever the batchFile is:
+
+        - <path>/batchFile.dat
+        - <path>/MachFlag/GEQDSK
+        - <path>/MachFlag/CAD
+        - <path>/MachFlag/PFC
+        - <path>/MachFlag/Input
+
+        Example for an NSTX-U run:
+
+        MachFlag, Tag, GEQDSK, CAD, PFC, Input, Output
+
+        nstx,run1, g204118.00004, IBDH_2tiles.step, PFCs_run1.csv, NSTXU_input.csv, B:hfOpt
+
+        And the directory structure would look like this
+
+        - <path>/batchFile.dat
+        - <path>/nstx/g204118.00004
+        - <path>/nstx/IBDH_2tiles.step
+        - <path>/nstx/PFCs_run1.csv
+        - <path>/nstx/NSTXU_input.csv
+
         """
         print("Reading batch file")
         log.info("Reading batch file")

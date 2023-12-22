@@ -34,8 +34,27 @@ class OpenFOAM():
 
     def allowed_class_vars(self):
         """
-        Writes a list of recognized class variables to HEAT object
-        Used for error checking input files and for initialization
+        .. Writes a list of recognized class variables to HEAT object
+        .. Used for error checking input files and for initialization
+          
+        OpenFOAM Variables:
+        -------------------
+
+        :OFtMin: minimum timestep of openFOAM simulation [s]
+        :OFtMax: maximum timestep of openFOAM simulation [s]
+        :deltaT: timestep size for simulation [s]
+        :writeDeltaT: timestep size for writing simulation [s].  Currently must be set to 
+          same value as deltaT.
+        :STLscale: scales points in STL mesh up/down by scalar value [float].  Can be used for
+          unit conversions on meshes.
+        :meshMinLevel: minimum number of refinement iterations to be completed when snapping
+          a volume mesh to a surface mesh [integrer].  Increasing this value creates a finer
+          volume mesh but takes longer.  Cannot be larger than meshMaxLevel.
+        :meshMaxLevel: maximum number of refinement iterations to be completed when snapping
+          a volume mesh to a surface mesh [integrer].  Increasing this value creates a finer
+          volume mesh but takes longer.  Cannot be smaller than meshMinLevel.        
+
+                
         """
         self.allowed_vars = [
                              'OFtMin',

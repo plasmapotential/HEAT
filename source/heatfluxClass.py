@@ -39,11 +39,74 @@ class heatFlux:
 
     def allowed_class_vars(self):
         """
-        Writes a list of recognized class variables to HEAT object
-        Used for error checking input files and for initialization
+        .. Writes a list of recognized class variables to HEAT object
+        .. Used for error checking input files and for initialization
 
-        Here is a list of variables with description:
-        testvar         dummy for testing
+        Optical Heat Flux Variables:
+        ----------------------------
+
+        :hfmode: selects the mode for defining the q|| function.  options are: eich,
+          multiExp, limiter, tophat, qFile.  eich uses an Eich #15 profile [1] where 
+          exponential is convoluted with a Gaussian of width, S.  multiExp uses a 
+          superposition of 4 exponential decays, like the work by Brunner [2], with two 
+          in the private flux region and two in the common flux region.  limiter uses a 
+          double exponential decay, with flux tubes in the core (private flux region) set 
+          to 0.  tophat uses a tophat profile of user defined width.  qFile allows HEAT
+          to read a previous HEAT run output tree and load the heat flux profiles without
+          performing any new calculations.  Depending upon the hfmode, various other 
+          variables in this section may be required.  
+        :lqCN: Heat flux width (or decay length) in the common near region [mm]. 
+          For eich profile and tophat profile this is the only used heat flux width.
+          Used by all hfmodes.
+        :lqCF: Heat flux width in the common far region [mm].  
+          Used by the multiExp and limiter profiles.
+        :lqPN: Heat flux width in the private flux near region [mm].  Used by multiExp
+          profile.
+        :lqPF: Heat flux width in the private flux far region [mm].  Used by multiExp 
+          profile.
+        :lqCNmode: sets the method used to calculate lqCN.  Can be eich or user.  eich
+          uses Eich's regression #15 and overrides any lqCN defined in the input file.  
+          user directly parses value from input file defined for lqCN.
+        :lqCFmode: sets the method used to calculate lqCF.  Can be horacek or user.  horacek
+          uses the scaling from [3] and overrides any lqCF defined in the input file.
+          user directly parses value from input file defined for lqCF.
+        :lqPNmode: sets the method used to calculate lqPN.  Can only be user.
+          user directly parses value from input file defined for lqPN.
+        :lqPFmode: sets the method used to calculate lqPF.  Can only be user.
+          user directly parses value from input file defined for lqPF.
+        :S: Gaussian spreading term [mm].  Used when hfmode is eich.  
+        :Smode: sets the method used to calculate S.  can be makowski or user.
+          makowski uses Figure 6 from [4], and requires the Greenwald density
+          fraction to be defined, fG, see below.  user directly parses value 
+          from input file defined for S.
+        :fracCN: fraction of total power going to the common flux near region (0,1)
+        :fracCF: fraction of total power going to the common flux far region (0,1)
+        :fracPN: fraction of total power going to the private flux near region (0,1)
+        :fracPF: fraction of total power going to the private flux far region (0,1)
+        :fracUI: fraction of power going to the upper inner divertor (0,1)
+        :fracUO: fraction of power going to the upper outer divertor (0,1)
+        :fracLI: fraction of power going to the lower outer divertor (0,1)
+        :fracLO: fraction of power going to the lower outer divertor (0,1)
+        :P: Total source power [MW].
+          Depending upon the context, P signifies different things.  For optical
+          and gyro orbit simulations, P represents PSOL or Psep, the power crossing
+          the separatrix and being conducted to the target.  For photon radiation
+          calculation, P represents the total emitted power over the entire torus.
+        :lossFrac: fraction of P to be removed.  Useful for prescribing a reduction
+          to P that arises from various effects. Power that will be used in the 
+          calculation is P*(1-lossFrac).
+        :qBG: Background heat flux applied to all surfaces when using an Eich profile [MW/m^2].
+          Note that this also applies flux on the backs of tiles.
+        :fG: Greenwald density fraction [5] to be used when using Makowski S scaling.
+        :qFilePath: Path to a HEAT results directory (ie /path/to/HEAT/data/nstx_000001)
+          that contains a tree (timestep and PFC directories) with heat flux data in them.  
+          HEAT will use this tree and read the .csv files to generate a heat flux profile.
+          This is for when a user wants to recycle a previous HEAT run without re-running
+          the heat flux calculation.  Set to None when no file should be read.
+        :qFileTag: When reading heat flux data from a file in qFilePath, defines the tag
+          that should be used for the heat flux files.  For example, to read a previous
+          HEAT runs photon radiation data, tag would be HF_rad and HEAT would read files
+          named HF_rad.csv.  Set to None when no file should be read.
 
         """
 

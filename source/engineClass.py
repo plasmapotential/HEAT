@@ -812,7 +812,35 @@ class engineObj():
 
     def readPFCfile(self, infile):
         """
-        Reads PFC names, timesteps, intersect names, and mapdirection from file
+        The HEAT PFC File:
+        ------------------
+
+        The PFC file defines which CAD objects comprise the region of interest (ROI),
+        as well as various parameters for each ROI object.  The PFC file is a CSV
+        file in which each row corresponds to a separate ROI object.  The columns 
+        in the PFC file are as follows:
+
+        :timesteps: the timesteps during which we should calculate quantities on this
+          ROI object
+        :PFCname: the name of the CAD object as it appears in the CAD file
+        :resolution: the maximum length [mm] of any triangular mesh element for this
+          ROI object.  This is a proxy for the resolution.
+        :DivCode: divertor code.  This can be: LO, LI, UO, UI, which correspond to:
+          Lower Outer, Lower Inner, Upper Outer, Upper Inner.  These codes
+          are how each PFC in the ROI get flagged as belonging to a specific
+          divertor, and will affect their power later (Psol * powerFrac).  The fractions
+          for each region are defined in the X_input.csv file
+        :intersectName: name of the PFCs that may cast a magnetic shadow upon the ROI object
+          we are calculating power on.  If we launch field lines from the
+          PFCname part and follow them up the SOL, we may hit one of these
+          intersectName PFCs.  If the user is unsure of this value, "all"
+          can be specified to check against all parts in the CAD.
+          Multiple PFCs can be specified by using ":" between part names.
+        :excludeName: name of PFCs to exclude in the intersection check.  This can be
+         useful when we use the "all" switch for intersectName and want to exclude 
+         some obvious PFCs (for example a gyroSourcePlane)
+
+
         """
         if infile == None:
             print("No timesteps input file.  Please provide input file")

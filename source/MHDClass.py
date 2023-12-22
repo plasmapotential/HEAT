@@ -96,16 +96,22 @@ class MHD:
 
     def allowed_class_vars(self):
         """
-        Writes a list of recognized class variables to HEAT object
-        Used for error checking input files and for initialization
+        .. Writes a list of recognized class variables to HEAT object
+        .. Used for error checking input files and for initialization
+        
+        MHD EQ Variables:
+        -----------------
 
-        Here is a list of variables with description:
-        testvar         dummy for testing
-        shot            discharge number
-        tree            EFIT tree (efit01, efit02, etc.)
-        tmin            minimum timestep to consider
-        tmax            maximum timestep to consider
-        MHDpath         location where we will save / read gfiles
+        :shot: integer pulse number
+        :tmin: minimum timestep of any MHD equilibrium in simulation [ms]
+        :tmax: maximum timestep of any MHD equilibrium in simulation [ms]
+        :traceLength: number of steps to trace along magnetic field lines looking for
+          intersections
+        :dpinit: toroidal length of each trace step up magnetic field line [degrees]
+        :plasma3Dmask: True or False. Set to true if using a 3D magnetic equilibrium,
+          (ie M3DC1).  Set to False for axisymmetric equilibria
+        
+
         """
         self.allowed_vars = [
                             'shot',

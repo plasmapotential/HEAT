@@ -36,11 +36,37 @@ class GYRO:
 
     def allowed_class_vars(self):
         """
-        Writes a list of recognized class variables to HEAT object
-        Used for error checking input files and for initialization
+        .. Writes a list of recognized class variables to HEAT object
+        .. Used for error checking input files and for initialization
 
-        Here is a list of variables with description:
-        testvar         dummy for testing
+        Gyro Orbit Heat Flux Variables:
+        -------------------------------------
+
+        :N_gyroSteps: number of discrete line segments per helical gyro period [integer].  
+          Higher values mean better approximation of the helical trajectory but come at 
+          the cost of longer computation times.
+        :gyroDeg: number of steps to trace for gyro orbit calculation [integer].  Step width
+          is defined by the MHD EQ variable dpinit.  Should really change this name to
+          gyroTraceLength as it is not directly related to degrees.  Total toroidal distance 
+          of trace is gyroDeg * dpinit
+        :gyroT_eV: Plasma ion temperature [eV].  This temperature corresponds to the mean
+          total velocity in the ion velocity distribution function.
+        :N_vSlice: Number of macroparticle samples to take from the velocity distribution
+          function [integer].  Each sample defines the ion energies.
+        :N_vPhase: Number of macroparticle samples to take from the velocity phase 
+          distribution function [integer].  Each sample the ion vPerp and v|| components. 
+        :N_gyroPhase: Number of macroparticle gyroPhase samples to take from a uniform
+          2pi distribution [integer].  Each sample corresponds to birth phase angle of particles about
+          guiding center.
+        :ionMassAMU: Ion mass in atomic mass units [AMU].
+        :vMode: determines if single temperature is defined for entire PFC or if each element
+          on PFC mesh has a unique plasma temperature.  Can be single or mesh.  For now,
+          only single works.
+        :ionFrac: fraction of PSOL carried by ions (as opposed to electrons) [0-1].  Power
+          carried by the ions will be P*ionFrac
+        :gyroSources: name of CAD object to be used as the gyro source plane.  
+
+        For more information on the gyro orbit module and corresponding physics, see [6].
 
         """
 
