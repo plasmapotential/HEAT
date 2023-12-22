@@ -16,6 +16,10 @@ jobs:
     - name: Pull Docker image
       run: docker pull plasmapotential/heat:v3.2
 
-    - name: Run integration test
+    - name: Run simple CI configuration test test
       run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v3.2 python3 /root/source/HEAT/tests/integrationTests/ciTest.py
+
+    - name: NSTX-U HEAT Calculation
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v3.2 /root/source/HEAT/github/source/runTerminalMode
+
 
