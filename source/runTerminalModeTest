@@ -1,2 +1,2 @@
 #!/bin/bash
-python3 launchHEAT.py --m t --f /root/source/HEAT/tests/integrationTests/nstxuTestCase/batchFile.dat
+python3 /root/source/HEAT/source/launchHEAT.py --m t --f /root/source/HEAT/tests/integrationTests/nstxuTestCase/batchFile.dat
