@@ -81,6 +81,21 @@ class CAD:
         self.chmod = chmod
         self.GID = GID
         self.UID = UID
+        
+        # total extent of the CAD; set by self.minmaxExtent()
+        self.Rmin = None
+        self.Rmax = None
+        self.Zmin = None
+        self.Zmax = None
+
+        return
+
+    def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
+        """
+        sets up pythonic string number formats for shot and timesteps
+        """
+        self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
+        self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
         return
 
     def loadPath(self, path):
@@ -264,7 +279,7 @@ class CAD:
             self.intersectMeshes[i] = self.globalMeshTranslation(mesh)
 
         #Now get face centers, normals, areas
-        self.intersectNorms,self.intersectCtrs,self.intersectAreas = self.normsCentersAreas(self.intersectMeshes)
+        self.intersectNorms,self.intersectCtrs,self.intersectAreas = self.normsCentersAreas(self.intersectMeshes,bndybox = True)
         return
 
     def getGyroSourceMeshes(self, resolution=None):
@@ -690,11 +705,38 @@ class CAD:
         mesh = Mesh.Mesh()
         return mesh
 
-    def normsCentersAreas(self, meshes):
+    def minmaxExtent(self, x,y,z, unitConvert = 1000.0):
+        """
+        Gets the Rmin, Rmax, Zmin and Zmax of all facets xyz in a mesh to 
+        determine the overall extent of the meshed surface. A global set is then updated.
+        This is used to generate a bounding box for field line tracing.
+        """
+        R = np.sqrt(x*x + y*y)
+        Rmin = R.min()/unitConvert
+        Rmax = R.max()/unitConvert
+        Zmin = z.min()/unitConvert
+        Zmax = z.max()/unitConvert
+        print('Extent of mesh:',Rmin, Rmax, Zmin, Zmax)
+        if self.Rmin is None: self.Rmin = Rmin
+        elif Rmin < self.Rmin: self.Rmin = Rmin
+        
+        if self.Rmax is None: self.Rmax = Rmax
+        elif Rmax > self.Rmax: self.Rmax = Rmax
+        
+        if self.Zmin is None: self.Zmin = Zmin
+        elif Zmin < self.Zmin: self.Zmin = Zmin
+        
+        if self.Zmax is None: self.Zmax = Zmax
+        elif Zmax > self.Zmax: self.Zmax = Zmax
+        return
+
+    def normsCentersAreas(self, meshes, bndybox = False):
         """
         Gets face normals and face centers.  Both norms and centers are arrays
         of length mesh.CountFacets, consisting of three components (x,y,z) per
         facet
+        This also updates the global self.Rmin,self.Rmax,self.Zmin,self.Zmax of 
+        the bounding box
         """
         #Check if this is a single mesh or list and make it a list
         if type(meshes) != list:
@@ -703,7 +745,7 @@ class CAD:
         norms = []
         centers = []
         areas = []
-        for mesh in meshes:
+        for k,mesh in enumerate(meshes):
             #mesh = obj.Mesh
             if (mesh == None) or (mesh=='None'):
                 print("No Mesh for one of these objects.  Did you have a typo in input file?")
@@ -729,6 +771,9 @@ class CAD:
                 norms.append(self.faceNormals(mesh))
                 centers.append(self.faceCenters(x,y,z))
                 areas.append(self.faceAreas(mesh))
+                if bndybox:
+                    print('Part:',self.intersectParts[k].Label)
+                    self.minmaxExtent(x,y,z)
         return norms,centers,areas
 
 

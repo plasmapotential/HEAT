@@ -94,6 +94,16 @@ class MHD:
         tools.dataPath = self.dataPath
         return
 
+
+    def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
+        """
+        sets up pythonic string number formats for shot and timesteps
+        """
+        self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
+        self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
+        return
+
+
     def allowed_class_vars(self):
         """
         .. Writes a list of recognized class variables to HEAT object
@@ -158,43 +168,72 @@ class MHD:
         return
 
 
-    def getGEQDSK(self,machine='nstx',gFileList=None):
+    def getGEQDSKtimesteps(self, gFileList):
         """
-        get gfile from mds+ tree if gfileList is None, otherwise use file
-        """
-        #load gfile from MDS+
-        if gFileList is None:
-            self.timesteps = self.GEQDSKFromMDS(
-                                                  self.MachFlag,
-                                                  self.shot,
-                                                  self.tree,
-                                                  self.tmin,
-                                                  self.tmax,
-                                                  self.shotPath,
-                                                  clobber=True,
-                                                  chmod=self.chmod,
-                                                  GID=self.GID,
-                                                  UID=self.UID
-                                                  )
-        #load from file in GUI or TUI
-        else:
-            self.timesteps = []
-            if len(gFileList) > 1:
-                self.N_gFiles = len(gFileList)
-            for i,gfile in enumerate(gFileList):
-                #test if gfile follows d3d naming convention
-                try:
-                    idx = gfile.find('.')
-                    fmtstr = '0' + str(idx-1) + 'd'
-                    shot, time = int(gfile[1:idx]), int(gfile[idx+1:idx+6])
-                #otherwise define new timestep based upon index
-                except:
-                    shot=self.shot
-                    time=i+1
-                ts = self.copyGfile2tree(gfile,shot,time)
-                self.timesteps.append(ts)
-            self.timesteps = np.array(self.timesteps)
+        gets timesteps for gfiles in tmpDir
 
+        checks to see if they are in the correct format, otherwise just arbitrarily assigns time
+
+        called from the GUI
+        """
+        #check if these GEQDSKs are named according to the HEAT convention g<shot>_<timestep>
+        #where shot is an int and timestep can be any float (ie with or without radix)
+        #test1 = np.all(np.array([len(x.split("_")) for x in gFileList]) > 1)
+        #test2 = np.all(np.array([type(g.split('_')[-1])==float for g in gFileList]) > 1)
+        useD3DtimeFmt = True
+        useHeatTimeFmt = True
+        for g in gFileList:
+            if ('.' in g) & ('_' not in g):
+                time = g.split('.')[-1]
+                try: time = float(time)
+                except: useD3DtimeFmt = False
+            else: useD3DtimeFmt = False
+
+            if ('_' in g): 
+                time = g.split('_')[-1]
+                try: time = float(time)
+                except: useHeatTimeFmt = False
+            else: useHeatTimeFmt = False
+        
+        ts = []
+        for i,g in enumerate(gFileList):
+            #GEQDSKs are named using timesteps
+            if useHeatTimeFmt:
+                ts.append(float(g.split('_')[-1]))
+            #GEQDSKs are named by D3D naming convention
+            elif useD3DtimeFmt:
+                ts.append(float(g.split('.')[-1]))
+            #GEQDSKs do not follow HEAT or D3D naming convention
+            else:
+                ts.append(i)
+
+        #print('Timesteps:', ts)
+        return np.array(ts)
+
+    def getGEQDSK(self, ts, gFileList):
+        """
+        copies geqdsks into the HEAT output tree
+
+        ts is list of timesteps
+        gFileList is list of names of geqdsks
+
+        ts and gFileList are indexed to match each other
+
+        geqdsk text file naming format for HEAT is:
+        g = 'g'+self.shotFmt.format(self.shot) +'_'+ self.tsFmt.format(t)
+        """
+        self.timesteps = ts
+        self.gFiles = []
+        for i,t in enumerate(ts):
+            g = gFileList[i]
+            timeDir = self.shotPath + self.tsFmt.format(t) +'/'
+            oldgfile = self.tmpDir + g
+            #copy gfile for this timestep
+            if self.shotPath[-1] != '/': self.shotPath += '/'
+            self.gFiles.append('g'+self.shotFmt.format(self.shot) + '_'+ self.tsFmt.format(t))
+            newgfile = timeDir + self.gFiles[-1]
+            shutil.copyfile(oldgfile, newgfile)
+            #shutil.copyfile(oldgfile, timeDir + g)
         return
 
 
@@ -209,24 +248,9 @@ class MHD:
         else:
             shotPath = self.shotPath
         if gfile is None:
-            gfile = shotPath+'{:06d}/g{:06d}.{:05d}'.format(t,shot,t)
-        self.ep = EP.equilParams(gfile, shot, t)
-        #Correct for weird helicity and field directions that are occasionally
-        #in gfile.  Here we assume that Ip is the CCW direction as viewed from
-        #above tokamak.
-#        self.dsign = np.sign(self.ep.g['Ip'])
-#        self.gsign = np.sign( (self.ep.g['psiAxis'] - self.ep.g['psiSep']) )
-#        self.qsign = np.sign(self.ep.g['Fpol'][-1]) #F_edge sign
-#        print('dsign = {:f}'.format(self.dsign))
-#        print('gsign = {:f}'.format(self.gsign))
-#        print('qsign = {:f}'.format(self.qsign))
-#        self.ep.g['FFprime'] *= self.dsign*self.qsign*self.gsign
-#        self.ep.g['Pprime'] *= self.dsign*self.qsign*self.gsign
-#        self.ep.g['psiRZ'] *= self.dsign*self.qsign*self.gsign
-#        self.ep.g['qpsi'] *= -self.qsign*self.dsign
-#        self.ep.g['psiSep'] *= self.dsign*self.qsign*self.gsign
-#        self.ep.g['psiAxis'] *= self.dsign*self.qsign*self.gsign
-#        self.ep.g['Fpol'] *= self.dsign*self.qsign
+            timeDir = self.shotPath + self.tsFmt.format(t) +'/'
+            gfile = timeDir + 'g'+self.shotFmt.format(shot)+'_'+self.tsFmt.format(t)
+        self.ep = EP.equilParams(gfile)#, shot, t)#, gtype='heat')
         return
 
     def makeEFITobjects(self):
@@ -239,12 +263,9 @@ class MHD:
         """
         self.ep= ['None' for i in range(len(self.timesteps))]
         for idx,t in enumerate(self.timesteps):
-            if self.shotPath[-1]!='/':
-                shotPath = self.shotPath+'/'
-            else:
-                shotPath = self.shotPath
-            gfile = shotPath+'{:06d}/g{:06d}.{:05d}'.format(t,self.shot,t)
-            self.ep[idx] = EP.equilParams(gfile)
+            timeDir = self.shotPath + self.tsFmt.format(t) +'/'
+            gfile = timeDir+self.gFiles[idx]
+            self.ep[idx] = EP.equilParams(gfile)#, gType='heat')
         return
 
 
@@ -389,6 +410,21 @@ class MHD:
         return
 
 
+    def setupMAFOTdirectory(self, controlfilePath:str, obj:object):
+        """
+        sets up necessary paths for MAFOT and saves them as object variables
+        """
+        if controlfilePath[-1]!='/': controlfilePath+='/'
+        
+        obj.controlfilePath = controlfilePath
+        obj.controlfile = '_lamCTL.dat'
+        obj.controlfileStruct = '_struct_CTL.dat'
+        obj.gridfile = obj.controlfilePath + 'grid.dat'
+        obj.gridfileStruct = obj.controlfilePath + 'struct_grid.dat'
+        obj.outputFile = obj.controlfilePath + 'lam.dat'
+        obj.structOutfile = obj.controlfilePath + 'struct.dat'
+        return obj
+
     def writeControlFile(self, name, t, mapDirection, mode='laminar'):
         """
         Create a control file for MAFOT
@@ -396,20 +432,16 @@ class MHD:
         if len(name.split('/')) > 1:
             save_location = name
         else:
-            if self.shotPath[-1] == '/':
-                save_location = self.shotPath + '{:06d}/'.format(t) + name
-            else:
-                save_location = self.shotPath + '/{:06d}/'.format(t) + name
+            save_location = self.shotPath + self.tsFmt.format(t)+'/' + name
+
+
         with open(save_location, 'w') as f:
 
-            f.write('# Parameterfile for ' + self.MachFlag + ' Programs\n')
-            f.write('# Shot: {:06d}\tTime: {:05d}ms\n'.format(int(self.shot), int(t)))
-            if self.shotPath[-1] == '/':
-                f.write('# Path: ' + self.shotPath + '{:06d}\n'.format(t))
-            else:
-                f.write('# Path: ' + self.shotPath + '/{:06d}\n'.format(t))
-
-            f.write('Nphi=\t{:d}\n'.format(self.Nphi))
+            f.write('# Parameterfile for HEAT Programs\n')
+            f.write('# Shot: '+self.shotFmt.format(self.shot)+'\tTime: '+self.tsFmt.format(t)+'s\n')
+            f.write('# Path: ' + self.shotPath  +self.tsFmt.format(t) + '/' + 'g'+self.shotFmt.format(self.shot) + '_'+ self.tsFmt.format(t) + '\n')
+            #f.write('# Path: ' + self.shotPath  +self.tsFmt.format(t) + '/' + '\n')
+            f.write('Nphi=\t{:d}\n'.format(self.Nphi))    # This must be entry index 0
 
             #itt means different things depending on if we are tracing field line
             #or running full MAFOT laminar
@@ -419,70 +451,36 @@ class MHD:
                 f.write('itt=\t{:f}\n'.format(self.ittGyro))
             else:
                 f.write('itt=\t{:f}\n'.format(self.ittStruct))
-            #f.write('Smin=\t{:2f}\n'.format(self.Smin))
-            #f.write('Smax=\t{:2f}\n'.format(self.Smax))
-            f.write('Rmin=\t{:2f}\n'.format(self.Rmin))
+                
+            f.write('Rmin=\t{:2f}\n'.format(self.Rmin))    # This must be entry index 2
             f.write('Rmax=\t{:2f}\n'.format(self.Rmax))
             f.write('Zmin=\t{:2f}\n'.format(self.Zmin))
             f.write('Zmax=\t{:2f}\n'.format(self.Zmax))
-            #f.write('phimin=\t{:2f}\n'.format(self.phimin))
-            #f.write('phimax=\t{:2f}\n'.format(self.phimax))
             f.write('Nswall=\t{:d}\n'.format(self.Nswall))
-
             f.write('phistart(deg)=\t{:2f}\n'.format(self.phistart))
             f.write('MapDirection=\t{:f}\n'.format(mapDirection))
-            #We check here to see if we defined a multiplier for MAFOT trace direction
-            #because MAFOT assumes increasing monotonic psiN (cant be decreasing)
-#            if (self.structMapDirMultiply >= 0.0) or (self.structMapDirMultiply is None):
-#                f.write('MapDirection=\t{:f}\n'.format(mapDirection))
-#                print("Writing CTL file with mapDir = {:f}".format(mapDirection))
-#                log.info("Writing CTL file with mapDir = {:f}".format(mapDirection))
-#            else:
-#                f.write('MapDirection=\t{:f}\n'.format(mapDirection*-1.0))
-#                print("Writing CTL file with mapDir = {:f}".format(mapDirection*-1.0))
-#                log.info("Writing CTL file with mapDir = {:f}".format(mapDirection*-1.0))
-            f.write('PlasmaResponse(0=no,>1=yes)=\t{:d}\n'
-                    .format(self.PlasmaResponse))
-            f.write('Field(-3=VMEC,-2=SIESTA,-1=gfile,M3DC1:0=Eq,1=I-coil,2=both)=\t'
-                    '{:d}\n'.format(self.Field))
-
+            f.write('PlasmaResponse(0=no,>1=yes)=\t{:d}\n'.format(self.PlasmaResponse))
+            f.write('Field(-3=VMEC,-2=SIESTA,-1=gfile,M3DC1:0=Eq,1=I-coil,2=both)=\t{:d}\n'.format(self.Field))
             f.write('target(0=useSwall)=\t{:d}\n'.format(self.target))
-            f.write('createPoints(2=target)=\t{:d}\n'.format(self.createPoints))
-
-            if(self.MachFlag == 'iter'):
-                f.write('useIcoil(0=no,1=yes)=\t{:d}\n'.format(self.useIcoil))
-            elif(self.MachFlag == 'nstx'):
-                f.write('useECcoil(0=no,1=yes)=\t{:d}\n'.format(self.useECcoil))
-            elif(self.MachFlag == 'mast'):
-                f.write('useCcoil(0=no,1=yes)=\t{:d}\n'.format(self.useCcoil))
-                f.write('useIcoil(0=no,1=yes)=\t{:d}\n'.format(self.useIcoil))
-            elif(self.MachFlag == 'd3d'):
-                f.write('useFcoil(0=no,1=yes)=\t{:d}\n'.format(self.useFcoil))
-                f.write('useCcoil(0=no,1=yes)=\t{:d}\n'.format(self.useCcoil))
-                f.write('useIcoil(0=no,1=yes)=\t{:d}\n'.format(self.useIcoil))
-            else:
-                f.write('useECcoil(0=no,1=yes)=\t{:d}\n'.format(self.useECcoil))
-
-            if self.MachFlag in self.machineList:
-                f.write('useFilament(0=no)=\t{:d}\n'.format(self.useFilament))
-                f.write('useTe_profile(0=no)=	{:d}\n'.format(self.useTe_profile))
-
-            f.write('ParticleDirection(1=co-pass,-1=ctr-pass,0=field-lines)=\t{:d}\n'
-                    .format(self.ParticleDirection))
-            f.write('PartileCharge(-1=electrons,>=1=ions)=\t{:d}\n'
-                    .format(self.ParticleCharge))
+            f.write('createPoints(2=target)=\t{:d}\n'.format(self.createPoints))    # This must be entry index 12
+            #f.write('useFcoil(0=no,1=yes)=\t{:d}\n'.format(self.useFcoil))
+            #f.write('useCcoil(0=no,1=yes)=\t{:d}\n'.format(self.useCcoil))
+            #f.write('useIcoil(0=no,1=yes)=\t{:d}\n'.format(self.useIcoil))
+            f.write('unused=\t0\n')
+            f.write('unused=\t0\n')
+            f.write('unused=\t0\n')
+            f.write('ParticleDirection(1=co-pass,-1=ctr-pass,0=field-lines)=\t{:d}\n'.format(self.ParticleDirection))   # This must be entry index 16
+            f.write('PartileCharge(-1=electrons,>=1=ions)=\t{:d}\n'.format(self.ParticleCharge))
             f.write('Ekin[keV]=\t{:2f}\n'.format(self.Ekin))
             f.write('lambda=\t{:2f}\n'.format(self.Lambda))
-            f.write('Mass=\t{:2f}\n'.format(self.Mass))
-
-            if self.MachFlag in ['dt']:
-                f.write('useFilament(0=no)=\t{:d}\n'.format(self.useFilament))
-                f.write('useBusError(0=no,1=yes)=\t{:d}\n'.format(self.useBus))
-                f.write('useBcoilError(0=no,1=yes)=\t{:d}\n'.format(self.useBcoil))
+            f.write('Mass=\t{:2f}\n'.format(self.Mass))    # This must be entry index 20
+            #f.write('useFilament(0=no)=\t{:d}\n'.format(self.useFilament))
+            #f.write('useECcoil(0=no,1=yes)=\t{:d}\n'.format(self.useECcoil))
+            f.write('unused=\t0\n')
+            f.write('unused=\t0\n')
+            f.write('dpinit=\t{:f}\n'.format(self.dpinit)) # This must be entry index 23
             f.write('pi=\t3.141592653589793\n')
-            f.write('2*pi=\t6.283185307179586\n')
-            #toroidal step size for HEAT
-            f.write('dpinit=\t{:f}\n'.format(self.dpinit))
+            f.write('2*pi=\t6.283185307179586\n')           
             return
 
     def psi2DfromEQ(self, PFC):
@@ -568,6 +566,8 @@ class MHD:
         args.append(gridfile)
         #args 5 is the MAFOT control file
         args.append(controlfile)
+        #args 6 is the tag, if not None
+        if tag is not None: args.append(tag)
         #Copy the current environment (important when in appImage mode)
         current_env = os.environ.copy()
         #run MAFOT structure for points in gridfile
@@ -580,7 +580,8 @@ class MHD:
             #write it out as a CSV.  Because this is a serial function that is only
             #called for special cases, we arent too concerned about speed or memory
             #so this works instead of making a more efficient pipeline
-            readfile = controlfilePath + 'struct.dat'
+            if tag is None: readfile = controlfilePath + 'struct.dat'
+            else: readfile = controlfilePath + 'struct_' + tag + '.dat'
             structdata = np.genfromtxt(readfile,comments='#')
 
             xyz = np.zeros((len(structdata),3))
@@ -753,42 +754,6 @@ class MHD:
 
         return repeat
 
-
-
-    def copyGfile2tree(self,gFileName,shot,time,clobberflag=True):
-        """
-        Copies gfile to HEAT tree
-        gFileName is name of gFile that is already located in self.tmpDir
-        """
-        oldgfile = self.tmpDir + gFileName
-#        #try to make EP object if naming follows d3d gFile naming convention
-#        try:
-#            ep = EP.equilParams(oldgfile)
-#            shot = ep.g['shot']
-#            time = ep.g['time']
-#
-#        #if gfile doesn't follow naming convention define manually
-#        except:
-#            print("Couldn't open gFile with equilParams_class")
-#            log.info("Couldn't open gFile with equilParams_class")
-#            if self.shot is None:
-#                shot = 1
-#            else:
-#                shot = self.shot
-#            time = idx
-
-        name = 'g{:06d}.{:05d}'.format(shot,time)
-        #make tree for this shot
-        tools.makeDir(self.shotPath, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
-        #make tree for this timestep
-        if self.shotPath[-1] != '/': self.shotPath += '/'
-        timeDir = self.shotPath + '{:06d}/'.format(time)
-        newgfile = timeDir + name
-
-        #clobber and make time directory
-        tools.makeDir(timeDir, clobberFlag=clobberflag, mode=self.chmod, UID=self.UID, GID=self.GID)
-        shutil.copyfile(oldgfile, newgfile)
-        return time
 
 
     def writeGfileData(self,gFileList, gFileData):
@@ -1211,9 +1176,9 @@ class MHD:
         #return ep that can be written to file (note its not a real EP as defined by equilParams class)
         return newEP
 
-
-
-
+    #=====================================================================
+    #                       LEGACY FUNCTIONS (not used now)
+    #=====================================================================
     def GEQDSKFromMDS(machine, shot, tree='efit01', tmin=None, tmax=None,
                           rootDir=None, clobber=True, chmod=0o774, UID=-1, GID=-1 ):
         """
@@ -1375,7 +1340,7 @@ class MHD:
 
         # Now, write to file using same style as J. Menard script (listed above)
         # Using function in WRITE_GFILE for reference
-        file = gpath + 'g' + format(shot, '06d') + '.' + format(time,'05d')
+        file = gpath + 'g' + self.shotFmt.format(shot) + '_' + self.tsFmt.format(time)
         with open(file, 'w') as f:
             if ('EFITD' in header or 'LRD' in header):
                 f.write(header)
@@ -1400,6 +1365,26 @@ class MHD:
         os.chown(file, self.UID, self.GID)
         os.chmod(file, self.chmod)
         return time
+
+    def copyGfile2tree(self,gFileName,shot,time,clobberflag=True):
+        """
+        Copies gfile to HEAT tree
+        gFileName is name of gFile that is already located in self.tmpDir
+        """
+        oldgfile = self.tmpDir + gFileName
+        name = 'g'+self.shotFmt.format(shot)+'_'+self.tsFmt.format(time)
+        #make tree for this shot
+        tools.makeDir(self.shotPath, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
+        #make tree for this timestep
+        timeDir = self.shotPath + self.tsFmt.format(time) + '/'
+        newgfile = timeDir + name
+
+        #clobber and make time directory
+        tools.makeDir(timeDir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
+        shutil.copyfile(oldgfile, newgfile)
+        return time
+
+
 
     #=====================================================================
     #                       private functions

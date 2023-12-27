@@ -31,6 +31,14 @@ class tools:
         self.chmod = chmod
         return
 
+    def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
+        """
+        sets up pythonic string number formats for shot and timesteps
+        """
+        self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
+        self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
+        return
+
     def initializeInput(self, obj, infile=None):
         """
         Pulls input data for Command Line Interface (CLI)
@@ -82,14 +90,23 @@ class tools:
         for i in range(len(data)):
             if data['Var'][i] in obj.allowed_vars:
                 noneList = ['none', None, 'None', 'NONE', '', 'na', 'NA', 'Na', 'nan', 'NaN', 'NAN', 'Nan', np.nan]
+                TrueList = ['True', 'true', 'T', 't']
+                FalseList = ['False','false','F', 'f']
                 #handle Nones
                 if type(data['Val'][i]) == str:
                     if (data['Val'][i].strip() in noneList):
                         setattr(obj, data['Var'][i], None)
+                    #elif (data['Val'][i].strip() in TrueList):
+                    #    setattr(obj, data['Var'][i], True)
+                    #elif (data['Val'][i].strip() in FalseList):
+                    #    setattr(obj, data['Var'][i], False)
                     else:
                         setattr(obj, data['Var'][i], data['Val'][i].strip())
                 else:
-                    setattr(obj, data['Var'][i], data['Val'][i])
+                    if np.isnan(data['Val'][i]): 
+                        setattr(obj, data['Var'][i], None)
+                    else:
+                        setattr(obj, data['Var'][i], data['Val'][i])
             else:
                 pass
                 #print("Caution! Unrecognized variable in input file: "+data['Var'][i])
@@ -299,29 +316,49 @@ class tools:
             setattr(obj, var, settingsDict[var])
 
 
-    def xyz2cyl(self,x,y,z):
+    def xyz2cyl(self,x,y,z, degrees=False):
         """
         Converts x,y,z coordinates to r,z,phi
+        phi will be returned in degrees if degrees=True
         """
         x = np.asarray(x)
         y = np.asarray(y)
         z = np.asarray(z)
         r = np.sqrt(x**2 + y**2)
         phi = np.arctan2(y,x)
-        #phi = np.radians(phi)
+        if degrees==True:
+            phi = np.degrees(phi)
         return r,z,phi
 
-    def cyl2xyz(self,r,z,phi):
+    def cyl2xyz(self,r,z,phi, degrees=True):
         """
         Converts r,z,phi coordinates to x,y,z
-        phi will be converted to radians
+        phi will be converted to radians if degrees=True
         """
         r = np.asarray(r)
         z = np.asarray(z)
-        phi = np.radians(np.asarray(phi))
+        if degrees == True:
+            phi = np.radians(np.asarray(phi))
         x = r*np.cos(phi)
         y = r*np.sin(phi)
         return x,y,z
+
+    def xyzVec2cylVec(self,x,y,z,vx,vy,vz):
+        """
+        Converts a vector in carthesian (vx,vy,vz) to a vector in cylindrical (vr,vphi,vz)
+        """
+        _,_,phi = self.xyz2cyl(x,y,z)
+        vr = vx*np.cos(phi) + vy*np.sin(phi)
+        vphi = -vx*np.sin(phi) + vy*np.cos(phi)
+        return vr,vphi,vz
+
+    def cylVec2xyzVec(self,phi,vr,vphi,vz):
+        """
+        Converts a vector in cylindrical (vr,vphi,vz) to a vector in carthesian (vx,vy,vz)
+        """
+        vx = vr*np.cos(phi) - vphi*np.sin(phi)
+        vy = vr*np.sin(phi) + vphi*np.cos(phi)
+        return vx,vy,vz
 
     def signedVolume(self,a,b,c,d):
         """
@@ -393,14 +430,6 @@ class tools:
         if verbose==True:
             print("PVpython subprocess complete")
             log.info("PVpython subprocess complete")
-        return
-
-    def createVTPoutput(self, file, prefix, points, scalar):
-        """
-        writes a VTP file created from the mesh and colored by scalar data
-        """
-
-
         return
 
     def intersectionTestParallelKdTree(self,i):
@@ -895,9 +924,9 @@ class tools:
         for t in timesteps:
             #Build timestep directory
             if dataPath[-1]!='/':
-                timeDir = dataPath + '/{:06d}/'.format(t)
+                timeDir = dataPath + self.tsFmt.format(t) + '/'
             else:
-                timeDir = dataPath + '{:06d}/'.format(t)
+                timeDir = dataPath + self.tsFmt.format(t) + '/'
 
             #don't overwrite time directories, just PFC directories
             self.makeDir(timeDir, clobberFlag=False, mode=chmod, UID=UID, GID=GID)
@@ -1058,6 +1087,19 @@ class tools:
                 newVar = var
         return newVar
 
+    def makeBool(self, var):
+        """
+        converts var to boolean
+        if var is None, returns None
+        """
+        if var == None:
+            newVar = None
+        else:
+            if var in ['t','T','true','True','TRUE','Tru','TRU','1']: newVar = True
+            elif var in ['f','F','false','False','FALSE','Fal','FAL','0']: newVar = False
+            else: raise ValueError('Input variable ' + str(var) + ' needs to be of type boolean')
+        return newVar
+
     def meshPerturbation(self, points):
         """
         perturbs a mesh's xyz coordinates by applying a translation
@@ -1103,3 +1145,29 @@ class tools:
         power flows (-1 is clockwise from above)
         """
         return np.sign(bdotn)*np.sign(Bt0)*-1.0
+
+
+    def physicsConstants(self, obj, ionMassAMU=2.515):
+        """
+        Sets up constants and saves as object vars
+
+        default mass# of deuterium is 2.014*AMU
+        default mass# of tritium is 3.016*AMU
+        default mass# of DT 50/50 is 2.515*AMU
+
+        """
+        #unit conversions
+        obj.kg2eV = 5.609e35 #1kg = 5.609e35 eV/c^2
+        obj.eV2K = 1.160e4 #1ev = 1.160e4 K
+        obj.eV2J = 1.602e-19 #1eV = 1.602e-19 J
+        #constants
+        obj.AMU = 931.494e6 #ev/c^2
+        obj.kB = 8.617e-5 #ev/K
+        obj.e = 1.602e-19 # C
+        obj.c = 299792458 #m/s
+        obj.diamag = -1 #diamagnetism = -1 for ions, 1 for electrons
+
+        obj.mass_eV = ionMassAMU * obj.AMU
+        obj.Z=1 #assuming isotopes of hydrogen here
+
+        return obj

@@ -32,6 +32,14 @@ class OpenFOAM():
         #self.buildheatFoam()
         return
 
+    def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
+        """
+        sets up pythonic string number formats for shot and timesteps
+        """
+        self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
+        self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
+        return
+
     def allowed_class_vars(self):
         """
         .. Writes a list of recognized class variables to HEAT object
