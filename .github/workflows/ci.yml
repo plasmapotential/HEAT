@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ cfsMachine ]
+    branches: [ v4.0 ]
   pull_request:
-    branches: [ cfsMachine ]
+    branches: [ v4.0 ]
 
 jobs:
   test:
@@ -14,12 +14,12 @@ jobs:
     - uses: actions/checkout@v2
 
     - name: Pull Docker image
-      run: docker pull plasmapotential/heat:v3.2
+      run: docker pull plasmapotential/heat:v4.0
 
     - name: Run simple CI configuration test test
-      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v3.2 python3 /root/source/HEAT/tests/integrationTests/ciTest.py
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.0 python3 /root/source/HEAT/tests/integrationTests/ciTest.py
 
     - name: NSTX-U HEAT Calculation
-      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v3.2 /root/source/HEAT/source/runTerminalModeTest
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.0 /root/source/HEAT/source/runTerminalModeTest
 
 
