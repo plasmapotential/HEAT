@@ -1010,7 +1010,7 @@ class engineObj():
                     fracCN,fracCF,fracPN,fracPF,
                     fracUI,fracUO,fracLI,fracLO,
                     lqCNmode,lqCFmode,lqPNmode,lqPFmode,SMode,
-                    qBG,P,coreRadFrac,fG,
+                    qBG,P,radFrac,fG,
                     qFilePath,qFileTag,tIdx=0):
         """
         get heat flux inputs from gui or input file
@@ -1022,7 +1022,7 @@ class engineObj():
         self.HF.lqPF = lqPF
         self.HF.S = S
         self.HF.P = P
-        self.HF.coreRadFrac = coreRadFrac
+        self.HF.radFrac = radFrac
         self.HF.qBG = qBG
         self.HF.fracCN = fracCN
         self.HF.fracCF = fracCF
@@ -1050,7 +1050,7 @@ class engineObj():
         self.HF.setTypes()
 
         #fraction of power conducted to PFC surfaces
-        self.HF.Psol = (1-self.HF.coreRadFrac)*self.HF.P
+        self.HF.Psol = (1-self.HF.radFrac)*self.HF.P
 
 
         print("HF Mode = "+hfMode)
@@ -1058,8 +1058,8 @@ class engineObj():
         if hfMode != 'qFile':
             print("P = {:f}".format(self.HF.P))
             log.info("P = {:f}".format(self.HF.P))
-            print("Fraction of P Radiated from Core = {:f}".format(self.HF.coreRadFrac))
-            log.info("Fraction of P Radiated from Core = {:f}".format(self.HF.coreRadFrac))
+            print("Fraction of P Radiated from Core = {:f}".format(self.HF.radFrac))
+            log.info("Fraction of P Radiated from Core = {:f}".format(self.HF.radFrac))
             print("Psol = {:f}".format(self.HF.Psol))
             log.info("Psol = {:f}".format(self.HF.Psol))
             print("Upper Inner Div Power Fraction: {:f}".format(self.HF.fracUI))
@@ -1179,7 +1179,7 @@ class engineObj():
                          self.HF.SMode,
                          self.HF.qBG,
                          self.HF.P,
-                         self.HF.coreRadFrac,
+                         self.HF.radFrac,
                          self.HF.fG,
                          self.HF.qFilePath,
                          self.HF.qFileTag,
@@ -3343,7 +3343,7 @@ class engineObj():
                     'fracLI': None,
                     'fracLO': None,
                     'P': None,
-                    'coreRadFrac' : None,
+                    'radFrac' : None,
                     'qBG' : None,
                     'fG' : None,
                     'qFilePath' : None,
@@ -3411,7 +3411,7 @@ class engineObj():
                     'fracPN': self.HF.fracPN,
                     'fracPF': self.HF.fracPF,
                     'P': self.HF.P,
-                    'coreRadFrac' : self.HF.coreRadFrac,
+                    'radFrac' : self.HF.radFrac,
                     'fracUI':self.HF.fracUI,
                     'fracUO':self.HF.fracUO,
                     'fracLI':self.HF.fracLI,
@@ -3476,7 +3476,7 @@ class engineObj():
                     'fracPN': self.HF.fracPN,
                     'fracPF': self.HF.fracPF,
                     'P': self.HF.P,
-                    'coreRadFrac' : self.HF.coreRadFrac,
+                    'radFrac' : self.HF.radFrac,
                     'fracUI':self.HF.fracUI,
                     'fracUO':self.HF.fracUO,
                     'fracLI':self.HF.fracLI,

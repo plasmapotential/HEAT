@@ -4,6 +4,10 @@
 #                CAD Variables
 #=============================================================
 gridRes, standard
+overWriteMask, False
+xT, None
+yT, None
+zT, None
 #==============================================================
 #                MHD Variables
 #==============================================================
@@ -35,8 +39,8 @@ fracUI,0.0
 fracUO,0.0
 fracLI,0.3
 fracLO,0.7
-Pinj, 10
-coreRadFrac, 0.3
+P, 10
+radFrac, 0.3
 qBG, 0.0
 fG, 0.6
 qFilePath, None

@@ -140,7 +140,7 @@ class heatFlux:
                             'fracLI',
                             'fracLO',
                             'P',
-                            'coreRadFrac',
+                            'radFrac',
                             'qBG',
                             'fG',
                             'qFilePath',
@@ -157,7 +157,7 @@ class heatFlux:
         floats = [
                     'S',
                     'P',
-                    'coreRadFrac',
+                    'radFrac',
                     'qBG',
                     'lqCN',
                     'lqCF',
@@ -1601,7 +1601,7 @@ class heatFlux:
 
         if self.hfMode != 'qFile':
             HFdict["Source Power (P) [MW]"] = self.P
-            HFdict["Radiated Fraction of Injected Power"] = self.coreRadFrac
+            HFdict["Fraction of P radiated by photons"] = self.radFrac
             HFdict["Power Crossing Separatrix (Psol) [MW]"] = self.Psol
             HFdict["Upper Inner Divertor Power Fraction"] = self.fracUI
             HFdict["Upper Outer Divertor Power Fraction"] = self.fracUO
