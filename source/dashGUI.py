@@ -521,7 +521,7 @@ def inputDragDrop(file, contents, MachFlag):
                State('OFwriteDeltaT', 'value'),
                State('dataPath', 'value'),
                State('N_gyroSteps','value'),
-               State('gyroDeg','value'),
+               State('gyroTraceLength','value'),
                State('gyroT_eV','value'),
                State('N_vSlice','value'),
                State('N_vPhase','value'),
@@ -583,7 +583,7 @@ def saveGUIinputs(  n_clicks,
                     OFwriteDeltaT,
                     dataLoc,
                     N_gyroSteps,
-                    gyroDeg,
+                    gyroTraceLength,
                     gyroT_eV,
                     N_vSlice,
                     N_vPhase,
@@ -670,7 +670,7 @@ def saveGUIinputs(  n_clicks,
     data['writeDeltaT'] = OFwriteDeltaT
     #gyro variables
     data['N_gyroSteps'] = N_gyroSteps
-    data['gyroDeg'] = gyroDeg
+    data['gyroTraceLength'] = gyroTraceLength
     data['gyroT_eV'] = gyroT_eV
     data['N_vSlice'] = N_vSlice
     data['N_vPhase'] = N_vPhase
@@ -1902,7 +1902,7 @@ def gyroInputBoxes():
             html.Div(
                 children=[
                     dbc.Label("Gyro Trace Length [deg]"),
-                    dbc.Input(id="gyroDeg", className="textInput"),
+                    dbc.Input(id="gyroTraceLength", className="textInput"),
                 ],
                 className="OFInput"
             ),
@@ -2099,7 +2099,7 @@ def allROISource(className):
               [Input('loadGYRO', 'n_clicks')],
               [State('N_gyroSteps', 'value'),
                State('N_gyroPhase', 'value'),
-               State('gyroDeg', 'value'),
+               State('gyroTraceLength', 'value'),
                State('ionMassAMU', 'value'),
                State('vMode','value'),
                State('gyroT_eV', 'value'),
@@ -2108,7 +2108,7 @@ def allROISource(className):
                State('ionFrac', 'value'),
                State('gyroSource', 'value')
               ])
-def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
+def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroTraceLength,ionMassAMU,vMode,gyroT_eV,
              N_vPhase, N_vSlice, ionFrac, gyroSource):
     """
     sets up GYRO module
@@ -2120,7 +2120,7 @@ def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
     if ('allROI' in gyroSource) and (len(gyroSource)>1):
         gyroSource.remove('allROI')
 
-    gui.getGyroInputs(N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
+    gui.getGyroInputs(N_gyroSteps,N_gyroPhase,gyroTraceLength,ionMassAMU,vMode,gyroT_eV,
                       N_vPhase, N_vSlice, ionFrac, gyroSource)
     gyroPhaseFig = gyroPhasePlots(update=True)
     vPhaseFig = vPhasePlots(update=True)
@@ -2132,7 +2132,7 @@ def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
     GYROdata = {
             'Number of steps per helix period':N_gyroSteps,
             'Number of samples in gyro phase space':N_gyroPhase,
-            'Gyro trace length [degrees] (goes both directions)': gyroDeg,
+            'Gyro trace length [degrees] (goes both directions)': gyroTraceLength,
             'Ion effective mass [AMU]': ionMassAMU,
             'Velocity / Temperature Mode':vMode,
             'Ion temperature at PFC surface [eV]':gyroT_eV,
@@ -3885,7 +3885,7 @@ Session storage callbacks and functions
                Output('OFdeltaT', 'value'),
                Output('OFwriteDeltaT', 'value'),
                Output('N_gyroSteps','value'),
-               Output('gyroDeg','value'),
+               Output('gyroTraceLength','value'),
                Output('gyroT_eV','value'),
                Output('N_vSlice','value'),
                Output('N_vPhase','value'),
@@ -3992,7 +3992,7 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('deltaT', ''),
             data.get('writeDeltaT', ''),
             data.get('N_gyroSteps',''),
-            data.get('gyroDeg',''),
+            data.get('gyroTraceLength',''),
             data.get('gyroT_eV',''),
             data.get('N_vSlice',''),
             data.get('N_vPhase',''),

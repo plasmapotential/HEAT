@@ -49,7 +49,7 @@ qFileTag, None
 #                Ion Gyro Orbit HF Variables
 #==============================================================
 N_gyroSteps, 8
-gyroDeg, 10
+gyroTraceLength, 10
 gyroT_eV, 100
 N_vSlice, 1
 N_vPhase, 3

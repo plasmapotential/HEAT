@@ -1200,7 +1200,7 @@ class engineObj():
         self.getGyroInputs(
                          self.GYRO.N_gyroSteps,
                          self.GYRO.N_gyroPhase,
-                         self.GYRO.gyroDeg,
+                         self.GYRO.gyroTraceLength,
                          self.GYRO.ionMassAMU,
                          self.GYRO.vMode,
                          self.GYRO.gyroT_eV,
@@ -1211,13 +1211,13 @@ class engineObj():
                          )
         return
 
-    def getGyroInputs(self,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
+    def getGyroInputs(self,N_gyroSteps,N_gyroPhase,gyroTraceLength,ionMassAMU,vMode,gyroT_eV,
                       N_vPhase, N_vSlice, ionFrac, gyroSources):
         """
         Sets up the gyro module
         """
         self.GYRO.N_gyroSteps = int(N_gyroSteps)
-        self.GYRO.gyroDeg = int(gyroDeg)
+        self.GYRO.gyroTraceLength = int(gyroTraceLength)
         self.GYRO.gyroT_eV = float(gyroT_eV)
         self.GYRO.N_vSlice = int(N_vSlice)
         self.GYRO.N_vPhase = int(N_vPhase)
@@ -1253,7 +1253,7 @@ class engineObj():
         self.GYRO.setupConstants(self.GYRO.ionMassAMU)
         print('Loaded Gyro Orbit Settings')
         print('# Steps per helix period = {:f}'.format(float(N_gyroSteps)))
-        print('Gyro tracing distance [degrees] = {:f}'.format(float(gyroDeg)))
+        print('Gyro tracing distance [degrees] = {:f}'.format(float(gyroTraceLength)))
         print('Plasma Temperature Mode = ' + vMode)
         print('Number of Monte Carlo runs per point = {:f}'.format(float(self.GYRO.N_MC)))
         print("Source of gyro orbit power = "+self.GYRO.gyroSourceTag)
@@ -1433,18 +1433,18 @@ class engineObj():
         self.MHD.getFieldpath(dphi, gridfile, controlfilePath, controlfile, paraview_mask=True, tag=tag)
         return
 
-    def gyroTrace(self,x,y,z,t,gPhase,vPhase,gyroDeg,dpinit,N_helix,traceDirection,gyroT_eV,tag=None):
+    def gyroTrace(self,x,y,z,t,gPhase,vPhase,gyroTraceLength,dpinit,N_helix,traceDirection,gyroT_eV,tag=None):
         """
         performs a single gyro orbit trace
 
         (x,y,z) are locations where we launch trace from
         gyroPhase is initial phase angle of orbit in degrees
-        gyroDeg is the number of degrees we will trace for
+        gyroTraceLength is the number of degrees we will trace for
         N_gyroSteps is the number of discrete lines we approximate helical path by
         """
         print("\n========Gyro Trace Initialized========")
         #get bField trace from this point
-        self.Btrace(x,y,z,t,traceDirection,gyroDeg,dpinit,tag)
+        self.Btrace(x,y,z,t,traceDirection,gyroTraceLength,dpinit,tag)
         #read bField trace csv output
 
         structOutfile = self.MHD.shotPath + self.tsFmt.format(t) + '/struct.dat'
@@ -1500,7 +1500,7 @@ class engineObj():
         vPhase = data['vPhase[deg]']
         gyroT_eV = data['T[eV]']
         N_helix = data['N_helix']
-        gyroDeg = data['Length[deg]']
+        gyroTraceLength = data['Length[deg]']
 
         xyz = np.array([x,y,z]).T
         controlfile = '_structCTL.dat'
@@ -1517,7 +1517,7 @@ class engineObj():
         structOutfile = controlfilePath + 'struct.dat'
 
         for i in range(Ntraces):
-            self.gyroTrace(x[i],y[i],z[i],t,gPhase[i],vPhase[i],gyroDeg[i],
+            self.gyroTrace(x[i],y[i],z[i],t,gPhase[i],vPhase[i],gyroTraceLength[i],
                            dpinit[i],N_helix[i],traceDirection[i],gyroT_eV[i],
                            tag='pt{:03d}'.format(i))
             os.remove(structOutfile)
@@ -3349,7 +3349,7 @@ class engineObj():
                     'qFilePath' : None,
                     'qFileTag' : None,
                     'N_gyroSteps': None,
-                    'gyroDeg': None,
+                    'gyroTraceLength': None,
                     'gyroT_eV': None,
                     'N_vSlice': None,
                     'N_vPhase': None,
@@ -3429,7 +3429,7 @@ class engineObj():
                     'meshMaxLevel': self.OF.meshMaxLevel,
                     'material': self.OF.material,
                     'N_gyroSteps': self.GYRO.N_gyroSteps,
-                    'gyroDeg': self.GYRO.gyroDeg,
+                    'gyroTraceLength': self.GYRO.gyroTraceLength,
                     'gyroT_eV': self.GYRO.gyroT_eV,
                     'N_vSlice': self.GYRO.N_vSlice,
                     'N_vPhase': self.GYRO.N_vPhase,
@@ -3494,7 +3494,7 @@ class engineObj():
                     'meshMaxLevel': self.OF.meshMaxLevel,
                     'material': self.OF.material,
                     'N_gyroSteps': self.GYRO.N_gyroSteps,
-                    'gyroDeg': self.GYRO.gyroDeg,
+                    'gyroTraceLength': self.GYRO.gyroTraceLength,
                     'gyroT_eV': self.GYRO.gyroT_eV,
                     'N_vSlice': self.GYRO.N_vSlice,
                     'N_vPhase': self.GYRO.N_vPhase,

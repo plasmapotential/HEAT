@@ -52,10 +52,10 @@ class GYRO:
         :N_gyroSteps: number of discrete line segments per helical gyro period [integer].  
           Higher values mean better approximation of the helical trajectory but come at 
           the cost of longer computation times.
-        :gyroDeg: number of steps to trace for gyro orbit calculation [integer].  Step width
+        :gyroTraceLength: number of steps to trace for gyro orbit calculation [integer].  Step width
           is defined by the MHD EQ variable dpinit.  Should really change this name to
           gyroTraceLength as it is not directly related to degrees.  Total toroidal distance 
-          of trace is gyroDeg * dpinit
+          of trace is gyroTraceLength * dpinit
         :gyroT_eV: Plasma ion temperature [eV].  This temperature corresponds to the mean
           total velocity in the ion velocity distribution function.
         :N_vSlice: Number of macroparticle samples to take from the velocity distribution
@@ -80,7 +80,7 @@ class GYRO:
 
         self.allowed_vars = [
                     'N_gyroSteps',
-                    'gyroDeg',
+                    'gyroTraceLength',
                     'gyroT_eV',
                     'N_vSlice',
                     'N_vPhase',
@@ -98,7 +98,7 @@ class GYRO:
         """
         integers = [
                     'N_gyroSteps',
-                    'gyroDeg',
+                    'gyroTraceLength',
                     'N_vSlice',
                     'N_vPhase',
                     'N_gyroPhase',
