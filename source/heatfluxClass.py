@@ -139,7 +139,7 @@ class heatFlux:
                             'fracUO',
                             'fracLI',
                             'fracLO',
-                            'Pinj',
+                            'P',
                             'coreRadFrac',
                             'qBG',
                             'fG',
@@ -156,7 +156,7 @@ class heatFlux:
         integers = []
         floats = [
                     'S',
-                    'Pinj',
+                    'P',
                     'coreRadFrac',
                     'qBG',
                     'lqCN',
@@ -340,13 +340,13 @@ class heatFlux:
         pp. 326-337
         doi: https://doi.org/10.1080/07468342.1986.11972974
 
-        Pinj should be power injected into tokamak in [W]
+        P should be source power in [W] 
         """
-        #check if power is in MW or W (assumes Pinj > 500W)
-        if self.Pinj < 500:
-            Pinj = self.Pinj * 1e6
+        #check if power is in MW or W (assumes P > 500W)
+        if self.P < 500:
+            P = self.P * 1e6
         else:
-            Pinj = self.Pinj
+            P = self.P
 
         #find the plasma volume from the equilibrium
         Rlim = ep.g['lcfs'][:,0]
@@ -380,7 +380,7 @@ class heatFlux:
         k = b / a
 
         #lambda q from Horacek engineering scaling figure 6a
-        self.lqCF = 10 * (Pinj / vol)**(-0.38) * aspect**(1.3) * k**(-1.3) * 1e3 #in mm
+        self.lqCF = 10 * (P / vol)**(-0.38) * aspect**(1.3) * k**(-1.3) * 1e3 #in mm
         return
 
 #===============================================================================
@@ -1600,7 +1600,7 @@ class heatFlux:
             HFdict["Heat Flux Width (\u03BBq) [mm]"] = self.lqCN           
 
         if self.hfMode != 'qFile':
-            HFdict["Power Injected (Pinj) [MW]"] = self.Pinj
+            HFdict["Source Power (P) [MW]"] = self.P
             HFdict["Radiated Fraction of Injected Power"] = self.coreRadFrac
             HFdict["Power Crossing Separatrix (Psol) [MW]"] = self.Psol
             HFdict["Upper Inner Divertor Power Fraction"] = self.fracUI

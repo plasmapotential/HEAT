@@ -39,7 +39,6 @@ tools = toolsClass.tools()
 class engineObj():
     def __init__(self, logFile, rootDir, dataPath, OFbashrc, chmod, UID, GID, tsSigFigs=9, shotSigFigs=6):
         #number of significant figures after radix for timesteps
-        print(tsSigFigs)
         self.tsSigFigs=tsSigFigs
         self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
         #number of significant figures for shot numbers
@@ -765,6 +764,7 @@ class engineObj():
         self.CAD.gTx = gTx
         self.CAD.gTy = gTy
         self.CAD.gTz = gTz
+
         return
 
     def getCAD(self,STPfile=None,STPdata=None, ts=None):
@@ -805,9 +805,16 @@ class engineObj():
                     self.CAD.overWriteMask = True #we need to also overwrite meshes
                     os.chmod(newSTPpath, self.chmod)
                     os.chown(newSTPpath, self.UID, self.GID)
+                #meshes are already up to date, only overwrite if user requests
                 else:
-                    self.CAD.overWriteMask = False #meshes are already up to date
-                    print("STP file is already in the HEAT database.  Not overwriting...")
+                    falseList = [False, 'F', 'f', 'false', 'False', 'FALSE']
+                    if self.CAD.overWriteMask in falseList:
+                        self.CAD.overWriteMask = False
+                        print("STP file is already in the HEAT database.  Not overwriting...")
+                    else:
+                        self.CAD.overWriteMask = True
+                        print("Overwriting CAD data per user input file overWriteMask variable.")
+
             self.CAD.STPfile = newSTPpath
             #load STP file using FreeCAD
             self.CAD.loadSTEP()
@@ -850,8 +857,13 @@ class engineObj():
                 os.chmod(newSTPpath, self.chmod)
                 os.chown(newSTPpath, self.UID, self.GID)
             else:
-                self.CAD.overWriteMask = False #meshes are already up to date
-                print("STP file is already in the HEAT database.  Not overwriting...")
+                falseList = [False, 'F', 'f', 'false', 'False', 'FALSE']
+                if self.CAD.overWriteMask in falseList:
+                    self.CAD.overWriteMask = False
+                    print("STP file is already in the HEAT database.  Not overwriting...")
+                else:
+                    self.CAD.overWriteMask = True
+                    print("Overwriting CAD data per user input file overWriteMask variable.")
         self.CAD.STPfile = newSTPpath
         #load STP file using FreeCAD
         self.CAD.loadSTEP()
@@ -998,7 +1010,7 @@ class engineObj():
                     fracCN,fracCF,fracPN,fracPF,
                     fracUI,fracUO,fracLI,fracLO,
                     lqCNmode,lqCFmode,lqPNmode,lqPFmode,SMode,
-                    qBG,Pinj,coreRadFrac,fG,
+                    qBG,P,coreRadFrac,fG,
                     qFilePath,qFileTag,tIdx=0):
         """
         get heat flux inputs from gui or input file
@@ -1009,7 +1021,7 @@ class engineObj():
         self.HF.lqPN = lqPN
         self.HF.lqPF = lqPF
         self.HF.S = S
-        self.HF.Pinj = Pinj
+        self.HF.P = P
         self.HF.coreRadFrac = coreRadFrac
         self.HF.qBG = qBG
         self.HF.fracCN = fracCN
@@ -1038,16 +1050,16 @@ class engineObj():
         self.HF.setTypes()
 
         #fraction of power conducted to PFC surfaces
-        self.HF.Psol = (1-self.HF.coreRadFrac)*self.HF.Pinj
+        self.HF.Psol = (1-self.HF.coreRadFrac)*self.HF.P
 
 
         print("HF Mode = "+hfMode)
         log.info("Hf Mode = "+hfMode)
         if hfMode != 'qFile':
-            print("Pinj = {:f}".format(self.HF.Pinj))
-            log.info("Pinj = {:f}".format(self.HF.Pinj))
-            print("Fraction of Pinj Radiated from Core = {:f}".format(self.HF.coreRadFrac))
-            log.info("Fraction of Pinj Radiated from Core = {:f}".format(self.HF.coreRadFrac))
+            print("P = {:f}".format(self.HF.P))
+            log.info("P = {:f}".format(self.HF.P))
+            print("Fraction of P Radiated from Core = {:f}".format(self.HF.coreRadFrac))
+            log.info("Fraction of P Radiated from Core = {:f}".format(self.HF.coreRadFrac))
             print("Psol = {:f}".format(self.HF.Psol))
             log.info("Psol = {:f}".format(self.HF.Psol))
             print("Upper Inner Div Power Fraction: {:f}".format(self.HF.fracUI))
@@ -1166,7 +1178,7 @@ class engineObj():
                          self.HF.lqPFmode,
                          self.HF.SMode,
                          self.HF.qBG,
-                         self.HF.Pinj,
+                         self.HF.P,
                          self.HF.coreRadFrac,
                          self.HF.fG,
                          self.HF.qFilePath,
@@ -3330,7 +3342,7 @@ class engineObj():
                     'fracUO': None,
                     'fracLI': None,
                     'fracLO': None,
-                    'Pinj': None,
+                    'P': None,
                     'coreRadFrac' : None,
                     'qBG' : None,
                     'fG' : None,
@@ -3398,7 +3410,7 @@ class engineObj():
                     'fracCF': self.HF.fracCF,
                     'fracPN': self.HF.fracPN,
                     'fracPF': self.HF.fracPF,
-                    'Pinj': self.HF.Pinj,
+                    'P': self.HF.P,
                     'coreRadFrac' : self.HF.coreRadFrac,
                     'fracUI':self.HF.fracUI,
                     'fracUO':self.HF.fracUO,
@@ -3463,7 +3475,7 @@ class engineObj():
                     'fracCF': self.HF.fracCF,
                     'fracPN': self.HF.fracPN,
                     'fracPF': self.HF.fracPF,
-                    'Pinj': self.HF.Pinj,
+                    'P': self.HF.P,
                     'coreRadFrac' : self.HF.coreRadFrac,
                     'fracUI':self.HF.fracUI,
                     'fracUO':self.HF.fracUO,

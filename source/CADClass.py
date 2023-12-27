@@ -120,6 +120,8 @@ class CAD:
           a mesh with triangle edge lengths smaller than number.  If set to 
           standard, uses the FreeCAD standard mesher.  Recommended to use standard
           unless you know what you are doing.
+        :overWrite: can be True or False.  If True, overWrite existing STPs and STLs.
+          If False, recycle previous CAD unless there is a timestep mismatch.
         :xT: global translation of entire ROI in x direction [mm]
         :yT: global translation of entire ROI in y direction [mm]
         :zT: global translation of entire ROI in z direction [mm]
@@ -132,6 +134,7 @@ class CAD:
                             'gTy',
                             'gTz',
                             'gridRes',
+                            'overWriteMask'
                             ]
         return
 

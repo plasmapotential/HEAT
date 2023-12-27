@@ -502,7 +502,7 @@ def inputDragDrop(file, contents, MachFlag):
                State('limlqCF', 'value'),
                State('limfracCN', 'value'),
                State('limfracCF', 'value'),
-               State('Pinj', 'value'),
+               State('P', 'value'),
                State('coreRadFrac', 'value'),
                State('fracUI', 'value'),
                State('fracUO', 'value'),
@@ -564,7 +564,7 @@ def saveGUIinputs(  n_clicks,
                     limlqCF,
                     limFracCN,
                     limFracCF,
-                    Pinj,
+                    P,
                     coreRadFrac,
                     fracUI,
                     fracUO,
@@ -656,7 +656,7 @@ def saveGUIinputs(  n_clicks,
     data['fracUO'] = fracUO
     data['fracLI'] = fracLI
     data['fracLO'] = fracLO
-    data['Pinj'] = Pinj
+    data['P'] = P
     data['coreRadFrac'] = coreRadFrac
     data['qBG'] = qBG
     data['fG'] = fG
@@ -1018,8 +1018,8 @@ def PsolInput(hidden=False, data=None):
     return html.Div(
              className=className,
              children=[
-                    dbc.Label("Power Injected [MW]", className="psolInput"),
-                    dbc.Input(id="Pinj", value=data['Pinj'], className="psolInput"),
+                    dbc.Label("Source Power (PSOL or Psep) [MW]", className="psolInput"),
+                    dbc.Input(id="P", value=data['P'], className="psolInput"),
                     dbc.Label("Radiated Fraction of Injected Power", className="psolInput"),
                     dbc.Input(id="coreRadFrac", value=data['coreRadFrac'], className="psolInput"),
                     row2,
@@ -1073,7 +1073,7 @@ def loadHFSettings(mode=None, hidden=False, sessionData=None):
         sessionData['fracUO'] = None
         sessionData['fracLI'] = None
         sessionData['fracLO'] = None
-        sessionData['Pinj'] = None
+        sessionData['P'] = None
         sessionData['coreRadFrac'] = None
         sessionData['qBG'] = None
         sessionData['fG'] = None
@@ -1583,7 +1583,7 @@ def  tophatParameters(className, data):
                State('limfracCN', 'value'),
                State('limfracCF', 'value'),
                State('qBG', 'value'),
-               State('Pinj', 'value'),
+               State('P', 'value'),
                State('coreRadFrac', 'value'),
                State('fG', 'value'),
                State('qFilePath', 'value'),
@@ -1596,7 +1596,7 @@ def loadHF(n_clicks,hfMode,MachFlag,
             eichlqCNmode,SMode,
             multiExplqCNmode,multiExplqCFmode,multiExplqPNmode,multiExplqPFmode,
             limiterlqCNmode,limiterlqCFmode,limlqCN,limlqCF,limfracCN,limfracCF,
-            qBG,Pinj,coreRadFrac,fG,
+            qBG,P,coreRadFrac,fG,
             qFilePath, qFileTag):
     if MachFlag is None:
         raise PreventUpdate
@@ -1673,7 +1673,7 @@ def loadHF(n_clicks,hfMode,MachFlag,
                         fracCN,fracCF,fracPN,fracPF,
                         fracUI,fracUO,fracLI,fracLO,
                         lqCNmode,lqCFmode,lqPNmode,lqPFmode,SMode,
-                        qBG,Pinj,coreRadFrac,fG,
+                        qBG,P,coreRadFrac,fG,
                         qFilePath,qFileTag)
 
 
@@ -3867,7 +3867,7 @@ Session storage callbacks and functions
                Output('fracCF', 'value'),
                Output('fracPN', 'value'),
                Output('fracPF', 'value'),
-               Output('Pinj', 'value'),
+               Output('P', 'value'),
                Output('coreRadFrac', 'value'),
                Output('fracUI', 'value'),
                Output('fracUO', 'value'),
@@ -3974,7 +3974,7 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('fracCF', ''),
             data.get('fracPN', ''),
             data.get('fracPF', ''),
-            data.get('Pinj', ''),
+            data.get('P', ''),
             data.get('coreRadFrac', ''),
             data.get('fracUI', ''),
             data.get('fracUO', ''),
