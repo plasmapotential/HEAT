@@ -67,7 +67,7 @@ RUN apt-get -yqq install software-properties-common && \
     apt-get install -yqq freecad-python3
 
 #utility tools/libs layers
-RUN apt-get -yqq install coreutils libnglib-6.2 libcurl4 libunwind-dev nano git gfortran iputils-ping iproute2
+RUN apt-get -yqq install coreutils libnglib-6.2 libcurl4 libunwind-dev nano git gfortran iputils-ping iproute2 htop
 
 #3D plasmas layer
 RUN apt-get -yqq install libopenmpi-dev libhdf5-openmpi-dev libnetcdf-dev libnetcdff-dev
@@ -92,4 +92,4 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 EXPOSE 8050
 
 # start app
-CMD [ "python3", "./source/HEAT/launchHEAT.py", "--a", "0.0.0.0", "--p", "8050", "--m", "g" ]
+CMD [ "python3", "./source/HEAT/source/launchHEAT.py", "--a", "0.0.0.0", "--p", "8050", "--m", "g" ]

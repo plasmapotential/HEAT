@@ -1,6 +1,12 @@
 # Input file for HEAT
 # Format is: Variable, Value
 #=============================================================
+#                IO Variables
+#=============================================================
+vtpMeshOut, True
+vtpPCOut, False
+csvOut, True
+#=============================================================
 #                CAD Variables
 #=============================================================
 gridRes, standard
@@ -13,7 +19,7 @@ zT, None
 #==============================================================
 shot, 204118
 tmin, 0
-tmax, 10000
+tmax, 15000
 traceLength, 10
 dpinit, 0.25
 plasma3Dmask, 0 #1=true, 0=false
@@ -61,7 +67,7 @@ gyroSources, gyroSourcePlane
 #==============================================================
 #                Radiated Power HF Variables
 #==============================================================
-radFile, /home/tom/HEATruns/testCase_v3.0.0/nstx/RZpower.csv
+radFile, /root/source/HEAT/source/tests/integrationTests/nstxuTestCase/nstx/RZpower.csv
 Ntor, 5
 Nref, 1
 phiMin, 20
@@ -70,7 +76,7 @@ phiMax, 35
 #                OpenFOAM Variables
 #==============================================================
 OFtMin, 0
-OFtMax, 60
+OFtMax, 0.06
 deltaT, 0.005
 writeDeltaT, 0.005
 STLscale, 1.0

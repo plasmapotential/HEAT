@@ -11,7 +11,7 @@ rm -rf dockerDir
 mkdir -p dockerDir/source/HEAT
 
 # copy HEAT into the AppDir
-cp -r github/source/*  dockerDir/source/HEAT/
+cp -r github/*  dockerDir/source/HEAT/
 
 # copy ORNL EFIT module
 cp -r /home/tom/source/EFIT dockerDir/source/EFIT

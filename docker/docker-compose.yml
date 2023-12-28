@@ -5,7 +5,7 @@
 #             requires user to have the volumes below locally on host
 #             if not, comment out the line for the dir you don't have
 #             if so, change paths to match your machine
-version: "4.0"
+version: "3.0"
 
 services:
   HEAT:
