@@ -5,11 +5,12 @@
 #             requires user to have the volumes below locally on host
 #             if not, comment out the line for the dir you don't have
 #             if so, change paths to match your machine
-version: "3.3"
+version: "4.0"
 
 services:
   HEAT:
-    image: "plasmapotential/heat:v3.2"
+    #user: ${UID}:${GID}
+    image: "plasmapotential/heat:v4.0"
     ports:
       - "8050:8050"
     volumes:
@@ -33,7 +34,7 @@ services:
 #      - /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/bin:/root/opt/swak4foam/bin
 #      - /home/tom/OpenFOAM/tom-v2106/platforms/linux64GccDPInt32Opt/lib:/root/opt/swak4foam/lib
 #      # Batch mode directory
-#      - /home/tom/HEATruns/SPARC/MEQscans:/root/terminal
+#      - /home/tom/HEATruns/SPARC/sweep7_T4:/root/terminal
     stdin_open: true # docker run -i
     tty: true        # docker run -t
     #if you want to set env vars, do it here:

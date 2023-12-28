@@ -31,7 +31,8 @@ ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/openfoam/platforms/linux64GccDPIn
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/openfoam/platforms/linux64GccDPInt32Opt/lib/sys-openmpi
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/swak4foam/lib
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/openfoam/platforms/linux64GccDPInt32Opt/lib/dummy
-ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/open3d/lib:/root/opt/open3d/lib/python_package
+#ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/open3d/lib:/root/opt/open3d/lib/python_package
+ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/m3dc1/lib
 
 #set up paths for bins
 ENV PATH $PATH:/root/opt/mafot/bin
@@ -39,7 +40,8 @@ ENV PATH $PATH:/root/opt/paraview/bin
 ENV PATH $PATH:/root/opt/openfoam/bin
 ENV PATH $PATH:/root/opt/openfoam/platforms/linux64GccDPInt32Opt/bin
 ENV PATH $PATH:/root/opt/swak4foam/bin
-ENV PATH $PATH:/root/opt/open3d/bin
+#ENV PATH $PATH:/root/opt/open3d/bin
+ENV PATH $PATH:/root/opt/m3dc1/bin
 
 #===system-wide deps for HEAT
 #update layer
