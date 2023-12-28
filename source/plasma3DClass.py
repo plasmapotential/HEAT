@@ -480,7 +480,7 @@ class heatflux3D:
 		self.HFS = None	# True: use high field side SOL, False: use low field side SOL
 		self.teProfileData = None
 		self.neProfileData = None
-		self.allowed_vars = ['Lcmin', 'lcfs', 'lqCN', 'S', 'Pinj', 'coreRadFrac', 'qBG', 
+		self.allowed_vars = ['Lcmin', 'lcfs', 'lqCN', 'S', 'P', 'radFrac', 'qBG', 
 				'teProfileData', 'neProfileData', 'kappa', 'model']
 
 
@@ -498,7 +498,7 @@ class heatflux3D:
 		else: self.cwd = cwd
 		if inputFile is not None: self.read_input_file(inputFile)
 		else: self.setHFctl()	# just defaults	
-		self.Psol = (1 - self.coreRadFrac) * self.Pinj
+		self.Psol = (1 - self.radFrac) * self.P
 			
 		T = self.teProfileData
 		ne = self.neProfileData
@@ -568,8 +568,8 @@ class heatflux3D:
 		print('#=============================================================')
 		print('lqCN = ' + str(self.lqCN))
 		print('S = ' + str(self.S))
-		print('Pinj = ' + str(self.Pinj))
-		print('coreRadFrac = ' + str(self.coreRadFrac))
+		print('P = ' + str(self.P))
+		print('radFrac = ' + str(self.radFrac))
 		print('qBG = ' + str(self.qBG))
 		print('kappa = ' + str(self.kappa))
 		print('#=============================================================')
@@ -582,7 +582,7 @@ class heatflux3D:
 		print('model = ' + str(self.model))
 		
 
-	def setHFctl(self, Lcmin = 0.075, lcfs = 0.97, lqCN = 5, S = 2, Pinj = 10, coreRadFrac = 0.0, qBG = 0, kappa = 2000):
+	def setHFctl(self, Lcmin = 0.075, lcfs = 0.97, lqCN = 5, S = 2, P = 10, radFrac = 0.0, qBG = 0, kappa = 2000):
 		"""
 		Set the specific class variables
 		"""
@@ -590,8 +590,8 @@ class heatflux3D:
 		self.lcfs = tools.makeFloat(lcfs) 			# psi of the Last Closed Flux Surface inside the stochastic layer
 		self.lqCN = tools.makeFloat(lqCN) 		    # heat flux layer width for Eich profile, in mm
 		self.S = tools.makeFloat(S) 				# heat flux layer extension width in PFR, in mm
-		self.Pinj = tools.makeFloat(Pinj) 			# total power into SOL, in MW
-		self.coreRadFrac = tools.makeFloat(coreRadFrac)  # fraction of radiated power
+		self.P = tools.makeFloat(P) 				# total power into SOL, in MW
+		self.radFrac = tools.makeFloat(radFrac)  	# fraction of radiated power
 		self.qBG = tools.makeFloat(qBG) 			# background heat flux in MW/m^2
 		self.kappa = tools.makeFloat(kappa) 		# electron heat conductivity in W/m/eV^3.5
 		self.teProfileData = None
@@ -623,7 +623,7 @@ class heatflux3D:
 		Set variable types for the stuff that isnt a string from the input file
 		"""
 		integers = []
-		floats = ['Lcmin', 'lcfs', 'lqCN', 'S', 'Pinj', 'coreRadFrac', 'qBG', 'kappa']
+		floats = ['Lcmin', 'lcfs', 'lqCN', 'S', 'P', 'radFrac', 'qBG', 'kappa']
 		bools = []
 		setAllTypes(self, integers, floats, bools)
 		

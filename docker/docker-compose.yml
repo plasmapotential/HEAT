@@ -21,7 +21,7 @@ services:
       # HEAT data directory on this machine (need to replace with absolute path on Windows)
       - ${HOME}/HEAT:/root/HEAT
 #      # HEAT source code from github
-#      - /home/tom/source/HEAT/github/source:/root/source/HEAT
+      - /home/tlooby/source/HEAT/github/source:/root/source/HEAT
 #      # ORNL EFIT class from github (if you have access, else in container)
 #      - /home/tom/source/EFIT:/root/EFIT
 #      # MAFOT bins and libs
@@ -38,11 +38,11 @@ services:
     stdin_open: true # docker run -i
     tty: true        # docker run -t
     #if you want to set env vars, do it here:
-#    environment:
-#    - dockerUID=$dockerUID
-#    - dockerGID=$dockerGID
-#    - UID=$dockerUID
-#    - GID=$dockerGID
+    environment:
+    - dockerUID=$dockerUID
+    - dockerGID=$dockerGID
+    - UID=$dockerUID
+    - GID=$dockerGID
 
 #NOTES:
 #to run HEAT in batch mode, first bind mount the /root/terminal directory to your

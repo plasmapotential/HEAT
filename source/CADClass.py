@@ -109,14 +109,23 @@ class CAD:
 
     def allowed_class_vars(self):
         """
-        Writes a list of recognized class variables to HEAT object
-        Used for error checking input files and for initialization
+        .. Writes a list of recognized class variables to HEAT object
+        .. Used for error checking input files and for initialization
 
-        Here is a list of variables with description:
-        xT              global translation in x [mm]
-        yT              global translation in x [mm]
-        zT              global translation in x [mm]
-        gridRes         max length of mesh triangle edge in [mm] not in ROI
+        CAD Variables:
+        --------------
+
+        :gridRes:  can be a number in [mm] or 'standard'.  Defines the intersection mesh
+          grid resolution.  If set to a number, uses Mefisto mesher to generate
+          a mesh with triangle edge lengths smaller than number.  If set to 
+          standard, uses the FreeCAD standard mesher.  Recommended to use standard
+          unless you know what you are doing.
+        :overWrite: can be True or False.  If True, overWrite existing STPs and STLs.
+          If False, recycle previous CAD unless there is a timestep mismatch.
+        :xT: global translation of entire ROI in x direction [mm]
+        :yT: global translation of entire ROI in y direction [mm]
+        :zT: global translation of entire ROI in z direction [mm]
+
         """
 
 
@@ -125,6 +134,7 @@ class CAD:
                             'gTy',
                             'gTz',
                             'gridRes',
+                            'overWriteMask'
                             ]
         return
 
@@ -377,10 +387,19 @@ class CAD:
     def loadSTEP(self):
         """
         Loads CAD STEP (ISO 10303-21) file into object
+
+        (Also loads other file formats, including .FCStd)
         """
         print("Loading STEP file...")
         log.info("Loading STEP file...")
-        self.CAD = Import.open(self.STPfile)
+        
+        #check if we are loading a STEP file or a native FreeCAD file
+        _, file_extension = os.path.splitext(self.STPfile)
+        if file_extension == '.FCStd':
+            self.CAD = FreeCAD.open(self.STPfile)
+        else:
+            self.CAD = Import.open(self.STPfile)
+
         self.CADdoc = FreeCAD.ActiveDocument
         #Coordinate permutation if necessary
         if self.permute_mask=='True' or self.permute_mask == True:

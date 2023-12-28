@@ -28,11 +28,15 @@ class IO_HEAT:
 
     def allowed_class_vars(self):
         """
-        Writes a list of recognized class variables to HEAT object
-        Used for error checking input files and for initialization
+        .. Writes a list of recognized class variables to HEAT object
+        .. Used for error checking input files and for initialization
 
-        Here is a list of variables with description:
-        testvar         dummy for testing
+        IO Variables:
+        -------------
+
+        :vtpMeshOut: True or False.  Set to true to write VTP mesh files in HEAT output
+        :vtpPCOut: True or False.  Set to true to write VTP point cloud (PC) files in HEAT output
+        :csvOut: True or False.  Set to true to write csv point cloud files in HEAT output
 
         """
 
@@ -183,6 +187,8 @@ class IO_HEAT:
         tag - name tag for file (<tag>.vtp)
         path - file path where paraview folder lives
         """
+        print("Creating Glyph "+prefix)
+        log.info("Creating Glyph "+prefix)        
         if tag is None:
             fName = prefix + '.vtp'
         else:

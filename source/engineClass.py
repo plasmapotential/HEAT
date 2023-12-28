@@ -39,7 +39,6 @@ tools = toolsClass.tools()
 class engineObj():
     def __init__(self, logFile, rootDir, dataPath, OFbashrc, chmod, UID, GID, tsSigFigs=9, shotSigFigs=6):
         #number of significant figures after radix for timesteps
-        print(tsSigFigs)
         self.tsSigFigs=tsSigFigs
         self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
         #number of significant figures for shot numbers
@@ -765,6 +764,7 @@ class engineObj():
         self.CAD.gTx = gTx
         self.CAD.gTy = gTy
         self.CAD.gTz = gTz
+
         return
 
     def getCAD(self,STPfile=None,STPdata=None, ts=None):
@@ -805,9 +805,16 @@ class engineObj():
                     self.CAD.overWriteMask = True #we need to also overwrite meshes
                     os.chmod(newSTPpath, self.chmod)
                     os.chown(newSTPpath, self.UID, self.GID)
+                #meshes are already up to date, only overwrite if user requests
                 else:
-                    self.CAD.overWriteMask = False #meshes are already up to date
-                    print("STP file is already in the HEAT database.  Not overwriting...")
+                    falseList = [False, 'F', 'f', 'false', 'False', 'FALSE']
+                    if self.CAD.overWriteMask in falseList:
+                        self.CAD.overWriteMask = False
+                        print("STP file is already in the HEAT database.  Not overwriting...")
+                    else:
+                        self.CAD.overWriteMask = True
+                        print("Overwriting CAD data per user input file overWriteMask variable.")
+
             self.CAD.STPfile = newSTPpath
             #load STP file using FreeCAD
             self.CAD.loadSTEP()
@@ -850,8 +857,13 @@ class engineObj():
                 os.chmod(newSTPpath, self.chmod)
                 os.chown(newSTPpath, self.UID, self.GID)
             else:
-                self.CAD.overWriteMask = False #meshes are already up to date
-                print("STP file is already in the HEAT database.  Not overwriting...")
+                falseList = [False, 'F', 'f', 'false', 'False', 'FALSE']
+                if self.CAD.overWriteMask in falseList:
+                    self.CAD.overWriteMask = False
+                    print("STP file is already in the HEAT database.  Not overwriting...")
+                else:
+                    self.CAD.overWriteMask = True
+                    print("Overwriting CAD data per user input file overWriteMask variable.")
         self.CAD.STPfile = newSTPpath
         #load STP file using FreeCAD
         self.CAD.loadSTEP()
@@ -871,7 +883,35 @@ class engineObj():
 
     def readPFCfile(self, infile):
         """
-        Reads PFC names, timesteps, intersect names, and mapdirection from file
+        The HEAT PFC File:
+        ------------------
+
+        The PFC file defines which CAD objects comprise the region of interest (ROI),
+        as well as various parameters for each ROI object.  The PFC file is a CSV
+        file in which each row corresponds to a separate ROI object.  The columns 
+        in the PFC file are as follows:
+
+        :timesteps: the timesteps during which we should calculate quantities on this
+          ROI object
+        :PFCname: the name of the CAD object as it appears in the CAD file
+        :resolution: the maximum length [mm] of any triangular mesh element for this
+          ROI object.  This is a proxy for the resolution.
+        :DivCode: divertor code.  This can be: LO, LI, UO, UI, which correspond to:
+          Lower Outer, Lower Inner, Upper Outer, Upper Inner.  These codes
+          are how each PFC in the ROI get flagged as belonging to a specific
+          divertor, and will affect their power later (Psol * powerFrac).  The fractions
+          for each region are defined in the X_input.csv file
+        :intersectName: name of the PFCs that may cast a magnetic shadow upon the ROI object
+          we are calculating power on.  If we launch field lines from the
+          PFCname part and follow them up the SOL, we may hit one of these
+          intersectName PFCs.  If the user is unsure of this value, "all"
+          can be specified to check against all parts in the CAD.
+          Multiple PFCs can be specified by using ":" between part names.
+        :excludeName: name of PFCs to exclude in the intersection check.  This can be
+         useful when we use the "all" switch for intersectName and want to exclude 
+         some obvious PFCs (for example a gyroSourcePlane)
+
+
         """
         if infile == None:
             print("No timesteps input file.  Please provide input file")
@@ -970,7 +1010,7 @@ class engineObj():
                     fracCN,fracCF,fracPN,fracPF,
                     fracUI,fracUO,fracLI,fracLO,
                     lqCNmode,lqCFmode,lqPNmode,lqPFmode,SMode,
-                    qBG,Pinj,coreRadFrac,fG,
+                    qBG,P,radFrac,fG,
                     qFilePath,qFileTag,tIdx=0):
         """
         get heat flux inputs from gui or input file
@@ -981,8 +1021,8 @@ class engineObj():
         self.HF.lqPN = lqPN
         self.HF.lqPF = lqPF
         self.HF.S = S
-        self.HF.Pinj = Pinj
-        self.HF.coreRadFrac = coreRadFrac
+        self.HF.P = P
+        self.HF.radFrac = radFrac
         self.HF.qBG = qBG
         self.HF.fracCN = fracCN
         self.HF.fracCF = fracCF
@@ -1010,16 +1050,16 @@ class engineObj():
         self.HF.setTypes()
 
         #fraction of power conducted to PFC surfaces
-        self.HF.Psol = (1-self.HF.coreRadFrac)*self.HF.Pinj
+        self.HF.Psol = (1-self.HF.radFrac)*self.HF.P
 
 
         print("HF Mode = "+hfMode)
         log.info("Hf Mode = "+hfMode)
         if hfMode != 'qFile':
-            print("Pinj = {:f}".format(self.HF.Pinj))
-            log.info("Pinj = {:f}".format(self.HF.Pinj))
-            print("Fraction of Pinj Radiated from Core = {:f}".format(self.HF.coreRadFrac))
-            log.info("Fraction of Pinj Radiated from Core = {:f}".format(self.HF.coreRadFrac))
+            print("P = {:f}".format(self.HF.P))
+            log.info("P = {:f}".format(self.HF.P))
+            print("Fraction of P Radiated from Core = {:f}".format(self.HF.radFrac))
+            log.info("Fraction of P Radiated from Core = {:f}".format(self.HF.radFrac))
             print("Psol = {:f}".format(self.HF.Psol))
             log.info("Psol = {:f}".format(self.HF.Psol))
             print("Upper Inner Div Power Fraction: {:f}".format(self.HF.fracUI))
@@ -1138,8 +1178,8 @@ class engineObj():
                          self.HF.lqPFmode,
                          self.HF.SMode,
                          self.HF.qBG,
-                         self.HF.Pinj,
-                         self.HF.coreRadFrac,
+                         self.HF.P,
+                         self.HF.radFrac,
                          self.HF.fG,
                          self.HF.qFilePath,
                          self.HF.qFileTag,
@@ -1160,7 +1200,7 @@ class engineObj():
         self.getGyroInputs(
                          self.GYRO.N_gyroSteps,
                          self.GYRO.N_gyroPhase,
-                         self.GYRO.gyroDeg,
+                         self.GYRO.gyroTraceLength,
                          self.GYRO.ionMassAMU,
                          self.GYRO.vMode,
                          self.GYRO.gyroT_eV,
@@ -1171,13 +1211,13 @@ class engineObj():
                          )
         return
 
-    def getGyroInputs(self,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
+    def getGyroInputs(self,N_gyroSteps,N_gyroPhase,gyroTraceLength,ionMassAMU,vMode,gyroT_eV,
                       N_vPhase, N_vSlice, ionFrac, gyroSources):
         """
         Sets up the gyro module
         """
         self.GYRO.N_gyroSteps = int(N_gyroSteps)
-        self.GYRO.gyroDeg = int(gyroDeg)
+        self.GYRO.gyroTraceLength = int(gyroTraceLength)
         self.GYRO.gyroT_eV = float(gyroT_eV)
         self.GYRO.N_vSlice = int(N_vSlice)
         self.GYRO.N_vPhase = int(N_vPhase)
@@ -1213,7 +1253,7 @@ class engineObj():
         self.GYRO.setupConstants(self.GYRO.ionMassAMU)
         print('Loaded Gyro Orbit Settings')
         print('# Steps per helix period = {:f}'.format(float(N_gyroSteps)))
-        print('Gyro tracing distance [degrees] = {:f}'.format(float(gyroDeg)))
+        print('Gyro tracing distance [degrees] = {:f}'.format(float(gyroTraceLength)))
         print('Plasma Temperature Mode = ' + vMode)
         print('Number of Monte Carlo runs per point = {:f}'.format(float(self.GYRO.N_MC)))
         print("Source of gyro orbit power = "+self.GYRO.gyroSourceTag)
@@ -1296,6 +1336,9 @@ class engineObj():
             self.IO.writeGlyphCSV(ctrs,PFC.Bxyz,path,prefix,header,tag)
         if self.IO.vtpPCMask == True:
             self.IO.writeGlyphVTP(ctrs,PFC.Bxyz,label,prefix,path,tag)
+        if self.IO.csvMask==False and self.IO.vtpPCMask == False:
+            print("To write glyphs (Normal and Bfield) you must choose a PC option")
+            log.info("To write glyphs (Normal and Bfield) you must choose a PC option")
 
 
         #B scalar point clouds
@@ -1390,18 +1433,18 @@ class engineObj():
         self.MHD.getFieldpath(dphi, gridfile, controlfilePath, controlfile, paraview_mask=True, tag=tag)
         return
 
-    def gyroTrace(self,x,y,z,t,gPhase,vPhase,gyroDeg,dpinit,N_helix,traceDirection,gyroT_eV,tag=None):
+    def gyroTrace(self,x,y,z,t,gPhase,vPhase,gyroTraceLength,dpinit,N_helix,traceDirection,gyroT_eV,tag=None):
         """
         performs a single gyro orbit trace
 
         (x,y,z) are locations where we launch trace from
         gyroPhase is initial phase angle of orbit in degrees
-        gyroDeg is the number of degrees we will trace for
+        gyroTraceLength is the number of degrees we will trace for
         N_gyroSteps is the number of discrete lines we approximate helical path by
         """
         print("\n========Gyro Trace Initialized========")
         #get bField trace from this point
-        self.Btrace(x,y,z,t,traceDirection,gyroDeg,dpinit,tag)
+        self.Btrace(x,y,z,t,traceDirection,gyroTraceLength,dpinit,tag)
         #read bField trace csv output
 
         structOutfile = self.MHD.shotPath + self.tsFmt.format(t) + '/struct.dat'
@@ -1457,7 +1500,7 @@ class engineObj():
         vPhase = data['vPhase[deg]']
         gyroT_eV = data['T[eV]']
         N_helix = data['N_helix']
-        gyroDeg = data['Length[deg]']
+        gyroTraceLength = data['Length[deg]']
 
         xyz = np.array([x,y,z]).T
         controlfile = '_structCTL.dat'
@@ -1474,7 +1517,7 @@ class engineObj():
         structOutfile = controlfilePath + 'struct.dat'
 
         for i in range(Ntraces):
-            self.gyroTrace(x[i],y[i],z[i],t,gPhase[i],vPhase[i],gyroDeg[i],
+            self.gyroTrace(x[i],y[i],z[i],t,gPhase[i],vPhase[i],gyroTraceLength[i],
                            dpinit[i],N_helix[i],traceDirection[i],gyroT_eV[i],
                            tag='pt{:03d}'.format(i))
             os.remove(structOutfile)
@@ -1787,6 +1830,7 @@ class engineObj():
                         log.info('Percent difference between radiation summation and hull = {:0.4f}%\n'.format(np.abs(PFC.powerSumRad[tIdx]/PFC.powerHullRad[tIdx]-1.0)*100.0))
 
                     if 'B' in runList:
+                        print('Writing Bfield Glyphs')
                         self.bfieldAtSurface(PFC,paraview=True)
                     if 'psiN' in runList:
                         self.psiPC(PFC)
@@ -1962,6 +2006,8 @@ class engineObj():
             if self.IO.csvMask == True:
                 self.combineTimeSteps(runList, t)
 
+        #copy HEAT logfile to shotpath
+        shutil.copyfile(self.logFile, self.MHD.shotPath+'HEATlog.txt')
 
         #set tree permissions
         tools.recursivePermissions(self.MHD.shotPath, self.UID, self.GID, self.chmod)
@@ -3296,14 +3342,14 @@ class engineObj():
                     'fracUO': None,
                     'fracLI': None,
                     'fracLO': None,
-                    'Pinj': None,
-                    'coreRadFrac' : None,
+                    'P': None,
+                    'radFrac' : None,
                     'qBG' : None,
                     'fG' : None,
                     'qFilePath' : None,
                     'qFileTag' : None,
                     'N_gyroSteps': None,
-                    'gyroDeg': None,
+                    'gyroTraceLength': None,
                     'gyroT_eV': None,
                     'N_vSlice': None,
                     'N_vPhase': None,
@@ -3364,8 +3410,8 @@ class engineObj():
                     'fracCF': self.HF.fracCF,
                     'fracPN': self.HF.fracPN,
                     'fracPF': self.HF.fracPF,
-                    'Pinj': self.HF.Pinj,
-                    'coreRadFrac' : self.HF.coreRadFrac,
+                    'P': self.HF.P,
+                    'radFrac' : self.HF.radFrac,
                     'fracUI':self.HF.fracUI,
                     'fracUO':self.HF.fracUO,
                     'fracLI':self.HF.fracLI,
@@ -3383,7 +3429,7 @@ class engineObj():
                     'meshMaxLevel': self.OF.meshMaxLevel,
                     'material': self.OF.material,
                     'N_gyroSteps': self.GYRO.N_gyroSteps,
-                    'gyroDeg': self.GYRO.gyroDeg,
+                    'gyroTraceLength': self.GYRO.gyroTraceLength,
                     'gyroT_eV': self.GYRO.gyroT_eV,
                     'N_vSlice': self.GYRO.N_vSlice,
                     'N_vPhase': self.GYRO.N_vPhase,
@@ -3429,8 +3475,8 @@ class engineObj():
                     'fracCF': self.HF.fracCF,
                     'fracPN': self.HF.fracPN,
                     'fracPF': self.HF.fracPF,
-                    'Pinj': self.HF.Pinj,
-                    'coreRadFrac' : self.HF.coreRadFrac,
+                    'P': self.HF.P,
+                    'radFrac' : self.HF.radFrac,
                     'fracUI':self.HF.fracUI,
                     'fracUO':self.HF.fracUO,
                     'fracLI':self.HF.fracLI,
@@ -3448,7 +3494,7 @@ class engineObj():
                     'meshMaxLevel': self.OF.meshMaxLevel,
                     'material': self.OF.material,
                     'N_gyroSteps': self.GYRO.N_gyroSteps,
-                    'gyroDeg': self.GYRO.gyroDeg,
+                    'gyroTraceLength': self.GYRO.gyroTraceLength,
                     'gyroT_eV': self.GYRO.gyroT_eV,
                     'N_vSlice': self.GYRO.N_vSlice,
                     'N_vPhase': self.GYRO.N_vPhase,

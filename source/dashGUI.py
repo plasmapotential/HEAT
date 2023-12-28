@@ -502,8 +502,8 @@ def inputDragDrop(file, contents, MachFlag):
                State('limlqCF', 'value'),
                State('limfracCN', 'value'),
                State('limfracCF', 'value'),
-               State('Pinj', 'value'),
-               State('coreRadFrac', 'value'),
+               State('P', 'value'),
+               State('radFrac', 'value'),
                State('fracUI', 'value'),
                State('fracUO', 'value'),
                State('fracLI', 'value'),
@@ -521,7 +521,7 @@ def inputDragDrop(file, contents, MachFlag):
                State('OFwriteDeltaT', 'value'),
                State('dataPath', 'value'),
                State('N_gyroSteps','value'),
-               State('gyroDeg','value'),
+               State('gyroTraceLength','value'),
                State('gyroT_eV','value'),
                State('N_vSlice','value'),
                State('N_vPhase','value'),
@@ -564,8 +564,8 @@ def saveGUIinputs(  n_clicks,
                     limlqCF,
                     limFracCN,
                     limFracCF,
-                    Pinj,
-                    coreRadFrac,
+                    P,
+                    radFrac,
                     fracUI,
                     fracUO,
                     fracLI,
@@ -583,7 +583,7 @@ def saveGUIinputs(  n_clicks,
                     OFwriteDeltaT,
                     dataLoc,
                     N_gyroSteps,
-                    gyroDeg,
+                    gyroTraceLength,
                     gyroT_eV,
                     N_vSlice,
                     N_vPhase,
@@ -656,8 +656,8 @@ def saveGUIinputs(  n_clicks,
     data['fracUO'] = fracUO
     data['fracLI'] = fracLI
     data['fracLO'] = fracLO
-    data['Pinj'] = Pinj
-    data['coreRadFrac'] = coreRadFrac
+    data['P'] = P
+    data['radFrac'] = radFrac
     data['qBG'] = qBG
     data['fG'] = fG
     #openfoam variables
@@ -670,7 +670,7 @@ def saveGUIinputs(  n_clicks,
     data['writeDeltaT'] = OFwriteDeltaT
     #gyro variables
     data['N_gyroSteps'] = N_gyroSteps
-    data['gyroDeg'] = gyroDeg
+    data['gyroTraceLength'] = gyroTraceLength
     data['gyroT_eV'] = gyroT_eV
     data['N_vSlice'] = N_vSlice
     data['N_vPhase'] = N_vPhase
@@ -870,7 +870,7 @@ def buildCADbox():
                     id='CAD-upload',
                     children=html.Div([
                         'Drag and Drop or ',
-                        html.A('Select STP file')
+                        html.A('Select CAD file')
                     ]),
                     style={
                         'width': '60%', 'height': '60px', 'lineHeight': '60px',
@@ -1018,10 +1018,10 @@ def PsolInput(hidden=False, data=None):
     return html.Div(
              className=className,
              children=[
-                    dbc.Label("Power Injected [MW]", className="psolInput"),
-                    dbc.Input(id="Pinj", value=data['Pinj'], className="psolInput"),
-                    dbc.Label("Radiated Fraction of Injected Power", className="psolInput"),
-                    dbc.Input(id="coreRadFrac", value=data['coreRadFrac'], className="psolInput"),
+                    dbc.Label("Source Power (PSOL or Psep) [MW]", className="psolInput"),
+                    dbc.Input(id="P", value=data['P'], className="psolInput"),
+                    dbc.Label("Fraction of Source Power Radiated by Photons", className="psolInput"),
+                    dbc.Input(id="radFrac", value=data['radFrac'], className="psolInput"),
                     row2,
                     row3,
                     ],
@@ -1073,8 +1073,8 @@ def loadHFSettings(mode=None, hidden=False, sessionData=None):
         sessionData['fracUO'] = None
         sessionData['fracLI'] = None
         sessionData['fracLO'] = None
-        sessionData['Pinj'] = None
-        sessionData['coreRadFrac'] = None
+        sessionData['P'] = None
+        sessionData['radFrac'] = None
         sessionData['qBG'] = None
         sessionData['fG'] = None
         sessionData['qFilePath'] = None
@@ -1583,8 +1583,8 @@ def  tophatParameters(className, data):
                State('limfracCN', 'value'),
                State('limfracCF', 'value'),
                State('qBG', 'value'),
-               State('Pinj', 'value'),
-               State('coreRadFrac', 'value'),
+               State('P', 'value'),
+               State('radFrac', 'value'),
                State('fG', 'value'),
                State('qFilePath', 'value'),
                State('qFileTag', 'value'),
@@ -1596,7 +1596,7 @@ def loadHF(n_clicks,hfMode,MachFlag,
             eichlqCNmode,SMode,
             multiExplqCNmode,multiExplqCFmode,multiExplqPNmode,multiExplqPFmode,
             limiterlqCNmode,limiterlqCFmode,limlqCN,limlqCF,limfracCN,limfracCF,
-            qBG,Pinj,coreRadFrac,fG,
+            qBG,P,radFrac,fG,
             qFilePath, qFileTag):
     if MachFlag is None:
         raise PreventUpdate
@@ -1673,7 +1673,7 @@ def loadHF(n_clicks,hfMode,MachFlag,
                         fracCN,fracCF,fracPN,fracPF,
                         fracUI,fracUO,fracLI,fracLO,
                         lqCNmode,lqCFmode,lqPNmode,lqPFmode,SMode,
-                        qBG,Pinj,coreRadFrac,fG,
+                        qBG,P,radFrac,fG,
                         qFilePath,qFileTag)
 
 
@@ -1795,14 +1795,14 @@ def PFCtable(n_clicks, filename, dataStore, ts, uploadContents,
             gui.getPFCinputs(defaultMask=False)
             tD = gui.timestepMap.to_dict('records')
 
-        hiddenDiv = [html.Label("Loaded PFC Data into HEAT", className="text-success")]
+        hiddenDiv = [html.Label("Loaded PFC Data into HEAT.  Meshing complete.", className="text-success")]
 
     #file dropper
     elif filename != dataStore['PFCfilename']:
         df = parse_contents(uploadContents, filename)
         tableData = df.to_dict('records')
         tableColumns = [{"name": i, "id": i} for i in df.columns]
-        hiddenDiv = [html.Label("Loaded file: "+filename, className="text-info")]
+        hiddenDiv = [html.Label("Loaded file: "+filename+", creating meshes now...", className="text-info")]
         tD = tableData.copy()
 
     else:
@@ -1902,7 +1902,7 @@ def gyroInputBoxes():
             html.Div(
                 children=[
                     dbc.Label("Gyro Trace Length [deg]"),
-                    dbc.Input(id="gyroDeg", className="textInput"),
+                    dbc.Input(id="gyroTraceLength", className="textInput"),
                 ],
                 className="OFInput"
             ),
@@ -2099,7 +2099,7 @@ def allROISource(className):
               [Input('loadGYRO', 'n_clicks')],
               [State('N_gyroSteps', 'value'),
                State('N_gyroPhase', 'value'),
-               State('gyroDeg', 'value'),
+               State('gyroTraceLength', 'value'),
                State('ionMassAMU', 'value'),
                State('vMode','value'),
                State('gyroT_eV', 'value'),
@@ -2108,7 +2108,7 @@ def allROISource(className):
                State('ionFrac', 'value'),
                State('gyroSource', 'value')
               ])
-def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
+def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroTraceLength,ionMassAMU,vMode,gyroT_eV,
              N_vPhase, N_vSlice, ionFrac, gyroSource):
     """
     sets up GYRO module
@@ -2120,7 +2120,7 @@ def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
     if ('allROI' in gyroSource) and (len(gyroSource)>1):
         gyroSource.remove('allROI')
 
-    gui.getGyroInputs(N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
+    gui.getGyroInputs(N_gyroSteps,N_gyroPhase,gyroTraceLength,ionMassAMU,vMode,gyroT_eV,
                       N_vPhase, N_vSlice, ionFrac, gyroSource)
     gyroPhaseFig = gyroPhasePlots(update=True)
     vPhaseFig = vPhasePlots(update=True)
@@ -2132,7 +2132,7 @@ def loadGYRO(n_clicks,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
     GYROdata = {
             'Number of steps per helix period':N_gyroSteps,
             'Number of samples in gyro phase space':N_gyroPhase,
-            'Gyro trace length [degrees] (goes both directions)': gyroDeg,
+            'Gyro trace length [degrees] (goes both directions)': gyroTraceLength,
             'Ion effective mass [AMU]': ionMassAMU,
             'Velocity / Temperature Mode':vMode,
             'Ion temperature at PFC surface [eV]':gyroT_eV,
@@ -3867,8 +3867,8 @@ Session storage callbacks and functions
                Output('fracCF', 'value'),
                Output('fracPN', 'value'),
                Output('fracPF', 'value'),
-               Output('Pinj', 'value'),
-               Output('coreRadFrac', 'value'),
+               Output('P', 'value'),
+               Output('radFrac', 'value'),
                Output('fracUI', 'value'),
                Output('fracUO', 'value'),
                Output('fracLI', 'value'),
@@ -3885,7 +3885,7 @@ Session storage callbacks and functions
                Output('OFdeltaT', 'value'),
                Output('OFwriteDeltaT', 'value'),
                Output('N_gyroSteps','value'),
-               Output('gyroDeg','value'),
+               Output('gyroTraceLength','value'),
                Output('gyroT_eV','value'),
                Output('N_vSlice','value'),
                Output('N_vPhase','value'),
@@ -3974,8 +3974,8 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('fracCF', ''),
             data.get('fracPN', ''),
             data.get('fracPF', ''),
-            data.get('Pinj', ''),
-            data.get('coreRadFrac', ''),
+            data.get('P', ''),
+            data.get('radFrac', ''),
             data.get('fracUI', ''),
             data.get('fracUO', ''),
             data.get('fracLI', ''),
@@ -3992,7 +3992,7 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('deltaT', ''),
             data.get('writeDeltaT', ''),
             data.get('N_gyroSteps',''),
-            data.get('gyroDeg',''),
+            data.get('gyroTraceLength',''),
             data.get('gyroT_eV',''),
             data.get('N_vSlice',''),
             data.get('N_vPhase',''),
