@@ -30,14 +30,16 @@ class PFC:
     This class also builds out the directory tree for each simulation
     rootDir is root location of python modules (where dashGUI.py lives)
     dataPath is the location where we write all output to
+    tsAll is all timesteps from the HEAT simulation (filaments + MHD)
     """
-    def __init__(self, timestepMapRow, rootDir, dataPath, CADintersectList):
+    def __init__(self, timestepMapRow, rootDir, dataPath, CADintersectList, tsAll):
         #Parse PFC input file row data into PFC object
-        self.timeStr = timestepMapRow['timesteps']
         self.name = timestepMapRow['PFCname']
-        self.timeLimits = np.asarray( self.timeStr.split(':') ).astype(int)
-        deltat = self.timeLimits[1]-self.timeLimits[0]
-        self.timesteps = np.linspace(self.timeLimits[0],self.timeLimits[1],deltat+1,dtype=int)
+        self.timeStr = timestepMapRow['timesteps']
+        tLimits = np.asarray( self.timeStr.split(':') ).astype(float)
+        use = np.where(np.logical_and(tsAll>tLimits[0], tsAll<tLimits[1]))
+        self.timesteps = tsAll[use]
+
         #name of divertor this PFC is in (ie upper outer)
         self.DivCode = timestepMapRow['DivCode']
         #names of tiles that will be checked for magnetic field line shadowing
@@ -69,6 +71,16 @@ class PFC:
         self.phiFilterSwitch = True
         #filter by poloidal flux (psi)
         self.psiFilterSwitch = True
+        if 'outsideFacingThreshold' in timestepMapRow: self.outsideFacingThreshold = float(timestepMapRow['outsideFacingThreshold'])
+        else: self.outsideFacingThreshold = -1   # value typically between 0 and -1; value <= -1 and the filter does nothing
+        return
+
+    def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
+        """
+        sets up pythonic string number formats for shot and timesteps
+        """
+        self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
+        self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
         return
 
     def allowed_class_vars(self):
@@ -122,6 +134,7 @@ class PFC:
         self.areas = CAD.ROIareas[ROIidx] / (1000.0**2) #convert to meters^2
         self.mesh = CAD.ROImeshes[ROIidx]
         self.Nfaces = self.mesh.CountFacets
+        self.vertices = self.getVertices(CAD)	# in meters; uses self.mesh and self.Nfaces
         self.qDiv = np.zeros((len(self.centers)))
         R,Z,phi = tools.xyz2cyl(self.centers[:,0],self.centers[:,1],self.centers[:,2])
         PFC.phiMin = phi.min()
@@ -164,18 +177,35 @@ class PFC:
         self.t = MHD.timesteps[self.tIndexes[0]]
         self.controlfile = '_lamCTL.dat'
         self.controlfileStruct = '_struct_CTL.dat'
-        if MHD.shotPath[-1]=='/':
-            self.controlfilePath = MHD.shotPath + '{:06d}/'.format(self.t) + self.name + '/'
-            self.gridfile = MHD.shotPath + '{:06d}/'.format(self.t) + self.name + '/grid.dat'
-            self.gridfileStruct = MHD.shotPath + '{:06d}/'.format(self.t) + self.name + '/struct_grid.dat'
-        else:
-            self.controlfilePath = MHD.shotPath + '/' + '{:06d}/'.format(self.t) + self.name + '/'
-            self.gridfile = MHD.shotPath + '/' + '{:06d}/'.format(self.t) + self.name + '/grid.dat'
-            self.gridfileStruct = MHD.shotPath + '/' + '{:06d}/'.format(self.t) + self.name + '/struct_grid.dat'
+        self.controlfilePath = MHD.shotPath + self.tsFmt.format(t) + '/' + self.name + '/'
+        self.gridfile = self.controlfilePath + 'grid.dat'
+        self.gridfileStruct = self.controlfilePath + 'struct_grid.dat'
         self.outputFile = self.controlfilePath + 'lam.dat'
         self.structOutfile = self.controlfilePath + 'struct.dat'
 
         return
+
+
+    def getVertices(self, CAD):
+        """
+        Store the triangle vertices for the PFC mesh. Converted to meters.
+        """
+        x = np.zeros((self.Nfaces,3))
+        y = np.zeros((self.Nfaces,3))
+        z = np.zeros((self.Nfaces,3))
+
+        for i,facet in enumerate(self.mesh.Facets):
+            #mesh points
+            for j in range(3):
+                x[i][j] = facet.Points[j][0]
+                y[i][j] = facet.Points[j][1]
+                z[i][j] = facet.Points[j][2]
+
+        # scale and permute if necessary
+        x,y,z = CAD.scale_and_permute(x,y,z)
+        vertices = {'x':x / (1000.0), 'y':y / (1000.0), 'z':z / (1000.0)} # convert to meters
+        return vertices
+
 
     def resetPFCeps(self, MHD):
         """
@@ -300,6 +330,72 @@ class PFC:
         return targetPoints, targetNorms
 
 
+    def checkInsideBoundingBox(self, q2, MHD, CAD):
+        """
+        q2 contains the xyz of the endpoints of a structure trace. This function
+        finds the ones outside the bounding box and returns a mask.
+        The bounding box is given by the outermost boundary of 
+        CAD class Rmin,Rmax,Zmin,Zmax and the MHD class ep.g['wall'].
+        """
+        Rmin = np.min([CAD.Rmin, MHD.ep[0].g['wall'][:,0].min()])
+        Rmax = np.max([CAD.Rmax, MHD.ep[0].g['wall'][:,0].max()])
+        Zmin = np.min([CAD.Zmin, MHD.ep[0].g['wall'][:,1].min()])
+        Zmax = np.max([CAD.Zmax, MHD.ep[0].g['wall'][:,1].max()])
+        print('\nBounding box Filter limits set to: Rmin =',Rmin,' Rmax =',Rmax,' Zmin =',Zmin,' Zmax =',Zmax)
+        log.info('\nBounding box Filter limits set to: Rmin = ' + str(Rmin) + ' Rmax = ' + str(Rmax) + ' Zmin = ' + str(Zmin) + ' Zmax = ' + str(Zmax))
+        
+        x = q2[:,0]
+        y = q2[:,1]
+        Z = q2[:,2]
+        R = np.sqrt(x*x + y*y)
+        inside = np.zeros(len(x), dtype=bool)
+        
+        idx = np.where((R > Rmin) & (R < Rmax) & (Z > Zmin) & (Z < Zmax))[0]
+        inside[idx] = True
+        print(np.sum(~inside),' Field lines left the bounding box','\n')
+        log.info(str(np.sum(~inside)) + ' Field lines left the bounding box\n')
+        return inside, idx
+        
+        
+    def removeOutsideFacingFacets(self, Ctrs, Norms, MHD, threshold = -0.2):
+        """
+        Calculates the scalar product of face normal and vector from plasma (R0,Z0) to face center:
+        a = (R0 - Rcenter, 0, Z0 - Zcenter)/norm * Norms
+        Norms is an XYZ vector. Needs conversion to RphiZ vector
+        For face looking inwards to plasma this is close to 1.0
+        For face looking sideways this is close to 0
+        For face looking outwards this is close to -1
+        Set filter to a < threshold
+        """
+        if threshold > -1: 
+        	print('Outside Facing filter threshold is set to: ' + str(threshold))
+        	log.info('Outside Facing filter threshold is set to: ' + str(threshold))
+        else: 
+        	print('Outside Facing filter is not used')
+        	log.info('Outside Facing filter is not used')
+        R0 = MHD.ep[0].g['R0']
+        Z0 = MHD.ep[0].g['Zmid']
+        
+        R,Z,phi = tools.xyz2cyl(Ctrs[:,0],Ctrs[:,1],Ctrs[:,2])
+        nR = Norms[:,0]*np.cos(phi) + Norms[:,1]*np.sin(phi)
+        nZ = Norms[:,2]
+        facingOut = np.zeros(len(R), dtype=bool)
+        
+        norm = np.sqrt((R0-R)**2 + (Z0-Z)**2)
+        a = (R0-R)/norm * nR + (Z0-Z)/norm * nZ
+        
+        idx = np.where(a < threshold)[0]
+        facingOut[idx] = True 
+        Nfiltered = np.sum(facingOut)
+        if threshold > -1: 
+        	print(Nfiltered,'faces are oriented away from the plasma and are considered shadowed.')
+        	log.info(str(Nfiltered) + ' faces are oriented away from the plasma and are considered shadowed.')
+        if (threshold <= -1) & (Nfiltered > 0): 
+        	print('WARNING: Outside Facing filter should not filter anything, but it does.', Nfiltered, 'faces are neglected')
+        	log.info('WARNING: Outside Facing filter should not filter anything, but it does. ' + str(Nfiltered) + ' faces are neglected')
+        return facingOut
+        
+
     def findOpticalShadowsOpen3D(self,MHD,CAD,verbose=False, shadowMaskClouds=False):
         """
         Find shadowed faces for a given PFC object using MAFOT structure.
@@ -310,9 +406,11 @@ class PFC:
         Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
         library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
         """
+        # Remove faces that cannot see the plasma
+        facingOut = self.removeOutsideFacingFacets(self.centers, self.norms, MHD, threshold = self.outsideFacingThreshold)
+        self.shadowed_mask[facingOut] = 1
         use = np.where(self.shadowed_mask == 0)[0]
-        intersectMask = np.zeros((len(self.centers)))
-
+        intersectMask = np.zeros((len(self.centers[use])))
 
         print("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
         log.info("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
@@ -350,35 +448,43 @@ class PFC:
             log.info("-Forward Trace-")
             mapDirectionStruct = 1.0
             startIdx = 1 #Match MAFOT sign convention for toroidal direction (CCW=+)
-            fwdUse = np.where(self.powerDir==-1)[0]
+            #fwdUse = np.where(self.powerDir==-1)[0]
+            fwdUse = np.where(self.powerDir[use]==-1)[0]
             if len(fwdUse) != 0:
                 MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
                 #Perform first integration step
-                MHD.writeMAFOTpointfile(self.centers[fwdUse],self.gridfileStruct)
+                #MHD.writeMAFOTpointfile(self.centers[fwdUse],self.gridfileStruct)
+                MHD.writeMAFOTpointfile(self.centers[use][fwdUse],self.gridfileStruct)
                 MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
                 structData = tools.readStructOutput(self.structOutfile)
-                os.remove(self.structOutfile) #clean up
+                #os.remove(self.structOutfile) #clean up
+                os.rename(self.structOutfile,self.structOutfile + '_fwdUse_step1')
                 q1[fwdUse] = structData[0::2,:] #even indexes are first trace point
                 q2[fwdUse] = structData[1::2,:] #odd indexes are second trace point
                 intersect_mask = self.intersectTestOpen3D(q1[fwdUse],q2[fwdUse],targetPoints[fwdUseTgt],targetNorms[fwdUseTgt])
-                self.shadowed_mask[fwdUse] = intersect_mask
+                #self.shadowed_mask[fwdUse] = intersect_mask
+                self.shadowed_mask[use][fwdUse] = intersect_mask
             #run reverse mesh elements
             print("-Reverse Trace-")
             log.info("-Reverse Trace-")
             mapDirectionStruct = -1.0
             startIdx = 0 #Match MAFOT sign convention for toroidal direction
-            revUse = np.where(self.powerDir==1)[0]
+            #revUse = np.where(self.powerDir==1)[0]
+            revUse = np.where(self.powerDir[use]==1)[0]
             if len(revUse) != 0:
                 MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
                 #Perform first integration step
-                MHD.writeMAFOTpointfile(self.centers[revUse],self.gridfileStruct)
+                #MHD.writeMAFOTpointfile(self.centers[revUse],self.gridfileStruct)
+                MHD.writeMAFOTpointfile(self.centers[use][revUse],self.gridfileStruct)
                 MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
                 structData = tools.readStructOutput(self.structOutfile)
-                os.remove(self.structOutfile) #clean up
+                #os.remove(self.structOutfile) #clean up
+                os.rename(self.structOutfile,self.structOutfile + '_revUse_step1')
                 q1[revUse] = structData[1::2,:] #even indexes are first trace point
                 q2[revUse] = structData[0::2,:] #odd indexes are second trace point
                 intersect_mask = self.intersectTestOpen3D(q1[revUse],q2[revUse],targetPoints[revUseTgt],targetNorms[revUseTgt])
-                self.shadowed_mask[revUse] = intersect_mask
+                #self.shadowed_mask[revUse] = intersect_mask
+                self.shadowed_mask[use][revUse] = intersect_mask
 
             #this is for printing information about a specific mesh element
             #you can get the element # from paraview Point ID
@@ -495,7 +601,12 @@ class PFC:
                     os.remove(self.structOutfile) #clean up
                     q1[fwdUse] = structData[0::2,:] #odd indexes are second trace point
                     q2[fwdUse] = structData[1::2,:] #odd indexes are second trace point
-                    intersect_mask2[use2[fwdUse]] = self.intersectTestOpen3D(q1[fwdUse],q2[fwdUse],targetPoints,targetNorms)
+                    #checkMask1 = self.intersectTestOpen3D(q1[fwdUse],q2[fwdUse],targetPoints,targetNorms)
+                    insideBndy,insideBndyIdx = self.checkInsideBoundingBox(q2[fwdUse], MHD, CAD)
+                    checkMask2 = ~insideBndy     # field lines outside the Bounding box are shadowed
+                    checkMask2[insideBndyIdx] = self.intersectTestOpen3D(q1[fwdUse][insideBndyIdx],q2[fwdUse][insideBndyIdx],targetPoints,targetNorms)
+                    #print('Verify the Box Mask Fwd: old =', np.sum(checkMask1), '  new =', np.sum(checkMask2), '  Okay?', np.sum(checkMask1) <= np.sum(checkMask2))
+                    intersect_mask2[use2[fwdUse]] = checkMask2
 
                 #run reverse mesh elements
                 print("-Reverse Trace-")
@@ -515,7 +626,12 @@ class PFC:
                     os.remove(self.structOutfile) #clean up
                     q1[revUse] = structData[1::2,:] #odd indexes are second trace point
                     q2[revUse] = structData[0::2,:] #odd indexes are second trace point
-                    intersect_mask2[use2[revUse]] = self.intersectTestOpen3D(q1[revUse],q2[revUse],targetPoints,targetNorms)
+                    #checkMask1 = self.intersectTestOpen3D(q1[revUse],q2[revUse],targetPoints,targetNorms)
+                    insideBndy,insideBndyIdx = self.checkInsideBoundingBox(q2[revUse], MHD, CAD)
+                    checkMask2 = ~insideBndy     # field lines outside the Bounding box are shadowed
+                    checkMask2[insideBndyIdx] = self.intersectTestOpen3D(q1[revUse][insideBndyIdx],q2[revUse][insideBndyIdx],targetPoints,targetNorms)
+                    #print('Verify the Box Mask Rev: old =', np.sum(checkMask1), '  new =', np.sum(checkMask2), '  Okay?', np.sum(checkMask1) <= np.sum(checkMask2))
+                    intersect_mask2[use2[revUse]] = checkMask2
 
                 #for debugging, save a shadowmask at each step up fieldline
                 if shadowMaskClouds == True:
@@ -537,8 +653,8 @@ class PFC:
         """
         #walk up field line to determine where we should start helix tracing from
         CTLfile = self.controlfilePath + self.controlfileStruct
-        MHD.ittGyro = int(GYRO.gyroDeg / GYRO.dpinit)
-        print("Tracing guiding centers for {:f} degrees".format(GYRO.gyroDeg))
+        MHD.ittGyro = int(GYRO.gyroTraceLength / GYRO.dpinit)
+        print("Tracing guiding centers for {:f} degrees".format(GYRO.gyroTraceLength))
 
         #MHD.writeControlFile(CTLfile, self.t, 0, mode='gyro') #0 for both directions
         #trace
@@ -663,9 +779,9 @@ class PFC:
 
         #Walk downstream along GC path tracing helices and looking for intersections
         if "allROI" in GYRO.gyroSources:
-            N_GCdeg = int((GYRO.gyroDeg*2) / GYRO.dpinit) + 1
+            N_GCdeg = int((GYRO.gyroTraceLength*2) / GYRO.dpinit) + 1
         else:
-            N_GCdeg = int((GYRO.gyroDeg) / GYRO.dpinit) + 1
+            N_GCdeg = int((GYRO.gyroTraceLength) / GYRO.dpinit) + 1
 
         gP = 0
         vP = 0
@@ -771,6 +887,9 @@ class PFC:
         #    print("Launch Face: {:d}, Intersect Face: {:d}".format(int(i), int(GYRO.intersectRecord[0,0,0,i])))
         #
         return
+
+
+
 
     def intersectTestOpen3D(self,q1,q2,targets,targetNorms, batchSize=1000):
         """
@@ -906,9 +1025,9 @@ class PFC:
 
         #Walk downstream along GC path tracing helices and looking for intersections
         if "allROI" in GYRO.gyroSources:
-            N_GCdeg = int((GYRO.gyroDeg*2) / GYRO.dpinit) + 1
+            N_GCdeg = int((GYRO.gyroTraceLength*2) / GYRO.dpinit) + 1
         else:
-            N_GCdeg = int((GYRO.gyroDeg) / GYRO.dpinit) + 1
+            N_GCdeg = int((GYRO.gyroTraceLength) / GYRO.dpinit) + 1
 
         GYRO.Nsteps = N_GCdeg
         gP = 0
@@ -1321,9 +1440,9 @@ class PFC:
 
         #Walk downstream along GC path tracing helices and looking for intersections
         if "allROI" in GYRO.gyroSources:
-            N_GCdeg = GYRO.gyroDeg*2 + 1
+            N_GCdeg = GYRO.gyroTraceLength*2 + 1
         else:
-            N_GCdeg = GYRO.gyroDeg + 1
+            N_GCdeg = GYRO.gyroTraceLength + 1
         gP = 0
         vP = 0
         vS = 0

@@ -24,5 +24,6 @@ netCDF4
 mpi4py
 gmsh
 scikit-image
+open3d
 
 

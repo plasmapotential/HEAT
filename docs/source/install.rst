@@ -12,15 +12,24 @@ The link below explains how to install the HEAT docker container and get HEAT up
 
 To download test HEAT case
 **************************
-After downloading, you can test your HEAT installation by using a test case I
-have prepared.  The test case can be downloaded and extracted by using the following commands
+For HEAT versions equal or greater to v4.0, there are test cases inside the container.
+These tests cases serve two purposes:
+ * They enable integration testing for HEAT developers in CI
+ * They enable HEAT users to test their local setup
+
+These test cases can be found in the <HEATsource>/tests directory, where <HEATsource> is the 
+location of your source code.  Inside the container, the <HEATsource> directory can be found at: 
+/root/source/HEAT
+
+Alternatively, you can test your HEAT installation by using a test case provided on the releases tab on github.  
+The test case can be downloaded and extracted by using the following commands
 (again replacing <tag> with latest version ie vX.X.X)::
 
     wget https://github.com/plasmapotential/HEAT/releases/download/<tag>/testCase_<tag>.tar.gz
     tar -xvzf testCase_<tag>.tar.gz
 
 
-Test Case Installation Video:
+Test Case Installation Video (from release tab on github):
 
     .. raw:: html
 

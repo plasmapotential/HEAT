@@ -3,12 +3,11 @@
 #Engineer:      T Looby
 #Date:          20220131
 """
-HEAT Engine (formerly GUIclass.py)
+HEAT Engine
 
 Connects GUI/TUI to other HEAT classes.  Steps thru time solving for
 HF, T, etc.
 """
-
 import CADClass
 import MHDClass
 import toolsClass
@@ -16,8 +15,10 @@ import heatfluxClass
 import openFOAMclass
 import pfcClass
 import gyroClass
+import filamentClass
 import radClass
 import ioClass
+import plasma3DClass
 import time
 import numpy as np
 import logging
@@ -36,7 +37,13 @@ log = logging.getLogger(__name__)
 tools = toolsClass.tools()
 
 class engineObj():
-    def __init__(self, logFile, rootDir, dataPath, OFbashrc, chmod, UID, GID):
+    def __init__(self, logFile, rootDir, dataPath, OFbashrc, chmod, UID, GID, tsSigFigs=9, shotSigFigs=6):
+        #number of significant figures after radix for timesteps
+        self.tsSigFigs=tsSigFigs
+        self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
+        #number of significant figures for shot numbers
+        self.shotSigFigs = shotSigFigs
+        self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
         #file read/write/execute permissions
         self.chmod = chmod
         self.GID = GID
@@ -94,7 +101,10 @@ class engineObj():
         self.OF = openFOAMclass.OpenFOAM(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
         self.GYRO = gyroClass.GYRO(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
         self.RAD = radClass.RAD(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
-        self.IO = ioClass.IO_HEAT()
+        self.FIL = filamentClass.filament(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
+        self.IO = ioClass.IO_HEAT(self.chmod, self.UID, self.GID)
+        self.plasma3D = plasma3DClass.plasma3D()
+        self.hf3D = plasma3DClass.heatflux3D()
 
         #set up class variables for each object
         self.MHD.allowed_class_vars()
@@ -104,6 +114,20 @@ class engineObj():
         self.GYRO.allowed_class_vars()
         self.RAD.allowed_class_vars()
         self.IO.allowed_class_vars()
+        self.FIL.allowed_class_vars()
+
+        #setup number formats for each object
+        self.MHD.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
+        self.CAD.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
+        self.HF.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
+        self.OF.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
+        self.GYRO.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
+        self.RAD.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
+        self.IO.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
+        self.FIL.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
+        self.plasma3D.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
+        self.hf3D.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
+        tools.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
 
         return
 
@@ -290,8 +314,42 @@ class engineObj():
 
         return
 
+    def setupTime(self, timesteps:np.ndarray, shot:int, tag=None, clobberFlag=True):
+        """
+        sets up timesteps.  timesteps includes timesteps from batchfile and from
+        filament file.  
 
-    def getMHDInputs(self,shot=None,tmin=None,tmax=None,traceLength=None,dpinit=None,
+        creates self.timesteps, which has all timesteps (FIL.tsFil and MHD.timesteps)
+
+        """
+        if tag is None:
+            tag = ''
+        else:
+            tag = '_'+tag
+
+        if self.dataPath[-1]!='/':
+            self.shotPath = self.dataPath + '/' + self.MachFlag +"_"+self.shotFmt.format(shot) +tag + "/"
+        else:
+            self.shotPath = self.dataPath + self.MachFlag +"_"+self.shotFmt.format(shot) +tag + "/"
+
+
+        #make tree for this shot
+        tools.makeDir(self.shotPath, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
+        #make tree for this timestep
+        if self.shotPath[-1] != '/': self.shotPath += '/'
+
+        #make file for each timestep
+        for t in timesteps:
+            #clobber and make time directory
+            timeDir = self.shotPath + self.tsFmt.format(t) +'/'
+            tools.makeDir(timeDir, clobberFlag=clobberFlag, mode=self.chmod, UID=self.UID, GID=self.GID)
+
+        self.timesteps = timesteps
+        self.shot = shot
+        return
+
+
+    def getMHDInputs(self,shot=None,traceLength=None,dpinit=None,
                      gFileList=None,gFileData=None,plasma3Dmask=None,
                      ):
         """
@@ -304,10 +362,7 @@ class engineObj():
 
         if shot is not None:
             self.MHD.shot = shot
-        if tmin is not None:
-            self.MHD.tmin = tmin
-        if tmax is not None:
-            self.MHD.tmax = tmax
+
         if traceLength is not None:
             self.MHD.traceLength = traceLength
             self.MHD.nTrace = int(traceLength / dpinit)
@@ -318,18 +373,17 @@ class engineObj():
             self.MHD.writeGfileData(gFileList, gFileData)
 
         if plasma3Dmask is not None:
-            self.MHD.plasma3Dmask = plasma3Dmask
+            self.plasma3D.plasma3Dmask = plasma3Dmask
 
         self.MHD.tree = 'EFIT02'
 
-        if self.dataPath[-1]!='/':
-            self.MHD.shotPath = self.dataPath + '/' + self.MHD.MachFlag +"_{:06d}".format(self.MHD.shot)
-        else:
-            self.MHD.shotPath = self.dataPath + self.MHD.MachFlag +"_{:06d}".format(self.MHD.shot)
+        self.timesteps = self.MHD.getGEQDSKtimesteps(gFileList)
 
+        #make tree branch for this shot
+        self.setupTime(self.timesteps, shot, clobberFlag=False)
+        self.MHD.shotPath = self.shotPath
 
-        self.MHD.getGEQDSK('nstx',self.MHD.gFileList)
-#        self.t = self.MHD.timesteps[0]
+        self.MHD.getGEQDSK(self.timesteps,gFileList)
         self.MHD.makeEFITobjects()
         self.NCPUs = multiprocessing.cpu_count() - 2 #reserve 2 cores for overhead
         self.MHD.psiSepLimiter = None
@@ -343,13 +397,14 @@ class engineObj():
         log.info('psiSep0 = {:f}'.format(self.MHD.ep[0].g['psiSep']))
         log.info('psiAxis0 = {:f}'.format(self.MHD.ep[0].g['psiAxis']))
         log.info('Nlcfs0: {:f}'.format(self.MHD.ep[0].g['Nlcfs']))
-        if self.MHD.plasma3Dmask==1:
+        if self.plasma3D.plasma3Dmask:
             print('Solving for 3D plasmas with MAFOT')
             log.info('Solving for 3D plasmas with MAFOT')
         else:
             print('Solving for 2D plasmas with EFIT (no MAFOT)')
             log.info('Solving for 2D plasmas with EFIT (no MAFOT)')
         return
+
 
     def gfileClean(self, psiRZMult,psiSepMult,psiAxisMult,FpolMult,
                    psiRZAdd,psiSepAdd,psiAxisAdd,FpolAdd,
@@ -428,7 +483,6 @@ class engineObj():
         """
         tIdx = np.where(t==self.MHD.timesteps)[0][0]
         ep = self.MHD.ep[tIdx]
-        gfile = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + 'g{:6d}.{:05d}'.format(self.MHD.shot, t)
         #redefine LCFS to be tangent to CAD maximum R (because rNew=None)
         self.newLCFS(t, rNew=rNew, zNew=None, psiSep=None)
         print("CAD rTangent: {:f}".format(self.MHD.rTangent))
@@ -457,6 +511,8 @@ class engineObj():
         #self.MHD.makeEFITobjects()
         for PFC in self.PFCs:
             PFC.resetPFCeps(self.MHD)
+        
+        return
 
     def findPsiSepfromPFCs(self, t, rNew=None):
         """
@@ -467,7 +523,7 @@ class engineObj():
         Both MHD and PFC objects must be defined before running this function
         """
         tIdx = np.where(t==self.MHD.timesteps)[0][0]
-        gfile = self.MHD.shotPath + '{:06d}/'.format(t) + 'g{:06d}.{:05d}'.format(self.MHD.shot, t)
+        gfile = self.MHD.shotPath + self.tsFmt.format(t) + '/g'+self.shotFmt.format(self.MHD.shot)+'_'+self.tsFmt.format(t)
         #redefine LCFS to be tangent to CAD maximum R (because rNew=None)
         self.newLCFS(t, rNew=rNew, zNew=None, psiSep=None)
         print("CAD rTangent: {:f}".format(self.MHD.rTangent))
@@ -554,7 +610,7 @@ class engineObj():
         self.MHD.rTangent = rNew
 
         #overwrite existing gfile
-        gfile = self.MHD.shotPath + '{:06d}/'.format(t) + 'g{:06d}.{:05d}'.format(self.MHD.shot, t)
+        gfile = self.MHD.shotPath + self.tsFmt.format(t) + '/g'+self.shotFmt.format(self.MHD.shot)+'_'+self.tsFmt.format(t)
         self.MHD.writeGfile(gfile, shot=self.MHD.shot, time=t, ep=ep)
         self.MHD.ep[idx] = EP.equilParams(gfile)
         for PFC in self.PFCs:
@@ -590,7 +646,7 @@ class engineObj():
 
         #write all new geqdsks to tmpDir
         for i,t in enumerate(self.MHD.timesteps):
-            f = dir + 'g{:06d}.{:05d}'.format(self.MHD.shot,t)
+            f = dir + 'g'+self.shotFmt.format(self.MHD.shot) +'_'+ self.tsFmt.format(t)
             self.MHD.writeGfile(f, self.MHD.shot, t, self.MHD.ep[i])
 
         #combine geqdsks into zip file for user download
@@ -612,7 +668,8 @@ class engineObj():
         log.info("Interpolating gFile")
         t = int(t)
         ep = self.MHD.gFileInterpolate(t)
-        gFileName = self.tmpDir + 'g{:06d}.{:05d}'.format(self.MHD.shot,t)
+        g = 'g'+self.shotFmt.format(self.MHD.shot) +'_'+ self.tsFmt.format(t)
+        gFileName = self.tmpDir + g
         self.MHD.writeGfile(gFileName,self.MHD.shot,t,ep)
         print("gFile Interpolated")
         log.info("gFile Interpolated")
@@ -631,13 +688,14 @@ class engineObj():
         g<XXXXXX>.<YYYYY>
         where <XXXXXX> is shot number and <YYYYY> is timestep[ms]
         """
-        #change filename to d3d convention
+        #change filename to HEAT GEQDSK naming convention
         self.MHD.tmax = int(max(timesteps))
         self.MHD.tmin = int(min(timesteps))
         shot = self.MHD.shot
         newGfiles = []
         for i,f in enumerate(gfiles):
-            newGfiles.append('g{:06d}.{:05d}'.format(shot,timesteps[i]))
+            g = 'g'+self.shotFmt.format(shot) +'_'+ self.tsFmt.format(timesteps[i])
+            newGfiles.append(g)
             old = self.tmpDir + gfiles[i]
             new = self.tmpDir + newGfiles[i]
             try:
@@ -706,6 +764,7 @@ class engineObj():
         self.CAD.gTx = gTx
         self.CAD.gTy = gTy
         self.CAD.gTz = gTz
+
         return
 
     def getCAD(self,STPfile=None,STPdata=None, ts=None):
@@ -746,9 +805,16 @@ class engineObj():
                     self.CAD.overWriteMask = True #we need to also overwrite meshes
                     os.chmod(newSTPpath, self.chmod)
                     os.chown(newSTPpath, self.UID, self.GID)
+                #meshes are already up to date, only overwrite if user requests
                 else:
-                    self.CAD.overWriteMask = False #meshes are already up to date
-                    print("STP file is already in the HEAT database.  Not overwriting...")
+                    falseList = [False, 'F', 'f', 'false', 'False', 'FALSE']
+                    if self.CAD.overWriteMask in falseList:
+                        self.CAD.overWriteMask = False
+                        print("STP file is already in the HEAT database.  Not overwriting...")
+                    else:
+                        self.CAD.overWriteMask = True
+                        print("Overwriting CAD data per user input file overWriteMask variable.")
+
             self.CAD.STPfile = newSTPpath
             #load STP file using FreeCAD
             self.CAD.loadSTEP()
@@ -791,8 +857,13 @@ class engineObj():
                 os.chmod(newSTPpath, self.chmod)
                 os.chown(newSTPpath, self.UID, self.GID)
             else:
-                self.CAD.overWriteMask = False #meshes are already up to date
-                print("STP file is already in the HEAT database.  Not overwriting...")
+                falseList = [False, 'F', 'f', 'false', 'False', 'FALSE']
+                if self.CAD.overWriteMask in falseList:
+                    self.CAD.overWriteMask = False
+                    print("STP file is already in the HEAT database.  Not overwriting...")
+                else:
+                    self.CAD.overWriteMask = True
+                    print("Overwriting CAD data per user input file overWriteMask variable.")
         self.CAD.STPfile = newSTPpath
         #load STP file using FreeCAD
         self.CAD.loadSTEP()
@@ -812,7 +883,35 @@ class engineObj():
 
     def readPFCfile(self, infile):
         """
-        Reads PFC names, timesteps, intersect names, and mapdirection from file
+        The HEAT PFC File:
+        ------------------
+
+        The PFC file defines which CAD objects comprise the region of interest (ROI),
+        as well as various parameters for each ROI object.  The PFC file is a CSV
+        file in which each row corresponds to a separate ROI object.  The columns 
+        in the PFC file are as follows:
+
+        :timesteps: the timesteps during which we should calculate quantities on this
+          ROI object
+        :PFCname: the name of the CAD object as it appears in the CAD file
+        :resolution: the maximum length [mm] of any triangular mesh element for this
+          ROI object.  This is a proxy for the resolution.
+        :DivCode: divertor code.  This can be: LO, LI, UO, UI, which correspond to:
+          Lower Outer, Lower Inner, Upper Outer, Upper Inner.  These codes
+          are how each PFC in the ROI get flagged as belonging to a specific
+          divertor, and will affect their power later (Psol * powerFrac).  The fractions
+          for each region are defined in the X_input.csv file
+        :intersectName: name of the PFCs that may cast a magnetic shadow upon the ROI object
+          we are calculating power on.  If we launch field lines from the
+          PFCname part and follow them up the SOL, we may hit one of these
+          intersectName PFCs.  If the user is unsure of this value, "all"
+          can be specified to check against all parts in the CAD.
+          Multiple PFCs can be specified by using ":" between part names.
+        :excludeName: name of PFCs to exclude in the intersection check.  This can be
+         useful when we use the "all" switch for intersectName and want to exclude 
+         some obvious PFCs (for example a gyroSourcePlane)
+
+
         """
         if infile == None:
             print("No timesteps input file.  Please provide input file")
@@ -864,7 +963,8 @@ class engineObj():
         self.PFCs = []
         #initialize PFC objects for each ROI part
         for i,row in self.timestepMap.iterrows():
-            PFC = pfcClass.PFC(row, self.rootDir, self.dataPath, self.CAD.intersectList)
+            PFC = pfcClass.PFC(row, self.rootDir, self.dataPath, self.CAD.intersectList, self.timesteps)
+            PFC.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
             PFC.makePFC(self.MHD, self.CAD, i, clobberFlag=True)
             self.PFCs.append(PFC)
 
@@ -910,7 +1010,7 @@ class engineObj():
                     fracCN,fracCF,fracPN,fracPF,
                     fracUI,fracUO,fracLI,fracLO,
                     lqCNmode,lqCFmode,lqPNmode,lqPFmode,SMode,
-                    qBG,Pinj,coreRadFrac,fG,
+                    qBG,P,radFrac,fG,
                     qFilePath,qFileTag,tIdx=0):
         """
         get heat flux inputs from gui or input file
@@ -921,8 +1021,8 @@ class engineObj():
         self.HF.lqPN = lqPN
         self.HF.lqPF = lqPF
         self.HF.S = S
-        self.HF.Pinj = Pinj
-        self.HF.coreRadFrac = coreRadFrac
+        self.HF.P = P
+        self.HF.radFrac = radFrac
         self.HF.qBG = qBG
         self.HF.fracCN = fracCN
         self.HF.fracCF = fracCF
@@ -950,16 +1050,16 @@ class engineObj():
         self.HF.setTypes()
 
         #fraction of power conducted to PFC surfaces
-        self.HF.Psol = (1-self.HF.coreRadFrac)*self.HF.Pinj
+        self.HF.Psol = (1-self.HF.radFrac)*self.HF.P
 
 
         print("HF Mode = "+hfMode)
         log.info("Hf Mode = "+hfMode)
         if hfMode != 'qFile':
-            print("Pinj = {:f}".format(self.HF.Pinj))
-            log.info("Pinj = {:f}".format(self.HF.Pinj))
-            print("Fraction of Pinj Radiated from Core = {:f}".format(self.HF.coreRadFrac))
-            log.info("Fraction of Pinj Radiated from Core = {:f}".format(self.HF.coreRadFrac))
+            print("P = {:f}".format(self.HF.P))
+            log.info("P = {:f}".format(self.HF.P))
+            print("Fraction of P Radiated from Core = {:f}".format(self.HF.radFrac))
+            log.info("Fraction of P Radiated from Core = {:f}".format(self.HF.radFrac))
             print("Psol = {:f}".format(self.HF.Psol))
             log.info("Psol = {:f}".format(self.HF.Psol))
             print("Upper Inner Div Power Fraction: {:f}".format(self.HF.fracUI))
@@ -1078,8 +1178,8 @@ class engineObj():
                          self.HF.lqPFmode,
                          self.HF.SMode,
                          self.HF.qBG,
-                         self.HF.Pinj,
-                         self.HF.coreRadFrac,
+                         self.HF.P,
+                         self.HF.radFrac,
                          self.HF.fG,
                          self.HF.qFilePath,
                          self.HF.qFileTag,
@@ -1100,7 +1200,7 @@ class engineObj():
         self.getGyroInputs(
                          self.GYRO.N_gyroSteps,
                          self.GYRO.N_gyroPhase,
-                         self.GYRO.gyroDeg,
+                         self.GYRO.gyroTraceLength,
                          self.GYRO.ionMassAMU,
                          self.GYRO.vMode,
                          self.GYRO.gyroT_eV,
@@ -1111,13 +1211,13 @@ class engineObj():
                          )
         return
 
-    def getGyroInputs(self,N_gyroSteps,N_gyroPhase,gyroDeg,ionMassAMU,vMode,gyroT_eV,
+    def getGyroInputs(self,N_gyroSteps,N_gyroPhase,gyroTraceLength,ionMassAMU,vMode,gyroT_eV,
                       N_vPhase, N_vSlice, ionFrac, gyroSources):
         """
         Sets up the gyro module
         """
         self.GYRO.N_gyroSteps = int(N_gyroSteps)
-        self.GYRO.gyroDeg = int(gyroDeg)
+        self.GYRO.gyroTraceLength = int(gyroTraceLength)
         self.GYRO.gyroT_eV = float(gyroT_eV)
         self.GYRO.N_vSlice = int(N_vSlice)
         self.GYRO.N_vPhase = int(N_vPhase)
@@ -1153,7 +1253,7 @@ class engineObj():
         self.GYRO.setupConstants(self.GYRO.ionMassAMU)
         print('Loaded Gyro Orbit Settings')
         print('# Steps per helix period = {:f}'.format(float(N_gyroSteps)))
-        print('Gyro tracing distance [degrees] = {:f}'.format(float(gyroDeg)))
+        print('Gyro tracing distance [degrees] = {:f}'.format(float(gyroTraceLength)))
         print('Plasma Temperature Mode = ' + vMode)
         print('Number of Monte Carlo runs per point = {:f}'.format(float(self.GYRO.N_MC)))
         print("Source of gyro orbit power = "+self.GYRO.gyroSourceTag)
@@ -1209,6 +1309,14 @@ class engineObj():
         log.info("Radiation module loaded")
         return
 
+
+    def getFilamentInputs(self):
+        """
+        sets up the filament module
+        """
+        return
+
+
     def bfieldAtSurface(self, PFC, paraview=False):
         """
         Calculate the B field at tile surface
@@ -1228,6 +1336,9 @@ class engineObj():
             self.IO.writeGlyphCSV(ctrs,PFC.Bxyz,path,prefix,header,tag)
         if self.IO.vtpPCMask == True:
             self.IO.writeGlyphVTP(ctrs,PFC.Bxyz,label,prefix,path,tag)
+        if self.IO.csvMask==False and self.IO.vtpPCMask == False:
+            print("To write glyphs (Normal and Bfield) you must choose a PC option")
+            log.info("To write glyphs (Normal and Bfield) you must choose a PC option")
 
 
         #B scalar point clouds
@@ -1279,13 +1390,10 @@ class engineObj():
         BR = self.MHD.ep[tIdx].BRFunc.ev(R,Z)
         BZ = self.MHD.ep[tIdx].BZFunc.ev(R,Z)
 
-        if self.MHD.shotPath[-1]=='/':
-            gridfile = self.MHD.shotPath + '{:06d}/struct_grid.dat'.format(t)
-            controlfilePath =  self.MHD.shotPath + '{:06d}/'.format(t)
-        else:
-            gridfile = self.MHD.shotPath + '/' + '{:06d}/struct_grid.dat'.format(t)
-            controlfilePath =  self.MHD.shotPath + '/' + '{:06d}/'.format(t)
+        gridfile = self.MHD.shotPath + self.tsFmt.format(t) + '/struct_grid.dat'
+        controlfilePath = self.MHD.shotPath + self.tsFmt.format(t) + '/'
         structOutfile = controlfilePath + 'struct.dat'
+
         for i in range(len(xyz)):
             self.MHD.ittStruct = data['Length[deg]'][i] / data['stepSize[deg]'][i]
             self.MHD.dpinit = data['stepSize[deg]'][i]
@@ -1315,12 +1423,8 @@ class engineObj():
         dphi = 1.0
 
         self.MHD.ittStruct = float(traceDeg)
-        if self.MHD.shotPath[-1]=='/':
-            gridfile = self.MHD.shotPath + '{:06d}/struct_grid.dat'.format(t)
-            controlfilePath =  self.MHD.shotPath + '{:06d}/'.format(t)
-        else:
-            gridfile = self.MHD.shotPath + '/' + '{:06d}/struct_grid.dat'.format(t)
-            controlfilePath =  self.MHD.shotPath + '/' + '{:06d}/'.format(t)
+        gridfile = self.MHD.shotPath + self.tsFmt.format(t) + '/struct_grid.dat'
+        controlfilePath = self.MHD.shotPath + self.tsFmt.format(t) + '/'
 
         self.MHD.ittStruct = traceDeg / dpinit
         self.MHD.dpinit = dpinit
@@ -1329,25 +1433,23 @@ class engineObj():
         self.MHD.getFieldpath(dphi, gridfile, controlfilePath, controlfile, paraview_mask=True, tag=tag)
         return
 
-    def gyroTrace(self,x,y,z,t,gPhase,vPhase,gyroDeg,dpinit,N_helix,traceDirection,gyroT_eV,tag=None):
+    def gyroTrace(self,x,y,z,t,gPhase,vPhase,gyroTraceLength,dpinit,N_helix,traceDirection,gyroT_eV,tag=None):
         """
         performs a single gyro orbit trace
 
         (x,y,z) are locations where we launch trace from
         gyroPhase is initial phase angle of orbit in degrees
-        gyroDeg is the number of degrees we will trace for
+        gyroTraceLength is the number of degrees we will trace for
         N_gyroSteps is the number of discrete lines we approximate helical path by
         """
         print("\n========Gyro Trace Initialized========")
         #get bField trace from this point
-        self.Btrace(x,y,z,t,traceDirection,gyroDeg,dpinit,tag)
+        self.Btrace(x,y,z,t,traceDirection,gyroTraceLength,dpinit,tag)
         #read bField trace csv output
-        if self.MHD.shotPath[-1]=='/':
-            structOutfile = self.MHD.shotPath + '{:06d}/struct.dat'.format(t)
-            controlfilePath =  self.MHD.shotPath + '{:06d}/'.format(t)
-        else:
-            structOutfile = self.MHD.shotPath + '/' + '{:06d}/struct.dat'.format(t)
-            controlfilePath =  self.MHD.shotPath + '/' + '{:06d}/'.format(t)
+
+        structOutfile = self.MHD.shotPath + self.tsFmt.format(t) + '/struct.dat'
+        controlfilePath = self.MHD.shotPath + self.tsFmt.format(t) + '/'
+
         BtraceXYZ = tools.readStructOutput(structOutfile) #[m]
         #Setup gyro orbit trace constants and velocities
         self.GYRO.setupConstants()
@@ -1398,7 +1500,7 @@ class engineObj():
         vPhase = data['vPhase[deg]']
         gyroT_eV = data['T[eV]']
         N_helix = data['N_helix']
-        gyroDeg = data['Length[deg]']
+        gyroTraceLength = data['Length[deg]']
 
         xyz = np.array([x,y,z]).T
         controlfile = '_structCTL.dat'
@@ -1411,16 +1513,11 @@ class engineObj():
             R,Z,phi = tools.xyz2cyl(xyz[0],xyz[1],xyz[2])
             Ntraces = 1
 
-        if self.MHD.shotPath[-1]=='/':
-            gridfile = self.MHD.shotPath + '{:06d}/struct_grid.dat'.format(t)
-            controlfilePath =  self.MHD.shotPath + '{:06d}/'.format(t)
-        else:
-            gridfile = self.MHD.shotPath + '/' + '{:06d}/struct_grid.dat'.format(t)
-            controlfilePath =  self.MHD.shotPath + '/' + '{:06d}/'.format(t)
+        controlfilePath = self.MHD.shotPath + self.tsFmt.format(t) + '/'
         structOutfile = controlfilePath + 'struct.dat'
 
         for i in range(Ntraces):
-            self.gyroTrace(x[i],y[i],z[i],t,gPhase[i],vPhase[i],gyroDeg[i],
+            self.gyroTrace(x[i],y[i],z[i],t,gPhase[i],vPhase[i],gyroTraceLength[i],
                            dpinit[i],N_helix[i],traceDirection[i],gyroT_eV[i],
                            tag='pt{:03d}'.format(i))
             os.remove(structOutfile)
@@ -1536,6 +1633,21 @@ class engineObj():
             tools.initializeInput(self.RAD, infile=infile)
         return
 
+    def initializeFIL(self, infile=None):
+        """
+        Initialize filament heat flux variables
+        """
+        print("-"*70)
+        print("Filament power parameters read from file")
+        log.info("Filament power parameters read from file")
+        #Initialize FIL Object
+        if infile == None:
+            tools.initializeInput(self.FIL, infile=self.infile)
+        else:
+            tools.initializeInput(self.FIL, infile=infile)
+        return
+
+
     def runHEAT(self, runList):
         """
         Run a HEAT calculation.  This is called from gui/tui by user.
@@ -1545,27 +1657,39 @@ class engineObj():
         timestep
 
         runList options are:
-        B               Bfield glyph cloud
-        psiN            normalized psi point cloud
-        pwrDir          power direction point cloud
-        norm            normal vector point cloud
-        bdotn           bdotn poitn cloud
-        hfOpt           optical heat flux point cloud
-        hfGyro          gyro orbit heat flux point cloud
-        hfRad          photon radiation point cloud
+        B               Bfield glyphs
+        psiN            normalized psi 
+        pwrDir          power direction 
+        norm            normal glyphs
+        bdotn           bdotn
+        hfOpt           optical heat flux 
+        hfGyro          gyro orbit heat flux 
+        hfRad           photon radiation heat flux
+        hfFil           filament heat flux
         """
         print('\n')
         print("-"*70)
         print("HEAT RUN INITIALIZED")
         log.info("HEAT RUN INITIALIZED")
         t0 = time.time()
+
         #make sure that something in runList can be run in this function, else return
-        allowedOptions = ['hfOpt', 'pwrDir', 'bdotn', 'B', 'psiN', 'norm', 'hfGyro', 'hfRad']
+        allowedOptions = ['hfOpt', 'pwrDir', 'bdotn', 'B', 'psiN', 'norm', 'hfGyro', 'hfRad', 'hfFil']
         if len([i for i in runList if i in allowedOptions]) < 1:
-            print("No HEAT point cloud option to run")
+            print("No HEAT runList option to run.  Breaking out of engineClass runHEAT loop.")
             return
         else:
             self.runList = runList
+
+
+        #paraview movie dir
+        PVdir = self.MHD.shotPath + "paraview/"
+        tools.makeDir(PVdir, clobberFlag=True, mode=self.chmod, UID=self.UID, GID=self.GID)
+
+        #=========================
+        # ===== Steady State =====    
+        #=========================
+
         #set up variables for power balance calculation
         powerTesselate = np.zeros((len(self.MHD.timesteps)))
         powerTrue = np.zeros((len(self.MHD.timesteps)))
@@ -1585,8 +1709,8 @@ class engineObj():
             print('\n')
             print("-"*80)
             log.info("-"*80)
-            print("Timestep: {:d}".format(t))
-            log.info("Timestep: {:d}\n".format(t))
+            print("Timestep: "+self.tsFmt.format(t))
+            log.info("Timestep: "+self.tsFmt.format(t))
             print("-"*80)
             log.info("-"*80)
             #if user supplied multiple input files in TUI, parse at each timestep
@@ -1606,14 +1730,9 @@ class engineObj():
                     #set up file directory structure
                     PFC.controlfile = '_lamCTL.dat'
                     PFC.controlfileStruct = '_struct_CTL.dat'
-                    if self.MHD.shotPath[-1]=='/':
-                        PFC.controlfilePath = self.MHD.shotPath + '{:06d}/'.format(t) + PFC.name + '/'
-                        PFC.gridfile = self.MHD.shotPath + '{:06d}/'.format(t) + PFC.name + '/grid.dat'
-                        PFC.gridfileStruct = self.MHD.shotPath + '{:06d}/'.format(t) + PFC.name + '/struct_grid.dat'
-                    else:
-                        PFC.controlfilePath = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/'
-                        PFC.gridfile = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/grid.dat'
-                        PFC.gridfileStruct = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/struct_grid.dat'
+                    PFC.controlfilePath = self.MHD.shotPath + self.tsFmt.format(t) +'/'+PFC.name+'/'
+                    PFC.gridfile = PFC.controlfilePath + 'grid.dat'
+                    PFC.gridfileStruct = PFC.controlfilePath + 'struct_grid.dat'
                     PFC.outputFile = PFC.controlfilePath + 'lam.dat'
                     PFC.structOutfile = PFC.controlfilePath + 'struct.dat'
                     #set up time and equilibrium
@@ -1629,10 +1748,22 @@ class engineObj():
                     #powerDir can also be calculated using dot product of phi
                     #PFC.bdotphi = np.multiply(PFC.BNorms, PFC.phiVec).sum(1)
                     #PFC.powerDir = np.sign(PFC.bdotn)*np.sign(PFC.bdotphi)*-1.0
+                    
                     print('\n')
-                    print("*"*20)
-                    print('PFC Name: '+ PFC.name+', timestep: {:d}'.format(t))
-                    log.info('PFC Name: '+ PFC.name+', timestep: {:d}'.format(t))
+                    print("*"*80)
+                    print('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+                    log.info('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+                    print("*"*80)
+                    print('\n')
+                    
+                    #3Dplasma setup
+                    if self.MHD.plasma3Dmask == 1:
+                        gFile = self.MHD.shotPath + self.tsFmt.format(t) + '/' + self.MHD.gFiles[tIdx]
+                        self.plasma3D.initializePlasma3D(self.MHD.shot, t, gFile, self.inputFileList[tIdx], PFC.controlfilePath[0:-1], self.MHD.tmpDir[0:-1])   # remove / at the end of paths
+                        self.plasma3D.setBoundaryBox(self.MHD, self.CAD)
+                        self.hf3D.initializeHF3D(PFC.ep, self.inputFileList[tIdx], PFC.controlfilePath[0:-1], self.MHD.tmpDir[0:-1])
+                        self.plasma3D.print_settings()
+                        self.hf3D.print_settings()
                     if 'hfOpt' in runList:
                         #load HF settings for this timestep if applicable (terminal mode)
                         try:
@@ -1676,6 +1807,7 @@ class engineObj():
                         if PFC.DivCode not in divCodes:
                             powerTrue[tIdx] += self.HF.Psol*PFC.powerFrac
                         divCodes.append(PFC.DivCode)
+                          
 
                     if 'hfRad' in runList:
                         #load RAD settings for this timestep if applicable (terminal mode)
@@ -1698,6 +1830,7 @@ class engineObj():
                         log.info('Percent difference between radiation summation and hull = {:0.4f}%\n'.format(np.abs(PFC.powerSumRad[tIdx]/PFC.powerHullRad[tIdx]-1.0)*100.0))
 
                     if 'B' in runList:
+                        print('Writing Bfield Glyphs')
                         self.bfieldAtSurface(PFC,paraview=True)
                     if 'psiN' in runList:
                         self.psiPC(PFC)
@@ -1768,7 +1901,7 @@ class engineObj():
                 #redistribute ion optical power and build intersectRecord
                 self.gyroOrbitHF()
                 #path for this timestep
-                tPath = self.MHD.shotPath + '/' + '{:06d}/'.format(t)
+                tPath = self.MHD.shotPath + self.tsFmt.format(t) + '/'
                 #write intersectRecord to CSV file
                 self.intersectRecordCSV(tPath)
 
@@ -1831,8 +1964,8 @@ class engineObj():
                             print("PFC array sum: {:.6f}".format(totalPowPow))
                             log.info("PFC array sum: {:.6f}".format(totalPowPow))
 
-            print("Completed all heat flux calculations\n")
-            log.info("Completed all heat flux calculations\n")
+            print("Completed all steady state heat flux calculations\n")
+            log.info("Completed all steady state heat flux calculations\n")
 
             #generating allSources heat fluxes
             if ('hfGyro' in runList) or ('hfOpt' in runList) or ('hfRad' in runList):
@@ -1862,13 +1995,10 @@ class engineObj():
                             self.IO.writeMeshVTP(PFC.mesh, q, label, prefix, path, PFC.tag)
 
 
-        # Time Loop: postprocessing
+        # Time Loop: postprocessing for steady state heat loads
         for tIdx,t in enumerate(self.MHD.timesteps):
             #path for this timestep
-            if self.MHD.shotPath[-1]=='/':
-                tPath = self.MHD.shotPath + '{:06d}/'.format(t)
-            else:
-                tPath = self.MHD.shotPath + '/' + '{:06d}/'.format(t)
+            tPath = self.MHD.shotPath + self.tsFmt.format(t) + '/'
             #merge multiple pointclouds into one single pointcloud for visualization
             self.combinePFCpointcloud(runList, tPath, tIdx)
             #copy each timestep's composite point clouds to central location for
@@ -1876,10 +2006,162 @@ class engineObj():
             if self.IO.csvMask == True:
                 self.combineTimeSteps(runList, t)
 
+        #copy HEAT logfile to shotpath
+        shutil.copyfile(self.logFile, self.MHD.shotPath+'HEATlog.txt')
 
         #set tree permissions
         tools.recursivePermissions(self.MHD.shotPath, self.UID, self.GID, self.chmod)
 
+
+
+        #=========================
+        # ===== Transients =======
+        #=========================
+        #transient filament heat flux calculation
+        if 'hfFil' in runList:
+            filDict = self.FIL.filData.to_dict()
+
+            #build filament meshes
+            self.getFilMeshes()
+
+            #loop thru ROI PFCs initializing filament HF matrix
+            for PFC in self.PFCs:
+                #initialize all self.timesteps, even if not in PFC.timesteps
+                PFC.qFil = np.zeros((len(PFC.centers), len(self.timesteps)))
+                PFC.Edep = np.zeros((len(PFC.centers), len(self.timesteps)))
+                PFC.ptclDep = np.zeros((len(PFC.centers), len(self.timesteps)))
+                PFC.filTimesteps = self.timesteps
+
+
+
+            #loop through each filament
+            for idx,ts in enumerate(self.FIL.tsFil):
+                print('\n')
+                print("-"*80)
+                log.info("-"*80)
+
+                id = filDict['id'][idx]
+                N_src_t = filDict['N_src_t'][idx]
+
+                print("Filament ID: "+id)
+                log.info("Filament ID: "+id)
+                print("-"*80)
+                log.info("-"*80)
+
+                EtotROI = 0.0
+                pTotROI = 0.0
+                EtotAll = 0.0
+                pTotAll = 0.0
+
+                #get the steady state timestep that precedes this transient timestep
+                both = np.intersect1d(ts, self.MHD.timesteps)
+                epIdx = np.where( np.min(both)==self.MHD.timesteps )[0][0]
+                self.FIL.initializeFilamentFromDict(filDict, idx, self.MHD.ep[epIdx])
+                self.FIL.ts = ts
+
+
+                #loop through source timesteps for this filament
+                tCount = 0
+                for tIdx,t in enumerate(ts):
+                    print('\n')
+                    print("-"*30)
+                    print("Filament Timestep: "+self.tsFmt.format(t))
+                    log.info("\nFilament Timestep: "+self.tsFmt.format(t))
+
+                    #set up file directory structure
+                    timeDir = self.MHD.shotPath + self.tsFmt.format(t) + '/'  
+                    self.FIL = self.MHD.setupMAFOTdirectory(timeDir, self.FIL)
+
+                    if tIdx == 0:                       
+                        #trace magnetic field at filament center at t0
+                        Btrace = self.FIL.filamentCtrBtrace(self.MHD, t)
+
+                    #build source for this timestep
+                    if tCount < N_src_t:
+                        self.getFilamentSource(t, id, Btrace, tIdx)
+                    #else:
+                    #    break
+
+                    #trace macroparticles from source at this timestep
+                    if tIdx < self.FIL.N_src_t:
+                        self.FIL.tEQ = ts[0]
+                        self.FIL.traceFilamentParticles(self.MHD, ts, tIdx)
+                        #loop thru ROI PFCs, mapping power to targets
+                        for PFC in self.PFCs:
+                            if t not in PFC.timesteps:
+                                pass
+                            else:
+                                print("*"*20)
+                                print('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+                                log.info("*"*20)
+                                log.info('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+
+                                pfcDir = self.MHD.shotPath + self.tsFmt.format(t) +'/'+PFC.name+'/'
+                                tools.makeDir(pfcDir, clobberFlag=False)
+                                self.HF.filamentHeatFlux(self.FIL, PFC, ts, tIdx)
+                                self.HF.filamentParticleFlux(self.FIL, PFC, ts, tIdx)
+                                pTotROI += np.sum(PFC.ptclDep)
+                                EtotROI += np.sum(PFC.Edep)
+
+                        #energy balance calculation
+                        energy, particles = self.filDepositedEnergyParticles(tIdx)
+                        EtotAll += energy
+                        pTotAll += particles
+
+                        print("Generating trace output")
+                        log.info("Generating trace output")
+                        self.filamentTraceOutput(id,t,tIdx)
+
+                    else:
+                        print("No more source timesteps to trace.  Breaking loop.")
+                        log.info("No more source timesteps to trace.  Breaking loop.")
+                        break
+
+                    tCount += 1
+
+
+                #print energy balance stats
+                print("\n\nTotal Energy Deposited on ROI PFCs: {:f}".format(EtotROI))
+                print("Total Energy Deposited on All PFCs: {:f}".format(EtotAll))
+                print("Theoretical total energy: {:f}".format(self.FIL.E0))
+                print("Energy balance: {:0.3f}%".format(EtotAll / self.FIL.E0 * 100.0))
+                log.info("\n\nTotal Energy Deposited on ROI PFCs: {:f}".format(EtotROI))
+                log.info("Total Energy Deposited on All PFCs: {:f}".format(EtotAll))
+                log.info("Theoretical total energy: {:f}".format(self.FIL.E0))
+                log.info("Energy balance: {:0.3f}%".format(EtotAll / self.FIL.E0 * 100.0))
+
+                #print particle balance stats
+                Nptcls = self.FIL.N_b*self.FIL.N_r*self.FIL.N_p*self.FIL.N_vS
+                print("N Particles Deposited on All PFCs: {:f}".format(np.sum(pTotAll)))
+                print("Theoretical N particles: {:f}".format(Nptcls))
+                print("Particle balance: {:0.3f}%\n".format(pTotAll / Nptcls * 100.0))
+                log.info("N Particles Deposited on All PFCs: {:f}".format(np.sum(pTotAll)))
+                log.info("Theoretical N particles: {:f}".format(Nptcls))
+                log.info("Particle balance: {:0.3f}%\n".format(pTotAll / Nptcls * 100.0))
+
+
+                #copy heat fluxes to the paraview movie directory
+                print("Copying HF to PV movieDir")
+                log.info("Copying HF to PV movieDir")
+                self.saveFilamentHFOutput(ts, id)
+                self.saveFilamentParticleOutput(ts, id)
+
+
+            #copy filament sources at this timestep to the paraview movie directory
+            print("\nBuilding paraview movie directory...can take some time")
+            for i,ts in enumerate(self.FIL.tsFil):
+                id = filDict['id'][i]
+                N_src_t = filDict['N_src_t'][i]
+                tCount = 0
+                for t in ts:
+                    if tCount < N_src_t: 
+                        oldPath = self.MHD.shotPath + self.tsFmt.format(t) + '/paraview/'
+                        newPath = self.MHD.shotPath + '/paraview/'
+                        name = 'filamentSource_'+id+'_' + self.tsFmt.format(t)
+                        self.combineFilTimesteps(name, oldPath, newPath)
+                    tCount +=1
+
+            
         print("Total Time Elapsed: {:f}".format(time.time() - t0))
         log.info("Total Time Elapsed: {:f}".format(time.time() - t0))
         print("\nCompleted HEAT run\n")
@@ -1888,7 +2170,280 @@ class engineObj():
         #make a sound when complete
 #        os.system('spd-say -t female2 "HEAT run complete"')
 
+        #end of runHEAT
         return
+
+
+    #==========================================================
+    #      runHEAT helper functions
+    #==========================================================
+
+    #--- Filaments ---
+
+    def filDepositedEnergyParticles(self, tIdx:int):
+        """
+        loops through intersectRecord and calculates the sum of all deposited energy
+        and particles on any PFC, including PFCs outside of the ROI
+        """
+        density = self.FIL.density[:,:,:,tIdx].reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p)
+
+        energy = np.zeros(density.shape)
+        ptcls = 0.0
+        for i in range(self.FIL.N_vS):
+            hits = np.any(~np.isnan(self.FIL.intersectRecord[i,:,:]), axis=1)
+            #ptcls +=  density * self.FIL.velocityFracs[:,i] * hits
+            #energy += density * self.FIL.energyFracs[:,i] * hits
+            #energy += E * self.FIL.velocityFracs[:,i] * hits
+            #ptcls += np.sum(hits)
+
+            ptcls += np.sum(hits)
+            energy += self.FIL.E0 * density * self.FIL.energyFracs[:,i] * hits
+            
+        return np.sum(energy), ptcls
+
+    def getFilamentSource(self, t:float, id:str, Btrace:np.ndarray, tIdx: int):
+        """
+        generates a filament source object along a flux coordinate grid
+        saves output in csv and vtp point cloud formats
+
+        only creates N_src_t sources
+        """
+        #set up time and equilibrium
+        self.FIL.createSource(t, Btrace)
+        self.filamentSourceOutput(id, t, tIdx)
+        return
+
+
+    def filamentSourceOutput(self,id: str, t: float, tIdx: int):
+        """
+        saves filament source profile
+        """
+
+        #save filament data to file
+        tag = self.tsFmt.format(t)
+        prefix = 'filamentSource_'+id
+        label = 'Filament Source'
+        xyzData = self.FIL.xyzPts.reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p, 3)
+        scalarData = self.FIL.density[:,:,:,tIdx].reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p)
+        path = self.FIL.controlfilePath
+        if self.IO.csvMask == True:
+            self.IO.writePointCloudCSV(xyzData,scalarData,path,label,tag,prefix)
+        if self.IO.vtpPCMask == True:
+            self.IO.writePointCloudVTP(xyzData,scalarData,label,prefix,path,tag)
+
+        return
+
+    def filamentTraceOutput(self, id: str, t_source: float, tIdx: int, colorbar=True):
+        """
+        saves filament traces in CSV or VTP format
+
+        """ 
+        N_ts = int((self.FIL.tMax - self.FIL.tMin) / self.FIL.dt)+1
+        ts = np.linspace(self.FIL.tMin, self.FIL.tMax, N_ts)
+        path = self.MHD.shotPath 
+        for i in range(self.FIL.N_vS):
+            for j,t in enumerate(ts):
+                #save filament trajectory data to file
+                tag = self.tsFmt.format(t)
+                prefix = 'filamentTrace_'+id+'_vS{:03d}_tsSrc'.format(i)+self.tsFmt.format(t_source)
+                label = 'Filament Trace'
+                xyzData = self.FIL.xyzSteps[i,:,j,:].reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p, 3)
+                if colorbar == True:
+                    scalarData = self.FIL.density[:,:,:,tIdx].reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p) * self.FIL.energyFracs[:,i]
+                else:
+                    scalarData = np.ones((self.FIL.N_b*self.FIL.N_r*self.FIL.N_p))
+                if self.IO.csvMask == True:
+                    self.IO.writePointCloudCSV(xyzData,scalarData,path,label,tag,prefix)
+                if self.IO.vtpPCMask == True:
+                    self.IO.writePointCloudVTP(xyzData,scalarData,label,prefix,path,tag, PClabel=False)
+
+        return
+
+    def saveFilamentHFOutput(self, ts:np.ndarray, id:str, EdepMask=True):
+        """
+        saves heat fluxes calculated on PFC in VTP or CSV format
+        """
+        path = self.MHD.shotPath
+        
+        #create mesh
+        mesh = self.CAD.createEmptyMesh()
+        #update mesh placement to reflect global translations
+        mesh = self.CAD.globalMeshTranslation(mesh)
+        [mesh.addMesh(PFC.mesh) for PFC in self.PFCs]
+        c = [PFC.centers for PFC in self.PFCs]
+        ctrs = np.concatenate(c)
+
+        #create heat fluxes
+        for i,t in enumerate(ts):
+            #write hf files
+            tag = self.tsFmt.format(t)
+            print("Adding PV movieDir timestep: " + tag)
+            log.info("Adding PV movieDir timestep: " + tag)
+
+            prefix = 'HF_filaments_all_'+id+'_'
+            label = '$W/m^2$'
+            prefixE = 'Edep_filaments_all_'+id+'_'
+            labelE = '$J$'
+            q = np.array([])
+            #for PFC in self.PFCs:
+            #    q = np.append(q, PFC.qFil[:,i])
+            #    mesh.addMesh(PFC.mesh)
+            #trying to be faster
+            qArr = [PFC.qFil[:,i] for PFC in self.PFCs]
+            q = np.concatenate(qArr)
+            EArr = [PFC.Edep[:,i] for PFC in self.PFCs]
+            Edep = np.concatenate(EArr)
+
+            #save output
+            if self.IO.csvMask == True:
+                 self.IO.writePointCloudCSV(ctrs,q,path+'paraview/',label,tag,prefix) #fluxes 
+                 if EdepMask==True:
+                     self.IO.writePointCloudCSV(ctrs,Edep,path+'paraview/',labelE,tag,prefixE) #energies
+            if self.IO.vtpMeshMask == True:
+                self.IO.writeMeshVTP(mesh, q, label, prefix, path, tag, PClabel=False)
+                if EdepMask==True:
+                    self.IO.writeMeshVTP(mesh, Edep, labelE, prefix, path, tag, PClabel=False)
+            if self.IO.vtpPCMask == True:
+                self.IO.writePointCloudVTP(ctrs,q,label,prefix,path+'paraview/',tag, PClabel=True)
+                if EdepMask==True:
+                    self.IO.writePointCloudVTP(ctrs,Edep,labelE,prefix,path+'paraview/',tag, PClabel=True)
+
+        return
+
+
+    def saveFilamentParticleOutput(self, ts:np.ndarray, id:str):
+        """
+        saves particle fluxes calculated on PFC
+        """
+        path = self.MHD.shotPath
+        
+        #create mesh
+        mesh = self.CAD.createEmptyMesh()
+        #update mesh placement to reflect global translations
+        mesh = self.CAD.globalMeshTranslation(mesh)
+        [mesh.addMesh(PFC.mesh) for PFC in self.PFCs]
+        c = [PFC.centers for PFC in self.PFCs]
+        ctrs = np.concatenate(c)
+
+        #particle fluxes
+        for i,t in enumerate(ts):
+            #write hf files
+            tag = self.tsFmt.format(t)
+            print("Adding PV movieDir timestep: " + tag)
+            log.info("Adding PV movieDir timestep: " + tag)
+
+            prefix = 'Particles_filaments_all_'+id+'_'
+            label = '$Particles$'
+            p = np.array([])
+            #for PFC in self.PFCs:
+            #    q = np.append(q, PFC.qFil[:,i])
+            #    mesh.addMesh(PFC.mesh)
+            #trying to be faster
+            pArr = [PFC.ptclDep[:,i] for PFC in self.PFCs]
+            p = np.concatenate(pArr)
+
+            #particle flux
+            if self.IO.csvMask == True:
+                 self.IO.writePointCloudCSV(ctrs,p,path+'paraview/',label,tag,prefix) #fluxes 
+            if self.IO.vtpMeshMask == True:
+                self.IO.writeMeshVTP(mesh, p, label, prefix, path, tag, PClabel=False)
+            if self.IO.vtpPCMask == True:
+                self.IO.writePointCloudVTP(ctrs,p,label,prefix,path,tag, PClabel=True)
+
+        return
+
+
+
+
+    def combineFilTimesteps(self, name, oldPath, newPath):
+        """
+        combines timesteps into a single directory for movie-making in paraview
+
+        uses IO flags to determine which files to copy
+        """
+        old = oldPath + 'PC_' + name
+        new = newPath + name
+        tools.makeDir(newPath, clobberFlag=False)
+
+        if self.IO.vtpPCMask == True:
+            shutil.copyfile(old+'.vtp', new+'.vtp')
+        return
+
+
+    def getFilMeshes(self):
+        """
+        sets up filament meshes, independent of timestep
+        
+        very similar to getGYROMeshes, so could probably be consolidated into single function
+        one day...
+        """
+        print("\nBuilding filament meshes and mappings")
+        log.info("\nBuilding filament meshes and mappings")
+        totalMeshCounter = 0
+        numTargetFaces = 0
+        numROIFaces = 0
+        targetPoints = []
+        targetNorms = []
+        self.FIL.CADtargetNames = []
+        self.FIL.CADROIindexes = []
+        self.FIL.CADROINames = []
+
+      
+        #build arrays for intersections
+        #first include the PFCs in the ROI
+        print("CAD ROI List:")
+        print(self.CAD.ROIList)
+
+        for i,target in enumerate(self.CAD.ROImeshes):
+            totalMeshCounter+=target.CountFacets
+            numTargetFaces += target.CountFacets
+            numROIFaces += target.CountFacets
+            #append target data
+            for face in target.Facets:
+                self.FIL.CADtargetNames.append(self.CAD.ROIList[i]) #do this for future HF reassignment
+                self.FIL.CADROIindexes.append(i)
+                self.FIL.CADROINames.append(self.CAD.ROIList[i])
+                targetPoints.append(face.Points)
+                targetNorms.append(face.Normal)
+
+        #now include PFCs in the intersection list not in ROI
+        for i,target in enumerate(self.CAD.intersectMeshes):
+            totalMeshCounter+=target.CountFacets
+            #we already have the ROI version of this PFC
+            if self.CAD.intersectList[i] in self.CAD.ROIList:
+                pass
+            else:
+                print("Adding target "+self.CAD.intersectList[i]+" to intersects with {:f} faces".format(target.CountFacets))
+                numTargetFaces += target.CountFacets
+                #append target data
+                for face in target.Facets:
+                    self.FIL.CADtargetNames.append(self.CAD.intersectList[i]) #do this for future HF reassignment
+                    targetPoints.append(face.Points)
+                    targetNorms.append(face.Normal)
+
+        #targets
+        targetPoints = np.asarray(targetPoints)/1000.0 #scale to m
+        targetNorms = np.asarray(targetNorms)
+        self.FIL.targetPoints = targetPoints
+        self.FIL.targetNorms = targetNorms
+        self.FIL.t1 = targetPoints[:,0,:] #target point 1 of mesh triangle
+        self.FIL.t2 = targetPoints[:,1,:] #target point 2 of mesh triangle
+        self.FIL.t3 = targetPoints[:,2,:] #target point 3 of mesh triangle
+        self.FIL.Nt = len(self.FIL.t1)
+        self.FIL.intersectCenters = tools.getTargetCenters(targetPoints)
+        self.FIL.intersectNorms = np.zeros(targetNorms.shape)
+        mag = np.linalg.norm(targetNorms,axis=1)
+        for i in range(len(targetNorms)):
+            self.FIL.intersectNorms[i,:] = targetNorms[i,:] / mag[i]
+        print("Total FIL Intersect Faces: {:d}".format(self.FIL.Nt))
+
+        self.FIL.N_CADROI = len(self.FIL.CADROINames)
+        #maps from Targets to ROI
+        self.FIL.CADTGT_CADROImap = np.arange(self.FIL.N_CADROI)
+
+        return
+
+    #--- Optical approximation ---
 
     def HF_PFC(self, PFC, repeatIdx=None, tag=None, rayTriMode='open3d'):
         """
@@ -1897,44 +2452,82 @@ class engineObj():
         """
         #Check for intersections with MAFOT struct
         t0 = time.time()
-        #check if this is a repeated MHD EQ
-        #and that the inputs have not changed
-        if (repeatIdx == None) or (self.newInputsFlag == True):
-            if rayTriMode=='open3d':
-                #newer ray-triangle calcs using Open3D
-                PFC.findOpticalShadowsOpen3D(self.MHD,self.CAD)
-            else:
-                #original HEAT homebrew MT ray-triangle method
-                PFC.findShadows_structure(self.MHD, self.CAD)
+        val = -1
+        if self.plasma3D.loadHF:
+            f = self.plasma3D.loadBasePath + '/' + self.HF.tsFmt.format(PFC.t) + '/' + PFC.name + '/shadowMask.csv'
+            val = plasma3DClass.readShadowFile(f, PFC)
+        if val == -1:
+            #check if this is a repeated MHD EQ
+            #and that the inputs have not changed
+            if (repeatIdx == None) or (self.newInputsFlag == True):
+                if rayTriMode=='open3d':
+                    #newer ray-triangle calcs using Open3D
+                    PFC.findOpticalShadowsOpen3D(self.MHD,self.CAD)
+                else:
+                    #original HEAT homebrew MT ray-triangle method
+                    PFC.findShadows_structure(self.MHD, self.CAD)
 
-        else:
-            PFC.shadowed_mask = PFC.shadowMasks[repeatIdx].copy()
+            else:
+                PFC.shadowed_mask = PFC.shadowMasks[repeatIdx].copy()
 
         #PFC.findIntersectionFreeCADKDTree(self.MHD,self.CAD)
         print("Intersection calculation took {:f} [s]\n".format(time.time() - t0))
 
         #Run MAFOT laminar for 3D plasmas
-        if self.MHD.plasma3Dmask==True:
-#            print('\n')
-#            print("-"*70)
-#            print("MAFOT LAMINAR MODULE INITIALIZED")
-#            log.info("MAFOT LAMINAR MODULE INITIALIZED")
-            CTLfile=PFC.controlfilePath + PFC.controlfile
-            self.MHD.writeControlFile(CTLfile, PFC.t, PFC.mapDirection, mode='laminar')
-            use = np.where(PFC.shadowed_mask != 1)[0]
-            self.MHD.writeMAFOTpointfile(PFC.centers[use],PFC.gridfile)
-            self.MHD.runMAFOTlaminar(PFC.gridfile,PFC.controlfilePath,PFC.controlfile,self.NCPUs)
-            self.HF.readMAFOTLaminarOutput(PFC,PFC.outputFile)
-            os.remove(PFC.outputFile)
+        if self.MHD.plasma3Dmask:
+            print('-'*80)
+            print('\n----Solving for 3D plasmas with MAFOT----')
+            log.info('\n----Solving for 3D plasmas with MAFOT----')
+            use = np.where(PFC.shadowed_mask == 0)[0]
+            #self.plasma3D.updatePointsFromCenters(PFC.centers[use])
+            self.plasma3D.updatePointsFromVertices(PFC.vertices['x'][use,:], PFC.vertices['y'][use,:], PFC.vertices['z'][use,:], PFC.centers[use])
+            if self.plasma3D.loadHF:
+                f = self.plasma3D.loadBasePath + '/' + self.HF.tsFmt.format(PFC.t) + '/' + PFC.name
+                self.plasma3D.copyAndRead(path = f, tag = 'opticalHF')
+            else: 
+                self.plasma3D.launchLaminar(self.NCPUs, tag = 'opticalHF')   # use MapDirection = 0. If problem, then we need to split here into fwd and bwd direction separately
+                self.plasma3D.cleanUp(tag = 'opticalHF')      # removes the MAFOT log files
+            
+            # check for invalid points (psimin = 10) and remove; there should be none, but just in case
+            invalid = self.plasma3D.checkValidOutput()    # this does NOT change self.plasma3D.psimin
+            PFC.shadowed_mask[use[invalid]] = 1
+            use = np.where(PFC.shadowed_mask == 0)[0]
+            if (len(PFC.centers[use]) != len(self.plasma3D.psimin[~invalid])): 
+                raise ValueError('psimin array does not match PFC centers. Abort!')
+            
+            # define and update psimin and Lc in PFC class
+            PFC.psimin = np.zeros(PFC.centers[:,0].shape)
+            PFC.Lc = np.zeros(PFC.centers[:,0].shape)
+            PFC.psimin[use] = self.plasma3D.psimin[~invalid]
+            PFC.Lc[use] = self.plasma3D.Lc[~invalid]
+            
+            print('\n' + '-'*80)
+            print('\n----Calculating 3D Heat Flux Profile----')
+            log.info('\n----Calculating 3D Heat Flux Profile----')
+            self.hf3D.updateLaminarData(PFC.psimin[use],PFC.Lc[use])
+            PFC.powerFrac = self.HF.getDivertorPowerFraction(PFC.DivCode)
+            self.hf3D.heatflux(PFC.DivCode, PFC.powerFrac)                # heat flux is scaled by power fraction here
+            print("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
+            log.info("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
+
+            q = np.zeros(PFC.centers[:,0].shape)
+            q[use] = self.hf3D.q                                          # this is the parallel heat flux q||
+            qDiv = np.zeros(PFC.centers[:,0].shape)
+            qDiv[use] = q[use] * PFC.bdotn[use] * self.HF.elecFrac        # this is the incident heat flux
+
         #get psi from gfile for 2D plasmas
         else:
+            print('\n----Solving for 2D plasmas with EFIT----')
+            log.info('\n----Solving for 2D plasmas with EFIT----')
             self.MHD.psi2DfromEQ(PFC)
 
-        #Create Heat Flux Profile
-        print('----Calculating Heat Flux Profile----')
-        log.info('----Calculating Heat Flux Profile----')
-        q = self.HF.getHFprofile(PFC)
-        qDiv = self.HF.q_div(PFC, self.MHD, q) * self.HF.elecFrac
+            #Create Heat Flux Profile
+            print('\n----Calculating Heat Flux Profile----')
+            log.info('\n----Calculating Heat Flux Profile----')
+            q = self.HF.getHFprofile(PFC)   # this is q||
+        
+            # get the incident heat flux
+            qDiv = self.HF.q_div(PFC, self.MHD, q) * self.HF.elecFrac
 
         #Save data to class variable for future use
         PFC.q = q
@@ -1959,9 +2552,11 @@ class engineObj():
             self.IO.writeMeshVTP(PFC.mesh, qDiv, label, prefix, path, PFC.tag)
             self.IO.writeMeshVTP(PFC.mesh, PFC.shadowed_mask, 'shadowMask','shadowMask', path, PFC.tag)
 
-        #structOutfile = MHD.shotPath + '/' + '{:06d}/struct.csv'.format(PFC.t)
+        #structOutfile = MHD.shotPath + self.tsFmt.format(t) +'/struct.csv'
         #HF.PointCloudfromStructOutput(structOutfile)
         return
+
+    #--- Radiated power (photons) ---
 
     def radPower(self,PFC, rayTriMode='open3d'):
         """
@@ -2013,6 +2608,9 @@ class engineObj():
 
         return
 
+
+
+    #--- Gyro Orbits ---
 
     def gyroOrbitIntersects(self, PFC, mode='open3d'):
         """
@@ -2339,6 +2937,9 @@ class engineObj():
 
         return
 
+
+    #--- Generic Outputs + File Saving ---
+
     def combinePFCpointcloud(self, runList, tPath, tIdx):
         """
         Combines multiple pointclouds into a single pointcloud then saves to file
@@ -2595,57 +3196,55 @@ class engineObj():
         save composite csv from each timestep into a single directory for
         making paraview movies
         """
-        if self.MHD.shotPath[-1] == '/':
-            movieDir = self.MHD.shotPath + 'paraview/'
-            tPath = self.MHD.shotPath + '{:06d}/'.format(t)
-        else:
-            movieDir = self.MHD.shotPath + '/paraview/'
-            tPath = self.MHD.shotPath + '/' + '{:06d}/'.format(t)
+        movieDir = self.MHD.shotPath + 'paraview/'
+        tPath = self.MHD.shotPath + self.tsFmt.format(t) + '/'
+
         #first try to make new directory
         tools.makeDir(movieDir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
+        tStr = self.tsFmt.format(t)
         if 'hfOpt' in runList:
             src = tPath + 'HF_optical_all.csv'
-            dest = movieDir + 'hfOptical_{:06d}.csv'.format(t)
+            dest = movieDir + 'hfOptical_'+tStr+'.csv'
             shutil.copy(src,dest)
             src = tPath + '/paraview/HF_optical_all_mesh.vtp'
-            dest = movieDir + 'hfOptical_mesh_{:06d}.vtp'.format(t)
+            dest = movieDir + 'hfOptical_mesh_'+tStr+'.vtp'.format(t)
             shutil.copy(src,dest)            
             src = tPath + '/paraview/shadowMask_all_mesh.vtp'
-            dest = movieDir + 'shadowMask_mesh_{:06d}.vtp'.format(t)
+            dest = movieDir + 'shadowMask_mesh_'+tStr+'.vtp'
             shutil.copy(src,dest)
         if 'shadowPC' in runList:
             src = tPath + 'shadowMask_all.csv'
-            dest = movieDir + 'shadowMask_{:06d}.csv'.format(t)
+            dest = movieDir + 'shadowMask_'+tStr+'.csv'.format(t)
             shutil.copy(src,dest)
         if 'pwrDir' in runList:
             src = tPath + 'powerDir_all.csv'
-            dest = movieDir + 'powerDir_{:06d}.csv'.format(t)
+            dest = movieDir + 'powerDir_'+tStr+'.csv'.format(t)
             shutil.copy(src,dest)
         if 'bdotn' in runList:
             src = tPath + 'bdotn_all.csv'
-            dest = movieDir + 'bdotn_{:06d}.csv'.format(t)
+            dest = movieDir + 'bdotn_'+tStr+'.csv'.format(t)
             shutil.copy(src,dest)
         if 'psiN' in runList:
             src = tPath + 'psiN_all.csv'
-            dest = movieDir + 'psiN_{:06d}.csv'.format(t)
+            dest = movieDir + 'psiN_'+tStr+'.csv'.format(t)
             shutil.copy(src,dest)
         if 'norm' in runList:
             src = tPath + 'NormGlyph_all.csv'
-            dest = movieDir + 'NormGlyph_{:06d}.csv'.format(t)
+            dest = movieDir + 'NormGlyph_'+tStr+'.csv'.format(t)
             shutil.copy(src,dest)
         if 'B' in runList:
             src = tPath + 'BfieldGlyph_all.csv'
-            dest = movieDir + 'BfieldGlyph_{:06d}.csv'.format(t)
+            dest = movieDir + 'BfieldGlyph_'+tStr+'.csv'.format(t)
             shutil.copy(src,dest)
         if 'hfGyro' in runList:
             src = tPath + 'HF_gyro_all.csv'
-            dest = movieDir + 'hfGyro_{:06d}.csv'.format(t)
+            dest = movieDir + 'hfGyro_'+tStr+'.csv'.format(t)
             shutil.copy(src,dest)
             src = tPath + 'HF_allSources_all.csv'
-            dest = movieDir + 'hfAll_{:06d}.csv'.format(t)
+            dest = movieDir + 'hfAll_'+tStr+'.csv'.format(t)
             shutil.copy(src,dest)
             src = tPath + 'shadowMaskGyro_all.csv'
-            dest = movieDir + 'shadowMaskGyro_{:06d}.csv'.format(t)
+            dest = movieDir + 'shadowMaskGyro_'+tStr+'.csv'.format(t)
             shutil.copy(src,dest)
 
         #set tree permissions
@@ -2659,7 +3258,7 @@ class engineObj():
         you need to have run the cad, mhd, and hf initialization processes
         before running this function
         """
-        PFC.shadowed_mask = np.zeros((len(PFC.shadowed_mask)))
+        #PFC.shadowed_mask = np.zeros((len(PFC.shadowed_mask)))
         self.getPsiEverywhere(PFC, PFC.tag)
 
         print("Completed psiN calculation")
@@ -2672,16 +3271,32 @@ class engineObj():
         get psi all over the PFC (including shadowed regions).
         """
         #Run MAFOT laminar for 3D plasmas
-        if self.MHD.plasma3Dmask==True:
-            CTLfile=PFC.controlfilePath + PFC.controlfile
-            self.MHD.writeControlFile(CTLfile, PFC.t, PFC.mapDirection, mode='laminar')
-            self.MHD.writeMAFOTpointfile(PFC.centers,PFC.gridfile)
-            self.MHD.runMAFOTlaminar(PFC.gridfile,PFC.controlfilePath,PFC.controlfile,self.NCPUs)
-            self.HF.readMAFOTLaminarOutput(PFC,PFC.outputFile)
-            use = np.where(PFC.psimin < 10)[0]
-            os.remove(PFC.outputFile)
+        if self.plasma3D.plasma3Dmask:
+#            CTLfile=PFC.controlfilePath + PFC.controlfile
+#            self.MHD.writeControlFile(CTLfile, PFC.t, PFC.mapDirection, mode='laminar')
+#            self.MHD.writeMAFOTpointfile(PFC.centers,PFC.gridfile)
+#            self.MHD.runMAFOTlaminar(PFC.gridfile,PFC.controlfilePath,PFC.controlfile,self.NCPUs)
+#            self.HF.readMAFOTLaminarOutput(PFC,PFC.outputFile)
+#            use = np.where(PFC.psimin < 10)[0]
+#            os.remove(PFC.outputFile)
+            print('Solving for 3D plasmas with MAFOT')
+            log.info('Solving for 3D plasmas with MAFOT')
+            self.plasma3D.updatePointsFromCenters(PFC.centers)
+            self.plasma3D.launchLaminar(self.NCPUs, tag = 'psiOnly')
+            self.plasma3D.cleanUp(tag = 'psiOnly')      # removes the MAFOT log files
+            invalid = self.plasma3D.checkValidOutput()    # this does not update self.plasma3D.psimin
+            if(np.sum(invalid) > 0): 
+                print('****** WARNING *******')
+                print('psimin could not be computed for all points.')
+                print('Failed points will have psimin = 10.')
+                print('Reason: they are most likely outside the M3D-C1 simulation domain.\n')
+            PFC.psimin = self.plasma3D.psimin     # this defines and declares PFC.psimin
+            
         #get psi from gfile for 2D plasmas
         else:
+            print('Solving for 2D plasmas with EFIT')
+            log.info('Solving for 2D plasmas with EFIT')
+            PFC.shadowed_mask = np.zeros((len(PFC.shadowed_mask)))
             self.MHD.psi2DfromEQ(PFC)
 
         prefix = 'psiN'
@@ -2697,6 +3312,8 @@ class engineObj():
 
         return
 
+
+    #--- Default I/O and dicts ---
 
     def getDefaultDict(self):
         """
@@ -2728,14 +3345,14 @@ class engineObj():
                     'fracUO': None,
                     'fracLI': None,
                     'fracLO': None,
-                    'Pinj': None,
-                    'coreRadFrac' : None,
+                    'P': None,
+                    'radFrac' : None,
                     'qBG' : None,
                     'fG' : None,
                     'qFilePath' : None,
                     'qFileTag' : None,
                     'N_gyroSteps': None,
-                    'gyroDeg': None,
+                    'gyroTraceLength': None,
                     'gyroT_eV': None,
                     'N_vSlice': None,
                     'N_vPhase': None,
@@ -2768,6 +3385,7 @@ class engineObj():
         tools.initializeInput(self.CAD, self.infile)
         tools.initializeInput(self.HF, self.infile)
         tools.initializeInput(self.GYRO, self.infile)
+        tools.initializeInput(self.FIL, self.infile)
         tools.initializeInput(self.RAD, self.infile)
         tools.initializeInput(self.OF, self.infile)
 
@@ -2795,8 +3413,8 @@ class engineObj():
                     'fracCF': self.HF.fracCF,
                     'fracPN': self.HF.fracPN,
                     'fracPF': self.HF.fracPF,
-                    'Pinj': self.HF.Pinj,
-                    'coreRadFrac' : self.HF.coreRadFrac,
+                    'P': self.HF.P,
+                    'radFrac' : self.HF.radFrac,
                     'fracUI':self.HF.fracUI,
                     'fracUO':self.HF.fracUO,
                     'fracLI':self.HF.fracLI,
@@ -2814,7 +3432,7 @@ class engineObj():
                     'meshMaxLevel': self.OF.meshMaxLevel,
                     'material': self.OF.material,
                     'N_gyroSteps': self.GYRO.N_gyroSteps,
-                    'gyroDeg': self.GYRO.gyroDeg,
+                    'gyroTraceLength': self.GYRO.gyroTraceLength,
                     'gyroT_eV': self.GYRO.gyroT_eV,
                     'N_vSlice': self.GYRO.N_vSlice,
                     'N_vPhase': self.GYRO.N_vPhase,
@@ -2826,7 +3444,7 @@ class engineObj():
                     'phiMin':self.RAD.phiMin,
                     'phiMax':self.RAD.phiMax,
                     'Ntor':self.RAD.Ntor,
-                    'Nref':self.RAD.Nref
+                    'Nref':self.RAD.Nref,
                     }
         print("Loaded inputs")
 
@@ -2860,8 +3478,8 @@ class engineObj():
                     'fracCF': self.HF.fracCF,
                     'fracPN': self.HF.fracPN,
                     'fracPF': self.HF.fracPF,
-                    'Pinj': self.HF.Pinj,
-                    'coreRadFrac' : self.HF.coreRadFrac,
+                    'P': self.HF.P,
+                    'radFrac' : self.HF.radFrac,
                     'fracUI':self.HF.fracUI,
                     'fracUO':self.HF.fracUO,
                     'fracLI':self.HF.fracLI,
@@ -2879,7 +3497,7 @@ class engineObj():
                     'meshMaxLevel': self.OF.meshMaxLevel,
                     'material': self.OF.material,
                     'N_gyroSteps': self.GYRO.N_gyroSteps,
-                    'gyroDeg': self.GYRO.gyroDeg,
+                    'gyroTraceLength': self.GYRO.gyroTraceLength,
                     'gyroT_eV': self.GYRO.gyroT_eV,
                     'N_vSlice': self.GYRO.N_vSlice,
                     'N_vPhase': self.GYRO.N_vPhase,
@@ -2891,7 +3509,7 @@ class engineObj():
                     'phiMin':self.RAD.phiMin,
                     'phiMax':self.RAD.phiMax,
                     'Ntor':self.RAD.Ntor,
-                    'Nref':self.RAD.Nref
+                    'Nref':self.RAD.Nref,
                     }
         print("Loaded current inputs")
 
@@ -2945,21 +3563,24 @@ class engineObj():
 
         return
 
+
+    #--- OpenFOAM ---
+
     def loadOF(self,OFtMin,OFtMax,OFminMeshLevel,OFmaxMeshLevel,
                       OFSTLscale, OFbashrc, OFdeltaT, OFwriteDeltaT, materialSelect):
         """
         loads user OF GUI settings
 
-        OFstartTime is when we start OF simulation (can be before HF)
-        OFstopTime is when we start OF simulation (can be after HF)
+        OFtMin is when we start OF simulation (can be before HF)
+        OFtMax is when we stop OF simulation (can be after HF)
         OFminMeshLev is minimum refinement level for snappyhexmesh (default is 1)
         OFminMeshLev is maximum refinement level for snappyhexmesh (default is 3)
         OFSTLscale is scalar for unit conversion (default is 1)
         OFbashrc is file location on system to source OF binaries / libs
         OFdeltaT is timestep size for FVM simulation.  Defaults to 1ms (0.001s)
         """
-        self.OF.OFtMin = float(OFtMin)/1000.0 #to [s] for openfoam
-        self.OF.OFtMax = float(OFtMax)/1000.0 #to [s] for openfoam
+        self.OF.OFtMin = float(OFtMin) #[s] for openfoam
+        self.OF.OFtMax = float(OFtMax) #[s] for openfoam
         self.OF.meshMinLevel = int(OFminMeshLevel)
         self.OF.meshMaxLevel = int(OFmaxMeshLevel)
         self.OF.STLscale = OFSTLscale
@@ -2978,7 +3599,6 @@ class engineObj():
         print("Loaded OF data")
         log.info("Loaded OF data")
         return
-
 
     def runOpenFOAM(self):
         """
@@ -3026,12 +3646,8 @@ class engineObj():
         log.info('Setting Up OF run')
 
         #set up base OF directory for this discharge
-        if self.MHD.shotPath[-1]=='/':
-            self.OF.OFDir = self.MHD.shotPath + 'openFoam'
-            self.OF.caseDir = self.MHD.shotPath + 'openFoam/heatFoam'
-        else:
-            self.OF.OFDir = self.MHD.shotPath + '/openFoam'
-            self.OF.caseDir = self.MHD.shotPath + '/openFoam/heatFoam'
+        self.OF.OFDir = self.MHD.shotPath + 'openFoam'
+        self.OF.caseDir = self.MHD.shotPath + 'openFoam/heatFoam'
         tools.makeDir(self.OF.caseDir, clobberFlag=True, mode=self.chmod, UID=self.UID, GID=self.GID)
 
         #set up directory for all .foam files
@@ -3111,10 +3727,8 @@ class engineObj():
                 print(e)
 
             #set up timesteps
-            tMin = self.OF.OFtMin*1000.0 #in [ms] for HEAT
-            tMax = self.OF.OFtMax*1000.0 #in [ms] for HEAT
-            arr = np.linspace(int(tMin), int(tMax), int((tMax-tMin)+1), dtype=int)
-            OFtimesteps = arr[0::int(self.OF.deltaT*1000.0)]
+            N_t = int((self.OF.OFtMax - self.OF.OFtMin) / self.OF.deltaT)
+            OFtimesteps = np.linspace(self.OF.OFtMin, self.OF.OFtMax, N_t+1)
 
             #create symbolic link to STL file
             print("Creating openFOAM symlink to STL")
@@ -3305,59 +3919,54 @@ class engineObj():
             #HF_allSources.csv in between HF and Temp runs, to create non-uniform mesh
             #get the mesh centers from one of the timesteps
             t = self.MHD.timesteps[0]
-            if self.MHD.shotPath[-1]=='/':
-                HFcsv = self.MHD.shotPath + '{:06d}/'.format(t) + PFC.name + '/HF_allSources.csv'
-            else:
-                HFcsv = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/HF.allSources.csv'
+            HFcsv = self.MHD.shotPath + self.tsFmt.format(t) + '/' + PFC.name + '/HF_allSources.csv'
             OFcenters = pd.read_csv(HFcsv).iloc[:,0:3].values
 
             #cycle through timesteps and get HF data from HEAT tree
             for t in OFtimesteps:
-                print("openFOAM timestep: {:d}".format(t))
-                log.info("openFOAM timestep: {:d}".format(t))
-                OFt = t/1000.0 #in [s] for openFOAM
+                print("openFOAM timestep: {:f}".format(t))
+                log.info("openFOAM timestep: {:f}".format(t))
 
                 #make timeDir folder and copy HF
-                timeDir = partDir + '/{:f}'.format(OFt).rstrip('0').rstrip('.')
+                timeDir = partDir + '/{:f}'.format(t).rstrip('0').rstrip('.')
                 #timestep field prescriptions
-                HFt0 = partDir+'/{:f}'.format(self.OF.OFtMin).rstrip('0').rstrip('.')+'/HF'
-                HFtStep = partDir+'/{:f}'.format(OFt).rstrip('0').rstrip('.')+'/HF'
-                try:
-                    #shutil.copytree(t0new,timeDir
-                    tools.makeDir(timeDir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
-                    #shutil.copy(HFt0, HFtStep)
-                    shutil.copy(HFt0, timeDir)
+                HFt0 = partDir + '/{:f}'.format(self.OF.OFtMin).rstrip('0').rstrip('.')+'/HF'
+                HFtStep = partDir + '/{:f}'.format(t).rstrip('0').rstrip('.')+'/HF'
 
-                except:
-                    print("***")
-                    print("Could not create OF directory for timestep {:d}".format(t))
-                    print("(this is expected for t=0)")
-                    print("***")
-                    pass
+                if self.OF.OFtMin != t:
+                    try:
+                        #shutil.copytree(t0new,timeDir
+                        tools.makeDir(timeDir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
+                        #shutil.copy(HFt0, HFtStep)
+                        shutil.copy(HFt0, timeDir)
+
+                    except:
+                        print("***")
+                        print("Could not create OF directory for timestep {:d}".format(t))
+                        print("(this is expected for t=0)")
+                        print("***")
+                        pass
 
 
                 # determine heat flux boundary condition
                 if (t in PFC.timesteps) and (t in self.MHD.timesteps):
                     #we explicitly calculated HF for this timestep
-                    print("OF.timestep: {:d} in PFC.timesteps".format(t))
-                    log.info("OF.timestep: {:d} in PFC.timesteps".format(t))
-                    if self.MHD.shotPath[-1]=='/':
-                        HFcsv = self.MHD.shotPath + '{:06d}/'.format(t) + PFC.name + '/HF_allSources.csv'
-                    else:
-                        HFcsv = self.MHD.shotPath + '/' + '{:06d}/'.format(t) + PFC.name + '/HF.allSources.csv'
+                    print("OF.timestep: {:f} in PFC.timesteps".format(t))
+                    log.info("OF.timestep: {:f} in PFC.timesteps".format(t))
+                    HFcsv = self.MHD.shotPath + self.tsFmt.format(t) + '/' + PFC.name + '/HF_allSources.csv'
                     qDiv = pd.read_csv(HFcsv)['$MW/m^2$'].values #this is the HF column header in the CSV file
                     #OFcenters = pd.read_csv(HFcsv).iloc[:,0:3].values
                     #write boundary condition
                     print("Maximum qDiv for this PFC and time: {:f}".format(qDiv.max()))
-                    self.HF.write_openFOAM_boundary(OFcenters,qDiv,partDir,OFt)
+                    self.HF.write_openFOAM_boundary(OFcenters,qDiv,partDir,t)
                 elif (t < self.MHD.timesteps.min()) or (t > self.MHD.timesteps.max()):
                     #apply zero HF outside of discharge domain (ie tiles cooling)
-                    print("OF.timestep: {:d} outside MHD domain".format(t))
-                    log.info("OF.timestep: {:d} outside MHD domain".format(t))
+                    print("OF.timestep: {:f} outside MHD domain".format(t))
+                    log.info("OF.timestep: {:f} outside MHD domain".format(t))
                     qDiv = np.zeros((len(OFcenters)))
                     #write boundary condition
                     print("Maximum qDiv for this PFC and time: {:f}".format(qDiv.max()))
-                    self.HF.write_openFOAM_boundary(OFcenters,qDiv,partDir,OFt)
+                    self.HF.write_openFOAM_boundary(OFcenters,qDiv,partDir,t)
                 else:
                     #boundary using last timestep that we calculated a HF for
                     #(basically a heaviside function in time)
@@ -3365,7 +3974,7 @@ class engineObj():
                     #log.info("OF.timestep: {:d} using heaviside from last PFC.timestep".format(t))
                     #write boundary condition
                     #print("Maximum qDiv for this PFC and time: {:f}".format(qDiv.max()))
-                    #self.HF.write_openFOAM_boundary(ctrs,qDiv,partDir,OFt)
+                    #self.HF.write_openFOAM_boundary(ctrs,qDiv,partDir,t)
 
                     #openFOAM linear interpolation in time using timeVaryingMappedFixedValue
                     print("HF being linearly interpolated by OF at this t")
@@ -3382,11 +3991,10 @@ class engineObj():
             #print("Building allFoams directory")
             #log.info("Building allFoams directory")
             #for t in OFtimesteps:
-            #    OFt = t/1000.0 #in [s] for openFOAM
             #    #make timeDir folder and copy HF
-            #    timeDir = partDir + '/{:f}'.format(OFt).rstrip('0').rstrip('.')
+            #    timeDir = partDir + '/{:f}'.format(t).rstrip('0').rstrip('.')
             #    #make the allFoam timestep directory for this timestep
-            #    allFoamTimeDir = self.OF.allFoamsDir + '/{:f}'.format(OFt).rstrip('0').rstrip('.')
+            #    allFoamTimeDir = self.OF.allFoamsDir + '/{:f}'.format(t).rstrip('0').rstrip('.')
             #    tools.makeDir(allFoamTimeDir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
 
         #set tree permissions
@@ -3394,6 +4002,9 @@ class engineObj():
         print("openFOAM run completed.")
         log.info("openFOAM run completed.")
         return
+
+
+    #--- Plots ---
 
     def getOFMinMaxPlots(self):
         """
@@ -3416,10 +4027,8 @@ class engineObj():
                         print("Not including "+PFC.name+" in MinMax plots")
                         continue
 
-            if self.MHD.shotPath[-1]=='/':
-                partDir = self.MHD.shotPath + 'openFoam/heatFoam/'+PFC.name
-            else:
-                partDir = self.MHD.shotPath + '/openFoam/heatFoam/'+PFC.name
+            partDir = self.MHD.shotPath + 'openFoam/heatFoam/'+PFC.name
+
             #replace spaces with underscores to prevent pyfoam from reading args as
             # space delimited list
             partDir = partDir.replace(" ", "_")
@@ -3432,13 +4041,8 @@ class engineObj():
         fig = pgp.plotlyOpenFOAMplot(data,pfcNames)
 
         #save interactive plotly plot in shotPath/plotly/OFminmax.html
-        if self.MHD.shotPath[-1]=='/':
-            plotlyDir = self.MHD.shotPath + 'plotly'
-        else:
-            plotlyDir = self.MHD.shotPath + '/plotly'
-
+        plotlyDir = self.MHD.shotPath + 'plotly'
         tools.makeDir(plotlyDir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
-
         plotPath = plotlyDir + '/OFminmax.html'
         fig.write_html(plotPath)
 
@@ -3460,13 +4064,8 @@ class engineObj():
         fig = pgp.plotlyqDivPlot(heatFluxes, labels, logPlot=True)
 
         #save interactive plotly plot in shotPath/plotly/HFdist.html
-        if self.MHD.shotPath[-1]=='/':
-            plotlyDir = self.MHD.shotPath + 'plotly'
-        else:
-            plotlyDir = self.MHD.shotPath + '/plotly'
-
+        plotlyDir = self.MHD.shotPath + 'plotly'
         tools.makeDir(plotlyDir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
-
         plotPath = plotlyDir + '/HFdist.html'
         fig.write_html(plotPath)
 
@@ -3524,13 +4123,8 @@ class engineObj():
         fig = pgp.plotlyTprobes(tData,Tdata,names)
 
         #save interactive plotly plot in shotPath/plotly/Tprobes.html
-        if self.MHD.shotPath[-1]=='/':
-            plotlyDir = self.MHD.shotPath + 'plotly'
-        else:
-            plotlyDir = self.MHD.shotPath + '/plotly'
-
+        plotlyDir = self.MHD.shotPath + 'plotly'
         tools.makeDir(plotlyDir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
-
         plotPath = plotlyDir + '/Tprobes.html'
         fig.write_html(plotPath)
 
@@ -3591,10 +4185,7 @@ class engineObj():
 
 
     def writeInputTable(self, data):
-        if self.MHD.shotPath[-1]!= '/':
-            path = self.MHD.shotPath + '/inputData.csv'
-        else:
-            path = self.MHD.shotPath + 'inputData.csv'
+        path = self.MHD.shotPath + '/inputData.csv'
         with open(path, 'w') as f:
             for line in data:
                 p = line['Parameter']

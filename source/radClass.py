@@ -34,12 +34,35 @@ class RAD:
         self.UID = UID
         return
 
+    def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
+        """
+        sets up pythonic string number formats for shot and timesteps
+        """
+        self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
+        self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
+        return
+
     def allowed_class_vars(self):
         """
-        Writes a list of recognized class variables to HEAT object
-        Used for error checking input files and for initialization
+        .. Writes a list of recognized class variables to HEAT object
+        .. Used for error checking input files and for initialization
 
-        Here is a list of variables with description:
+        Photon Radiation Heat Flux Variables:
+        -------------------------------------
+
+        :radFile: CSV file path where the photon emission data is stored.  Photon emission
+          data should be provided in a CSV file with columns R,Z,MW, corresonding to an
+          axisymmetric photon emission profile given in [MW].  Path should be absolute path.
+        :Ntor: Number of times the axisymmetric profile is repeated toroidally.  In the limit
+          that Ntor goes to infinity, emission profile becomes toroidally continuous.
+        :Nref: Number of reflections to trace for.  Currently reflections are not implemented
+          in HEAT so this should be set to 1
+        :phiMin: Minimum toroidal angle of emission extent [degrees].  The emission profile
+          read from a file will be duplicated Ntor times between phiMin and phiMax.
+        :phiMax: Maximum toroidal angle of emission extent [degrees].  The emission profile
+          read from a file will be duplicated Ntor times between phiMin and phiMax.
+
+        
         """
 
 
@@ -68,13 +91,23 @@ class RAD:
 
     def read2DSourceFile(self, file):
         """
-        reads a comma delimited file that describes the radiated power on an
+        Reads a comma delimited file that describes the radiated power on an
         R,Z grid. This point cloud (pc) should represent the axisymmetric
         plasma radiated power across a single poloidal plane (ie sliced at phi).
         The power defined at each RZ point is the radiated photon power.
 
         It is assumed that the RZ points are located at the centroids of mesh
         elements
+
+        Each row of this file corresponds to a separate source point.  The columns
+        of the file are:
+
+        :R: Radial coordinate of the source point [m]
+        :Z: Z coordinate of the source point [m]
+        :MW: The power [MW] associated with that mesh point.  This power represents the 
+          toroidally integrated power.  In other words, the total power of a toroidally
+          revolved mesh element centered at R,Z
+
         """
         print("Reading 2D photon radiation source file: "+file)
         log.info("Reading 2D photon radiation source file: "+file)
@@ -129,9 +162,11 @@ class RAD:
         phiMin: minimum angle of phi in degrees
         phiMax: maximum angle of phi in degrees
         """
-        self.phis = np.linspace(phiMin, phiMax, Ntor)
+        self.phis = np.linspace(phiMin, phiMax, Ntor+2)[1:-1]
         self.Nphi = len(self.phis)
         self.deltaPhi = phiMax - phiMin
+        print("Radiated Power Source Angles:")
+        print(self.phis)
         return
 
 
