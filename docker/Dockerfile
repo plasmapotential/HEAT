@@ -31,7 +31,8 @@ ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/openfoam/platforms/linux64GccDPIn
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/openfoam/platforms/linux64GccDPInt32Opt/lib/sys-openmpi
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/swak4foam/lib
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/openfoam/platforms/linux64GccDPInt32Opt/lib/dummy
-ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/open3d/lib:/root/opt/open3d/lib/python_package
+#ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/open3d/lib:/root/opt/open3d/lib/python_package
+ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/root/opt/m3dc1/lib
 
 #set up paths for bins
 ENV PATH $PATH:/root/opt/mafot/bin
@@ -39,7 +40,8 @@ ENV PATH $PATH:/root/opt/paraview/bin
 ENV PATH $PATH:/root/opt/openfoam/bin
 ENV PATH $PATH:/root/opt/openfoam/platforms/linux64GccDPInt32Opt/bin
 ENV PATH $PATH:/root/opt/swak4foam/bin
-ENV PATH $PATH:/root/opt/open3d/bin
+#ENV PATH $PATH:/root/opt/open3d/bin
+ENV PATH $PATH:/root/opt/m3dc1/bin
 
 #===system-wide deps for HEAT
 #update layer
@@ -65,7 +67,7 @@ RUN apt-get -yqq install software-properties-common && \
     apt-get install -yqq freecad-python3
 
 #utility tools/libs layers
-RUN apt-get -yqq install coreutils libnglib-6.2 libcurl4 libunwind-dev nano git gfortran iputils-ping iproute2
+RUN apt-get -yqq install coreutils libnglib-6.2 libcurl4 libunwind-dev nano git gfortran iputils-ping iproute2 htop
 
 #3D plasmas layer
 RUN apt-get -yqq install libopenmpi-dev libhdf5-openmpi-dev libnetcdf-dev libnetcdff-dev
@@ -90,4 +92,4 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 EXPOSE 8050
 
 # start app
-CMD [ "python3", "./source/HEAT/launchHEAT.py", "--a", "0.0.0.0", "--p", "8050", "--m", "g" ]
+CMD [ "python3", "./source/HEAT/source/launchHEAT.py", "--a", "0.0.0.0", "--p", "8050", "--m", "g" ]

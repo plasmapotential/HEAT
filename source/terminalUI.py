@@ -21,13 +21,16 @@ import time
 
 
 #get relevant environment variables.  Needed for containers
-logFile = os.environ["logFile"]
-rootDir = os.environ["rootDir"]
-dataPath = os.environ["dataPath"]
-OFbashrc = os.environ["OFbashrc"]
-FreeCADPath = os.environ["FreeCADPath"]
-PVPath = os.environ["PVPath"]
-pvpythonCMD = os.environ["pvpythonCMD"]
+try:
+    logFile = os.environ["logFile"]
+    rootDir = os.environ["rootDir"]
+    dataPath = os.environ["dataPath"]
+    OFbashrc = os.environ["OFbashrc"]
+    FreeCADPath = os.environ["FreeCADPath"]
+    PVPath = os.environ["PVPath"]
+    pvpythonCMD = os.environ["pvpythonCMD"]
+except:
+    print("Could not properly set up environment.  Proceed with caution!")
 try:
     AppDir = os.environ["APPDIR"]
 except:
@@ -36,7 +39,7 @@ except:
 try:
     chmod = int(os.environ["HEATchmod"], 8) #convert from base 8
 except:
-    chmod = int(0o774, 8)
+    chmod = 0o774
 
 try:
     GID = int(os.environ["dockerGID"]) #group ID
@@ -53,27 +56,106 @@ print("UID: {:d}".format(UID))
 print("GID: {:d}".format(GID))
 
 #Import HEAT engine class
-from engineClass import engineObj
+import engineClass
 
 class TUI():
     def __init__(self):
         """
         intialize terminal user interface (TUI) object
         """
-        self.ENG = engineObj(logFile, rootDir, dataPath, OFbashrc, chmod, UID, GID)
+        self.ENG = engineClass.engineObj(logFile, rootDir, dataPath, OFbashrc, chmod, UID, GID)
         self.ENG.NCPUs = multiprocessing.cpu_count() - 2 #reserve 2 cores for overhead
         self.chmod = chmod
         self.GID = GID
         self.UID = UID
         #if data directory doesn't exist, create it
         tools.makeDir(dataPath, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
+        #set up number formats for file IO and printing
+        self.setupNumberFormats(self.ENG.tsSigFigs, self.ENG.shotSigFigs)
         return
 
+    def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
+        """
+        sets up pythonic string number formats for shot and timesteps
+        """
+        self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
+        self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
+        return
 
     def simulationSchedule(self, batchFile):
         """
         determines what simulations need to be run and their correct grouping
         via a batchFile
+
+        The fist line of every batchFile should be:
+        MachFlag, Tag, GEQDSK, CAD, PFC, Input, Output
+
+        Column variables are defined as follows
+
+        :MachFlag: machine specific flag.
+          can be 'd3d','nstx','st40','step','sparc','west','kstar'
+
+        :Tag:  user specified tag to label the simulation by.  Tags represent
+          independent HEAT runs.  For time varying discharges with multiple
+          GEQDSK files, tag should be repeated on multiple lines with the GEQDSK
+          for each timestep in each line.
+
+        :GEQDSK: magnetic equilibrium file (ie EFIT) in GEQDSK format
+          naming convention is g<shot>.<timestep> where <shot> is the integer
+          shot number (6 digits) and timestep is the timestep in ms (5 digits).
+          For example, shot 204118 timestep 50ms would be g204118.00050
+
+        :CAD: CAD file for the tag.  Note that HEAT will use the first CAD file provided
+          in for each tag.  Subsequent lines in that tag are ignored.  In other words,
+          there can only be one CAD file per tag.
+
+        :PFC: PFC file for the tag.  Note that HEAT will use the first PFC file provided
+          in for each tag.  Subsequent lines in that tag are ignored.  In other words,
+          there can only be one PFC file per tag.
+
+        :INPUT: Input file for the tag.  Input files can be time varying, but only the
+          HF Variables will be read at each timestep.
+
+        :Output: Defines what output HEAT should calculate.  Options are:
+          :hfOpt:   optical heat flux point cloud
+          :hfGyro:  gyro orbit heat flux point cloud
+          :hfRad:   radiated power heat flux point cloud
+          :B:       magnetic field glyph cloud
+          :psiN:    normalized poloidal flux point cloud
+          :pwrDir:  powerDir point cloud
+          :bdotn:   bdotn point cloud
+          :norm:    normal vector glyph cloud
+          :T:       temperature
+
+          for multiple outputs, separate options with : (ie hfOpt:psi:T).  Note
+          that HEAT will use the first options list provided for each tag.
+          Subsequent lines in that tag are ignored.  In other words, there can
+          only be one set of options per tag.
+
+
+        Once you have a batchFile, you need to save all input files in the following
+        directory structure, where <path> is wherever the batchFile is:
+
+        - <path>/batchFile.dat
+        - <path>/MachFlag/GEQDSK
+        - <path>/MachFlag/CAD
+        - <path>/MachFlag/PFC
+        - <path>/MachFlag/Input
+
+        Example for an NSTX-U run:
+
+        MachFlag, Tag, GEQDSK, CAD, PFC, Input, Output
+
+        nstx,run1, g204118.00004, IBDH_2tiles.step, PFCs_run1.csv, NSTXU_input.csv, B:hfOpt
+
+        And the directory structure would look like this
+
+        - <path>/batchFile.dat
+        - <path>/nstx/g204118.00004
+        - <path>/nstx/IBDH_2tiles.step
+        - <path>/nstx/PFCs_run1.csv
+        - <path>/nstx/NSTXU_input.csv
+
         """
         print("Reading batch file")
         log.info("Reading batch file")
@@ -124,17 +206,30 @@ class TUI():
                 print("-"*70)
                 print(" "*20 + "Machine: "+mach+"   Tag: "+tag)
                 print("-"*70)
+                log.info('\n')
+                log.info("-"*70)
+                log.info(" "*20 + "Machine: "+mach+"   Tag: "+tag)
+                log.info("-"*70)
+
                 tagData = data[data["Tag"]==tag]
                 N_thisTag = len(tagData)
                 print("# Timesteps for this machine + tag combo: {:d}".format(N_thisTag))
 
                 #get file paths associated with this tag from batchFile
-                gFileNames = tagData['GEQDSK'].values
-                gFilePaths = machInDir + gFileNames
-                CADfiles = machInDir + tagData['CAD'].values
-                PFCfiles = machInDir + tagData['PFC'].values
-                inputFiles = machInDir + tagData['Input'].values
-                runList = [x.split(":") for x in tagData['Output'].values]
+                try:
+                    shots = tagData['Shot'].values #only 1 shot per tag allowed
+                    timesteps = tagData['TimeStep'].values
+                    gFileNames = tagData['GEQDSK'].values
+                    gFilePaths = machInDir + gFileNames
+                    CADfiles = machInDir + tagData['CAD'].values
+                    PFCfiles = machInDir + tagData['PFC'].values
+                    inputFiles = machInDir + tagData['Input'].values
+                    runList = [x.split(":") for x in tagData['Output'].values]
+                    runList = np.unique([x for y in runList for x in y])
+                except Exception as e:
+                    print("\n\nSomething is wrong with your batchFile!  Error Trace:\n")
+                    print(e.message)
+                    sys.exit()
 
                 #refresh all subclasses
                 self.ENG.refreshSubclasses()
@@ -145,8 +240,14 @@ class TUI():
                 #build the HEAT tree for this tag
                 self.prepareDirectories(mach,tag)
 
+                #load filament data 
+                self.loadFilaments(runList, machInDir)
+
+                #build timesteps
+                self.loadTimeSteps(timesteps, shots[0], tag, self.ENG.FIL.tsFil)
+
                 #read GEQDSK and load into MHD object
-                self.loadMHD(mach, machInDir, gFileNames)
+                self.loadMHD(machInDir, gFileNames, timesteps)
 
                 #read CAD and initialize CAD objects
                 #note: current version of HEAT only supports single CAD file
@@ -167,10 +268,11 @@ class TUI():
                 #run HEAT
                 #note: current version of HEAT only supports single runList
                 #per tag
-                self.runHEAT(inputFiles, runList[0])
+                self.runHEAT(inputFiles, runList)
 
                 print("Completed all HEAT runs\n")
                 log.info("Completed all HEAT runs\n")
+                shutil.copy(logFile, self.shotPath + 'HEATlog.txt')
 
 
 
@@ -205,9 +307,9 @@ class TUI():
         build HEAT tree for mach + tag combo
         """
         if dataPath[-1]!='/':
-            self.shotPath = dataPath + '/' + mach +"_{:06d}".format(self.ENG.MHD.shot)+"_"+tag+"/"
+            self.shotPath = dataPath + '/' + mach +"_"+self.shotFmt.format(self.ENG.MHD.shot)+"_"+tag+"/"
         else:
-            self.shotPath = dataPath + mach +"_{:06d}".format(self.ENG.MHD.shot)+"_"+tag+"/"
+            self.shotPath = dataPath + mach +"_"+self.shotFmt.format(self.ENG.MHD.shot)+"_"+tag+"/"
 
         self.ENG.MHD.shotPath = self.shotPath
 
@@ -216,8 +318,38 @@ class TUI():
 
         return
 
+    def loadFilaments(self, runList, path):
+        """
+        loads a filament file and build timestep array for filament tracing
 
-    def loadMHD(self, mach, tmpDir, gFiles):
+        runList is HEAT runlist of unique values
+        path is path to filament file
+        """
+        if 'hfFil' in runList:
+            self.ENG.FIL.readFilamentFile(path)
+            self.ENG.FIL.setupFilamentTime()
+        else:
+            self.ENG.FIL.tsFil = None
+        return
+
+    def loadTimeSteps(self, ts, shot, tag, tsFil=None):
+        """
+        ts is timesteps in batchfile
+        tsFil is 2D list of timesteps for each filament (can be finer resolution than batchfile)
+
+        loads timesteps data from batchFile and filament file.  
+        """
+        if tsFil is not None:
+            for row in tsFil:
+                ts = np.append(ts, row)
+
+        ts = np.unique(np.sort(ts))
+        self.ENG.setupTime(ts, shot, tag)
+
+        return
+
+
+    def loadMHD(self, tmpDir, gFiles, ts):
         """
         loads GEQDSK file into HEAT tree and MHD object
         """
@@ -228,7 +360,7 @@ class TUI():
             #initialize MHD
             self.ENG.MHD.tmpDir = tmpDir
             self.ENG.MHD.tree = 'EFIT02'
-            self.ENG.MHD.getGEQDSK(machine=mach,gFileList=gFiles)
+            self.ENG.MHD.getGEQDSK(ts, gFiles)
             self.ENG.MHD.makeEFITobjects()
             self.ENG.MHD.psiSepLimiter = None
             self.ENG.MHD.setTypes()

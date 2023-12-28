@@ -81,6 +81,21 @@ class CAD:
         self.chmod = chmod
         self.GID = GID
         self.UID = UID
+        
+        # total extent of the CAD; set by self.minmaxExtent()
+        self.Rmin = None
+        self.Rmax = None
+        self.Zmin = None
+        self.Zmax = None
+
+        return
+
+    def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
+        """
+        sets up pythonic string number formats for shot and timesteps
+        """
+        self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
+        self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
         return
 
     def loadPath(self, path):
@@ -94,14 +109,23 @@ class CAD:
 
     def allowed_class_vars(self):
         """
-        Writes a list of recognized class variables to HEAT object
-        Used for error checking input files and for initialization
+        .. Writes a list of recognized class variables to HEAT object
+        .. Used for error checking input files and for initialization
 
-        Here is a list of variables with description:
-        xT              global translation in x [mm]
-        yT              global translation in x [mm]
-        zT              global translation in x [mm]
-        gridRes         max length of mesh triangle edge in [mm] not in ROI
+        CAD Variables:
+        --------------
+
+        :gridRes:  can be a number in [mm] or 'standard'.  Defines the intersection mesh
+          grid resolution.  If set to a number, uses Mefisto mesher to generate
+          a mesh with triangle edge lengths smaller than number.  If set to 
+          standard, uses the FreeCAD standard mesher.  Recommended to use standard
+          unless you know what you are doing.
+        :overWrite: can be True or False.  If True, overWrite existing STPs and STLs.
+          If False, recycle previous CAD unless there is a timestep mismatch.
+        :xT: global translation of entire ROI in x direction [mm]
+        :yT: global translation of entire ROI in y direction [mm]
+        :zT: global translation of entire ROI in z direction [mm]
+
         """
 
 
@@ -110,6 +134,7 @@ class CAD:
                             'gTy',
                             'gTz',
                             'gridRes',
+                            'overWriteMask'
                             ]
         return
 
@@ -257,7 +282,7 @@ class CAD:
             self.intersectMeshes[i] = self.globalMeshTranslation(mesh)
 
         #Now get face centers, normals, areas
-        self.intersectNorms,self.intersectCtrs,self.intersectAreas = self.normsCentersAreas(self.intersectMeshes)
+        self.intersectNorms,self.intersectCtrs,self.intersectAreas = self.normsCentersAreas(self.intersectMeshes,bndybox = True)
         return
 
     def getGyroSourceMeshes(self, resolution=None):
@@ -362,10 +387,19 @@ class CAD:
     def loadSTEP(self):
         """
         Loads CAD STEP (ISO 10303-21) file into object
+
+        (Also loads other file formats, including .FCStd)
         """
         print("Loading STEP file...")
         log.info("Loading STEP file...")
-        self.CAD = Import.open(self.STPfile)
+        
+        #check if we are loading a STEP file or a native FreeCAD file
+        _, file_extension = os.path.splitext(self.STPfile)
+        if file_extension == '.FCStd':
+            self.CAD = FreeCAD.open(self.STPfile)
+        else:
+            self.CAD = Import.open(self.STPfile)
+
         self.CADdoc = FreeCAD.ActiveDocument
         #Coordinate permutation if necessary
         if self.permute_mask=='True' or self.permute_mask == True:
@@ -674,11 +708,38 @@ class CAD:
         mesh = Mesh.Mesh()
         return mesh
 
-    def normsCentersAreas(self, meshes):
+    def minmaxExtent(self, x,y,z, unitConvert = 1000.0):
+        """
+        Gets the Rmin, Rmax, Zmin and Zmax of all facets xyz in a mesh to 
+        determine the overall extent of the meshed surface. A global set is then updated.
+        This is used to generate a bounding box for field line tracing.
+        """
+        R = np.sqrt(x*x + y*y)
+        Rmin = R.min()/unitConvert
+        Rmax = R.max()/unitConvert
+        Zmin = z.min()/unitConvert
+        Zmax = z.max()/unitConvert
+        print('Extent of mesh:',Rmin, Rmax, Zmin, Zmax)
+        if self.Rmin is None: self.Rmin = Rmin
+        elif Rmin < self.Rmin: self.Rmin = Rmin
+        
+        if self.Rmax is None: self.Rmax = Rmax
+        elif Rmax > self.Rmax: self.Rmax = Rmax
+        
+        if self.Zmin is None: self.Zmin = Zmin
+        elif Zmin < self.Zmin: self.Zmin = Zmin
+        
+        if self.Zmax is None: self.Zmax = Zmax
+        elif Zmax > self.Zmax: self.Zmax = Zmax
+        return
+
+    def normsCentersAreas(self, meshes, bndybox = False):
         """
         Gets face normals and face centers.  Both norms and centers are arrays
         of length mesh.CountFacets, consisting of three components (x,y,z) per
         facet
+        This also updates the global self.Rmin,self.Rmax,self.Zmin,self.Zmax of 
+        the bounding box
         """
         #Check if this is a single mesh or list and make it a list
         if type(meshes) != list:
@@ -687,7 +748,7 @@ class CAD:
         norms = []
         centers = []
         areas = []
-        for mesh in meshes:
+        for k,mesh in enumerate(meshes):
             #mesh = obj.Mesh
             if (mesh == None) or (mesh=='None'):
                 print("No Mesh for one of these objects.  Did you have a typo in input file?")
@@ -713,6 +774,9 @@ class CAD:
                 norms.append(self.faceNormals(mesh))
                 centers.append(self.faceCenters(x,y,z))
                 areas.append(self.faceAreas(mesh))
+                if bndybox:
+                    print('Part:',self.intersectParts[k].Label)
+                    self.minmaxExtent(x,y,z)
         return norms,centers,areas
 
 

@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [ v4.0 ]
+  pull_request:
+    branches: [ v4.0 ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Pull Docker image
+      run: docker pull plasmapotential/heat:v4.0
+
+    - name: Run simple CI configuration test 
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.0 python3 /root/source/HEAT/tests/integrationTests/ciTest.py
+
+    - name: NSTX-U Optical HEAT Calculation
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.0 /root/source/HEAT/source/runTerminalModeTestOptical
+
+#    - name: NSTX-U Gyro-orbit HEAT Calculation
+#      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.0 /root/source/HEAT/source/runTerminalModeTestGyro
+#
+#    - name: NSTX-U Photon Radiation HEAT Calculation
+#      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.0 /root/source/HEAT/source/runTerminalModeTestRad
+
+

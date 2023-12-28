@@ -49,7 +49,8 @@ def extract_contours(R, Z, psi, levels):
 
 
 def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
-                    logFile=False, bg = None, xRange=None, yRange=None):
+                    logFile=False, bg = None, xRange=None, yRange=None,
+                    tsFmt="{:.6f}", shotFmt="{:06d}"):
     """
     returns a DASH object for use directly in dash app
     """
@@ -173,7 +174,7 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
 
 
     fig.update_layout(
-        title="{:06d}@{:05d}ms".format(shot,time),
+        title=shotFmt.format(shot)+"@"+tsFmt.format(time)+"s",
         xaxis_title="R [m]",
         yaxis_title="Z [m]",
         autosize=True,
@@ -216,7 +217,77 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
 
 
 
+def highlightPsiFromSep(fig, ep, lq):
+    """
+    when passed an existing EQ figure, adds a highlight for the flux surface 
+    lq, [m] from the LCFS
+    """
+    #assuming plasma is centered in machine here
+    zMin = ep.g['ZmAxis'] - 0.25
+    zMax = ep.g['ZmAxis'] + 0.25
+    Z_lcfs = ep.g['lcfs'][:,1]
+    #this prevents us from getting locations not at midplane
+    idx = np.where(np.logical_and(Z_lcfs>zMin,Z_lcfs<zMax))
+    R_omp = ep.g['lcfs'][:,0][idx].max()
+    Z_omp = 0.0
 
+
+    #calculate psi value for point d distance from OMP LCFS
+    # Convert to meters
+    psiaxis = ep.g['psiAxis']
+    psiedge = ep.g['psiSep']
+    deltaPsi = np.abs(psiedge - psiaxis)
+
+
+    # Evaluate B at outboard midplane
+    Bp = ep.BpFunc.ev(R_omp,Z_omp)
+    Bt = ep.BtFunc.ev(R_omp,Z_omp)
+    B_omp = np.sqrt(Bp**2 + Bt**2)
+
+    # Gradient
+    gradPsi = Bp*R_omp
+    xfm = gradPsi / deltaPsi
+    # Decay width mapped to flux coordinates
+    lq_hat = lq * xfm
+
+    psi_1lq = 1.0+lq_hat
+
+    print("psi @ 1 lq away from OMP: {:f}".format(psi_1lq))
+
+
+    import plotly.graph_objects as go
+    r = ep.g['R']
+    z = ep.g['Z']
+    psi = ep.g['psiRZn']
+    R,Z = np.meshgrid(r, z)
+
+    #Seperatrix in red.  Sometimes this fails if psi is negative
+    #so we try and except.
+    #if try fails, just plot using rbdry,zbdry from gfile
+    levels=[1.0, psi_1lq]
+    CS = plt.contourf(R,Z,psi,levels,cmap=plt.cm.cividis)
+    lcfsCS = plt.contour(CS, levels = [psi_1lq])
+    for i in range(len(lcfsCS.allsegs[0])):
+        rlcfs = lcfsCS.allsegs[0][i][:,0]
+        zlcfs = lcfsCS.allsegs[0][i][:,1]
+        fig.add_trace(
+            go.Scatter(
+                x=rlcfs,
+                y=zlcfs,
+                mode="lines",
+                name="1lq Away",
+                line=dict(
+                    color="yellow",
+                    width=1,
+                        )
+                )
+                )
+
+
+
+
+
+    return fig
 
 def writePlotlyEQ(shot, time, outFile, MachFlag, ep=None, gfile=None, logFile=False):
     """
