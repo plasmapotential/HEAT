@@ -1,6 +1,6 @@
 #!/bin/bash
 #Engineer: T Looby
-#Date: 01/27/2022
+#Date: 12/27/2023
 #Description:  prepares docker context, then creates docker container
 #              from dev machine
 
@@ -51,10 +51,14 @@ cp -rn /home/tom/OpenFOAM/tom-v2112/platforms/linux64GccDPInt32Opt/bin/* dockerD
 cp -rn /home/tom/OpenFOAM/tom-v2112/platforms/linux64GccDPInt32Opt/lib/* dockerDir/opt/swak4foam/lib/
 
 # copy Open3D bins and libs
-mkdir -p dockerDir/opt/open3d/bin
-mkdir -p dockerDir/opt/open3d/lib
-cp -rn /opt/open3d/Open3D/build/bin/* dockerDir/opt/open3d/bin/
-cp -rn /opt/open3d/Open3D/build/lib/* dockerDir/opt/open3d/lib/
+#mkdir -p dockerDir/opt/open3d/bin
+#mkdir -p dockerDir/opt/open3d/lib
+#cp -rn /opt/open3d/Open3D/build/bin/* dockerDir/opt/open3d/bin/
+#cp -rn /opt/open3d/Open3D/build/lib/* dockerDir/opt/open3d/lib/
+
+#copy m3dc1 bins and libs
+mkdir -p dockerDir/opt/m3dc1
+cp -rn /opt/m3dc1/build/* dockerDir/opt/m3dc1/
 
 #make file for docker build files
 mkdir -p dockerDir/dockerBuildFiles
