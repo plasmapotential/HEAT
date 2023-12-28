@@ -134,6 +134,7 @@ class PFC:
         self.areas = CAD.ROIareas[ROIidx] / (1000.0**2) #convert to meters^2
         self.mesh = CAD.ROImeshes[ROIidx]
         self.Nfaces = self.mesh.CountFacets
+        self.vertices = self.getVertices(CAD)	# in meters; uses self.mesh and self.Nfaces
         self.qDiv = np.zeros((len(self.centers)))
         R,Z,phi = tools.xyz2cyl(self.centers[:,0],self.centers[:,1],self.centers[:,2])
         PFC.phiMin = phi.min()
@@ -183,6 +184,28 @@ class PFC:
         self.structOutfile = self.controlfilePath + 'struct.dat'
 
         return
+
+
+    def getVertices(self, CAD):
+        """
+        Store the triangle vertices for the PFC mesh. Converted to meters.
+        """
+        x = np.zeros((self.Nfaces,3))
+        y = np.zeros((self.Nfaces,3))
+        z = np.zeros((self.Nfaces,3))
+
+        for i,facet in enumerate(self.mesh.Facets):
+            #mesh points
+            for j in range(3):
+                x[i][j] = facet.Points[j][0]
+                y[i][j] = facet.Points[j][1]
+                z[i][j] = facet.Points[j][2]
+
+        # scale and permute if necessary
+        x,y,z = CAD.scale_and_permute(x,y,z)
+        vertices = {'x':x / (1000.0), 'y':y / (1000.0), 'z':z / (1000.0)} # convert to meters
+        return vertices
+
 
     def resetPFCeps(self, MHD):
         """
@@ -319,6 +342,7 @@ class PFC:
         Zmin = np.min([CAD.Zmin, MHD.ep[0].g['wall'][:,1].min()])
         Zmax = np.max([CAD.Zmax, MHD.ep[0].g['wall'][:,1].max()])
         print('\nBounding box Filter limits set to: Rmin =',Rmin,' Rmax =',Rmax,' Zmin =',Zmin,' Zmax =',Zmax)
+        log.info('\nBounding box Filter limits set to: Rmin = ' + str(Rmin) + ' Rmax = ' + str(Rmax) + ' Zmin = ' + str(Zmin) + ' Zmax = ' + str(Zmax))
         
         x = q2[:,0]
         y = q2[:,1]
@@ -329,6 +353,7 @@ class PFC:
         idx = np.where((R > Rmin) & (R < Rmax) & (Z > Zmin) & (Z < Zmax))[0]
         inside[idx] = True
         print(np.sum(~inside),' Field lines left the bounding box','\n')
+        log.info(str(np.sum(~inside)) + ' Field lines left the bounding box\n')
         return inside, idx
         
         
@@ -342,8 +367,12 @@ class PFC:
         For face looking outwards this is close to -1
         Set filter to a < threshold
         """
-        if threshold > -1: print('Outside Facing filter threshold is set to: ' + str(threshold))
-        else: print('Outside Facing filter is not used')
+        if threshold > -1: 
+        	print('Outside Facing filter threshold is set to: ' + str(threshold))
+        	log.info('Outside Facing filter threshold is set to: ' + str(threshold))
+        else: 
+        	print('Outside Facing filter is not used')
+        	log.info('Outside Facing filter is not used')
         R0 = MHD.ep[0].g['R0']
         Z0 = MHD.ep[0].g['Zmid']
         
@@ -358,8 +387,12 @@ class PFC:
         idx = np.where(a < threshold)[0]
         facingOut[idx] = True 
         Nfiltered = np.sum(facingOut)
-        if threshold > -1: print(Nfiltered,'faces are oriented away from the plasma and are considered shadowed.')
-        if (threshold <= -1) & (Nfiltered > 0): print('WARNING: Outside Facing filter should not filter anything, but it does.', Nfiltered, 'faces are neglected')
+        if threshold > -1: 
+        	print(Nfiltered,'faces are oriented away from the plasma and are considered shadowed.')
+        	log.info(str(Nfiltered) + ' faces are oriented away from the plasma and are considered shadowed.')
+        if (threshold <= -1) & (Nfiltered > 0): 
+        	print('WARNING: Outside Facing filter should not filter anything, but it does.', Nfiltered, 'faces are neglected')
+        	log.info('WARNING: Outside Facing filter should not filter anything, but it does. ' + str(Nfiltered) + ' faces are neglected')
         return facingOut
         
 
@@ -424,7 +457,8 @@ class PFC:
                 MHD.writeMAFOTpointfile(self.centers[use][fwdUse],self.gridfileStruct)
                 MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
                 structData = tools.readStructOutput(self.structOutfile)
-                os.remove(self.structOutfile) #clean up
+                #os.remove(self.structOutfile) #clean up
+                os.rename(self.structOutfile,self.structOutfile + '_fwdUse_step1')
                 q1[fwdUse] = structData[0::2,:] #even indexes are first trace point
                 q2[fwdUse] = structData[1::2,:] #odd indexes are second trace point
                 intersect_mask = self.intersectTestOpen3D(q1[fwdUse],q2[fwdUse],targetPoints[fwdUseTgt],targetNorms[fwdUseTgt])
@@ -444,7 +478,8 @@ class PFC:
                 MHD.writeMAFOTpointfile(self.centers[use][revUse],self.gridfileStruct)
                 MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
                 structData = tools.readStructOutput(self.structOutfile)
-                os.remove(self.structOutfile) #clean up
+                #os.remove(self.structOutfile) #clean up
+                os.rename(self.structOutfile,self.structOutfile + '_revUse_step1')
                 q1[revUse] = structData[1::2,:] #even indexes are first trace point
                 q2[revUse] = structData[0::2,:] #odd indexes are second trace point
                 intersect_mask = self.intersectTestOpen3D(q1[revUse],q2[revUse],targetPoints[revUseTgt],targetNorms[revUseTgt])

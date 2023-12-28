@@ -34,6 +34,8 @@ class plasma3D:
 		self.Z = None		# in m
 		self.psimin = None
 		self.Lc = None		# in km
+		self.NCPUs = 100
+		self.useVertices = False
 		
 		# Boundary Box limits
 		self.bbRmin = None	
@@ -46,7 +48,7 @@ class plasma3D:
 		
 		self.allowed_vars = ['plasma3Dmask','shot','time','tmax','gFile','itt','response',
 				'selectField','useIcoil','sigma','charge','Ekin','Lambda','Mass','loadHF',
-				'loadBasePath']
+				'loadBasePath','NCPUs']
 	
 	
 	def initializePlasma3D(self, shot, time, gFile = None, inputFile = None, cwd = None, inputDir = None):
@@ -216,10 +218,26 @@ class plasma3D:
 		"""
 		Set variable types for the stuff that isnt a string from the input file
 		"""
-		integers = ['plasma3Dmask','shot','time','tmax','itt','response','selectField','useIcoil','sigma','charge','Mass']
+		integers = ['plasma3Dmask','shot','time','tmax','itt','response','selectField','useIcoil','sigma','charge','Mass','NCPUs']
 		floats = ['Ekin','Lambda']
 		bools = ['loadHF']
 		setAllTypes(self, integers, floats, bools)     # this is not a typo, but the correct syntax for this call
+
+
+	def updatePointsFromVertices(self, xvertices, yvertices, zvertices, centers):
+		"""
+		Converts xyz of vertices and centers into R,phi,Z, update class variables and write the points file
+		"""
+		self.useVertices = True
+		N = len(centers[:,0])
+		R,Z,phi = np.zeros((N,4)),np.zeros((N,4)),np.zeros((N,4))
+		R[:,0],Z[:,0],phi[:,0] = tools.xyz2cyl(centers[:,0],centers[:,1],centers[:,2])
+		R[:,1],Z[:,1],phi[:,1] = tools.xyz2cyl(xvertices[:,0],yvertices[:,0],zvertices[:,0])
+		R[:,2],Z[:,2],phi[:,2] = tools.xyz2cyl(xvertices[:,1],yvertices[:,1],zvertices[:,1])
+		R[:,3],Z[:,3],phi[:,3] = tools.xyz2cyl(xvertices[:,2],yvertices[:,2],zvertices[:,2])
+		R,Z,phi = R.flatten(),Z.flatten(),phi.flatten()
+		phi = np.degrees(phi)
+		self.updatePoints(R, phi, Z)
 
 
 	def updatePointsFromCenters(self, xyz):
@@ -260,7 +278,7 @@ class plasma3D:
 				f.write(str(R[i]) + "\t" + str(phi[i]) + "\t" + str(Z[i]) + "\n")
 				
 				
-	def launchLaminar(self, nproc, tag = None, MapDirection = 0):
+	def launchLaminar(self, NCPUs = None, tag = None, MapDirection = 0):
 		"""
 		Write all input files and launch MAFOT
 		Read the output file when finished
@@ -270,19 +288,17 @@ class plasma3D:
 		self.writeM3DC1supFile()
 		self.writeCoilsupFile()
 		
-		if nproc > 20: nproc = 20
-		self.nproc = nproc
 		self.tag = tag
-		print('Launching 3D plasma field line tracing')
-		log.info('Launching 3D plasma field line tracing')
+		print('Launching 3D plasma field line tracing on ' + str(self.NCPUs) + ' cores')
+		log.info('Launching 3D plasma field line tracing ' + str(self.NCPUs) + ' cores')
 		
 		bbLimits = str(self.bbRmin) + ',' + str(self.bbRmax) + ',' + str(self.bbZmin) + ',' + str(self.bbZmax)
-		args = ['mpirun','-n',str(nproc),'heatlaminar_mpi','-P','points3DHF.dat','-B',bbLimits,'_lamCTL.dat',tag]
+		args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points3DHF.dat','-B',bbLimits,'_lamCTL.dat',tag]
 		current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
 		subprocess.run(args, env=current_env, cwd=self.cwd)
-		#print('mpirun -n ' + str(nproc) + ' heatlaminar_mpi' + ' -P points3DHF.dat' + ' _lamCTL.dat' + ' ' + tag)
+		#print('mpirun -n ' + str(self.NCPUs) + ' heatlaminar_mpi' + ' -P points3DHF.dat' + ' _lamCTL.dat' + ' ' + tag)
 		
-		#self.wait2finish(nproc, tag)
+		#self.wait2finish(self.NCPUs, tag)
 		self.readLaminar(tag)
 		print('3D plasma field line tracing complete')
 		log.info('3D plasma field line tracing complete')
@@ -298,8 +314,17 @@ class plasma3D:
 		file = path + '/' + 'lam_' + tag + '.dat'
 		if os.path.isfile(file): 
 			lamdata = np.genfromtxt(file,comments='#')
-			self.Lc = lamdata[:,3]
-			self.psimin = lamdata[:,4]
+			if self.useVertices:
+				Lc = lamdata[:,3]
+				psimin = lamdata[:,4]
+				N = int(len(Lc)/4)
+				Lc = Lc.reshape(N,4)
+				psimin = psimin.reshape(N,4)
+				self.Lc = Lc.mean(1)
+				self.psimin = psimin.mean(1)
+			else:
+				self.Lc = lamdata[:,3]
+				self.psimin = lamdata[:,4]
 		else:
 			print('MAFOT output file: ' + file + ' not found!')
 			log.info('MAFOT output file: ' + file + ' not found!')
@@ -326,7 +351,15 @@ class plasma3D:
 			shutil.copy(src, dst)
 
 		#self.writeCoilsupFile()
+
+		# normalization profile data
+		for tag in ['LI','LO','UI','UO']:
+			src = path + '/../' + 'lam_' + tag + '.dat'
+			dst = self.cwd + '/../' + 'lam_' + tag + '.dat'
+			if (not os.path.isfile(dst)) & os.path.isfile(src): 
+				shutil.copy(src, dst)
 		
+		# main data
 		src = path + '/' + 'lam_' + tag + '.dat'
 		dst = self.cwd + '/' + 'lam_' + tag + '.dat'
 		if os.path.isfile(src): 
@@ -343,9 +376,9 @@ class plasma3D:
 		
 	def checkValidOutput(self):
 		""" 
-		Check for invalid points in the laminar run: psimin == 10
+		Check for invalid points in the laminar run: psimin > 2
 		"""
-		idx = np.where(self.psimin == 10)[0]
+		idx = np.where(self.psimin > 2.0)[0]
 		invalid = np.zeros(len(self.psimin), dtype=bool)
 		invalid[idx] = True
 		print('Number of points for which Laminar run could not compute psimin:', np.sum(invalid))
@@ -414,7 +447,7 @@ class plasma3D:
 		return
 		
 	
-	def wait2finish(self, nproc, tag):
+	def wait2finish(self, NCPUs, tag):
 		import time
 		print ('Waiting for job to finish...', end='')
 		time.sleep(5)	# wait 5 seconds
@@ -424,8 +457,8 @@ class plasma3D:
 			
 		if not self.isComplete():
 			print('MAFOT run ended prematurely. Attempt restart...')
-			subprocess.call(['mpirun','-n',str(nproc),'heatlaminar_mpi','-P','points.dat','_lamCTL.dat',tag])
-			self.wait2finish(nproc, tag)
+			subprocess.call(['mpirun','-n',str(NCPUs),'heatlaminar_mpi','-P','points.dat','_lamCTL.dat',tag])
+			self.wait2finish(NCPUs, tag)
 		else: return
 	
 	
@@ -475,13 +508,15 @@ class heatflux3D:
 		self.psimin = None
 		self.Lc = None		# in km
 		self.N = 1
+		self.NCPUs = 100
 		self.q = np.zeros(self.N)
+		self.q0 = None
 		self.ep = None	# equilParams_class instance for EFIT equilibrium
 		self.HFS = None	# True: use high field side SOL, False: use low field side SOL
 		self.teProfileData = None
 		self.neProfileData = None
 		self.allowed_vars = ['Lcmin', 'lcfs', 'lqCN', 'S', 'P', 'radFrac', 'qBG', 
-				'teProfileData', 'neProfileData', 'kappa', 'model']
+				'teProfileData', 'neProfileData', 'kappa', 'model','NCPUs']
 
 
 	def initializeHF3D(self, ep, inputFile = None, cwd = None, inputDir = None):
@@ -622,7 +657,7 @@ class heatflux3D:
 		"""
 		Set variable types for the stuff that isnt a string from the input file
 		"""
-		integers = []
+		integers = ['NCPUs']
 		floats = ['Lcmin', 'lcfs', 'lqCN', 'S', 'P', 'radFrac', 'qBG', 'kappa']
 		bools = []
 		setAllTypes(self, integers, floats, bools)
@@ -688,6 +723,7 @@ class heatflux3D:
 		computes self.q for the chosen model
 		zeroes out invalid points
 		updates self.q
+		sets self.q0 this first time its called
 		"""
 		print('3D Heat flux model type: ' + self.model)
 		log.info('3D Heat flux model type: ' + self.model)
@@ -705,7 +741,7 @@ class heatflux3D:
 			log.info('LCFS at ' + str(self.lcfs))
 			log.info('Is on HFS: ' + str(self.HFS))
 			q = self.getq_layer()	# normalized to qmax = 1
-			q0 = self.scale_layer(self.lqCN, self.S, self.Psol*powerFrac)
+			if self.q0 is None: self.q0 = self.scale_layer(self.lqCN, self.S, self.Psol*powerFrac, DivCode)
 		elif self.model in ['conduct', 'conductive']:
 			L = np.mean(self.Lc[self.psimin > self.lcfs])*1e3	# average connection length in open field line area in m
 			ratio = self.lqCN/self.S
@@ -716,14 +752,14 @@ class heatflux3D:
 			log.info('Ratio of SOL/PFR spread: ' + format(ratio,'.1f'))
 			log.info('LCFS at ' + str(self.lcfs))
 			q = self.getq_conduct(self.psimin, kappa = self.kappa, L = L, pfr = self.pfr, ratio = ratio)
-			q0 = self.scale_conduct(self.Psol*powerFrac, self.kappa, L, ratio)
+			if self.q0 is None: self.q0 = self.scale_conduct(self.Psol*powerFrac, self.kappa, L, ratio)
 		else:
 			raise ValueError('No valid model selected')
 		
-		q *= q0
-		print('Scaling Factor q0 =', q0)	
+		q *= self.q0
+		print('Scaling Factor q0 =', self.q0)	
 		print('Background qBG =', self.qBG)
-		log.info('Scaling Factor q0 = ' + str(q0))
+		log.info('Scaling Factor q0 = ' + str(self.q0))
 		log.info('Background qBG = ' + str(self.qBG))
 		self.q[self.good] = q[self.good]
 		self.q += self.qBG
@@ -800,19 +836,24 @@ class heatflux3D:
 		# get q_hat from laminar		
 		if self.HFS: tag = 'hfs_mp'
 		else: tag = 'lfs_mp'
-		file = self.inputDir + '/' + 'lam_' + tag + '.dat'
+		file = self.cwd + '/../' + 'lam_' + tag + '.dat'
 		if os.path.isfile(file): runLaminar = False
 
 		if runLaminar:
-			with open(self.inputDir + '/' + 'points_' + tag + '.dat','w') as f:
+			with open(self.cwd + '/' + 'points_' + tag + '.dat','w') as f:
 				for i in range(len(R)):
 					f.write(str(R[i]) + '\t' + str(0.0) + '\t' + str(Z[i]) + '\n')
 					
-			nproc = 10
-			args = ['mpirun','-n',str(nproc),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
+			#nproc = 10
+			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-			subprocess.run(args, env=current_env, cwd=self.inputDir)
-			for f in glob.glob(self.inputDir + '/' + 'log*'): os.remove(f)		#cleanup
+			subprocess.run(args, env=current_env, cwd=self.cwd)
+			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
+			# move one folder down
+			src = self.cwd + '/' + 'lam_' + tag + '.dat'
+			dst = self.cwd + '/../' + 'lam_' + tag + '.dat'
+			if os.path.isfile(src): 
+				shutil.move(src, dst)
 		
 		if os.path.isfile(file): 
 			lamdata = np.genfromtxt(file,comments='#')
@@ -865,12 +906,8 @@ class heatflux3D:
 		xsep = self.map_R_psi(1.0)
 
 		# this only needs to resolve the peak well, no need to cover the entire profile, in case lq and S are large
-		if lobes:
-			s0 = self.map_R_psi(lcfs)
-			s = self.map_R_psi(np.linspace(lcfs-0.05,lcfs+0.1,10000))
-		else:
-			s0 = self.map_R_psi(1.0)
-			s = self.map_R_psi(np.linspace(0.95,1.1,10000))
+		s0 = self.map_R_psi(lcfs)
+		s = self.map_R_psi(np.linspace(lcfs-0.05,lcfs+0.1,10000))
 			
 		qref = eich_profile(s, lq, S, s0, q0 = 1, qBG = 0, fx = 1)
 		idx = qref.argmax()
@@ -892,7 +929,7 @@ class heatflux3D:
 		if lobes:
 			q[psi < lcfs] = qmax
 		
-		return q/q.max()*q0, qsep/q.max()*q0
+		return q*q0, qsep*q0
 
 
 	def map_R_psi(self, psi, HFS = None):
@@ -912,10 +949,387 @@ class heatflux3D:
 		
 		f = scinter.UnivariateSpline(p, R, s = 0, ext = 'const')	# psi outside of spline domain return the boundary value
 		return f(psi)
-	
-	
-	def scale_layer(self, lq, S, P, pfr = 1.0):
+
+
+
+	def scale_layer(self, lq, S, P, DivCode):
 		"""
+		scales HF using a part of the limiter outline in the g-file 
+		q-profile is obtained using laminar and apply the heat flux layer to psimin
+		Get scale factor q||0 (q0) for heat flux via power balance:
+		(input MW = output MW)
+		Finds strike point on surface and sets a dense grid around it
+		Integrates q_perp along surface and assumes axisymmetry.
+		q||0 = P_div / ( 2*pi integral(R(s) * q_perp * ds))
+		return q0
+		"""
+		# Parameter
+		srange = 0.3
+		ds = 0.0001
+		Nphi = 36
+		
+		# strike lines
+		d = self.ep.strikeLines()
+		if d is None: 		
+			# this means inner wall limited
+			s0 = 0	# inner wall at Z = Zaxis 						!!!!!!! this needs to be computed properly !!!!!!!!!
+			swall = np.arange(s0-srange, s0+srange, ds)
+		else:				
+			# find strike point for DivCode (this is to double check and prevent missmatches)
+			if 'Rin2' in d: N = 4
+			else: N = 2
+			Rstr = np.zeros(N)
+			Zstr = np.zeros(N)
+			Sstr = np.zeros(N)
+			keys = ['in','out','in2','out2']
+			for i in range(N):
+				Rstr[i] = d['R' + keys[i]]
+				Zstr[i] = d['Z' + keys[i]]
+				Sstr[i] = d['swall' + keys[i]]
+		
+			if 'L' in DivCode:					# Lower divertor, always 2 strike points
+				Rtmp = Rstr[Zstr < 0]
+				Ztmp = Zstr[Zstr < 0]
+				Stmp = Sstr[Zstr < 0]
+			elif 'U' in DivCode:				# Upper divertor
+				Rtmp = Rstr[Zstr > 0]
+				Ztmp = Zstr[Zstr > 0]
+				Stmp = Sstr[Zstr > 0]
+		
+			if len(Rtmp) < 2: 
+				raise RuntimeError('No strike points found for divertor ' + DivCode)
+	
+			# s0 is the strike point and s1 is the "other" strike point we don't want
+			if 'I' in DivCode:
+				if Rtmp[0] < Rtmp[1]: s0,s1 = Stmp[0],Stmp[1]
+				else: s0,s1 = Stmp[1],Stmp[0]
+			elif 'O' in DivCode:
+				if Rtmp[0] < Rtmp[1]: s0,s1 = Stmp[1],Stmp[0]
+				else: s0,s1 = Stmp[0],Stmp[1]
+
+			# set swall range
+			if s0 < s1:		# swall goes ccw for inner and cw for outer
+				dpfr = s1 - s0
+				swall = np.arange(s0 - srange, s0 + 0.4*dpfr, ds)
+			else:
+				dpfr = s0 - s1
+				swall = np.arange(s0 - 0.4*dpfr, s0 + srange, ds)
+
+		# get R,Z and write points file
+		R,Z,nR,nZ = self.ep.all_points_along_wall(swall, get_normal = True)
+
+		# Use MAFOT to get psimin
+		runLaminar = True
+		tag = DivCode
+		file = self.cwd + '/../' + 'lam_' + tag + '.dat'
+		if os.path.isfile(file): runLaminar = False		# MAFOT data already available
+
+		if runLaminar:
+			# write points file
+			with open(self.cwd + '/' + 'points_' + tag + '.dat','w') as f:
+				for j in range(Nphi):
+					phi = j*(360.0/Nphi)
+					for i in range(len(R)):
+						f.write(str(R[i]) + '\t' + str(phi) + '\t' + str(Z[i]) + '\n')
+			
+			# set bounding box
+			bbRmin = min([R.min()-0.1, self.ep.g['wall'][:,0].min()-0.1])
+			bbRmax = max([R.max()+0.1, self.ep.g['wall'][:,0].max()+0.1])
+			bbZmin = min([Z.min()-0.1, self.ep.g['wall'][:,1].min()-0.1])
+			bbZmax = max([Z.max()+0.1, self.ep.g['wall'][:,1].max()+0.1])
+			bbLimits = str(bbRmin) + ',' + str(bbRmax) + ',' + str(bbZmin) + ',' + str(bbZmax)
+			
+			# call MAFOT
+			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','-B',bbLimits,'_lamCTL.dat',tag]
+			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
+			subprocess.run(args, env=current_env, cwd=self.cwd)
+			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
+			
+			# move one folder down
+			src = self.cwd + '/' + 'lam_' + tag + '.dat'
+			dst = self.cwd + '/../' + 'lam_' + tag + '.dat'
+			if os.path.isfile(src): 
+				shutil.move(src, dst)
+		
+		# Read MAFOT data
+		if os.path.isfile(file): 
+			lamdata = np.genfromtxt(file,comments='#')
+			Lc = lamdata[:,3]
+			psimin = lamdata[:,4]
+			#BR = lamdata[:,6]
+			#BZ = lamdata[:,7]
+			#Bt = lamdata[:,8]
+		else:
+			print('File', file, 'not found') 
+			log.info('File ' + file + ' not found') 
+
+		# Find PFR
+		mask = np.zeros(len(psimin), dtype = bool)
+		pfr = np.where((psimin < 1) & (Lc < self.Lcmin))
+		mask[pfr] = True
+
+		# get parallel heat flux
+		qpar, q0tmp = self.set_layer(psimin, lq, S, lcfs = self.lcfs, lobes = True)
+		if np.sum(mask > 0): qpar[mask],_ = self.set_layer(psimin[mask], lq, S, q0 = q0tmp)
+
+		# average over the toroidal angles
+		qpar = qpar.reshape(Nphi,len(R))
+		qpar = qpar.mean(0)
+		
+		# get incident angle
+		BR = self.ep.BRFunc.ev(R,Z)
+		Bt = self.ep.BtFunc.ev(R,Z)
+		BZ = self.ep.BZFunc.ev(R,Z)
+		
+		#BR = BR.reshape(Nphi,len(R)); BR = BR.mean(0)
+		#BZ = BZ.reshape(Nphi,len(R)); BZ = BZ.mean(0)
+		#Bt = Bt.reshape(Nphi,len(R)); Bt = Bt.mean(0)
+
+		B = np.sqrt(BR**2 + Bt**2 + BZ**2)
+		nB = np.abs(nR*BR + nZ*BZ)/B
+		
+		# perpendicular heat flux
+		q = qpar*nB
+		
+		# Integrate along line and along toroidal angle (axisymm) to get total power
+		P0 = 2*np.pi * integ.simps(R*q, swall)
+		#account for nonphysical power
+		if P0 < 0: P0 = -P0
+		#Scale to input power
+		q0 = P/P0
+		return q0	#, q,mask,nB,qpar
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	def scale_layer_circle(self, lq, S, P, DivCode):
+		"""
+		DEPRECATED
+		This gives inconsistent results depending on where surface is placed
+		scales HF using a circular surface 5cm below/above lower/upper x-point 
+		q-profile is obtained using laminar and apply the heat flux layer to psimin
+		Get scale factor q||0 (q0) for heat flux via power balance:
+		(input MW = output MW)
+		Finds strike point on circular poloidal line (radius r from magnetic axis) and sets a dense grid around it
+		Integrates q_perp along line and assumes axisymmetry.
+		q||0 = P_div / ( 2*pi*r integral(R(theta) * q_perp * dtheta))
+		return q0
+		"""
+		# Define circular line
+		from scipy.optimize import bisect
+		
+		if 'L' in DivCode:					# Lower divertor
+			idx_Xpt = self.ep.g['lcfs'][:,1].argmin()
+		elif 'U' in DivCode:				# Upper divertor
+			idx_Xpt = self.ep.g['lcfs'][:,1].argmax()
+			
+		Rxpt = self.ep.g['lcfs'][idx_Xpt,0]
+		Zxpt = self.ep.g['lcfs'][idx_Xpt,1]
+		thetaxpt = self.ep.__get_theta__(Rxpt, Zxpt)
+		radius = 0.05 + np.sqrt((Rxpt - self.ep.g['RmAxis'])**2 + (Zxpt - self.ep.g['ZmAxis'])**2)
+		dth = 1e-4/radius
+	
+		f = lambda x: np.float64(self.ep.psiFunc.ev(radius*np.cos(x) + self.ep.g['RmAxis'],radius*np.sin(x) + self.ep.g['ZmAxis'])) - 1
+			
+		if 'L' in DivCode:
+			if 'I' in DivCode:
+				x0 = bisect(f,np.pi,thetaxpt)
+				theta = np.arange(x0 - 0.2/radius, thetaxpt, dth)	# about 20 cm away from strike point to center of pfr
+			elif 'O' in DivCode:
+				x0 = bisect(f,thetaxpt,2*np.pi)
+				theta = np.arange(thetaxpt, x0 + 0.2/radius, dth)
+		elif 'U' in DivCode:
+			if 'I' in DivCode:
+				x0 = bisect(f,thetaxpt,np.pi)
+				theta = np.arange(thetaxpt, x0 + 0.2/radius, dth)
+			elif 'O' in DivCode:
+				x0 = bisect(f,0,thetaxpt)
+				theta = np.arange(x0 - 0.2/radius, thetaxpt, dth)
+
+		R = radius*np.cos(theta) + self.ep.g['RmAxis']
+		Z = radius*np.sin(theta) + self.ep.g['ZmAxis']
+		
+		# Use MAFOT to get psimin
+		runLaminar = True
+		tag = DivCode
+		file = self.cwd + '/../' + 'lam_' + tag + '.dat'
+		if os.path.isfile(file): runLaminar = False		# MAFOT data already available
+
+		if runLaminar:
+			# write points file
+			with open(self.cwd + '/' + 'points_' + tag + '.dat','w') as f:
+				for j in range(5):
+					phi = j*(360/5.0)
+					for i in range(len(R)):
+						f.write(str(R[i]) + '\t' + str(phi) + '\t' + str(Z[i]) + '\n')
+			
+			# set bounding box
+			bbRmin = min([R.min()-0.1, self.ep.g['wall'][:,0].min()-0.1])
+			bbRmax = max([R.max()+0.1, self.ep.g['wall'][:,0].max()+0.1])
+			bbZmin = min([Z.min()-0.1, self.ep.g['wall'][:,1].min()-0.1])
+			bbZmax = max([Z.max()+0.1, self.ep.g['wall'][:,1].max()+0.1])
+			bbLimits = str(bbRmin) + ',' + str(bbRmax) + ',' + str(bbZmin) + ',' + str(bbZmax)
+			
+			# call MAFOT
+			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','-B',bbLimits,'_lamCTL.dat',tag]
+			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
+			subprocess.run(args, env=current_env, cwd=self.cwd)
+			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
+			
+			# move one folder down
+			src = self.cwd + '/' + 'lam_' + tag + '.dat'
+			dst = self.cwd + '/../' + 'lam_' + tag + '.dat'
+			if os.path.isfile(src): 
+				shutil.move(src, dst)
+		
+		# Read MAFOT data
+		if os.path.isfile(file): 
+			lamdata = np.genfromtxt(file,comments='#')
+			Lc = lamdata[:,3]
+			psimin = lamdata[:,4]
+		else:
+			print('File', file, 'not found') 
+			log.info('File ' + file + ' not found') 
+
+		# Find PFR
+		mask = np.zeros(len(psimin), dtype = bool)
+		pfr = np.where((psimin < 1) & (Lc < self.Lcmin))
+		mask[pfr] = True
+
+		# get parallel heat flux
+		qpar, q0tmp = self.set_layer(psimin, lq, S, lcfs = self.lcfs, lobes = True)
+		if np.sum(mask > 0): qpar[mask],_ = self.set_layer(psimin[mask], lq, S, q0 = q0tmp)
+
+		# average over the toroidal angles
+		qpar = qpar.reshape(5,len(R))
+		qpar = qpar.mean(0)
+		
+		# get incident angle
+		BR = self.ep.BRFunc.ev(R,Z)
+		Bt = self.ep.BtFunc.ev(R,Z)
+		BZ = self.ep.BZFunc.ev(R,Z)
+		B = np.sqrt(BR**2 + Bt**2 + BZ**2)
+		
+		nR = self.ep.g['RmAxis'] - R
+		nZ = self.ep.g['ZmAxis'] - Z
+		norm = np.sqrt(nR**2 + nZ**2)
+		nR = nR/norm
+		nZ = nZ/norm
+		
+		nB = np.abs(nR*BR + nZ*BZ)/B
+		
+		# perpendicular heat flux
+		q = qpar*nB
+		
+		# Integrate along line and along toroidal angle (axisymm) to get total power
+		P0 = 2*np.pi * integ.simps(radius*R*q, theta)
+		#account for nonphysical power
+		if P0 < 0: P0 = -P0
+		#Scale to input power
+		q0 = P/P0
+		return q0	#, q,mask,nB,qpar
+
+
+	def scale_layer_mpVar(self, lq, S, P):
+		"""
+		DEPRECATED
+		scales HF using a R-profile along the midplane at phi = 0
+		q-profile is obtained using laminar and apply the heat flux layer to psimin
+		Get scale factor q||0 (q0) for heat flux via power balance:
+		(input MW = output MW)
+		Creates a dense (1000pts) R-grid at the midplane (Z = Zaxis) to get higher resolution
+		integral.  Integrates q_hat with respect to psi.
+		q||0 = P_div / ( 2*pi* integral(q_hat dPsi ))
+		return q0
+		"""		
+		# Parameter
+		dR = 0.0001		#(20*lq + 20*S)*(1e-6)		# 1000 points over the range of Rlcfs-20*lq <-> Rlcfs+20*S
+		Nphi = 5
+
+		# Get a psi range that fully covers the profile for integration. Peak location does not matter, so use s0 from psi = 1.0
+		Rlcfs = self.map_R_psi(self.lcfs)
+		if self.HFS:
+			Rmin = min(self.ep.g['R']) + 0.01
+			#Rmin = Rlcfs - 20.0*lq*(1e-3)		#in m
+			#if Rmin < min(self.ep.g['R']): Rmin = min(self.ep.g['R'])	#if Rmin outside EFIT grid, cap at minimum R of grid
+			Rmax = Rlcfs + 20.0*S*(1e-3)		#in m
+			if Rmax > self.ep.g['RmAxis']: Rmax = self.ep.g['RmAxis']	#if Rmax is outside the magnetic axis, psi would increase again, so cap at axis
+		else:
+			Rmin = Rlcfs - 20.0*S*(1e-3)		#in m
+			if Rmin < self.ep.g['RmAxis']: Rmin = self.ep.g['RmAxis']	#if Rmin is inside the magnetic axis, psi would increase again, so cap at axis
+			#Rmax = Rlcfs + 20.0*lq*(1e-3)		#in m
+			#if Rmax > max(self.ep.g['R']): Rmax = max(self.ep.g['R'])	#if Rmax is outside EFIT grid, cap at maximum R of grid
+			Rmax = max(self.ep.g['R']) - 0.01
+
+		R = np.arange(Rmin,Rmax,dR)
+		Z = self.ep.g['ZmAxis']*np.ones(R.shape)
+		
+		# get q_hat from laminar		
+		runLaminar = True
+		if self.HFS: tag = 'hfs_mp'
+		else: tag = 'lfs_mp'
+		file = self.cwd + '/../' + 'lam_' + tag + '.dat'
+		if os.path.isfile(file): runLaminar = False
+
+		if runLaminar:
+			with open(self.cwd + '/' + 'points_' + tag + '.dat','w') as f:
+				for j in range(Nphi):
+					phi = j*(360.0/Nphi)
+					for i in range(len(R)):
+						f.write(str(R[i]) + '\t' + str(phi) + '\t' + str(Z[i]) + '\n')
+			
+			#nproc = 10
+			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
+			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
+			subprocess.run(args, env=current_env, cwd=self.cwd)
+			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
+			# move one folder down
+			src = self.cwd + '/' + 'lam_' + tag + '.dat'
+			dst = self.cwd + '/../' + 'lam_' + tag + '.dat'
+			if os.path.isfile(src): 
+				shutil.move(src, dst)
+		
+		if os.path.isfile(file): 
+			lamdata = np.genfromtxt(file,comments='#')
+			psimin = lamdata[:,4]
+		else:
+			print('File', file, 'not found') 
+			log.info('File ' + file + ' not found') 
+
+		
+		qpar,_ = self.set_layer(psimin, lq, S, lcfs = self.lcfs)
+
+		# average over the toroidal angles
+		qpar = qpar.reshape(Nphi,len(R))
+		qpar = qpar.mean(0)
+		
+		#Menard's method
+		psiN = self.ep.psiFunc.ev(R,Z)	# this is normalized
+		psi = psiN * (self.ep.g['psiSep']-self.ep.g['psiAxis']) + self.ep.g['psiAxis']	# this is flux
+		P0 = 2*np.pi * integ.simps(qpar, psi)
+		#account for nonphysical power
+		if P0 < 0: P0 = -P0
+		#Scale to input power
+		q0 = P/P0
+		return q0	#, q_hat,R,psiN,psi
+
+	
+	def scale_layer_mp(self, lq, S, P, pfr = 1.0):
+		"""
+		DEPRECATED
 		scales HF using a R-profile along the midplane at phi = 0
 		q-profile is obtained using laminar and apply the heat flux layer to psimin
 		Get scale factor q||0 (q0) for heat flux via power balance:
@@ -929,36 +1343,44 @@ class heatflux3D:
 		runLaminar = True
 		# Get a psi range that fully covers the profile for integration. Peak location does not matter, so use s0 from psi = 1.0
 		Rlcfs = self.map_R_psi(self.lcfs)
+		dR = 0.0001		#(20*lq + 20*S)*(1e-6)		# 1000 points over the range of Rlcfs-20*lq <-> Rlcfs+20*S
 		if self.HFS:
-			Rmin = Rlcfs - 20.0*lq*(1e-3)		#in m
-			if Rmin < min(self.ep.g['R']): Rmin = min(self.ep.g['R'])	#if Rmin outside EFIT grid, cap at minimum R of grid
+			Rmin = min(self.ep.g['R']) + 0.01
+			#Rmin = Rlcfs - 20.0*lq*(1e-3)		#in m
+			#if Rmin < min(self.ep.g['R']): Rmin = min(self.ep.g['R'])	#if Rmin outside EFIT grid, cap at minimum R of grid
 			Rmax = Rlcfs + 20.0*S*(1e-3)		#in m
 			if Rmax > self.ep.g['RmAxis']: Rmax = self.ep.g['RmAxis']	#if Rmax is outside the magnetic axis, psi would increase again, so cap at axis
 		else:
 			Rmin = Rlcfs - 20.0*S*(1e-3)		#in m
 			if Rmin < self.ep.g['RmAxis']: Rmin = self.ep.g['RmAxis']	#if Rmin is inside the magnetic axis, psi would increase again, so cap at axis
-			Rmax = Rlcfs + 20.0*lq*(1e-3)		#in m
-			if Rmax > max(self.ep.g['R']): Rmax = max(self.ep.g['R'])	#if Rmax is outside EFIT grid, cap at maximum R of grid
+			#Rmax = Rlcfs + 20.0*lq*(1e-3)		#in m
+			#if Rmax > max(self.ep.g['R']): Rmax = max(self.ep.g['R'])	#if Rmax is outside EFIT grid, cap at maximum R of grid
+			Rmax = max(self.ep.g['R']) - 0.01
 
-		R = np.linspace(Rmin,Rmax,1000)
+		R = np.arange(Rmin,Rmax,dR)
 		Z = self.ep.g['ZmAxis']*np.ones(R.shape)
 		
 		# get q_hat from laminar		
 		if self.HFS: tag = 'hfs_mp'
 		else: tag = 'lfs_mp'
-		file = self.inputDir + '/' + 'lam_' + tag + '.dat'
+		file = self.cwd + '/../' + 'lam_' + tag + '.dat'
 		if os.path.isfile(file): runLaminar = False
 
 		if runLaminar:
-			with open(self.inputDir + '/' + 'points_' + tag + '.dat','w') as f:
+			with open(self.cwd + '/' + 'points_' + tag + '.dat','w') as f:
 				for i in range(len(R)):
 					f.write(str(R[i]) + '\t' + str(0.0) + '\t' + str(Z[i]) + '\n')
-					
-			nproc = 10
-			args = ['mpirun','-n',str(nproc),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
+			
+			#nproc = 10
+			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-			subprocess.run(args, env=current_env, cwd=self.inputDir)
-			for f in glob.glob(self.inputDir + '/' + 'log*'): os.remove(f)		#cleanup
+			subprocess.run(args, env=current_env, cwd=self.cwd)
+			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
+			# move one folder down
+			src = self.cwd + '/' + 'lam_' + tag + '.dat'
+			dst = self.cwd + '/../' + 'lam_' + tag + '.dat'
+			if os.path.isfile(src): 
+				shutil.move(src, dst)
 		
 		if os.path.isfile(file): 
 			lamdata = np.genfromtxt(file,comments='#')
@@ -984,7 +1406,7 @@ class heatflux3D:
 		if P0 < 0: P0 = -P0
 		#Scale to input power
 		q0 = P/P0
-		return q0 #, q_hat,R,psiN,psi
+		return q0	#, q_hat,R,psiN,psi
 
 
 	def fluxConversion(self, R):
@@ -1003,6 +1425,7 @@ class heatflux3D:
 	
 	def scale_layer2D(self, lq, S, P, HFS = False):
 		"""
+		DEPRECATED
 		scales HF using a 2D profile, as if lcfs = 1.0
 		Get scale factor q||0 (q0) for heat flux via power balance:
 		(input MW = output MW)
