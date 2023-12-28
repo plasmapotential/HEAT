@@ -1,5 +1,6 @@
 # Input file for HEAT
 # Format is: Variable, Value
+# See HEAT readthedocs or code comments for descriptions
 #=============================================================
 #                IO Variables
 #=============================================================
