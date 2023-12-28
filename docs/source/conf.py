@@ -55,4 +55,5 @@ html_static_path = ['_static']
 
 #fake imports so that we dont need the docker container to run sphinx builds
 autodoc_mock_imports = ["EFIT", "FreeCAD", "Part", "Mesh", "MeshPart", "Import", 
-                        "werkzeug", "PyFoam", "trimesh"]
+                        "werkzeug", "PyFoam", "trimesh", "numpy", "stl", "pandas",
+                        ]
