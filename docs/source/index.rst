@@ -23,23 +23,24 @@ The objective is to enable engineers and physicists to quickly ascertain heat lo
 configurations and geometric configurations.
 
 Some examples of what HEAT can predict:
- * 3D heat loads from 2D plasmas for limited and diverted discharges
+ * 3D heat loads from 2D and 3D plasmas for limited and diverted discharges
  * Heat fluxes from the optical approximation, ion gyro orbit approximation, and photon flux
+ * Heat and particle fluxes from filaments
+ * 3D heat flux profiles from RMPs and Error Fields
  * Time varying heat loads and temperature profiles
  * Magnetic field line traces
  * Many other quantities
 
 
 The latest release of HEAT is v3.0, which includes the following notable additions / patches:
- * Open3D, which can accelerate ray tracing by 100X in some cases
- * New GUI using Dash Bootstrap Components.  User can choose GUI theme.
- * Updates to the ion gyro-orbit module after work published in Nuclear Fusion journal (T. Looby et al 2022 Nucl. Fusion 62 106020)
- * Photon radiation heat flux predictions from an axisymmetric radiation profile
+ * A filament tracer, based upon the Fundamenski Free Streaming Model (W Fundamenski et al 2006 Plasma Phys. Control. Fusion 48 109)
+ * Compatibility with M3DC1 equilibria for 3D field tracing and footprints
+ * Patch for photon tracing which results in 10X speedup in some cases
  * Numerous other bug fixes and user requests
 
 
 The following physics modules are scheduled to be added to HEAT soon:
- * 3D plasmas using M3DC1
+ * GPU Support
 
 To cite HEAT, you can use a paper published by the journal Fusion Science and Technology under open access.  The paper can be found here: https://doi.org/10.1080/15361055.2021.1951532
 

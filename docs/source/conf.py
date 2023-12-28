@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.abspath('../../source'))
 # -- Project information -----------------------------------------------------
 
 project = 'HEAT'
-copyright = '2022, Tom Looby'
+copyright = '2023, Tom Looby'
 author = 'Tom Looby'
 
 # The full version, including alpha/beta/rc tags
