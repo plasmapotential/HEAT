@@ -112,7 +112,7 @@ class TUI():
           radix, which corresponds to nanosecond resolution (defined in engineClass
           initialization function call)
         
-        :GEQDSK:  magnetic equilibrium file (ie EFIT) in GEQDSK format
+        :GEQDSK:  magnetic equilibrium file (ie EFIT) in GEQDSK format.  
           Psi should be in units of Wb/rad (divided by 2pi) and the Bt0, Fpol, Psi
           and Ip values should reflect COCOS.
 
@@ -156,6 +156,7 @@ class TUI():
         Example line for an NSTX-U run for pulse 204118 timestep 4ms:
 
         MachFlag, Tag, Shot, TimeStep, GEQDSK, CAD, PFC, Input, Output
+
         nstx,run1, 204118, 0.004, geqdsk.00004, IBDH_2tiles.step, PFCs_run1.csv, NSTXU_input.csv, B:hfOpt
         
         And the directory structure would look like this
