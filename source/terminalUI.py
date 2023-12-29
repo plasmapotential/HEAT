@@ -97,17 +97,28 @@ class TUI():
 
         :Tag:  user specified tag to label the simulation by.  Tags represent
           independent HEAT runs.  For time varying discharges with multiple
-          GEQDSK files, tag should be repeated on multiple lines with the GEQDSK
-          for each timestep in each line.
+          GEQDSK files, tag should be repeated on multiple lines with the 
+          TimeStep column changing.
 
-        :GEQDSK: magnetic equilibrium file (ie EFIT) in GEQDSK format
-          naming convention is g<shot>.<timestep> where <shot> is the integer
-          shot number (6 digits) and timestep is the timestep in ms (5 digits).
-          For example, shot 204118 timestep 50ms would be g204118.00050
+        :Shot:  pulse number to use for saving HEAT output (MachFlag_Shot).  Default is to
+          allow for 6 sig figs of shot numbers.  SigFigs can be changed in engineClass
+          object initialization function call.
+        
+        :TimeStep: Timestep that the equilibrium defined in "GEQDSK" column corresponds
+          to.  GEQDSKs can be named in multiple formats, but the TimeStep in 
+          this row is what is used by HEAT.  For time varying discharges, tag 
+          should be repeated on multiple lines with the TimeStep column changing.
+          Timestep units are [s].  Default is to allow for 9 SigFigs after the
+          radix, which corresponds to nanosecond resolution (defined in engineClass
+          initialization function call)
+        
+        :GEQDSK:  magnetic equilibrium file (ie EFIT) in GEQDSK format
+          Psi should be in units of Wb/rad (divided by 2pi) and the Bt0, Fpol, Psi
+          and Ip values should reflect COCOS.
 
         :CAD: CAD file for the tag.  Note that HEAT will use the first CAD file provided
           in for each tag.  Subsequent lines in that tag are ignored.  In other words,
-          there can only be one CAD file per tag.
+          there can only be one CAD file per tag.  Can be STEP, IGES, or FCStd formats.
 
         :PFC: PFC file for the tag.  Note that HEAT will use the first PFC file provided
           in for each tag.  Subsequent lines in that tag are ignored.  In other words,
@@ -142,12 +153,11 @@ class TUI():
         - <path>/MachFlag/PFC
         - <path>/MachFlag/Input
 
-        Example for an NSTX-U run:
+        Example line for an NSTX-U run for pulse 204118 timestep 4ms:
 
-        MachFlag, Tag, GEQDSK, CAD, PFC, Input, Output
-
-        nstx,run1, g204118.00004, IBDH_2tiles.step, PFCs_run1.csv, NSTXU_input.csv, B:hfOpt
-
+        MachFlag, Tag, Shot, TimeStep, GEQDSK, CAD, PFC, Input, Output
+        nstx,run1, 204118, 0.004, geqdsk.00004, IBDH_2tiles.step, PFCs_run1.csv, NSTXU_input.csv, B:hfOpt
+        
         And the directory structure would look like this
 
         - <path>/batchFile.dat
