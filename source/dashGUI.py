@@ -815,8 +815,7 @@ def loadMHD(n_clicks,shot,traceLength,dpinit,gFileList,gFileData,plasma3Dmask,da
     marks = {}
     for t in ts:
         if t in tAll:
-            marks.update({int(t):'{}'.format(t)})
-
+            marks.update({t:'{}'.format(t)})
     value = ts[0]
 
 
