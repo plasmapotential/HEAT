@@ -929,7 +929,7 @@ class heatflux3D:
 		if lobes:
 			q[psi < lcfs] = qmax
 		
-		return q*q0, qsep*q0
+		return q*q0/qmax, qsep*q0/qmax
 
 
 	def map_R_psi(self, psi, HFS = None):
@@ -949,7 +949,6 @@ class heatflux3D:
 		
 		f = scinter.UnivariateSpline(p, R, s = 0, ext = 'const')	# psi outside of spline domain return the boundary value
 		return f(psi)
-
 
 
 	def scale_layer(self, lq, S, P, DivCode):
@@ -1098,21 +1097,6 @@ class heatflux3D:
 		#Scale to input power
 		q0 = P/P0
 		return q0	#, q,mask,nB,qpar
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 	def scale_layer_circle(self, lq, S, P, DivCode):
