@@ -951,7 +951,7 @@ class heatflux3D:
 		return f(psi)
 
 
-	def scale_layer(self, lq, S, P, DivCode):
+	def scale_layer(self, lq, S, P, DivCode, verfyScaling = True):
 		"""
 		scales HF using a part of the limiter outline in the g-file 
 		q-profile is obtained using laminar and apply the heat flux layer to psimin
@@ -1070,11 +1070,46 @@ class heatflux3D:
 		# get parallel heat flux
 		qpar, q0tmp = self.set_layer(psimin, lq, S, lcfs = self.lcfs, lobes = True)
 		if np.sum(mask > 0): qpar[mask],_ = self.set_layer(psimin[mask], lq, S, q0 = q0tmp)
-
-		# average over the toroidal angles
 		qpar = qpar.reshape(Nphi,len(R))
-		qpar = qpar.mean(0)
-		
+
+		# filter for outliers
+		threshold = qpar.max(1).mean() + qpar.max(1).std()	# get max at each angle. outliers are > than average maximum + one standard deviation of all maxima
+		idx = np.where(qpar > threshold)
+
+		if verfyScaling:
+			with open(self.cwd + '/../' + 'qpar_' + tag + '.dat','w') as f:
+				f.write('# Parallel heat flux along g-file limiter for this divertor at multiple toroidal angles\n')
+				f.write('# The field line tracing is in file: ' + file + '\n')			
+				f.write('# Nphi = ' + str(Nphi) + '\n')
+				f.write('# lq = ' + str(lq) + '\n')
+				f.write('# S = ' + str(S) + '\n')
+				f.write('# lcfs = ' + str(self.lcfs) + '\n')
+				f.write('# Lcmin = ' + str(self.Lcmin) + '\n')
+				f.write('# Number of outliers = ' + str(len(idx[0])) + '\n')
+				f.write('# Filter threshold = ' + str(threshold) + '  Use: idx = np.where(qpar > threshold)' + '\n')
+				try: f.write('# Average outlier value = ' + str(qpar[idx].mean()) + '\n')
+				except: f.write('# Average outlier value = None\n')
+				f.write('# Each column of qpar is at another angle with phi[i] = i * 2pi/Nphi\n')
+				f.write('#\n')
+				f.write('# R[m]  Z[m]  swall[m]  qpar[phi,swall]\n')
+				f.write('#\n')
+				for i in range(len(R)):
+					f.write(str(R[i]) + '\t' + str(Z[i]) + '\t' + str(swall[i]))
+					for j in range(Nphi):
+						f.write('\t' + str(qpar[j,i]))
+					f.write('\n')
+
+		if len(idx[0]) > 0:
+			print('Filtering outliers: number = ' + str(len(idx[0])) + ', threshold = ' + str(threshold) + ', <outlier value> = ' + str(qpar[idx].mean()))
+			log.info('Filtering outliers: number = ' + str(len(idx[0])) + ', threshold = ' + str(threshold) + ', <outlier value> = ' + str(qpar[idx].mean()))
+			qpar[idx] = 0
+		else:
+			print('Filtering outliers: None found')
+			log.info('Filtering outliers: None found')
+			
+		# average over the toroidal angles
+		qparm = qpar.mean(0)
+
 		# get incident angle
 		BR = self.ep.BRFunc.ev(R,Z)
 		Bt = self.ep.BtFunc.ev(R,Z)
@@ -1088,7 +1123,7 @@ class heatflux3D:
 		nB = np.abs(nR*BR + nZ*BZ)/B
 		
 		# perpendicular heat flux
-		q = qpar*nB
+		q = qparm*nB
 		
 		# Integrate along line and along toroidal angle (axisymm) to get total power
 		P0 = 2*np.pi * integ.simps(R*q, swall)
@@ -1554,4 +1589,141 @@ def readShadowFile(f, PFC):
 
 	return val
 
+
+def gridMaker(ep, DivCode, ds = 0.0001, srange = 0.3, write = False, cwd = None, Nphi = 1, plotme = True):
+	"""
+	Generates the grid on the g-file limiter for field line tracing to be used in scaling the heat flux models.
+	"""
+	# strike lines
+	d = ep.strikeLines()
+	if d is None: 		
+		# this means inner wall limited
+		s0 = 0	# inner wall at Z = Zaxis 						!!!!!!! this needs to be computed properly !!!!!!!!!
+		swall = np.arange(s0-srange, s0+srange, ds)
+	else:				
+		# find strike point for DivCode (this is to double check and prevent missmatches)
+		if 'Rin2' in d: N = 4
+		else: N = 2
+		Rstr = np.zeros(N)
+		Zstr = np.zeros(N)
+		Sstr = np.zeros(N)
+		keys = ['in','out','in2','out2']
+		for i in range(N):
+			Rstr[i] = d['R' + keys[i]]
+			Zstr[i] = d['Z' + keys[i]]
+			Sstr[i] = d['swall' + keys[i]]
+		
+		if 'L' in DivCode:					# Lower divertor, always 2 strike points
+			Rtmp = Rstr[Zstr < 0]
+			Ztmp = Zstr[Zstr < 0]
+			Stmp = Sstr[Zstr < 0]
+		elif 'U' in DivCode:				# Upper divertor
+			Rtmp = Rstr[Zstr > 0]
+			Ztmp = Zstr[Zstr > 0]
+			Stmp = Sstr[Zstr > 0]
+		
+		if len(Rtmp) < 2: 
+			raise RuntimeError('No strike points found for divertor ' + DivCode)
+	
+		# s0 is the strike point and s1 is the "other" strike point we don't want
+		if 'I' in DivCode:
+			if Rtmp[0] < Rtmp[1]: s0,s1 = Stmp[0],Stmp[1]
+			else: s0,s1 = Stmp[1],Stmp[0]
+		elif 'O' in DivCode:
+			if Rtmp[0] < Rtmp[1]: s0,s1 = Stmp[1],Stmp[0]
+			else: s0,s1 = Stmp[0],Stmp[1]
+
+		# set swall range
+		if s0 < s1:		# swall goes ccw for inner and cw for outer
+			dpfr = s1 - s0
+			swall = np.arange(s0 - srange, s0 + 0.4*dpfr, ds)
+		else:
+			dpfr = s0 - s1
+			swall = np.arange(s0 - 0.4*dpfr, s0 + srange, ds)
+
+	# get R,Z and write points file
+	R,Z,nR,nZ = ep.all_points_along_wall(swall, get_normal = True)
+
+	if write:
+		if cwd is None: cwd = os.getcwd()
+		with open(cwd + '/' + 'points_' + DivCode + '.dat','w') as f:
+			for j in range(Nphi):
+				phi = j*(360.0/Nphi)
+				for i in range(len(R)):
+					f.write(str(R[i]) + '\t' + str(phi) + '\t' + str(Z[i]) + '\n')
+
+	# plot stuff
+	if plotme:
+		import matplotlib.pyplot as plt
+		ep.plot()
+		plt.plot(R,Z,'r-')
+	
+		bbRmin = np.round(min([R.min()-0.1, ep.g['wall'][:,0].min()-0.1]),3)
+		bbRmax = np.round(max([R.max()+0.1, ep.g['wall'][:,0].max()+0.1]),3)
+		bbZmin = np.round(min([Z.min()-0.1, ep.g['wall'][:,1].min()-0.1]),3)
+		bbZmax = np.round(max([Z.max()+0.1, ep.g['wall'][:,1].max()+0.1]),3)
+		bbLimits = str(bbRmin) + ',' + str(bbRmax) + ',' + str(bbZmin) + ',' + str(bbZmax)
+		print(bbLimits)
+	
+		plt.plot([bbRmin,bbRmax],[bbZmin,bbZmin],'g--')
+		plt.plot([bbRmax,bbRmax],[bbZmin,bbZmax],'g--')
+		plt.plot([bbRmin,bbRmax],[bbZmax,bbZmax],'g--')
+		plt.plot([bbRmin,bbRmin],[bbZmin,bbZmax],'g--')
+	
+		plt.xlim(bbRmin-0.05,bbRmax+0.05)
+		plt.ylim(bbZmin-0.05,bbZmax+0.05)
+
+	return R,Z,nR,nZ,swall
+
+
+def checkScaling(file, plotme =True):
+	"""
+	Reads the output file for heat flux scaling and plots the results to allow for visual verification
+	"""
+	data = np.genfromtxt(file,comments='#')
+	R = data[:,0] 
+	Z = data[:,1] 
+	swall = data[:,2] 
+	qpar = data[:,3::].T	# transpose to be consistent with array structure inside the class 
+	Ns, Nphi = qpar.shape
+	qparm = qpar.mean(0)
+	
+	threshold = qpar.max(1).mean() + qpar.max(1).std()	# get max at each angle. outliers are > than average maximum + one standard deviation of all maxima
+	idx = np.where(qpar > threshold)	
+	print('Filtering outliers: number = ' + str(len(idx[0])) + ', threshold = ' + str(threshold) + ', <outlier value> = ' + str(qpar[idx].mean()))
+	qpar[idx] = 0
+	
+	# plot stuff
+	if plotme:
+		import matplotlib.pyplot as plt
+		plt.figure()
+		plt.plot(swall,qparm,'k-', label = 'original')
+		plt.plot(swall,qpar.mean(0),'r-', label = 'filtered')
+		plt.legend(fontsize = 14)
+		plt.xlabel('S$_{wall}$ [m]')
+		plt.ylabel('q$_{||}$ [a.u.]')
+		
+	return swall, qpar
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 
