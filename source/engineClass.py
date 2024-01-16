@@ -3388,6 +3388,8 @@ class engineObj():
         tools.initializeInput(self.FIL, self.infile)
         tools.initializeInput(self.RAD, self.infile)
         tools.initializeInput(self.OF, self.infile)
+        tools.initializeInput(self.plasma3D, self.infile)
+        tools.initializeInput(self.hf3D, self.infile)
 
         inputDict = {
                     'shot': self.MHD.shot,
@@ -3445,6 +3447,7 @@ class engineObj():
                     'phiMax':self.RAD.phiMax,
                     'Ntor':self.RAD.Ntor,
                     'Nref':self.RAD.Nref,
+                    'plasma3Dmask':self.plasma3D.plasma3Dmask,
                     }
         print("Loaded inputs")
 

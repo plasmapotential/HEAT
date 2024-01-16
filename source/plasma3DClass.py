@@ -49,8 +49,13 @@ class plasma3D:
 		self.allowed_vars = ['plasma3Dmask','shot','time','tmax','gFile','itt','response',
 				'selectField','useIcoil','sigma','charge','Ekin','Lambda','Mass','loadHF',
 				'loadBasePath','NCPUs']
-	
-	
+
+	def allowed_class_vars(self):
+		self.allowed_vars = ['plasma3Dmask','shot','time','tmax','gFile','itt','response',
+		'selectField','useIcoil','sigma','charge','Ekin','Lambda','Mass','loadHF',
+		'loadBasePath','NCPUs']	
+		return
+
 	def initializePlasma3D(self, shot, time, gFile = None, inputFile = None, cwd = None, inputDir = None):
 		"""
 		Set up basic input vars
@@ -515,9 +520,11 @@ class heatflux3D:
 		self.HFS = None	# True: use high field side SOL, False: use low field side SOL
 		self.teProfileData = None
 		self.neProfileData = None
+
+	def allowed_class_vars(self):
 		self.allowed_vars = ['Lcmin', 'lcfs', 'lqCN', 'S', 'P', 'radFrac', 'qBG', 
 				'teProfileData', 'neProfileData', 'kappa', 'model','NCPUs']
-
+		return
 
 	def initializeHF3D(self, ep, inputFile = None, cwd = None, inputDir = None):
 		"""
