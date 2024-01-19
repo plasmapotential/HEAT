@@ -195,6 +195,11 @@ class MHD:
                 except: useHeatTimeFmt = False
             else: useHeatTimeFmt = False
         
+        print("HEAT time format: " + str(useHeatTimeFmt))
+        print("D3D time format: " + str(useD3DtimeFmt))
+        log.info("HEAT time format: " + str(useHeatTimeFmt))
+        log.info("D3D time format: " + str(useD3DtimeFmt))        
+        
         ts = []
         for i,g in enumerate(gFileList):
             #GEQDSKs are named using timesteps
@@ -205,9 +210,7 @@ class MHD:
                 ts.append(float(g.split('.')[-1]))
             #GEQDSKs do not follow HEAT or D3D naming convention
             else:
-                ts.append(i)
-
-        #print('Timesteps:', ts)
+                ts.append(float(i))
         return np.array(ts)
 
     def getGEQDSK(self, ts, gFileList):
@@ -573,7 +576,13 @@ class MHD:
         #run MAFOT structure for points in gridfile
         from subprocess import run
         run(args, env=current_env, cwd=controlfilePath)
-        run(['rm', 'log_*'], env=current_env, cwd=controlfilePath)
+        try:
+            print("Removing MAFOT logs")
+            log.info("Removing MAFOT logs")
+            run(['rm', 'log_*'], env=current_env, cwd=controlfilePath)
+        except:
+            print("Cannot delete MAFOT logs")
+            log.info("Cannot delete MAFOT logs")
 
         if paraview_mask:
             #This file is not in the format we want, so we read it in, and then

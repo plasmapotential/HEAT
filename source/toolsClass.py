@@ -997,6 +997,9 @@ class tools:
         print("Changing directory ownership recursively")
         print("GID: {:d}".format(GID))
         print("UID: {:d}".format(UID))
+        log.info("Changing directory ownership recursively")
+        log.info("GID: {:d}".format(GID))
+        log.info("UID: {:d}".format(UID))
         for dirpath, dirnames, filenames in os.walk(path):
             os.chown(dirpath, UID, GID)
             os.chmod(dirpath, chmod)

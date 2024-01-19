@@ -2826,6 +2826,8 @@ def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
 
     #Bfield trace
     if 'Btrace' in Btrace:
+        print("Tracing magnetic field lines...")
+        log.info("Tracing magnetic field lines...")
         gui.BtraceMultiple(BtraceTableData, t)
 
     #gyro orbit trace
@@ -2865,6 +2867,7 @@ def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
     #set tree permissions
     tools.recursivePermissions(gui.MHD.shotPath, gui.UID, gui.GID, gui.chmod)
     print("\nReturned to GUI.  HEAT run complete.\n")
+    log.info("\nReturned to GUI.  HEAT run complete.\n")
 
     return ([html.Label("HEAT Run Complete", className="text-success")],
             qDistFig,

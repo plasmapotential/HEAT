@@ -1368,7 +1368,6 @@ class engineObj():
         data = data.rename(columns=lambda x: x.strip())
         data = data.astype({"x[mm]": float, "y[mm]": float, "z[mm]": float, "traceDirection": int, "Length[deg]":float, "stepSize[deg]":float})
 
-        t = int(t)
         tIdx = np.where(float(t)==self.MHD.timesteps)[0][0]
         traceDirection=data['traceDirection']
         x = data['x[mm]'] / 1000.0
@@ -1392,15 +1391,16 @@ class engineObj():
 
         gridfile = self.MHD.shotPath + self.tsFmt.format(t) + '/struct_grid.dat'
         controlfilePath = self.MHD.shotPath + self.tsFmt.format(t) + '/'
-        structOutfile = controlfilePath + 'struct.dat'
-
+        #structOutfile = controlfilePath + 'struct.dat'
         for i in range(len(xyz)):
             self.MHD.ittStruct = data['Length[deg]'][i] / data['stepSize[deg]'][i]
             self.MHD.dpinit = data['stepSize[deg]'][i]
             self.MHD.writeControlFile(controlfile, t, data['traceDirection'][i], mode='struct')
             self.MHD.writeMAFOTpointfile(xyz[i,:],gridfile)
             self.MHD.getFieldpath(dphi, gridfile, controlfilePath, controlfile, paraview_mask=True, tag='pt{:03d}'.format(i))
-            os.remove(structOutfile)
+            #os.remove(structOutfile)
+
+
         return
 
 
@@ -1677,6 +1677,7 @@ class engineObj():
         allowedOptions = ['hfOpt', 'pwrDir', 'bdotn', 'B', 'psiN', 'norm', 'hfGyro', 'hfRad', 'hfFil']
         if len([i for i in runList if i in allowedOptions]) < 1:
             print("No HEAT runList option to run.  Breaking out of engineClass runHEAT loop.")
+            log.info("No HEAT runList option to run.  Breaking out of engineClass runHEAT loop.")
             return
         else:
             self.runList = runList
