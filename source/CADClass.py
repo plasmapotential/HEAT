@@ -27,6 +27,7 @@ import Mesh
 import MeshPart
 #sys.path = oldpath
 import Import
+import Fem
 import stl
 
 
@@ -41,6 +42,7 @@ import logging
 log = logging.getLogger(__name__)
 
 import open3d as o3d
+
 
 
 class CAD:
@@ -1489,3 +1491,71 @@ class CAD:
         colors[:] = color
         ls.colors = o3d.utility.Vector3dVector(colors)
         return ls
+    
+    def createFEMmeshNetgen(self, obj, MaxSize=1000, Fineness="Moderate",
+                          Optimize = True, SecondOrder=True, name='FEMMeshNetgen'):
+        """
+        Creates a FEM mesh object using the netgen mesher.  User specifies
+        the size and fineness of the mesh
+
+        Some of the functionality in this function may not work depending on the 
+        freecad version.  older versions do not have netgen module.
+        also requires an environment with netgen installed (from apt repo)
+
+        """
+        print("Generating Mesh Obj")
+        doc = self.CADdoc
+        mesh = doc.addObject('Fem::FemMeshShapeNetgenObject', name)
+        mesh.Shape = obj
+        mesh.MaxSize = MaxSize
+        mesh.Fineness = Fineness
+        mesh.Optimize = Optimize
+        mesh.SecondOrder = SecondOrder
+        doc.recompute()
+        
+        if hasattr(self, 'FEMmeshes'):
+            if self.FEMmeshes is None:
+                self.FEMmeshes = [mesh]
+            else:
+                self.FEMmeshes.append(mesh)
+        else:
+            self.FEMmeshes = [mesh]
+        return
+
+
+    def createFEMmeshGmsh(self, obj, maxLength=0, name='FEMMeshGmsh', verbose=False):
+        """
+        Creates a FEM mesh object using the Gmsh mesher.  User specifies
+        the maximum length of the mesh elements, which defaults to 0 (auto)
+
+        Some of the functionality in this function may not work depending on the 
+        freecad version.  older versions do not have ObjectsFem module.
+        also requires an environment with gmsh installed (from apt repo)
+        """
+        import ObjectsFem
+        print("Generating Mesh Obj")
+        doc = self.CADdoc
+        mesh = ObjectsFem.makeMeshGmsh(doc)
+        mesh.Label = name
+        mesh.Part = obj
+        #mesh.ElementDimension = "From Shape"
+        mesh.CharacteristicLengthMax = maxLength
+        #mesh.ElementOrder = 2  # Set to 2 for second order elements   
+        doc.recompute()
+
+        from femmesh.gmshtools import GmshTools as gt
+        gmsh_mesh = gt(mesh)
+        # Set Gmsh meshing parameters
+        error = gmsh_mesh.create_mesh()
+        if verbose==True:
+            print(error)
+        
+        if hasattr(self, 'FEMmeshes'):
+            if self.FEMmeshes is None:
+                self.FEMmeshes = [mesh]
+            else:
+                self.FEMmeshes.append(mesh)
+        else:
+            self.FEMmeshes = [mesh]
+
+        return
