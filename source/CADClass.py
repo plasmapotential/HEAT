@@ -1496,7 +1496,7 @@ class CAD:
                           Optimize = True, SecondOrder=True, name='FEMMeshNetgen'):
         """
         Creates a FEM mesh object using the netgen mesher.  User specifies
-        the size and fineness of the mesh
+        the size and fineness of the mesh.  Uses freecad api to netgen
 
         Some of the functionality in this function may not work depending on the 
         freecad version.  older versions do not have netgen module.
@@ -1526,7 +1526,8 @@ class CAD:
     def createFEMmeshGmsh(self, obj, maxLength=0, name='FEMMeshGmsh', verbose=False):
         """
         Creates a FEM mesh object using the Gmsh mesher.  User specifies
-        the maximum length of the mesh elements, which defaults to 0 (auto)
+        the maximum length of the mesh elements, which defaults to 0 (auto).
+        Uses freecad api to gmsh
 
         Some of the functionality in this function may not work depending on the 
         freecad version.  older versions do not have ObjectsFem module.
