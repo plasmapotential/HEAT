@@ -113,8 +113,8 @@ class MHD:
         -----------------
 
         :shot: integer pulse number
-        :tmin: minimum timestep of any MHD equilibrium in simulation [ms]
-        :tmax: maximum timestep of any MHD equilibrium in simulation [ms]
+        :tmin: minimum timestep of any MHD equilibrium in simulation [s]
+        :tmax: maximum timestep of any MHD equilibrium in simulation [s]
         :traceLength: number of steps to trace along magnetic field lines looking for
           intersections
         :dpinit: toroidal length of each trace step up magnetic field line [degrees]
@@ -140,11 +140,11 @@ class MHD:
         """
         integers = [
                     'shot',
-                    'tmin',
-                    'tmax',
                     'traceLength',
                     ]
         floats = [
+                    'tmin',
+                    'tmax',
                     'dpinit',
                 ]
 

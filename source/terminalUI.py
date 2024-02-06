@@ -327,6 +327,8 @@ class TUI():
         #make tree branch for this shot
         tools.makeDir(self.shotPath, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
 
+        #TO DO:  update logfile path here
+
         return
 
     def loadFilaments(self, runList, path):

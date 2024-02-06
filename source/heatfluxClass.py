@@ -763,8 +763,8 @@ class heatFlux:
         # transform hf width into flux space
         lqCN_hat = lqCN*xfm
         lqCF_hat = lqCF*xfm
-
-
+        print("Avg. lqCN_hat: {:f}".format(np.average(lqCN_hat)))
+        print("Avg. lqCF_hat: {:f}".format(np.average(lqCF_hat)))
         #Calculate flux at midplane using gfile
         psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
         psi = psiN*(psiedge - psiaxis) + psiaxis

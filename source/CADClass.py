@@ -1560,3 +1560,13 @@ class CAD:
             self.FEMmeshes = [mesh]
 
         return
+    
+    def importFEMmesh(self, file):
+        """
+        imports FEM mesh and returns FEM mesh object
+        """
+        print(file)
+        mesh = Fem.open(file)
+        self.CADdoc = FreeCAD.ActiveDocument
+        self.FEMmeshes = self.CADdoc.Objects
+        return

@@ -689,8 +689,8 @@ class engineObj():
         where <XXXXXX> is shot number and <YYYYY> is timestep[ms]
         """
         #change filename to HEAT GEQDSK naming convention
-        self.MHD.tmax = int(max(timesteps))
-        self.MHD.tmin = int(min(timesteps))
+        self.MHD.tmax = max(timesteps)
+        self.MHD.tmin = min(timesteps)
         shot = self.MHD.shot
         newGfiles = []
         for i,f in enumerate(gfiles):
@@ -3732,7 +3732,8 @@ class engineObj():
 
             #set up timesteps
             N_t = int((self.OF.OFtMax - self.OF.OFtMin) / self.OF.deltaT)
-            OFtimesteps = np.linspace(self.OF.OFtMin, self.OF.OFtMax, N_t+1)
+            OFtimesteps = np.round(np.linspace(self.OF.OFtMin, self.OF.OFtMax, N_t+1), self.tsSigFigs)
+            
 
             #create symbolic link to STL file
             print("Creating openFOAM symlink to STL")
@@ -3967,9 +3968,11 @@ class engineObj():
                     #apply zero HF outside of discharge domain (ie tiles cooling)
                     print("OF.timestep: {:f} outside MHD domain".format(t))
                     log.info("OF.timestep: {:f} outside MHD domain".format(t))
+
                     qDiv = np.zeros((len(OFcenters)))
                     #write boundary condition
                     print("Maximum qDiv for this PFC and time: {:f}".format(qDiv.max()))
+                    log.info("Maximum qDiv for this PFC and time: {:f}".format(qDiv.max()))
                     self.HF.write_openFOAM_boundary(OFcenters,qDiv,partDir,t)
                 else:
                     #boundary using last timestep that we calculated a HF for
