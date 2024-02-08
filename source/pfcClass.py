@@ -368,11 +368,11 @@ class PFC:
         Set filter to a < threshold
         """
         if threshold > -1: 
-        	print('Outside Facing filter threshold is set to: ' + str(threshold))
-        	log.info('Outside Facing filter threshold is set to: ' + str(threshold))
+            print('Outside Facing filter threshold is set to: ' + str(threshold))
+            log.info('Outside Facing filter threshold is set to: ' + str(threshold))
         else: 
-        	print('Outside Facing filter is not used')
-        	log.info('Outside Facing filter is not used')
+            print('Outside Facing filter is not used')
+            log.info('Outside Facing filter is not used')
         R0 = MHD.ep[0].g['R0']
         Z0 = MHD.ep[0].g['Zmid']
         
@@ -388,11 +388,11 @@ class PFC:
         facingOut[idx] = True 
         Nfiltered = np.sum(facingOut)
         if threshold > -1: 
-        	print(Nfiltered,'faces are oriented away from the plasma and are considered shadowed.')
-        	log.info(str(Nfiltered) + ' faces are oriented away from the plasma and are considered shadowed.')
+            print(Nfiltered,'faces are oriented away from the plasma and are considered shadowed.')
+            log.info(str(Nfiltered) + ' faces are oriented away from the plasma and are considered shadowed.')
         if (threshold <= -1) & (Nfiltered > 0): 
-        	print('WARNING: Outside Facing filter should not filter anything, but it does.', Nfiltered, 'faces are neglected')
-        	log.info('WARNING: Outside Facing filter should not filter anything, but it does. ' + str(Nfiltered) + ' faces are neglected')
+            print('WARNING: Outside Facing filter should not filter anything, but it does.', Nfiltered, 'faces are neglected')
+            log.info('WARNING: Outside Facing filter should not filter anything, but it does. ' + str(Nfiltered) + ' faces are neglected')
         return facingOut
         
 
@@ -410,7 +410,6 @@ class PFC:
         facingOut = self.removeOutsideFacingFacets(self.centers, self.norms, MHD, threshold = self.outsideFacingThreshold)
         self.shadowed_mask[facingOut] = 1
         use = np.where(self.shadowed_mask == 0)[0]
-        intersectMask = np.zeros((len(self.centers[use])))
 
         print("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
         log.info("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
@@ -440,8 +439,8 @@ class PFC:
             print("\n----Intersection Step 1----")
             log.info("\n----Intersection Step 1----")
             CTLfile = self.controlfilePath + self.controlfileStruct
-            q1 = np.zeros((len(self.centers),3))
-            q2 = np.zeros((len(self.centers),3))
+            #q1 = np.zeros((len(self.centers[use]),3))
+            #q2 = np.zeros((len(self.centers[use]),3))
 
             #run forward mesh elements
             print("-Forward Trace-")
@@ -459,11 +458,14 @@ class PFC:
                 structData = tools.readStructOutput(self.structOutfile)
                 #os.remove(self.structOutfile) #clean up
                 os.rename(self.structOutfile,self.structOutfile + '_fwdUse_step1')
-                q1[fwdUse] = structData[0::2,:] #even indexes are first trace point
-                q2[fwdUse] = structData[1::2,:] #odd indexes are second trace point
-                intersect_mask = self.intersectTestOpen3D(q1[fwdUse],q2[fwdUse],targetPoints[fwdUseTgt],targetNorms[fwdUseTgt])
+                #q1[fwdUse] = structData[0::2,:] #even indexes are first trace point
+                #q2[fwdUse] = structData[1::2,:] #odd indexes are second trace point
+                #intersect_mask = self.intersectTestOpen3D(q1[fwdUse],q2[fwdUse],targetPoints[fwdUseTgt],targetNorms[fwdUseTgt])
                 #self.shadowed_mask[fwdUse] = intersect_mask
-                self.shadowed_mask[use][fwdUse] = intersect_mask
+                q1 = structData[0::2,:] #even indexes are first trace point
+                q2 = structData[1::2,:] #odd indexes are second trace point
+                intersect_mask = self.intersectTestOpen3D(q1,q2,targetPoints[fwdUseTgt],targetNorms[fwdUseTgt])
+                self.shadowed_mask[use[fwdUse]] = intersect_mask
             #run reverse mesh elements
             print("-Reverse Trace-")
             log.info("-Reverse Trace-")
@@ -480,11 +482,15 @@ class PFC:
                 structData = tools.readStructOutput(self.structOutfile)
                 #os.remove(self.structOutfile) #clean up
                 os.rename(self.structOutfile,self.structOutfile + '_revUse_step1')
-                q1[revUse] = structData[1::2,:] #even indexes are first trace point
-                q2[revUse] = structData[0::2,:] #odd indexes are second trace point
-                intersect_mask = self.intersectTestOpen3D(q1[revUse],q2[revUse],targetPoints[revUseTgt],targetNorms[revUseTgt])
+                #q1[revUse] = structData[1::2,:] #even indexes are first trace point
+                #q2[revUse] = structData[0::2,:] #odd indexes are second trace point
+                #intersect_mask = self.intersectTestOpen3D(q1[revUse],q2[revUse],targetPoints[revUseTgt],targetNorms[revUseTgt])
                 #self.shadowed_mask[revUse] = intersect_mask
-                self.shadowed_mask[use][revUse] = intersect_mask
+                q1 = structData[1::2,:] #even indexes are first trace point
+                q2 = structData[0::2,:] #odd indexes are second trace point                
+                intersect_mask = self.intersectTestOpen3D(q1,q2,targetPoints[revUseTgt],targetNorms[revUseTgt])
+                self.shadowed_mask[use[revUse]] = intersect_mask
+
 
             #this is for printing information about a specific mesh element
             #you can get the element # from paraview Point ID
