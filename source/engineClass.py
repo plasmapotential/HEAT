@@ -19,6 +19,7 @@ import filamentClass
 import radClass
 import ioClass
 import plasma3DClass
+import elmerClass
 import time
 import numpy as np
 import logging
@@ -105,6 +106,7 @@ class engineObj():
         self.IO = ioClass.IO_HEAT(self.chmod, self.UID, self.GID)
         self.plasma3D = plasma3DClass.plasma3D()
         self.hf3D = plasma3DClass.heatflux3D()
+        self.FEM = elmerClass.FEM(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
 
         #set up class variables for each object
         self.MHD.allowed_class_vars()
@@ -115,6 +117,7 @@ class engineObj():
         self.RAD.allowed_class_vars()
         self.IO.allowed_class_vars()
         self.FIL.allowed_class_vars()
+        self.FEM.allowed_class_vars()
 
         #setup number formats for each object
         self.MHD.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
@@ -127,6 +130,7 @@ class engineObj():
         self.FIL.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
         self.plasma3D.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
         self.hf3D.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
+        self.FEM.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
         tools.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
 
         return
@@ -3391,6 +3395,7 @@ class engineObj():
         tools.initializeInput(self.OF, self.infile)
         tools.initializeInput(self.plasma3D, self.infile)
         tools.initializeInput(self.hf3D, self.infile)
+        tools.initializeInput(self.FEM, self.infile)
 
         inputDict = {
                     'shot': self.MHD.shot,
@@ -3449,6 +3454,10 @@ class engineObj():
                     'Ntor':self.RAD.Ntor,
                     'Nref':self.RAD.Nref,
                     'plasma3Dmask':self.plasma3D.plasma3Dmask,
+                    'meshFEMres':self.FEM.meshFEMres,
+                    'elmerDir':self.FEM.elmerDir,
+                    'elmerFile':self.FEM.elmerFile,
+                    'elmerHEATlib':self.FEM.elmerHEATlib
                     }
         print("Loaded inputs")
 
@@ -3514,6 +3523,11 @@ class engineObj():
                     'phiMax':self.RAD.phiMax,
                     'Ntor':self.RAD.Ntor,
                     'Nref':self.RAD.Nref,
+                    'plasma3Dmask':self.plasma3D.plasma3Dmask,
+                    'meshFEMres':self.FEM.meshFEMres,
+                    'elmerDir':self.FEM.elmerDir,
+                    'elmerFile':self.FEM.elmerFile,
+                    'elmerHEATlib':self.FEM.elmerHEATlib
                     }
         print("Loaded current inputs")
 
@@ -4010,6 +4024,143 @@ class engineObj():
         log.info("openFOAM run completed.")
         return
 
+
+    def loadElmer(self):
+        """
+        loads an elmer FEM file and prepares for an elmer simulation
+        """ 
+        self.FEM.loadElmerFile()        
+        return
+    
+    def runElmerFEM(self, meshAlg='gmsh'):
+        """
+        runs an Elmer FEM simulation
+        """
+        #build Elmer FEM output directory
+        self.FEM.elmerOutDir = self.MHD.shotPath + 'elmer/'
+        tools.makeDir(self.FEM.elmerOutDir, clobberFlag=True, mode=self.chmod, UID=self.UID, GID=self.GID)
+        
+        #initialize list of variables we accept as none in elmerFile
+        noneArray = ['None', 'NA', 'none', 'NONE', 'na', '']
+
+        #loop thru PFCs, building meshes
+        for PFC in self.PFCs:
+            #parameters from elmerFile
+            params = self.FEM.elmerData[PFC.name]
+
+            #user did not supply a mesh file
+            if params['meshFile'] in noneArray:
+                print("Creating new FEM mesh.")
+                log.info("Creating new FEM mesh.")
+                partIdx = self.CAD.ROIList.index(PFC.name)
+                part = self.CAD.ROIparts[partIdx]
+
+                if meshAlg == 'gmsh':
+                    print("Using GMSH mesh algorithm")
+                    log.info("Using GMSH mesh algorithm")
+                    meshName = PFC.name + '_GMSH_{:0.3f}mm'.format(self.FEM.meshFEMres)
+                    mesh = self.CAD.createFEMmeshGmsh(part, maxLength=self.FEM.meshFEMres, name=meshName)
+                else:
+                    print("Using NETGEN mesh algorithm")
+                    log.info("Using NETGEN mesh algorithm")
+                    meshName = PFC.name + '_NETGEN_{:0.3f}mm'.format(self.FEM.meshFEMres)
+                    mesh = self.CAD.createFEMmeshNetgen(part, MaxSize=self.FEM.meshFEMres, name=meshName)
+
+                meshFile = self.FEM.elmerOutDir + meshName + '.unv'
+                self.CAD.exportFEMmesh(mesh, meshFile)
+
+            #user supplied a mesh file
+            else:
+                #check if mesh file from user exists in .unv format
+                meshExists = os.path.isfile(self.FEM.elmerDir + params['meshFile'])
+                #if mesh .unv does not exist then make it
+                if meshExists != True:
+                    print("User supplied FEM mesh does not exist.  Creating new mesh.")
+                    log.info("User supplied FEM mesh does not exist.  Creating new mesh.")
+                    partIdx = self.CAD.ROIList.index(PFC.name)
+                    part = self.CAD.ROIparts[partIdx]
+                    if meshAlg == 'gmsh':
+                        print("Using GMSH mesh algorithm")
+                        log.info("Using GMSH mesh algorithm")
+                        meshName = PFC.name + '_GMSH_{:0.3f}mm'.format(self.FEM.meshFEMres)
+                        mesh = self.CAD.createFEMmeshGmsh(part, maxLength=self.FEM.meshFEMres, name=meshName)
+                    else:
+                        print("Using NETGEN mesh algorithm")
+                        log.info("Using NETGEN mesh algorithm")
+                        meshName = PFC.name + '_NETGEN_{:0.3f}mm'.format(self.FEM.meshFEMres)
+                        mesh = self.CAD.createFEMmeshNetgen(part, MaxSize=self.FEM.meshFEMres, name=meshName)
+                    meshFile = self.FEM.elmerOutDir + meshName + '.unv'
+                    self.CAD.exportFEMmesh(mesh, meshFile)
+                #mesh exists
+                else:
+                    print("Using user supplied FEM mesh.")
+                    log.info("Using user supplied FEM mesh.")
+                    meshName = params['meshFile']  
+                    meshFile = self.FEM.elmerDir + meshName         
+
+            #location where we will save the Elmer grid mesh (its a directory)
+            meshDir = self.FEM.elmerOutDir + PFC.name
+            self.FEM.buildElmerMesh(meshDir, meshFile)
+
+            PFC.meshDir = meshDir
+            PFC.meshFile = meshFile
+            PFC.meshName = meshName
+            PFC.SIFfile = params['SIF']
+
+        #build a timestep array from the SIF       
+        self.FEM.buildTimesteps(PFC.SIFfile)
+
+        #loop through Elmer timesteps, assigning HF from MHD timesteps
+        #to the Elmer timesteps as necessary.  Interpolates the heat 
+        #flux when the Elmer timesteps fall between MHD timesteps.
+        #If the Elmer timesteps fall outside of the MHD timestep domain,
+        #assigns 0.
+        for tIdx,t in enumerate(self.FEM.ts):
+            for PFC in self.PFCs:
+                if t in self.MHD.timesteps:
+                    tMHD = t
+                tMin = np.min(self.MHD.timesteps)
+                tMax = np.max(self.MHD.timesteps)
+                if t < tMin:
+                    #timesteps outside of PFC domain are assigned 0 HF on surface
+                    self.FEM.interpolateHFtoMesh(PFC, t, tMin, hfFile=None)
+                elif t > tMax:
+                    #timesteps outside of PFC domain are assigned 0 HF on surface
+                    self.FEM.interpolateHFtoMesh(PFC, t, tMin, hfFile=None)
+                elif t not in PFC.timesteps:
+                    #timesteps within the MHD domain but not an MHD timestep get linear
+                    #interpolated to the Elmer timestep
+                    idx = np.where(tMHD == self.MHD.timesteps)[0][0]
+                    tNext = self.MHD.timesteps[idx+1]
+                    pfcDirNext = self.MHD.shotPath + self.tsFmt.format(tNext) +'/'+PFC.name+'/'
+                    hfFileNext= pfcDirNext + "HF_allSources.csv"
+                    hfFileNew = self.FEM.interpolateHFinTime(hfFile, hfFileNext, tMHD, tNext, t)
+                    self.FEM.interpolateHFtoMesh(PFC, t, tMin, hfFileNew) 
+                else:
+                    #Elmer timesteps align with MHD timesteps
+                    pfcDir = self.MHD.shotPath + self.tsFmt.format(tMHD) +'/'+PFC.name+'/'
+                    hfFile = pfcDir + "HF_allSources.csv"
+                    self.FEM.interpolateHFtoMesh(PFC, t, tMin, hfFile)  
+
+#        for tIdx,t in enumerate(self.MHD.timesteps):
+#            for PFC in self.PFCs:
+#                if t not in PFC.timesteps:
+#                    pass
+#                else:
+#                    pfcDir = self.MHD.shotPath + self.tsFmt.format(t) +'/'+PFC.name+'/'
+#                    hfFile = pfcDir + "HF_allSources.csv"
+#                    self.FEM.interpolateHFtoMesh(PFC, t, tMin, hfFile)     
+
+        #loop through PFCs, running Elmer Solvers
+        for PFC in self.PFCs:
+            #parameters from elmerFile
+            params = self.FEM.elmerData[PFC.name]
+            #solve the Elmer system
+            self.FEM.runElmerSolve(params['SIF'], PFC.name)
+
+        #set tree permissions
+        tools.recursivePermissions(self.FEM.elmerOutDir, self.UID, self.GID, self.chmod)
+        return
 
     #--- Plots ---
 

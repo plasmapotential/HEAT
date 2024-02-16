@@ -136,7 +136,8 @@ class TUI():
           :pwrDir:  powerDir point cloud
           :bdotn:   bdotn point cloud
           :norm:    normal vector glyph cloud
-          :T:       temperature
+          :T:       temperature using openFoam
+          :elmer:       FEM analysis using Elmer FEM
 
           for multiple outputs, separate options with : (ie hfOpt:psi:T).  Note
           that HEAT will use the first options list provided for each tag.
@@ -299,7 +300,7 @@ class TUI():
         #will be used for the openFOAM settings.
         self.ENG.inputFileList = inputFiles
         self.ENG.runHEAT(runList)
-        #run openFOAM
+        #run thermal analysis
         if 'T' in runList:
             self.loadOF()
             if self.ENG.IO.csvMask == True:
@@ -310,6 +311,11 @@ class TUI():
                 print("Please turn on csv output file switch and re-run")
                 log.info("Error!  Cannot run openFOAM unless you save CSV files!")
                 log.info("Please turn on csv output file switch and re-run")
+
+        if 'elmer' in runList:
+            self.loadElmer()
+            self.ENG.runElmerFEM()
+
         print("Total time: {:f}".format(time.time() - t0))
         return
 
@@ -420,6 +426,14 @@ class TUI():
                     self.ENG.OF.writeDeltaT,
                     self.ENG.OF.material
                     )
+        return
+    
+    def loadElmer(self):
+        """
+        Loads Elmer FEM parameters into engine object
+        """
+        print("Elmer FEM")
+        self.ENG.FEM.readElmerFile()
         return
 
     def saveBatchFile(self, path=None):

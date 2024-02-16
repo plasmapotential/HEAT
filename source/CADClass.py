@@ -778,7 +778,8 @@ class CAD:
                 areas.append(self.faceAreas(mesh))
                 if bndybox:
                     print('Part:',self.intersectParts[k].Label)
-                    self.minmaxExtent(x,y,z)
+                    if len(x) > 0:
+                        self.minmaxExtent(x,y,z)
         return norms,centers,areas
 
 
@@ -1520,10 +1521,10 @@ class CAD:
                 self.FEMmeshes.append(mesh)
         else:
             self.FEMmeshes = [mesh]
-        return
+        return mesh
 
 
-    def createFEMmeshGmsh(self, obj, maxLength=0, name='FEMMeshGmsh', verbose=False):
+    def createFEMmeshGmsh(self, obj, maxLength=0, name='FEMMeshGmsh'):
         """
         Creates a FEM mesh object using the Gmsh mesher.  User specifies
         the maximum length of the mesh elements, which defaults to 0 (auto).
@@ -1536,20 +1537,32 @@ class CAD:
         import ObjectsFem
         print("Generating Mesh Obj")
         doc = self.CADdoc
-        mesh = ObjectsFem.makeMeshGmsh(doc)
+        mesh = ObjectsFem.makeMeshGmsh(doc, name + "_Mesh")
         mesh.Label = name
         mesh.Part = obj
         #mesh.ElementDimension = "From Shape"
         mesh.CharacteristicLengthMax = maxLength
         #mesh.ElementOrder = 2  # Set to 2 for second order elements   
+
+        #optimizations that prevent degenerate mesh elements
+        mesh.MeshSizeFromCurvature = 12
+        mesh.Recombine3DAll = True
+        mesh.RecombinationAlgorithm = "Simple"
+        mesh.OptimizeNetgen = True
         doc.recompute()
 
         from femmesh.gmshtools import GmshTools as gt
         gmsh_mesh = gt(mesh)
-        # Set Gmsh meshing parameters
-        error = gmsh_mesh.create_mesh()
-        if verbose==True:
+
+        try:
+            error = gmsh_mesh.create_mesh()
+        except:
+            print("Could not create 3D mesh...")
             print(error)
+            print("Do you have the python-is-python3 package installed?")
+            log.info("Could not create 3D mesh...")
+            log.info(error)
+            log.info("Do you have the python-is-python3 package installed?")
         
         if hasattr(self, 'FEMmeshes'):
             if self.FEMmeshes is None:
@@ -1559,7 +1572,7 @@ class CAD:
         else:
             self.FEMmeshes = [mesh]
 
-        return
+        return mesh
     
     def importFEMmesh(self, file):
         """
@@ -1569,4 +1582,14 @@ class CAD:
         mesh = Fem.open(file)
         self.CADdoc = FreeCAD.ActiveDocument
         self.FEMmeshes = self.CADdoc.Objects
+        return
+
+    def exportFEMmesh(self, mesh, file):
+        """
+        exports FEM mesh
+        """
+        print(file)
+        if type(mesh) != 'list':
+            mesh = [mesh]
+        Fem.export(mesh, file)
         return

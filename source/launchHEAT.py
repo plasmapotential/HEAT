@@ -68,6 +68,7 @@ def loadEnviron():
         #default freecad path
         #FreeCADPath = AppDir + '/opt/freecad/squashfs-root/usr/lib'
         FreeCADPath = AppDir + '/usr/lib/freecad-python3/lib'
+        FreeCADFEMPath = AppDir + '/lib/freecad/Mod/Fem'
 
         ### ORNL EFIT MODULE
         #default source code location (EFIT class should be here)
@@ -96,6 +97,7 @@ def loadEnviron():
         ### FREECAD
         #docker ubuntu repo freecad path
         FreeCADPath = '/usr/lib/freecad-python3/lib'
+        FreeCADFEMPath = '/lib/freecad/Mod/Fem'
         #FreeCADPath = '/usr/lib/freecad-daily/lib'
 
         ### ORNL EFIT CLASS
@@ -138,6 +140,7 @@ def loadEnviron():
         ### FREECAD
         # daily build binary freecad path
         FreeCADPath = '/usr/lib/freecad-daily/lib'
+        FreeCADFEMPath = '/lib/freecad/Mod/Fem'
         # downloaded appImage freecad path
         #FreeCADPath = '/opt/freecad/squashfs-root/usr/lib'
         # for ubuntu repo build
@@ -194,6 +197,7 @@ def loadEnviron():
     sys.path.append(EFITPath)
     #append FreeCAD to python path
     sys.path.append(FreeCADPath)
+    sys.path.append(FreeCADFEMPath)
     #append paraview to python path
     sys.path.append(PVPath)
     #append pyFoam site-packages location to python path
