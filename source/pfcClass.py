@@ -653,8 +653,8 @@ class PFC:
         """
         #walk up field line to determine where we should start helix tracing from
         CTLfile = self.controlfilePath + self.controlfileStruct
-        MHD.ittGyro = int(GYRO.gyroDeg / GYRO.dpinit)
-        print("Tracing guiding centers for {:f} degrees".format(GYRO.gyroDeg))
+        MHD.ittGyro = int(GYRO.gyroTraceLength / GYRO.dpinit)
+        print("Tracing guiding centers for {:f} degrees".format(GYRO.gyroTraceLength))
 
         #MHD.writeControlFile(CTLfile, self.t, 0, mode='gyro') #0 for both directions
         #trace
@@ -775,13 +775,13 @@ class PFC:
         #setup gyroPhase angle
         GYRO.uniformGyroPhaseAngle()
         #setup frequencies
-        GYRO.setupFreqs(self.Bmag[self.PFC_GYROmap,-1])
+        GYRO.setupFreqs(self.Bmag[self.PFC_GYROmap,-1]*self.Bsign)
 
         #Walk downstream along GC path tracing helices and looking for intersections
         if "allROI" in GYRO.gyroSources:
-            N_GCdeg = int((GYRO.gyroDeg*2) / GYRO.dpinit) + 1
+            N_GCdeg = int((GYRO.gyroTraceLength*2) / GYRO.dpinit) + 1
         else:
-            N_GCdeg = int((GYRO.gyroDeg) / GYRO.dpinit) + 1
+            N_GCdeg = int((GYRO.gyroTraceLength) / GYRO.dpinit) + 1
 
         gP = 0
         vP = 0
@@ -1021,13 +1021,13 @@ class PFC:
         #setup gyroPhase angle
         GYRO.uniformGyroPhaseAngle()
         #setup frequencies
-        GYRO.setupFreqs(self.Bmag[self.PFC_GYROmap,-1])
+        GYRO.setupFreqs(self.Bmag[self.PFC_GYROmap,-1]*self.Bsign)
 
         #Walk downstream along GC path tracing helices and looking for intersections
         if "allROI" in GYRO.gyroSources:
-            N_GCdeg = int((GYRO.gyroDeg*2) / GYRO.dpinit) + 1
+            N_GCdeg = int((GYRO.gyroTraceLength*2) / GYRO.dpinit) + 1
         else:
-            N_GCdeg = int((GYRO.gyroDeg) / GYRO.dpinit) + 1
+            N_GCdeg = int((GYRO.gyroTraceLength) / GYRO.dpinit) + 1
 
         GYRO.Nsteps = N_GCdeg
         gP = 0
@@ -1436,13 +1436,13 @@ class PFC:
         #setup gyroPhase angle
         GYRO.uniformGyroPhaseAngle()
         #setup frequencies
-        GYRO.setupFreqs(self.Bmag[self.PFC_GYROmap,-1])
+        GYRO.setupFreqs(self.Bmag[self.PFC_GYROmap,-1]*self.Bsign)
 
         #Walk downstream along GC path tracing helices and looking for intersections
         if "allROI" in GYRO.gyroSources:
-            N_GCdeg = GYRO.gyroDeg*2 + 1
+            N_GCdeg = GYRO.gyroTraceLength*2 + 1
         else:
-            N_GCdeg = GYRO.gyroDeg + 1
+            N_GCdeg = GYRO.gyroTraceLength + 1
         gP = 0
         vP = 0
         vS = 0

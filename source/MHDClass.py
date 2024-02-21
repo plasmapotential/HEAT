@@ -106,16 +106,22 @@ class MHD:
 
     def allowed_class_vars(self):
         """
-        Writes a list of recognized class variables to HEAT object
-        Used for error checking input files and for initialization
+        .. Writes a list of recognized class variables to HEAT object
+        .. Used for error checking input files and for initialization
+        
+        MHD EQ Variables:
+        -----------------
 
-        Here is a list of variables with description:
-        testvar         dummy for testing
-        shot            discharge number
-        tree            EFIT tree (efit01, efit02, etc.)
-        tmin            minimum timestep to consider
-        tmax            maximum timestep to consider
-        MHDpath         location where we will save / read gfiles
+        :shot: integer pulse number
+        :tmin: minimum timestep of any MHD equilibrium in simulation [ms]
+        :tmax: maximum timestep of any MHD equilibrium in simulation [ms]
+        :traceLength: number of steps to trace along magnetic field lines looking for
+          intersections
+        :dpinit: toroidal length of each trace step up magnetic field line [degrees]
+        :plasma3Dmask: True or False. Set to true if using a 3D magnetic equilibrium,
+          (ie M3DC1).  Set to False for axisymmetric equilibria
+        
+
         """
         self.allowed_vars = [
                             'shot',
@@ -771,6 +777,42 @@ class MHD:
 
         return
 
+    def writeNetCDF(self, data_dict, filename):
+        """
+        Write a dictionary containing numpy arrays to a NetCDF file.
+
+        :param data_dict: Dictionary containing numpy arrays.
+        :param filename: Name of the NetCDF file to write to.
+        """
+        import netCDF4 as nc
+        with nc.Dataset(filename, 'w') as ds:
+            for key, value in data_dict.items():
+                if isinstance(value, np.ndarray):
+                    # Create dimensions
+                    for i, dim_size in enumerate(value.shape):
+                        dim_name = f"{key}_dim_{i}"
+                        ds.createDimension(dim_name, dim_size)
+
+                    # Create the variable and assign data
+                    var = ds.createVariable(key, value.dtype, tuple(f"{key}_dim_{i}" for i in range(value.ndim)))
+                    var[:] = value
+
+                elif isinstance(value, str):
+                    # Handle string values
+                    str_dim = f"{key}_strlen"
+                    ds.createDimension(str_dim, len(value))
+                    var = ds.createVariable(key, "S1", (str_dim,))
+                    # Assign the string as a sequence of individual characters
+                    var[:] = nc.stringtochar(np.array(list(value), 'S1'))
+
+                elif isinstance(value, (int, float)):
+                    # Handle scalar numeric values
+                    var = ds.createVariable(key, type(value))
+                    var[:] = value
+
+        return
+
+
     def writeGfile(self, file, shot=None, time=None, ep=None):
         """
         writes a new gfile.  for use with the cleaner script.  user must supply
@@ -980,7 +1022,7 @@ class MHD:
         #return ep that can be written to file (note its not a real EP as defined by equilParams class)
         return newEP
 
-    def gFileInterpolateByS(self, newS):
+    def gFileInterpolateByS(self, newS, transposePsi=True, transposeFpol=True):
         """
         interpolates gfiles as a function of MHD.Spols at newS
 
@@ -1003,9 +1045,14 @@ class MHD:
 
         EPs = self.ep
         for ep in EPs:
+            if transposePsi==True:
+                psiRZAll.append(ep.g['psiRZ'].T)
+            else:
+                psiRZAll.append(ep.g['psiRZ'])
+                
+
             RmAxisAll.append(ep.g['RmAxis'])
             ZmAxisAll.append(ep.g['ZmAxis'])
-            psiRZAll.append(ep.g['psiRZ'])
             psiAxisAll.append(ep.g['psiAxis'])
             psiSepAll.append(ep.g['psiSep'])
             Bt0All.append(ep.g['Bt0'])
@@ -1027,11 +1074,18 @@ class MHD:
         psiSepAll = np.array(psiSepAll)
         Bt0All = np.array(Bt0All)
         IpAll = np.array(IpAll)
-        FpolAll = np.array(FpolAll).T
-        PresAll = np.array(PresAll).T
-        FFprimeAll = np.array(FFprimeAll).T
-        PprimeAll = np.array(PprimeAll).T
-        qpsiAll = np.array(qpsiAll).T
+        if transposeFpol==True:
+            FpolAll = np.array(FpolAll).T
+            PresAll = np.array(PresAll).T
+            FFprimeAll = np.array(FFprimeAll).T
+            PprimeAll = np.array(PprimeAll).T
+            qpsiAll = np.array(qpsiAll).T
+        else:
+            FpolAll = np.array(FpolAll)
+            PresAll = np.array(PresAll)
+            FFprimeAll = np.array(FFprimeAll)
+            PprimeAll = np.array(PprimeAll)
+            qpsiAll = np.array(qpsiAll)            
 #       FpolAll = np.dstack(FpolAll)
 #       FFprimeAll = np.dstack(FFprimeAll)
 #       PprimeAll = np.dstack(PprimeAll)
@@ -1040,7 +1094,6 @@ class MHD:
         #Set up interpolators
         RmAxisInterp = interp1d(Spols,RmAxisAll)
         ZmAxisInterp = interp1d(Spols,ZmAxisAll)
-
         psiRZInterp = RegularGridInterpolator((R, Z, Spols), psiRZAll)
         psiAxisInterp = interp1d(Spols, psiAxisAll)
         psiSepInterp = interp1d(Spols, psiSepAll)
@@ -1057,7 +1110,10 @@ class MHD:
         r,z = np.meshgrid(R,Z)
         RmAxis = RmAxisInterp(newS)
         ZmAxis = ZmAxisInterp(newS)
-        psiRZ = psiRZInterp((r,z,newS)).T
+        if transposePsi==True:
+            psiRZ = psiRZInterp((r,z,newS))
+        else:
+            psiRZ = psiRZInterp((r,z,newS)).T
         psiAxis = psiAxisInterp(newS)
         psiSep = psiSepInterp(newS)
         Bt0 = Bt0Interp(newS)

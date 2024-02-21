@@ -11,9 +11,41 @@ import EFIT.equilParams_class as EP
 from scipy import interpolate
 from scipy.interpolate import interp1d
 import json
-import matplotlib.pyplot as plt
 import logging
 from dash_bootstrap_templates import template_from_url
+from skimage import measure
+
+
+def extract_contours(R, Z, psi, levels):
+    """
+    Extract the contours of psi for given levels using skimage's measure.find_contours.
+
+    Parameters:
+    - R: 2D array of R coordinates
+    - Z: 2D array of Z coordinates
+    - psi: 2D array of scalar values
+    - levels: list of scalar values at which to extract contours
+
+    Returns:
+    - Dictionary where keys are levels and values are lists of contours.
+      Each contour is represented as an array of (R, Z) coordinates.
+    """
+    contours_dict = {}
+
+    for level in levels:
+        contours = measure.find_contours(psi, level)
+        contours_for_level = []
+        
+        for contour in contours:
+            r_indices = contour[:, 1]  # because of the way find_contours returns y, x
+            z_indices = contour[:, 0]
+            r_values = np.interp(r_indices, np.arange(R.shape[1]), R[0, :])
+            z_values = np.interp(z_indices, np.arange(Z.shape[0]), Z[:, 0])
+            contours_for_level.append(np.vstack([r_values,z_values]).T)
+            
+        contours_dict[level] = contours_for_level
+
+    return contours_dict
 
 
 def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
@@ -53,7 +85,10 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
 #    if height==None:
 #        height=1000
     if height is not None:
-        aspect = (z.max()-z.min()) / (r.max()-r.min())
+        if yRange == None:
+            aspect = (z.max()-z.min()) / (r.max()-r.min())
+        else:
+            aspect = (max(yRange) - min(yRange)) / (max(xRange) - min(xRange))
         width = (1.0/aspect)*height
 
 
@@ -79,7 +114,7 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
             ncontours=20,
         ))
 
-    #Wall in green
+    #Wall in green (accesible for colorblind)
     fig.add_trace(
         go.Scatter(
             x=rlim,
@@ -87,42 +122,39 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
             mode="markers+lines",
             name="Wall",
             line=dict(
-                color="#19fa1d"
+                color="#1AFF1A",
                     ),
             )
             )
 
     #white lines around separatrix
-    levelsAtLCFS = np.linspace(0.95,1.05,15)
-    CS = plt.contourf(R,Z,psi,levelsAtLCFS,cmap=plt.cm.cividis)
-    for i in range(len(levelsAtLCFS)):
-        levelsCS = plt.contour(R,Z,psi,levels=[levelsAtLCFS[i]])
-        for j in range(len(levelsCS.allsegs[0])):
-            r = levelsCS.allsegs[0][j][:,0]
-            z = levelsCS.allsegs[0][j][:,1]
+    levelsAtLCFS = np.linspace(0.95,1.05,16)
+    contours = extract_contours(R, Z, psi, levelsAtLCFS)
+    for c in contours:
+        for i in range(len(contours[c])):
+            r = contours[c][i][:,0]
+            z = contours[c][i][:,1]
             fig.add_trace(
                 go.Scatter(
                     x=r,
                     y=z,
+                    name="{:.4f}".format(c),
                     mode="lines",
                     line=dict(
                         color="white",
                         width=1,
                         dash='dot',
                             )
+                    )
                 )
-            )
 
-    #Seperatrix in red.  Sometimes this fails if psi is negative
-    #so we try and except.
-    #if try fails, just plot using rbdry,zbdry from gfile
-    try:
-        CS = plt.contourf(R,Z,psi,levels,cmap=plt.cm.cividis)
-        lcfsCS = plt.contour(CS, levels = [1.0])
-        for i in range(len(lcfsCS.allsegs[0])):
-            rlcfs = lcfsCS.allsegs[0][i][:,0]
-            zlcfs = lcfsCS.allsegs[0][i][:,1]
 
+    #Seperatrix in purple (accessible for colorblind)
+    contours = extract_contours(R, Z, psi, [1.0])
+    for c in contours:
+        for i in range(len(contours[c])):
+            rlcfs = contours[c][i][:,0]
+            zlcfs = contours[c][i][:,1]
             fig.add_trace(
                 go.Scatter(
                     x=rlcfs,
@@ -130,34 +162,11 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
                     mode="lines",
                     name="LCFS",
                     line=dict(
-                        color="red",
+                        color="#4B0092",
                         width=4,
-
                             )
                     )
                     )
-    except:
-        print("Could not create contour plot.  Psi levels must be increasing.")
-        print("Try flipping psi sign and replotting.")
-        print("plotting rbdry, zbdry from gfile (not contour)")
-        if logFile is True:
-            log.info("Could not create contour plot.  Psi levels must be increasing.")
-            log.info("Try flipping psi sign and replotting.")
-            log.info("plotting rbdry, zbdry from gfile (not contour)")
-
-        fig.add_trace(
-            go.Scatter(
-                x=rbdry,
-                y=zbdry,
-                mode="lines",
-                name="LCFS",
-                line=dict(
-                    color="red",
-                    width=4,
-
-                        )
-                )
-                )
 
     #set bkgrd color if not default (clear)
 #    if bg is None:
@@ -208,7 +217,77 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
 
 
 
+def highlightPsiFromSep(fig, ep, lq):
+    """
+    when passed an existing EQ figure, adds a highlight for the flux surface 
+    lq, [m] from the LCFS
+    """
+    #assuming plasma is centered in machine here
+    zMin = ep.g['ZmAxis'] - 0.25
+    zMax = ep.g['ZmAxis'] + 0.25
+    Z_lcfs = ep.g['lcfs'][:,1]
+    #this prevents us from getting locations not at midplane
+    idx = np.where(np.logical_and(Z_lcfs>zMin,Z_lcfs<zMax))
+    R_omp = ep.g['lcfs'][:,0][idx].max()
+    Z_omp = 0.0
 
+
+    #calculate psi value for point d distance from OMP LCFS
+    # Convert to meters
+    psiaxis = ep.g['psiAxis']
+    psiedge = ep.g['psiSep']
+    deltaPsi = np.abs(psiedge - psiaxis)
+
+
+    # Evaluate B at outboard midplane
+    Bp = ep.BpFunc.ev(R_omp,Z_omp)
+    Bt = ep.BtFunc.ev(R_omp,Z_omp)
+    B_omp = np.sqrt(Bp**2 + Bt**2)
+
+    # Gradient
+    gradPsi = Bp*R_omp
+    xfm = gradPsi / deltaPsi
+    # Decay width mapped to flux coordinates
+    lq_hat = lq * xfm
+
+    psi_1lq = 1.0+lq_hat
+
+    print("psi @ 1 lq away from OMP: {:f}".format(psi_1lq))
+
+
+    import plotly.graph_objects as go
+    r = ep.g['R']
+    z = ep.g['Z']
+    psi = ep.g['psiRZn']
+    R,Z = np.meshgrid(r, z)
+
+    #Seperatrix in red.  Sometimes this fails if psi is negative
+    #so we try and except.
+    #if try fails, just plot using rbdry,zbdry from gfile
+    levels=[1.0, psi_1lq]
+    CS = plt.contourf(R,Z,psi,levels,cmap=plt.cm.cividis)
+    lcfsCS = plt.contour(CS, levels = [psi_1lq])
+    for i in range(len(lcfsCS.allsegs[0])):
+        rlcfs = lcfsCS.allsegs[0][i][:,0]
+        zlcfs = lcfsCS.allsegs[0][i][:,1]
+        fig.add_trace(
+            go.Scatter(
+                x=rlcfs,
+                y=zlcfs,
+                mode="lines",
+                name="1lq Away",
+                line=dict(
+                    color="yellow",
+                    width=1,
+                        )
+                )
+                )
+
+
+
+
+
+    return fig
 
 def writePlotlyEQ(shot, time, outFile, MachFlag, ep=None, gfile=None, logFile=False):
     """
@@ -272,16 +351,12 @@ def writePlotlyEQ(shot, time, outFile, MachFlag, ep=None, gfile=None, logFile=Fa
             )
             )
 
-    #Seperatrix in red.  Sometimes this fails if psi is negative
-    #so we try and except.
-    #if try fails, just plot using rbdry,zbdry from gfile
-    try:
-        CS = plt.contourf(R,Z,psi,levels,cmap=plt.cm.cividis)
-        lcfsCS = plt.contour(CS, levels = [1.0])
-        for i in range(len(lcfsCS.allsegs[0])):
-            rlcfs = lcfsCS.allsegs[0][i][:,0]
-            zlcfs = lcfsCS.allsegs[0][i][:,1]
-
+    #Seperatrix in red.
+    contours = extract_contours(R, Z, psi, [1.0])
+    for c in contours:
+        for i in range(len(contours[c])):
+            rlcfs = contours[c][i][:,0]
+            zlcfs = contours[c][i][:,1]
             fig.add_trace(
                 go.Scatter(
                     x=rlcfs,
@@ -291,33 +366,9 @@ def writePlotlyEQ(shot, time, outFile, MachFlag, ep=None, gfile=None, logFile=Fa
                     line=dict(
                         color="red",
                         width=4,
-
                             )
                     )
                     )
-    except:
-        print("Could not create contour plot.  Psi levels must be increasing.")
-        print("Try flipping psi sign and replotting.")
-        print("plotting rbdry, zbdry from gfile (not contour)")
-        if logFile is True:
-            log.info("Could not create contour plot.  Psi levels must be increasing.")
-            log.info("Try flipping psi sign and replotting.")
-            log.info("plotting rbdry, zbdry from gfile (not contour)")
-
-        fig.add_trace(
-            go.Scatter(
-                x=rbdry,
-                y=zbdry,
-                mode="lines",
-                name="LCFS",
-                line=dict(
-                    color="red",
-                    width=4,
-
-                        )
-                )
-                )
-
 
     fig.update_layout(
         title="{:06d}@{:05d}ms".format(shot,time),

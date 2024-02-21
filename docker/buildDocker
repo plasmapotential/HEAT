@@ -1,8 +1,8 @@
 #!/bin/bash
 #Engineer: T Looby
-#Date: 01/27/2022
+#Date: 12/27/2023
 #Description:  prepares docker context, then creates docker container
-#              from ORNL dev machine
+#              from dev machine
 
 # remove previous build
 rm -rf dockerDir
@@ -11,7 +11,7 @@ rm -rf dockerDir
 mkdir -p dockerDir/source/HEAT
 
 # copy HEAT into the AppDir
-cp -r github/source/*  dockerDir/source/HEAT/
+cp -r github/*  dockerDir/source/HEAT/
 
 # copy ORNL EFIT module
 cp -r /home/tom/source/EFIT dockerDir/source/EFIT
@@ -51,10 +51,14 @@ cp -rn /home/tom/OpenFOAM/tom-v2112/platforms/linux64GccDPInt32Opt/bin/* dockerD
 cp -rn /home/tom/OpenFOAM/tom-v2112/platforms/linux64GccDPInt32Opt/lib/* dockerDir/opt/swak4foam/lib/
 
 # copy Open3D bins and libs
-mkdir -p dockerDir/opt/open3d/bin
-mkdir -p dockerDir/opt/open3d/lib
-cp -rn /opt/open3d/Open3D/build/bin/* dockerDir/opt/open3d/bin/
-cp -rn /opt/open3d/Open3D/build/lib/* dockerDir/opt/open3d/lib/
+#mkdir -p dockerDir/opt/open3d/bin
+#mkdir -p dockerDir/opt/open3d/lib
+#cp -rn /opt/open3d/Open3D/build/bin/* dockerDir/opt/open3d/bin/
+#cp -rn /opt/open3d/Open3D/build/lib/* dockerDir/opt/open3d/lib/
+
+#copy m3dc1 bins and libs
+mkdir -p dockerDir/opt/m3dc1
+cp -rn /opt/m3dc1/build/* dockerDir/opt/m3dc1/
 
 #make file for docker build files
 mkdir -p dockerDir/dockerBuildFiles
@@ -80,7 +84,11 @@ cp runDockerCompose /home/tom/source/HEAT/github/docker/
 echo "Building docker image..."
 cd dockerDir
 
+#build for linux
 docker build -t plasmapotential/heat .
+
+#cross platform build (for apple silicon)
+#docker buildx build --platform linux/amd64,linux/arm64 -t plasmapotential/heat -f ./Dockerfile . --push
 
 #after creating image, tag it using the following command
 # docker tag plasmapotential/heat:latest plasmapotential/heat:<tag>

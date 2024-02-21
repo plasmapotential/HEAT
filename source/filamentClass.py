@@ -2,9 +2,11 @@
 #Description:   HEAT filament module
 #Engineer:      T Looby
 #Date:          20230228
+
 """
 Class for filament tracing.  Used for ELMs and other filamentary structures
 """
+
 import os
 import sys
 import numpy as np
@@ -30,7 +32,7 @@ log = logging.getLogger(__name__)
 
 class filament:
 
-    def __init__(self, rootDir, dataPath, chmod=0o774, UID=-1, GID=-1):
+    def __init__(self, rootDir:str, dataPath:str, chmod=0o774, UID=-1, GID=-1):
         """
         rootDir is root location of python modules (where dashGUI.py lives)
         dataPath is the location where we write all output to
@@ -54,7 +56,7 @@ class filament:
         self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
         return
 
-    def readFilamentFile(self, path):
+    def readFilamentFile(self, path:str):
         """
         reads a filament csv input file
 
@@ -205,6 +207,7 @@ class filament:
             self.v_t = filDict['v_t[m/s]'][id]
             self.E0 = filDict['E0[J]'][id]
             self.T0 = filDict['T0[eV]'][id]
+            self.traceDir = filDict['traceDir'][id]
             self.ep = ep
 
         except:
@@ -233,20 +236,33 @@ class filament:
         os.remove(self.structOutfile)
         return Btrace
 
-    def findGuidingCenterPaths(self, pts, MHD):
+    def findGuidingCenterPaths(self, pts:np.ndarray, MHD:object, traceDir:float):
         """
+        creates MAFOT point files and control files, then runs heatstructure MAFOT program
+
+        pts are pts we want to trace from
+        MHD is a HEAT MHD object
+        traceDir is not self.traceDir, but rather a variable set by filament tracer that 
+           defines MAFOT mapDirection
+           
         """
         MHD.ittStruct = 1.0
         #forward trace
         MHD.writeMAFOTpointfile(pts,self.gridfileStruct)
-        MHD.writeControlFile(self.controlfilePath+self.controlfileStruct, self.tEQ, 1.0, mode='struct') #0 for both directions
+        MHD.writeControlFile(self.controlfilePath+self.controlfileStruct, self.tEQ, traceDir, mode='struct') #0 for both directions
         MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
                                 self.controlfileStruct)
 
         structData = tools.readStructOutput(self.structOutfile)
         os.remove(self.structOutfile) #clean up
-        q1 = structData[0::2,:] #even indexes are first trace point
-        q2 = structData[1::2,:] #odd indexes are second trace point
+        #traces are always saved in positive toroidal direction
+        if traceDir == 1.0:
+            q1 = structData[0::2,:] #even indexes are first trace point
+            q2 = structData[1::2,:] #odd indexes are second trace point
+        elif traceDir == -1.0:
+            q1 = structData[1::2,:] #odd indexes are first trace point
+            q2 = structData[0::2,:] #even indexes are second trace point
+
         return q1, q2
 
     def buildIntersectionMesh(self):
@@ -264,7 +280,7 @@ class filament:
         self.mesh_id = self.scene.add_triangles(vertices, triangles)
         return
 
-    def traceFilamentParticles(self, MHD, ts):
+    def traceFilamentParticles(self, MHD: object, ts:np.ndarray , tIdx:int):
         """
         Traces filament macro-particles
 
@@ -293,33 +309,39 @@ class filament:
         #initialize shadowMask matrix
         shadowMask = np.zeros((N_pts))
 
-
-
         for i in range(self.N_vS):
+            print("\n---Tracing for velocity slice: {:f} [m/s]---\n".format(self.vSlices[0,i]))
+            log.info("\n---Tracing for velocity slice: {:f} [m/s]---\n".format(self.vSlices[0,i]))
             #update time counting variables
-            tsNext = np.ones((N_pts))*ts[0]
-            t_tot = np.zeros((N_pts)) + tsNext
-            tIdxNext = np.zeros((N_pts), dtype=int)
+            tsNext = np.ones((N_pts))*ts[tIdx]
+            t_tot = np.ones((N_pts))*ts[tIdx]
+            tIdxNext = np.zeros((N_pts), dtype=int) + tIdx
             vec = np.zeros((N_pts, 3))
             frac = np.zeros((N_pts))
             use = np.arange(N_pts)
 
-            #save macroparticle coordinates at t0
+            #save macroparticle coordinates at t0, increment next
             self.xyzSteps[i,:,tIdxNext,:] = pts
             tIdxNext += 1
             tsNext = ts[tIdxNext]
-
             launchPt = pts.copy()
             v_b = self.vSlices[:,i]
-    
+            sumCount = 0
+
+            #check if v_b is positive or negative and trace accordingly
+            if v_b[0] > 0:
+                traceDir = 1.0
+            else:
+                traceDir = -1.0
+
             #walk along field line, correcting for v_r, looking for intersections,
             #saving coordinates at ts
             while len(use) > 0:
                 #calculate guiding center path for one step
-                q1, q2 = self.findGuidingCenterPaths(launchPt[use], MHD)
+                q1, q2 = self.findGuidingCenterPaths(launchPt[use], MHD, traceDir)
                 #correct guiding center path using radial velocity
                 d_b = np.linalg.norm((q2-q1), axis=1) #distance along field
-                t_b = d_b / v_b[use] #time along field for this step
+                t_b = d_b / np.abs(v_b)[use] #time along field for this step
                 t_tot[use] += t_b #cumulative time along field
                 d_r = t_b * self.v_r #radial distance
 
@@ -366,17 +388,20 @@ class filament:
                     idxHit = np.where(mask==1)[0]
                     intersectRecord[i, use[idxHit], tIdxNext[use[idxHit]]] = hitMap[idxHit]
                     #hdotn[i] = np.dot(self.intersectNorms[int(intersectRecord[i])],rNorm[idxHit])
-                else:
-                    #return nan if we didnt hit anything
-                    intersectRecord[i, use, tIdxNext[use]] = np.nan
-                    #hdotn[i] = np.nan
+                    sumCount += np.sum(mask)
+                #else:
+                #    #return nan if we didnt hit anything
+                #    intersectRecord[i, use, tIdxNext[use]] = np.nan
+                #    #hdotn[i] = np.nan
 
                 #particles we need to keep tracing (didnt hit and less than tMax)
                 test1 = np.where(np.isnan(intersectRecord[i, use, tIdxNext[use]]) == True)[0]
-                test2 = np.where(t_tot < self.tMax)[0]
+                test2 = np.where(t_tot[use] < self.tMax)[0]
 
                 #use = np.where(np.logical_or(test1,test2)==True)[0]
-                use = np.intersect1d(test1,test2)
+                #use = np.intersect1d(test1,test2)
+                #use = np.intersect1d(np.intersect1d(test1,test2),use)
+                use = use[np.intersect1d(test1,test2)]
 
                 #For testing
                 #print(self.tMax)
@@ -408,38 +433,48 @@ class filament:
 
         #record the final intersectRecord
         self.intersectRecord = intersectRecord
-
         return
-
-
 
     def setupParallelVelocities(self):
         """
-        given an array of energies, in self.E, split each array element into N macro-particles, 
-        using the energy distribution function
+        split each source point into N macro-particles, 
+        using the velocity distribution function, then
+        weighting by energy
 
         """
         self.vSlices = np.ones((self.N_b*self.N_r*self.N_p, self.N_vS))*np.nan
         self.energySlices = np.zeros((self.N_b*self.N_r*self.N_p, self.N_vS))
         self.energyIntegrals = np.zeros((self.N_b*self.N_r*self.N_p, self.N_vS))
         self.energyFracs = np.zeros((self.N_b*self.N_r*self.N_p, self.N_vS))
+        self.velocitySlices = np.zeros((self.N_b*self.N_r*self.N_p, self.N_vS))
+        self.velocityIntegrals = np.zeros((self.N_b*self.N_r*self.N_p, self.N_vS))
+        self.velocityFracs = np.zeros((self.N_b*self.N_r*self.N_p, self.N_vS))
         self.vBounds = np.zeros((self.N_b*self.N_r*self.N_p, self.N_vS+1))
 
         T_eV = np.ones((self.N_b*self.N_r*self.N_p))*self.T0
         
         for i in range(len(T_eV)):
-            B = (self.mass_eV/self.c**2) / (2.0*T_eV[i])
+            beta = (self.mass_eV/self.c**2) / (2.0*T_eV[i])
+            #for parallel velocity component only 1/2mv^2 = 1/2kT
             vThermal = np.sqrt(2.0*T_eV[i]/(self.mass_eV/self.c**2))
             #set upper bound of v*f(v) (note that this cuts off high energy particles)
-            vMax = 5 * vThermal
-            v = np.linspace(0,vMax,10000).T
+            vMax = 5 * vThermal + self.v_rot_b
 
-            #PDF for 1D v and for speed
-            pdf = lambda x: self.gaussian1D(B, x)
-            #1D (old and not correct, i think...)
+            #set v
+            if self.traceDir == 1:
+                v = np.linspace(0.0, vMax, 10000).T
+            elif self.traceDir == -1:
+                v = np.linspace(-vMax, 0.0, 10000).T
+            else:
+                v = np.linspace(-vMax, vMax, 10000).T
+
+            #PDFs
+            #1D energy
             #v_pdf = 0.5 * self.mass_eV/self.c**2 * v**2 * pdf(v)
-            #3D (Stangeby 2.12 or Chen 7.18)
-            v_pdf = 4*np.pi * (B/np.pi)**(3.0/2.0) * v**2 * pdf(v)
+            #1D velocity
+            v_pdf = self.gaussian1D(beta, v, x0=self.v_rot_b)
+            #3D speed (Stangeby 2.12 or Chen 7.18)
+            #v_pdf = 4*np.pi * (B/np.pi)**(3.0/2.0) * v**2 * np.exp(-B*v**2)
             #generate the CDF
             v_cdf = np.cumsum(v_pdf[1:])*np.diff(v)
             v_cdf = np.insert(v_cdf, 0, 0)
@@ -454,36 +489,51 @@ class filament:
             self.vSlices[i,:] = inverseCDF(cdfSlices)
             self.vBounds[i,:] = inverseCDF(cdfBounds)
 
-            #f_E = lambda x: x**2 * np.exp(-x / T_eV[i])
-            f_E = lambda x: 2*np.sqrt(x/np.pi) * (1.0/T_eV[i])**(3.0/2.0) * np.exp(-x / T_eV[i])
-            #energy slices that correspond to velocity slices
-            self.energySlices[i,:] = f_E(0.5 * (self.mass_eV/self.c**2) * self.vSlices[i,:]**2)
+            #calculate fraction of filament birth energy to be assigned to each particle
+            pdf = lambda x: self.gaussian1D(beta, x, x0=0.0)           
             #energy integrals (loop thru i unnecessary, but we do it in case in the future we dont have uniform temperature)
             for j in range(self.N_vS):
-                Elo = 0.5 * (self.mass_eV/self.c**2) * self.vBounds[i,j]**2
-                Ehi = 0.5 * (self.mass_eV/self.c**2) * self.vBounds[i,j+1]**2
-                self.energyIntegrals[i,j] = integrate.quad(f_E, Elo, Ehi)[0]
-            energyTotal = self.energyIntegrals[i,:].sum()
+                self.velocityIntegrals[i,j] = integrate.quad(pdf, self.vBounds[i,j], self.vBounds[i,j+1])[0]                           
+            velocityTotal = self.velocityIntegrals[i,:].sum()
+            #energy fractions - integrals normalized to the portion of the PDF we are sampling
+            #   using velocityFracs will result in density being reconstructed, regardless of whether or not we
+            #   are tracing in both directions.  If you actually want the energy to be 
+            #   scaled depending upon traceDir being 1 or -1 or 0, use E0
+            #velocity fracs (for particle fluxes)
+            for j in range(self.N_vS):
+                self.velocityFracs[i,j] = self.velocityIntegrals[i,j] / velocityTotal
+            #energy fracs (for energy fluxes)
+            energyTotal = np.sum(0.5 * (self.mass_eV/self.c**2) * self.vSlices[i,:]**2)
+            for j in range(self.N_vS):
+                self.energyFracs[i,j] = 0.5 * (self.mass_eV/self.c**2) * self.vSlices[i,j]**2 / energyTotal                  
+
             ##for testing
             #if i==0:
             #    print("Integral Test===")
             #    print(energyTotal)
-            #    print(integrate.quad(f_E, 0.0, self.vMax[i])[0])
-            #energy fractions
-            for j in range(self.N_vS):
-                self.energyFracs[i,j] = self.energyIntegrals[i,j] / energyTotal
+            #    print(integrate.quad(pdfE, 0.0, vMax)[0])
+            #    print(np.sum(self.energyFracs[i,:]))
+            #    print(self.energyFracs)
+            #    print(0.5 * (self.mass_eV/self.c**2)*self.vSlices[i,:]**2)
+            #    print(Esum)
+            #    input()
+            ##for testing
+            #print("Integral Test===")
+            #print(energyTotal)
+            #print(np.sum(self.velocityFracs))
+            #print(self.vSlices[0])
+            #print(self.velocityFracs[0,:])
+            #print(self.energyIntegrals[0,:])
+            #input()  
             
-        ##dummy for testing
-        #N_pts = self.N_b*self.N_p*self.N_r
-        #self.v_b = np.random.random_sample(N_pts) * 100000.0 #random speeds between 0 and 10km/s
-        ##self.v_b = np.ones(N_pts) * 1000.0 
-        #self.N_vS = 1
-
-        #print(self.vSlices)
-        #input()
         return
 
-    def intersectTestOpen3D(self,q1,q2,targets,targetNorms, batchSize=1000):
+    def intersectTestOpen3D(self,
+                            q1:np.ndarray,
+                            q2:np.ndarray,
+                            targets:np.ndarray,
+                            targetNorms:np.ndarray,
+                            ):
         """
         checks if any of the lines (field line traces) generated by MAFOT
         struct program intersect any of the target mesh faces.
@@ -551,7 +601,7 @@ class filament:
         self.gridPsiThetaDistAtCtr(self.rCtr, self.zCtr, multR=10.0, multZ = 10.0)
         #discretize filament into macroparticle sources along field line
         self.discretizeFilament(self.N_r,self.N_p,self.N_b, Btrace, self.N_sig_r, self.N_sig_p, self.N_sig_b)
-        self.gaussianAtPts(self.ctrPts, self.xyzPts, t-self.tMin, self.v_r)       
+        self.gaussianAtPts(self.ctrPts, self.xyzPts, t-self.tMin, self.v_r)
         return
 
     def fluxSurfNorms(self, ep: object, R:np.ndarray, Z:np.ndarray):
@@ -705,11 +755,9 @@ class filament:
 
         saves gaussian values on 3D grid, as well as distances (psi, theta) used to
         evaluate the gaussian        
-        """
-        ep = self.ep
-        sigma_r = self.sig_r
-        sigma_p = self.sig_p
 
+        calculates fractional density, n/n0, at each point
+        """
         gaussian = np.zeros((xyzPts.shape[:-1]))
         dPsi = np.zeros((xyzPts.shape[:-1]))
         dTheta = np.zeros((xyzPts.shape[:-1]))
@@ -721,31 +769,65 @@ class filament:
             R,Z,phi = tools.xyz2cyl(xyz[:,:,0],xyz[:,:,1],xyz[:,:,2])
             psiCtr, distPsi, thetaCtr, distTheta = self.fluxCoordDistance(rCtr,zCtr,R,Z)
 
-            #2D gaussian
+            #2D gaussian (not used)
             #g = self.gaussian2D(distPsi,distTheta,self.sig_r,self.sig_p,t,v_r,self.E0)
+
             #3D gaussian
             g = self.gaussian3D(distPsi,distTheta,self.distB[i],self.sig_r,self.sig_p,self.sig_b,t,v_r)
-            #reshape to meshgrid shape
-            #gaussian[i,:,:] = g.reshape((len(distPsi), len(distTheta)))
-            #dPsi[i,:,:] = distPsi.reshape((len(distPsi), len(distTheta)))
-            #dTheta[i,:,:] = distTheta.reshape((len(distPsi), len(distTheta)))
             gaussian[i,:,:] = g
             dPsi[i,:,:] = distPsi
             dTheta[i,:,:] = distTheta
             dB[i,:,:] = self.distB[i]
 
-        #now build weights for gaussian
-   
-        dX = np.diff(dPsi, axis=1)
-        dY = np.diff(dTheta, axis=2)
-        dZ = np.diff(dB, axis=0)
-        dX = np.pad(dX, ((0,0),(0,1),(0,0)), mode='edge')
-        dY = np.pad(dY, ((0,0),(0,0),(0,1)), mode='edge')
-        dZ = np.pad(dZ, ((0,1),(0,0),(0,0)), mode='edge')
-        self.dV = dX*dY*dZ
-        print(np.sum(gaussian * self.dV))
-        input()
-        self.g_pts = gaussian * self.dV
+        #now build weights for gaussian  
+        int_r = np.zeros((self.r_pts.shape))
+        rBounds = np.diff(self.r_pts) / 2.0 + self.r_pts[:-1]
+        rBounds = np.insert(rBounds, 0, -10*self.sig_r)
+        rBounds = np.insert(rBounds, len(rBounds), 10*self.sig_r)
+        for i in range(self.N_r):
+            lo = rBounds[i]
+            hi = rBounds[i+1]
+            int_r[i] = integrate.quad(self.f_r, lo, hi)[0]
+
+        int_p = np.zeros((self.p_pts.shape))
+        pBounds = np.diff(self.p_pts) / 2.0 + self.p_pts[:-1]
+        pBounds = np.insert(pBounds, 0, -10*self.sig_p)
+        pBounds = np.insert(pBounds, len(pBounds), 10*self.sig_p)
+        for i in range(self.N_p):
+            lo = pBounds[i]
+            hi = pBounds[i+1]
+            int_p[i] = integrate.quad(self.f_p, lo, hi)[0]
+
+        int_b = np.zeros((self.b_pts.shape))
+        bBounds = np.diff(self.b_pts) / 2.0 + self.b_pts[:-1]
+        bBounds = np.insert(bBounds, 0, -10*self.sig_b)
+        bBounds = np.insert(bBounds, len(bBounds), 10*self.sig_b)
+        for i in range(self.N_b):
+            lo = bBounds[i]
+            hi = bBounds[i+1]
+            int_b[i] = integrate.quad(self.f_b, lo, hi)[0]
+
+        #now build time weight, slices are also bin boundaries here
+        self.tSrc = self.ts[:self.N_src_t]
+        self.f_t = lambda t: (1.0 / self.decay_t) * np.exp(-(t-self.tSrc[0]) / self.decay_t)
+        int_t = np.zeros((self.N_src_t))
+        tBounds = np.zeros((self.N_src_t+1))
+        tBounds[:-1] = self.tSrc.copy()
+        tBounds[-1] = self.tSrc[-1] + self.dt
+        for i in range(self.N_src_t):
+            lo = tBounds[i]
+            hi = tBounds[i+1]
+            int_t[i] = integrate.quad(self.f_t, lo, hi)[0]
+
+        #scale weights so that sum=1 (all particles/energy gets exhausted)
+        tFracSum = np.sum(int_t)
+        tFrac = int_t / tFracSum
+
+        #build 4D energy density hypercube weight matrix
+        B,R,P,T = np.meshgrid(int_b,int_r,int_p,tFrac, indexing='ij')
+        weights = B*R*P*T
+
+        self.density = weights
         self.distPsi = dPsi
         self.distTheta = dTheta
         return
@@ -796,11 +878,11 @@ class filament:
 
         return psiCtr, distPsi, thetaCtr, distTheta
 
-    def gaussian1D(self, B, x):
+    def gaussian1D(self, B:float, x:np.ndarray, x0=0.0):
         """
         returns a 1D gaussian
         """
-        g = np.sqrt(B/np.pi) * np.exp(-B*x**2)
+        g = np.sqrt(B/np.pi) * np.exp(-B*(x-x0)**2)
         return g
 
     def filamentGaussian2D(self, t:float, v_r:float, distPsi:np.ndarray, distTheta:np.ndarray):
@@ -841,37 +923,33 @@ class filament:
 
     def gaussian3D(self, dx:np.ndarray, dy:np.ndarray, dz:np.ndarray, 
                    sigX:float, sigY:float, sigZ:float, 
-                   t:float , v_r:float, A=1.0, decay_t=500e-6):
+                   t:float , v_r:float, A=1.0):
         """
         calculates gaussian function with three spatial dimensions and 1 time dimension
 
-        multiplies gaussian by E0, so that 3D integral equals E0.
+        corresponds to density in Fundamenski advective-diffusive model
 
-        corresponds to advective-diffusive model
+        dx,dy,dz are distances from center point
+        sigX,sigY,sigZ are standard deviations in each direction
+        t is timestep
+        v_r is radial velocity (other velocity components not implemented, but could be)
         """
-        #A = self.E0 / ( (2*np.pi)**(3.0/2.0) * sigX*sigY*sigZ )  
-        #A =1.0 / ( (2*np.pi)**(3.0/2.0) * sigX*sigY*sigZ )  
-        #exp1 = np.exp( -1.0*(dx - t*v_r)**2 / (2*sigX**2) )
-        #exp2 = np.exp( -1.0*(dy**2) / (2*sigY**2) )
-        #exp3 = np.exp( -1.0*(dz**2) / (2*sigZ**2) )
-
-        A = self.E0
-        #A = 1.0
+        A = 1.0
 
         B_x = 1.0 / (2*sigX**2)
         B_y = 1.0 / (2*sigY**2)
         B_z = 1.0 / (2*sigZ**2)
         #1D gaussians
-        f_x = lambda x: self.gaussian1D(B_x, x)
-        f_y = lambda y: self.gaussian1D(B_y, y)
-        f_z = lambda z: self.gaussian1D(B_z, z)
+        self.f_r = lambda x: self.gaussian1D(B_x, x)
+        self.f_p = lambda y: self.gaussian1D(B_y, y)
+        self.f_b = lambda z: self.gaussian1D(B_z, z)
+        self.f_G = lambda x,y,z: self.f_r(x) * self.f_p(y) * self.f_b(z)
 
-        pdfX = f_x(dx - t*v_r)
-        pdfY = f_y(dy)
-        pdfZ = f_z(dz)
+        pdfX = self.f_r(dx - t*v_r)
+        pdfY = self.f_p(dy)
+        pdfZ = self.f_b(dz)
 
-        exp4 = np.exp(-t / decay_t)
-        g = A * pdfX * pdfY * pdfZ    # * exp4
+        g = A * pdfX * pdfY * pdfZ
 
 #        print("TEST=====!!!") 
 #        intX = integrate.quad(f_x, 0, sigX*10)[0]
@@ -883,8 +961,6 @@ class filament:
 #        print(intZ)
 #        print(intX * intY * intZ)
 #        input()
-
-
 
         return g
 
@@ -903,7 +979,6 @@ class filament:
         idx = np.where(Z < zMid)[0]
         theta[idx] *= -1.0
         return theta
-
 
     def discretizeFilament(self, N_r: int, N_p: int, N_b: int, Btrace: np.ndarray, 
                            N_sig_r: int, N_sig_p: int, N_sig_b: int):
@@ -975,9 +1050,15 @@ class filament:
         self.p_pts = p_pts
         self.r_pts = r_pts
 
+        #project user defined toroidal rotation velocity along the field line at center point
+        Br = self.ep.BRFunc.ev(self.rCtr,self.zCtr)
+        Bz = self.ep.BZFunc.ev(self.rCtr,self.zCtr)
+        Bt = self.ep.BtFunc.ev(self.rCtr,self.zCtr)
+        Bp = np.sqrt(Br**2+Bz**2)
+        Bmag = np.sqrt(Bt**2 + Bp**2)
+        self.v_rot_b = self.v_t * Bmag / Bt
+
         return
-
-
 
     def vectorGlyphs(self, ctrs:np.ndarray, vecs:np.ndarray, label:str, path:str, tag:str = None):
         """
@@ -986,8 +1067,6 @@ class filament:
         prefix = label
         IO.writeGlyphVTP(ctrs,vecs,label,prefix,path,tag)
         return
-
-
 
     def plotly2DContour(self, x:np.ndarray, y:np.ndarray, z:np.ndarray ,
                         fig:object = None, cs='plasma',zmin=0.0, zmax=1.0, mode='gauss'):
@@ -1082,8 +1161,6 @@ class filament:
 
         return fig
 
-
-
     def plotlyAddTrace(self, fig:object, trace:np.ndarray, 
                        name:str=None, color:str=None, mode:str=None, markDict:str=None):
         """
@@ -1125,7 +1202,7 @@ class filament:
 
         return fig
 
-    def plotlyEQ(self, ep):
+    def plotlyEQ(self, ep:object):
         """
         returns a DASH object for use directly in dash app
         """

@@ -20,7 +20,7 @@ the test case:
         </div>
 
 Running a gyro-orbit heat flux simulation
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The following video guides you through running the test case for gyro-orbit power:
 
@@ -33,7 +33,7 @@ The following video guides you through running the test case for gyro-orbit powe
 
 
 Running a radiated power heat flux simulation
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The following video guides you through running the test case for radiated power:
 
@@ -78,12 +78,13 @@ This method can be useful for users who do not have linux operating systems
 (ie macOS, windows, android), or for users who want to use HEAT without
 downloading and configuring on their local machine.  The limitations to this method
 are:
-    1) Only one user can access HEAT at a time.  There is work underway to enable
+
+    #. Only one user can access HEAT at a time.  There is work underway to enable
        multiple user sessions, but HEAT can only serve a single session currently.
-    2) The IP address assigned to HEAT must be the IP address assigned to that
+    #. The IP address assigned to HEAT must be the IP address assigned to that
        machine's network interface card (NIC) by the network DHCP server.  The
        user cannot assign a random IP address to HEAT.
-    3) The port must allow TCP/IP traffic.
+    #. The port must allow TCP/IP traffic.
 
 To do this, run HEAT in terminal mode and include include the IP address and
 desired port number as switches when executing the HEAT command in a terminal::
@@ -93,6 +94,7 @@ desired port number as switches when executing the HEAT command in a terminal::
 The -a switch precedes the intended IP address and the -p switch precedes the
 port number.  For example, to run HEAT at 192.168.0.100 on port 7500, the following command would
 be used::
+
     python3 launchHEAT.py --m t --f <batchFile> --a 192.168.0.100 --p 7500
 
 Then, on the client machine, HEAT can be accessed by opening a web browser and

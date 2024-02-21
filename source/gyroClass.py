@@ -43,18 +43,44 @@ class GYRO:
 
     def allowed_class_vars(self):
         """
-        Writes a list of recognized class variables to HEAT object
-        Used for error checking input files and for initialization
+        .. Writes a list of recognized class variables to HEAT object
+        .. Used for error checking input files and for initialization
 
-        Here is a list of variables with description:
-        testvar         dummy for testing
+        Gyro Orbit Heat Flux Variables:
+        -------------------------------------
+
+        :N_gyroSteps: number of discrete line segments per helical gyro period [integer].  
+          Higher values mean better approximation of the helical trajectory but come at 
+          the cost of longer computation times.
+        :gyroTraceLength: number of steps to trace for gyro orbit calculation [integer].  Step width
+          is defined by the MHD EQ variable dpinit.  Should really change this name to
+          gyroTraceLength as it is not directly related to degrees.  Total toroidal distance 
+          of trace is gyroTraceLength * dpinit
+        :gyroT_eV: Plasma ion temperature [eV].  This temperature corresponds to the mean
+          total velocity in the ion velocity distribution function.
+        :N_vSlice: Number of macroparticle samples to take from the velocity distribution
+          function [integer].  Each sample defines the ion energies.
+        :N_vPhase: Number of macroparticle samples to take from the velocity phase 
+          distribution function [integer].  Each sample the ion vPerp and v|| components. 
+        :N_gyroPhase: Number of macroparticle gyroPhase samples to take from a uniform
+          2pi distribution [integer].  Each sample corresponds to birth phase angle of particles about
+          guiding center.
+        :ionMassAMU: Ion mass in atomic mass units [AMU].
+        :vMode: determines if single temperature is defined for entire PFC or if each element
+          on PFC mesh has a unique plasma temperature.  Can be single or mesh.  For now,
+          only single works.
+        :ionFrac: fraction of PSOL carried by ions (as opposed to electrons) [0-1].  Power
+          carried by the ions will be P*ionFrac
+        :gyroSources: name of CAD object to be used as the gyro source plane.  
+
+        For more information on the gyro orbit module and corresponding physics, see [6].
 
         """
 
 
         self.allowed_vars = [
                     'N_gyroSteps',
-                    'gyroDeg',
+                    'gyroTraceLength',
                     'gyroT_eV',
                     'N_vSlice',
                     'N_vPhase',
@@ -72,7 +98,7 @@ class GYRO:
         """
         integers = [
                     'N_gyroSteps',
-                    'gyroDeg',
+                    'gyroTraceLength',
                     'N_vSlice',
                     'N_vPhase',
                     'N_gyroPhase',
@@ -366,6 +392,8 @@ class GYRO:
         BtraceXYZ is the points of the Bfield trace that we will gyrate about
         """
         print("Calculating gyro trace...")
+        log.info("Calculating gyro trace...")
+        log.info(omegaGyro)
         #Loop thru B field trace while tracing gyro orbit
         helixTrace = None
         for i in range(len(BtraceXYZ)-1):
@@ -400,8 +428,8 @@ class GYRO:
             w = w / np.sqrt(w.dot(w))
             xfm = np.vstack([u,v,w]).T
             #get helix path along (proxy) z axis reference frame
-            x_helix = self.rGyro*np.cos(self.omegaGyro*t + gyroPhase)
-            y_helix = self.diamag*self.rGyro*np.sin(self.omegaGyro*t + gyroPhase)
+            x_helix = rGyro*np.cos(omegaGyro*t + gyroPhase)
+            y_helix = self.diamag*rGyro*np.sin(omegaGyro*t + gyroPhase)
             z_helix = np.zeros((len(t)))
             #perform rotation to field line reference frame
             helix = np.vstack([x_helix,y_helix,z_helix]).T
@@ -413,7 +441,7 @@ class GYRO:
             helix_rot[:,1] += yGC
             helix_rot[:,2] += zGC
             #update gyroPhase variable so next iteration starts here
-            gyroPhase = self.omegaGyro*t[-1] + gyroPhase
+            gyroPhase = omegaGyro*t[-1] + gyroPhase
             #append to helix trace
             if helixTrace is None:
                 helixTrace = helix_rot
@@ -442,6 +470,14 @@ class GYRO:
             print("Number of gyro points = {:f}".format(len(helixTrace)))
             print("Longitudinal dist between gyro points = {:f} [m]".format(magP/float(Nsteps)))
             print("Each line segment length ~ {:f} [m]".format(magP))
+            log.info("\nV_perp = {:f} [m/s]".format(vPerp))
+            log.info("V_parallel = {:f} [m/s]".format(vParallel))
+            log.info("Cyclotron Freq = {:f} [rad/s]".format(self.omegaGyro[0]))
+            log.info("Cyclotron Freq = {:f} [Hz]".format(self.fGyro[0]))
+            log.info("Gyro Radius = {:f} [m]".format(self.rGyro[0][0]))
+            log.info("Number of gyro points = {:f}".format(len(helixTrace)))
+            log.info("Longitudinal dist between gyro points = {:f} [m]".format(magP/float(Nsteps)))
+            log.info("Each line segment length ~ {:f} [m]".format(magP))
         return
 
     def buildHelixParallel(self, i):

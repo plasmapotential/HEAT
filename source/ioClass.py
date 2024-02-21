@@ -9,8 +9,13 @@ import GUIscripts.vtkOpsClass as vtkOpsClass
 import logging
 log = logging.getLogger(__name__)
 
+import toolsClass
+tools = toolsClass.tools()
 class IO_HEAT:
-    def __init__(self):
+    def __init__(self, chmod=None, GID=None, UID=None):
+        self.chmod = chmod
+        self.GID = GID
+        self.UID = UID
         return
 
     def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
@@ -23,11 +28,15 @@ class IO_HEAT:
 
     def allowed_class_vars(self):
         """
-        Writes a list of recognized class variables to HEAT object
-        Used for error checking input files and for initialization
+        .. Writes a list of recognized class variables to HEAT object
+        .. Used for error checking input files and for initialization
 
-        Here is a list of variables with description:
-        testvar         dummy for testing
+        IO Variables:
+        -------------
+
+        :vtpMeshOut: True or False.  Set to true to write VTP mesh files in HEAT output
+        :vtpPCOut: True or False.  Set to true to write VTP point cloud (PC) files in HEAT output
+        :csvOut: True or False.  Set to true to write csv point cloud files in HEAT output
 
         """
 
@@ -122,8 +131,9 @@ class IO_HEAT:
 
         PVdir = path + "paraview/"
         f = PVdir+fName
-        if not os.path.exists(PVdir):
-            os.makedirs(PVdir)
+
+
+        tools.makeDir(PVdir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
 
         VTKops.writeMeshVTP(f)
         return
@@ -142,22 +152,25 @@ class IO_HEAT:
         """
         if tag is None:
             if PClabel == True:
-                fName = prefix + '_PC.vtp'
+                fName = 'PC_' + prefix + '.vtp'
             else:
                 fName = prefix + '.vtp'
         else:
             if PClabel == True:
-                fName = prefix + '_'+tag+'_PC.vtp'
+                fName = 'PC_' + prefix + '_'+tag+'.vtp'
             else:
                 fName = prefix + '_' + tag + '.vtp'
 
         VTKops = vtkOpsClass.VTKops()
         VTKops.initializePointCloudScalar(ctrs*1000.0, scalar, label) #scale to mm
 
-        PVdir = path + "paraview/"
+        if 'paraview' not in path:
+            PVdir = path + "paraview/"
+        else:
+            PVdir = path
         f = PVdir+fName
-        if not os.path.exists(PVdir):
-            os.makedirs(PVdir)
+
+        tools.makeDir(PVdir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
 
         VTKops.writePointCloudVTP(f)
         return
@@ -174,6 +187,8 @@ class IO_HEAT:
         tag - name tag for file (<tag>.vtp)
         path - file path where paraview folder lives
         """
+        print("Creating Glyph "+prefix)
+        log.info("Creating Glyph "+prefix)        
         if tag is None:
             fName = prefix + '.vtp'
         else:
@@ -184,8 +199,7 @@ class IO_HEAT:
 
         PVdir = path + "paraview/"
         f = PVdir+fName
-        if not os.path.exists(PVdir):
-            os.makedirs(PVdir)
+        tools.makeDir(PVdir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
 
         VTKops.writeGlyphVTP(f)
         return

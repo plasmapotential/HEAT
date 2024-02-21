@@ -47,11 +47,74 @@ class heatFlux:
 
     def allowed_class_vars(self):
         """
-        Writes a list of recognized class variables to HEAT object
-        Used for error checking input files and for initialization
+        .. Writes a list of recognized class variables to HEAT object
+        .. Used for error checking input files and for initialization
 
-        Here is a list of variables with description:
-        testvar         dummy for testing
+        Optical Heat Flux Variables:
+        ----------------------------
+
+        :hfmode: selects the mode for defining the q|| function.  options are: eich,
+          multiExp, limiter, tophat, qFile.  eich uses an Eich #15 profile [1] where 
+          exponential is convoluted with a Gaussian of width, S.  multiExp uses a 
+          superposition of 4 exponential decays, like the work by Brunner [2], with two 
+          in the private flux region and two in the common flux region.  limiter uses a 
+          double exponential decay, with flux tubes in the core (private flux region) set 
+          to 0.  tophat uses a tophat profile of user defined width.  qFile allows HEAT
+          to read a previous HEAT run output tree and load the heat flux profiles without
+          performing any new calculations.  Depending upon the hfmode, various other 
+          variables in this section may be required.  
+        :lqCN: Heat flux width (or decay length) in the common near region [mm]. 
+          For eich profile and tophat profile this is the only used heat flux width.
+          Used by all hfmodes.
+        :lqCF: Heat flux width in the common far region [mm].  
+          Used by the multiExp and limiter profiles.
+        :lqPN: Heat flux width in the private flux near region [mm].  Used by multiExp
+          profile.
+        :lqPF: Heat flux width in the private flux far region [mm].  Used by multiExp 
+          profile.
+        :lqCNmode: sets the method used to calculate lqCN.  Can be eich or user.  eich
+          uses Eich's regression #15 and overrides any lqCN defined in the input file.  
+          user directly parses value from input file defined for lqCN.
+        :lqCFmode: sets the method used to calculate lqCF.  Can be horacek or user.  horacek
+          uses the scaling from [3] and overrides any lqCF defined in the input file.
+          user directly parses value from input file defined for lqCF.
+        :lqPNmode: sets the method used to calculate lqPN.  Can only be user.
+          user directly parses value from input file defined for lqPN.
+        :lqPFmode: sets the method used to calculate lqPF.  Can only be user.
+          user directly parses value from input file defined for lqPF.
+        :S: Gaussian spreading term [mm].  Used when hfmode is eich.  
+        :Smode: sets the method used to calculate S.  can be makowski or user.
+          makowski uses Figure 6 from [4], and requires the Greenwald density
+          fraction to be defined, fG, see below.  user directly parses value 
+          from input file defined for S.
+        :fracCN: fraction of total power going to the common flux near region (0,1)
+        :fracCF: fraction of total power going to the common flux far region (0,1)
+        :fracPN: fraction of total power going to the private flux near region (0,1)
+        :fracPF: fraction of total power going to the private flux far region (0,1)
+        :fracUI: fraction of power going to the upper inner divertor (0,1)
+        :fracUO: fraction of power going to the upper outer divertor (0,1)
+        :fracLI: fraction of power going to the lower outer divertor (0,1)
+        :fracLO: fraction of power going to the lower outer divertor (0,1)
+        :P: Total source power [MW].
+          Depending upon the context, P signifies different things.  For optical
+          and gyro orbit simulations, P represents PSOL or Psep, the power crossing
+          the separatrix and being conducted to the target.  For photon radiation
+          calculation, P represents the total emitted power over the entire torus.
+        :lossFrac: fraction of P to be removed.  Useful for prescribing a reduction
+          to P that arises from various effects. Power that will be used in the 
+          calculation is P*(1-lossFrac).
+        :qBG: Background heat flux applied to all surfaces when using an Eich profile [MW/m^2].
+          Note that this also applies flux on the backs of tiles.
+        :fG: Greenwald density fraction [5] to be used when using Makowski S scaling.
+        :qFilePath: Path to a HEAT results directory (ie /path/to/HEAT/data/nstx_000001)
+          that contains a tree (timestep and PFC directories) with heat flux data in them.  
+          HEAT will use this tree and read the .csv files to generate a heat flux profile.
+          This is for when a user wants to recycle a previous HEAT run without re-running
+          the heat flux calculation.  Set to None when no file should be read.
+        :qFileTag: When reading heat flux data from a file in qFilePath, defines the tag
+          that should be used for the heat flux files.  For example, to read a previous
+          HEAT runs photon radiation data, tag would be HF_rad and HEAT would read files
+          named HF_rad.csv.  Set to None when no file should be read.
 
         """
 
@@ -76,8 +139,8 @@ class heatFlux:
                             'fracUO',
                             'fracLI',
                             'fracLO',
-                            'Pinj',
-                            'coreRadFrac',
+                            'P',
+                            'radFrac',
                             'qBG',
                             'fG',
                             'qFilePath',
@@ -93,8 +156,8 @@ class heatFlux:
         integers = []
         floats = [
                     'S',
-                    'Pinj',
-                    'coreRadFrac',
+                    'P',
+                    'radFrac',
                     'qBG',
                     'lqCN',
                     'lqCF',
@@ -185,12 +248,13 @@ class heatFlux:
         Cr = 0.04
         Cb = -0.92
         Ca = 0.42
+
         # Evaluate Bp at outboard midplane
         Z_omp_sol = 0.0
         Bp = abs(ep.BpFunc.ev(Rmax,Z_omp_sol))
+        Bt = abs(ep.BtFunc.ev(ep.g['RmAxis'],ep.g['ZmAxis']))
         #Evaluate lq
         self.lqEich = C * self.Psol**Cp * Rgeo**Cr * Bp**Cb * aspect**Ca # in mm
-        Bt = abs(ep.BtFunc.ev(ep.g['RmAxis'],ep.g['ZmAxis']))
         if verbose==True:
             print("Poloidal Field at midplane: {:f}".format(Bp))
             print("Toroidal Field at axis: {:f}".format(Bt))
@@ -276,13 +340,13 @@ class heatFlux:
         pp. 326-337
         doi: https://doi.org/10.1080/07468342.1986.11972974
 
-        Pinj should be power injected into tokamak in [W]
+        P should be source power in [W] 
         """
-        #check if power is in MW or W (assumes Pinj > 500W)
-        if self.Pinj < 500:
-            Pinj = self.Pinj * 1e6
+        #check if power is in MW or W (assumes P > 500W)
+        if self.P < 500:
+            P = self.P * 1e6
         else:
-            Pinj = self.Pinj
+            P = self.P
 
         #find the plasma volume from the equilibrium
         Rlim = ep.g['lcfs'][:,0]
@@ -316,12 +380,45 @@ class heatFlux:
         k = b / a
 
         #lambda q from Horacek engineering scaling figure 6a
-        self.lqCF = 10 * (Pinj / vol)**(-0.38) * aspect**(1.3) * k**(-1.3) * 1e3 #in mm
+        self.lqCF = 10 * (P / vol)**(-0.38) * aspect**(1.3) * k**(-1.3) * 1e3 #in mm
         return
 
 #===============================================================================
 #                   Heat flux profiles
 #===============================================================================
+    def tophat_profile_fluxspace(self,PFC,lq,R,Bp,psiN):
+        """
+        creates a flattop heat flux profile lq [mm] wide
+
+        lq is flattop width at midplane in mm
+        lq_hat is heat flux width in flux coordinates
+        s_hat is a flux coordinate
+
+
+        R and Bp should be at OMP, where flattop function is defined
+
+        psiN is indexed to match PFCs
+
+        """
+        psiaxis = PFC.ep.g['psiAxis']
+        psiedge = PFC.ep.g['psiSep']
+        deltaPsi = np.abs(psiedge - psiaxis)
+        R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
+        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,PFC.ep.g['ZmAxis'])
+        s_hat = psiN - PFC.psiMinLCFS
+        #s_hat = psiN - psiedge
+        # Gradient
+        gradPsi = Bp*R
+        xfm = gradPsi / deltaPsi
+        # Decay width mapped to flux coordinates
+        lq_hat = lq * xfm * 1e-3 # Convert to meters
+        #===flattop profile
+        test = np.logical_and(s_hat > 0.0, s_hat < lq_hat)
+        use = np.where(test==True)[0]
+        q = np.zeros((psiN.shape))
+        q[use] = 1.0 #heaviside function
+        return q
+    
     def eich_profile_fluxspace(self, PFC, lq, S, R, Bp, psiN):
         """
         Based on the paper: T.Eich et al.,PRL 107, 215001 (2011)
@@ -352,6 +449,8 @@ class heatFlux:
         xfm = gradPsi / deltaPsi
         # Decay width mapped to flux coordinates
         lq_hat = lq * xfm
+        print("Average lq_hat: {:f}".format(np.average(lq_hat)))
+        log.info("Average lq_hat: {:f}".format(np.average(lq_hat)))
         rho = s_hat/lq_hat
         rho_0 = S/(2.0*lq)
         #===Eich Profile as a function of psi
@@ -456,6 +555,75 @@ class heatFlux:
         q[inf_locations] = 0.0
         return q
 
+    def findScalingCoeffEich(self, PFC, lqEich, S, P):
+        """
+        scales HF using Eich profile
+
+        Get scale factor q||0 (q0) for heat flux via power balance:
+        (input MW = output MW)
+        Ignores wall psi and just creates a profile at OMP
+        Creates a dense (1000pts) grid at the midplane to get higher resolution
+        integral.  Integrates q_hat / B_omp with respect to psi.
+        q||0 = P_div / ( 2*pi* integral(q_hat / B_omp)dPsi )
+
+        return q0
+        """
+        # Get R and Z vectors at the midplane
+        R_omp_sol = self.map_R_psi(1.0,PFC)
+        #R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
+        R_omp_min = R_omp_sol - 5.0*lqEich*(1e-3) #in meters now
+        R_omp_max = R_omp_sol + 20.0*lqEich*(1e-3) #in meters now
+        #if R_omp_max is outside EFIT grid, cap at maximum R of grid
+        if R_omp_max > max(PFC.ep.g['R']):
+            R_omp_max = max(PFC.ep.g['R']) #in meters now
+        R_omp = np.linspace(R_omp_min, R_omp_max, 1000)
+        Z_omp = np.zeros(R_omp.shape) + PFC.ep.g['ZmAxis']
+
+        #Calculate flux at midplane using gfile
+        psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
+        psi = psiN * (PFC.ep.g['psiSep']-PFC.ep.g['psiAxis']) + PFC.ep.g['psiAxis']
+        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
+        s_hat = psiN - PFC.psiMinLCFS
+        # Evaluate B at outboard midplane
+        Bp_omp = PFC.ep.BpFunc.ev(R_omp,Z_omp)
+        Bt_omp = PFC.ep.BtFunc.ev(R_omp,Z_omp)
+        B_omp = np.sqrt(Bp_omp**2 + Bt_omp**2)
+
+        psiaxis = PFC.ep.g['psiAxis']
+        psiedge = PFC.ep.g['psiSep']
+        deltaPsi = np.abs(psiedge - psiaxis)
+        
+        # Gradient
+        #Bp_omp_sol = PFC.ep.BpFunc.ev(R_omp_sol,PFC.ep.g['ZmAxis'])
+        #gradPsi = Bp_omp*R_omp
+        #xfm = gradPsi / deltaPsi
+
+
+        #Get q|| profile then integrate in Psi
+        q_hat = self.eich_profile_fluxspace(PFC, lqEich, S, R_omp, Bp_omp, psiN)
+
+        #Menard's method (also see qDiv function)
+        #P0 = 2*np.pi * simps(q_hat, psi)
+        #Reinke's Method (also see qDiv function)
+        P0 = 2*np.pi * simps(q_hat / B_omp, psi)
+
+        #account for nonphysical power
+        if P0 < 0: P0 = -P0
+        #Scale to input power
+        q0 = P/P0
+
+        print("Eich q0 = {:f}[MW/m^2]".format(q0))
+        log.info("Eich q0 = {:f}[MW/m^2]".format(q0))
+
+        BpOmpLCFS = PFC.ep.BpFunc.ev(R_omp_sol,PFC.ep.g['ZmAxis'])
+        BtOmpLCFS = PFC.ep.BtFunc.ev(R_omp_sol, PFC.ep.g['ZmAxis'])
+        BOmpLCFS = np.sqrt(BpOmpLCFS**2 + BtOmpLCFS**2)
+        q0_simple = P / (2*np.pi*R_omp_sol*lqEich*1e-3) * BOmpLCFS / BpOmpLCFS
+        print("Simple q0 = {:f}[MW/m^2]".format(q0_simple))
+        log.info("Simple q0 = {:f}[MW/m^2]".format(q0_simple))
+
+        return q0
+
     def findScalingCoeffsMultiExp(self, PFC, lqCN, lqCF, lqPN, lqPF):
         """
         finds scaling coefficient for limiter heat flux profiles
@@ -470,14 +638,15 @@ class heatFlux:
 
         """
         # Get R and Z vectors at the midplane
-        R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
+        R_omp_sol = self.map_R_psi(1.0,PFC)
+        #R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
         R_omp_min = R_omp_sol - 5.0*(lqPN + lqPF) #already in m
         R_omp_max = R_omp_sol + 20.0*(lqCN + lqCF) #already in m
         #if R_omp_max is outside EFIT grid, cap at maximum R of grid
         if R_omp_max > max(PFC.ep.g['R']):
             R_omp_max = max(PFC.ep.g['R']) #in meters now
         R_omp = np.linspace(R_omp_min, R_omp_max, 1000)
-        Z_omp = np.zeros(R_omp.shape)
+        Z_omp = np.zeros(R_omp.shape) + PFC.ep.g['ZmAxis']
 
 
         # Evaluate B at outboard midplane
@@ -512,11 +681,11 @@ class heatFlux:
             qPN_hat = np.exp( s_hat[useP] / lqPN_hat[useP])
             qPF_hat = np.exp( s_hat[useP] / lqPF_hat[useP])
             #reinke method
-            #intPN = simps(qPN_hat / B_omp[useP], psi[useP])
-            #intPF = simps(qPF_hat / B_omp[useP], psi[useP])
+            intPN = simps(qPN_hat / B_omp[useP], psi[useP])
+            intPF = simps(qPF_hat / B_omp[useP], psi[useP])
             #menard method
-            intPN = simps(qPN_hat, psi[useP])
-            intPF = simps(qPF_hat, psi[useP])
+            #intPN = simps(qPN_hat, psi[useP])
+            #intPF = simps(qPF_hat, psi[useP])
         else:
             qPN_hat = 0.0
             qPF_hat = 0.0
@@ -527,11 +696,11 @@ class heatFlux:
             qCN_hat = np.exp(-s_hat[useC] / lqCN_hat[useC])
             qCF_hat = np.exp(-s_hat[useC] / lqCF_hat[useC])
             #reinke method
-            #intCN = simps(qCN_hat / B_omp[useC], psi[useC])
-            #intCF = simps(qCF_hat / B_omp[useC], psi[useC])
+            intCN = simps(qCN_hat / B_omp[useC], psi[useC])
+            intCF = simps(qCF_hat / B_omp[useC], psi[useC])
             #menard method
-            intCN = simps(qCN_hat, psi[useC])
-            intCF = simps(qCF_hat, psi[useC])
+            #intCN = simps(qCN_hat, psi[useC])
+            #intCF = simps(qCF_hat, psi[useC])
         else:
             qCN_hat = 0.0
             qCF_hat = 0.0
@@ -548,6 +717,9 @@ class heatFlux:
         #old method left for reference (same math)
         #q0 = (self.Psol/(2*np.pi)) / (intCN*self.fracCN + intCF*self.fracCF +
         #                              intPN*self.fracPN + intPF*self.fracPF)
+
+        print("MultiExp q0 = {:f}[MW/m^2]".format(q0))
+        log.info("MultiExp q0 = {:f}[MW/m^2]".format(q0))
 
         return q0
 
@@ -574,7 +746,7 @@ class heatFlux:
         if R_omp_max > max(PFC.ep.g['R']):
             R_omp_max = max(PFC.ep.g['R']) #in meters now
         R_omp = np.linspace(R_omp_min, R_omp_max, 1000)
-        Z_omp = np.zeros(R_omp.shape)
+        Z_omp = np.zeros(R_omp.shape) + PFC.ep.g['ZmAxis']
 
         # Evaluate B at outboard midplane
         Bp_omp = PFC.ep.BpFunc.ev(R_omp,Z_omp)
@@ -596,7 +768,7 @@ class heatFlux:
         #Calculate flux at midplane using gfile
         psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
         psi = psiN*(psiedge - psiaxis) + psiaxis
-        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
+        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,PFC.ep.g['ZmAxis'])
         s_hat = psiN - PFC.psiMinLCFS
 
 
@@ -611,11 +783,11 @@ class heatFlux:
 
         #note: simps integration will fail if x variable (psi) is not monotonic
         #reinke method
-        #intCN = simps(qCN_hat / B_omp, psi)
-        #intCF = simps(qCF_hat / B_omp, psi)
+        intCN = simps(qCN_hat / B_omp, psi)
+        intCF = simps(qCF_hat / B_omp, psi)
         #menard method
-        intCN = simps(qCN_hat, psi)
-        intCF = simps(qCF_hat, psi)
+        #intCN = simps(qCN_hat, psi)
+        #intCF = simps(qCF_hat, psi)
 
         P0 = 2*np.pi * (intCN*self.fracCN + intCF*self.fracCF)
         #account for nonphysical power
@@ -625,6 +797,61 @@ class heatFlux:
 
         #old method left for reference
         #q0 = (self.Psol/(2*np.pi)) / (intCN*self.fracCN + intCF*self.fracCF)
+
+        print("Limiter q0 = {:f}[MW/m^2]".format(q0))
+        log.info("Limiter q0 = {:f}[MW/m^2]".format(q0))
+
+        return q0
+
+
+    def findScalingCoeffTopHat(self,PFC,lq_mm,P):
+        """
+        calculates scaling coefficient for an arbitrary q profile
+        """
+        lq = lq_mm*1e-3 #[in m now]
+        R_omp_sol = self.map_R_psi(1.0,PFC)
+        #R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
+        area = lq*2*np.pi*R_omp_sol #convert to [m]
+        q0 = P / area
+
+
+        # Get R and Z vectors at the midplane
+        R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
+        R_omp_min = R_omp_sol #already in m
+        R_omp_max = R_omp_sol + lq #already in m
+        #if R_omp_max is outside EFIT grid, cap at maximum R of grid
+        if R_omp_max > max(PFC.ep.g['R']):
+            R_omp_max = max(PFC.ep.g['R']) #in meters now
+        R_omp = np.linspace(R_omp_min, R_omp_max, 1000)
+        Z_omp = np.zeros(R_omp.shape) + PFC.ep.g['ZmAxis']
+
+
+        # Evaluate B at outboard midplane
+        Bp_omp = PFC.ep.BpFunc.ev(R_omp,Z_omp)
+        Bt_omp = PFC.ep.BtFunc.ev(R_omp,Z_omp)
+        B_omp = np.sqrt(Bp_omp**2 + Bt_omp**2)
+
+        #Find coordinate transformation vector at midplane
+        psiaxis = PFC.ep.g['psiAxis']
+        psiedge = PFC.ep.g['psiSep']
+        deltaPsi = np.abs(psiedge - psiaxis)
+        gradPsi = Bp_omp*R_omp
+        xfm = gradPsi / deltaPsi
+        # transform hf width into flux space
+        lq_hat = lq*xfm
+
+        #Calculate flux at midplane using gfile
+        psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
+        psi = psiN*(psiedge - psiaxis) + psiaxis
+        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
+        s_hat = psiN - PFC.psiMinLCFS
+
+        q_hat = self.tophat_profile_fluxspace(PFC,lq_mm,R_omp,Bp_omp,psiN)
+        #Menard's method (also see qDiv function)
+        #P0 = 2*np.pi * simps(q_hat, psi)
+        #Reinke's method (also see qDiv function)
+        P0 = 2*np.pi * simps(q_hat/B_omp, psi)
+        q0 = np.abs(P / P0)
 
         return q0
 
@@ -668,7 +895,7 @@ class heatFlux:
         return R(psi)
         """
         R = np.linspace(PFC.ep.g['RmAxis'], PFC.ep.g['R1'] + PFC.ep.g['Xdim'], 100)
-        Z = np.zeros(len(R))
+        Z = np.zeros(len(R)) + PFC.ep.g['ZmAxis']
         p = PFC.ep.psiFunc.ev(R,Z)
 
         #In case of monotonically decreasing psi, sort R, p so that p is
@@ -680,34 +907,42 @@ class heatFlux:
         f = scinter.UnivariateSpline(p, R, s = 0, ext = 'const')	# psi outside of spline domain return the boundary value
         return f(psi)
 
-    def getHFprofile(self, PFC):
+    def getHFprofile(self, PFC, mafotPsi=False):
         """
         Calculates heat flux profile from psi.  Default is an Eich profile.
 
-        mode can be 'eich', 'multiExp', 'limiter'
+        mode can be 'eich', 'multiExp', 'limiter', 'tophat
 
+        is mafotPsi is true, uses psi from MAFOT calculation
         """
-        psi = PFC.psimin
+        xyz = PFC.centers
+        R_div,Z_div,phi_div = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
+        use = np.where(PFC.shadowed_mask == 0)[0]
+
+        if mafotPsi==True:
+            #use the psi from MAFOT
+            psi = PFC.psimin
+        else:
+            #Calculate psi using gfile
+            psi = PFC.ep.psiFunc.ev(R_div[use],Z_div[use])
+
         R_omp = self.map_R_psi(psi,PFC)
         Z_omp = np.zeros(R_omp.shape)
         # Evaluate B at midplane
         Bp_omp = PFC.ep.BpFunc.ev(R_omp,Z_omp)
         Bt_omp = PFC.ep.BtFunc.ev(R_omp,Z_omp)
         B_omp = np.sqrt(Bp_omp**2 + Bt_omp**2)
-        xyz = PFC.centers
-        R_div,Z_div,phi_div = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
+
         print('phi_divMin = {:f}'.format(phi_div.min()))
         print('phi_divMax = {:f}'.format(phi_div.max()))
         # Evaluate B at Target Plate neglecting shadowed points
         Bp_div = PFC.ep.BpFunc.ev(R_div,Z_div)
         Bt_div = PFC.ep.BtFunc.ev(R_div,Z_div)
         B_div = np.sqrt(Bp_div**2 + Bt_div**2)
-        #Calculate psi using gfile for scaling coefficient
-        psi_EQ = PFC.ep.psiFunc.ev(R_div,Z_div)
+
         #Calculate poloidal flux expansion
         #fx = R_div*Bp_div / (R_omp*Bp_omp)
         q = np.zeros(PFC.centers[:,0].shape)
-        use = np.where(PFC.shadowed_mask == 0)[0]
 
         #handle various heat flux regressions if user selected that in GUI
         if self.lqCNmode == 'eich':
@@ -730,19 +965,38 @@ class heatFlux:
                 print("lqCF: {}".format(self.lqCF))
                 print("lqPN: {}".format(self.lqPN))
                 print("lqPF: {}".format(self.lqPF))
+                log.info("lqCN: {}".format(self.lqCN))
+                log.info("lqCF: {}".format(self.lqCF))
+                log.info("lqPN: {}".format(self.lqPN))
+                log.info("lqPF: {}".format(self.lqPF))
             elif self.hfMode == 'limiter':
                 print("lqCN: {}".format(self.lqCN))
                 print("lqCF: {}".format(self.lqCF))
+                log.info("lqCN: {}".format(self.lqCN))
+                log.info("lqCF: {}".format(self.lqCF))
+
+        #tophat profile
+        elif self.hfMode == 'tophat':
+            q0 = self.findScalingCoeffTopHat(PFC,self.lqCN,self.Psol)
+            print("TopHat q0 = {:f}[MW/m^2]".format(q0))
+            log.info("TopHat q0 = {:f}[MW/m^2]".format(q0))
+            q[use] = self.tophat_profile_fluxspace(PFC,self.lqCN,R_omp,Bp_omp,psi)
+            q *= q0
+            print("Tophat lqCN: {}".format(self.lqCN))
+            log.info("Tophat lqCN: {}".format(self.lqCN))
+
 
         #Eich Profile
         else:
-            q0 = self.scaleHF_fluxspace(PFC,self.lqCN,self.S,self.Psol)
+            q0 = self.findScalingCoeffEich(PFC,self.lqCN,self.S,self.Psol)
             q[use] = self.eich_profile_fluxspace(PFC, self.lqCN, self.S, R_omp, Bp_omp, psi)
             q *= q0
             q += self.qBG
             print("lqCN: {} [mm]".format(self.lqCN))
             print("S: {} [mm]".format(self.S))
-            print("q0 {} [MW/m^2]".format(q0))
+            log.info("lqCN: {} [mm]".format(self.lqCN))
+            log.info("S: {} [mm]".format(self.S))
+
 
         #Scale by fraction of power going to this PFC's divertor
         PFC.powerFrac = self.getDivertorPowerFraction(PFC.DivCode)
@@ -752,51 +1006,6 @@ class heatFlux:
 
         return q
 
-
-    def scaleHF_fluxspace(self, PFC, lqEich, S, P):
-        """
-        scales HF using Eich profile
-
-        Get scale factor q||0 (q0) for heat flux via power balance:
-        (input MW = output MW)
-        Ignores wall psi and just creates a profile at OMP
-        Creates a dense (1000pts) grid at the midplane to get higher resolution
-        integral.  Integrates q_hat / B_omp with respect to psi.
-        q||0 = P_div / ( 2*pi* integral(q_hat / B_omp)dPsi )
-
-        return q0
-        """
-        # Get R and Z vectors at the midplane
-        R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
-        R_omp_min = R_omp_sol - 5.0*lqEich*(1e-3) #in meters now
-        R_omp_max = R_omp_sol + 20.0*lqEich*(1e-3) #in meters now
-        #if R_omp_max is outside EFIT grid, cap at maximum R of grid
-        if R_omp_max > max(PFC.ep.g['R']):
-            R_omp_max = max(PFC.ep.g['R']) #in meters now
-        R_omp = np.linspace(R_omp_min, R_omp_max, 1000)
-        Z_omp = np.zeros(R_omp.shape)
-        #Calculate flux at midplane using gfile
-        psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
-        psi = psiN * (PFC.ep.g['psiSep']-PFC.ep.g['psiAxis']) + PFC.ep.g['psiAxis']
-        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
-        s_hat = psiN - PFC.psiMinLCFS
-        # Evaluate B at outboard midplane
-        Bp_omp = PFC.ep.BpFunc.ev(R_omp,Z_omp)
-        Bt_omp = PFC.ep.BtFunc.ev(R_omp,Z_omp)
-        B_omp = np.sqrt(Bp_omp**2 + Bt_omp**2)
-
-        #Get q|| profile then integrate in Psi
-        q_hat = self.eich_profile_fluxspace(PFC, lqEich, S, R_omp, Bp_omp, psiN)
-
-        #Menard's method
-        P0 = 2*np.pi * simps(q_hat, psi)
-        #Matt's Method
-#        P0 = 2*np.pi * simps(q_hat / B_omp, psi)
-        #account for nonphysical power
-        if P0 < 0: P0 = -P0
-        #Scale to input power
-        q0 = P/P0
-        return q0
 
     def HFincidentAngle(self,PFC, MHD):
         """
@@ -816,7 +1025,7 @@ class heatFlux:
         incident angle.  This takes an already calculated vector, q||, and
         applies it to the divertor tile.
         """
-        psi = PFC.psimin
+        psi = PFC.psimin #read from MAFOT output
         xyz = PFC.centers
 
         R_div,Z_div,phi_div = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
@@ -857,10 +1066,10 @@ class heatFlux:
         q_div = np.zeros((len(xyz)))
         use = np.where(PFC.shadowed_mask == 0)[0]
 
-        #Matt's method
-#        q_div[use] = q[use] * B_div[use]/B_omp * PFC.bdotn[use]
-        #Menard's Method
-        q_div[use] = q[use] * B_div[use] * PFC.bdotn[use]
+        #Menard's Method (also see integral in scaling coeffs)
+        #q_div[use] = q[use] * B_div[use] * PFC.bdotn[use]
+        #Reinke's method (also see integral in scaling coeffs)
+        q_div[use] = q[use] * B_div[use]/B_omp * PFC.bdotn[use]
 
         #for i in range(len(q_div)):
         #	if q_div[i] > 8.0: q_div[i] = 0.0
@@ -1008,30 +1217,156 @@ class heatFlux:
         GYRO.gyroNanPower += PNaN
         return
     
-    def filamentAddHF(self, FIL, PFC, ts):
+    def filamentHeatFlux(self, FIL, PFC, ts, tIdx):
         """
-        assigns power from filament to targets
+        assigns energy from filament to targets
+        calculates heat flux and total energy deposition
 
         FIL.intersectRecord gets overwritten for each filament source timestep
         so this function needs to be called once per filament to add 
         the heat fluxes from each filament source timestep to the tallies on the PFC mesh
-
-        tLoc is the index of the timestep
         """
-        E = FIL.g_pts.reshape(FIL.N_b*FIL.N_r*FIL.N_p)
-        print(np.sum(E))
+        E = FIL.density[:,:,:,tIdx].reshape(FIL.N_b*FIL.N_r*FIL.N_p) * FIL.E0
+        ptclSum = 0
+        Esum = 0
+
+        #this PFC indexes in target mesh
+        idx1 = np.where(np.array(FIL.CADtargetNames) == PFC.name)[0]
+
+        # Create an array with shape (len(ts), FIL.N_vS, FIL.intersectRecord.shape[1]) and ensure it is of integer type
+        multi_ts_use = np.array([[np.where(np.isin(FIL.intersectRecord[j, :, i], idx1))[0].astype(int) for j in range(FIL.N_vS)] for i in range(len(ts))], dtype=object)
+
+        # Iterate over the combinations of time and velocity samples (vS)
         for i in range(len(ts)):
             for j in range(FIL.N_vS):
-                #indexes of intersect mesh that correspond to this PFC
-                idx1 = np.where(np.array(FIL.CADtargetNames) == PFC.name)[0] #this PFC indexes in target mesh
-                PFCidx = np.intersect1d(FIL.intersectRecord[j,:,i], idx1) #idxs where this PFC was hit in intersection test
-                use = np.where(np.isin(FIL.intersectRecord[j,:,i],PFCidx)==True)[0] #source macroparticles that hit a PFCidx
-                idx2 = FIL.intersectRecord[j,use,i].astype(int)
-                PFC.Edep[idx2, i] += E[use]
-        
+                use = multi_ts_use[i, j]
+                if len(use) > 0:
+                    #get indexes where there was a hit from intersectRecord
+                    idx3 = FIL.intersectRecord[j, use, i].astype(int)
+                    #map location in target mesh to relative index on this PFC
+                    idxTGT = np.searchsorted(idx1, idx3) 
+                    #scale energy by the v_|| energy bin frac
+                    E_scaled = E[use] * FIL.energyFracs[use, j]
+                    #add the sum for this mesh triangle
+                    np.add.at(PFC.Edep[:, i], idxTGT, E_scaled)
+
+
+#        # Iterate over the combinations of time and vS
+#        for i in range(len(ts)):
+#            for j in range(FIL.N_vS):
+#                use = multi_ts_use[i, j]
+#                if len(use) > 0:
+#                    #get indexes where there was a hit from intersectRecord
+#                    idx3 = FIL.intersectRecord[j, use, i].astype(int)
+#                    #map location in target mesh to relative index on this PFC
+#                    idxTGT = np.searchsorted(idx1, idx3) 
+#                    #scale energy by the v_|| bin frac
+#                    E_scaled = E[use] * FIL.velocityFracs[use, j]
+#                    #add the sum for this mesh triangle
+#                    np.add.at(PFC.Edep[:, i], idxTGT, E_scaled)
+
+
+#        #OLD METHOD (slow)
+#        for i in range(len(ts)):
+#            for j in range(FIL.N_vS):
+#                #indexes of intersect mesh that correspond to this PFC
+#                idx1 = np.where(np.array(FIL.CADtargetNames) == PFC.name)[0] 
+#                PFCidx = np.intersect1d(FIL.intersectRecord[j,:,i], idx1) #idxs where this PFC was hit in intersection test
+#                use = np.where(np.isin(FIL.intersectRecord[j,:,i],PFCidx)==True)[0] #list of source macroparticles that hit this PFC
+#                
+#                #vectorized method
+#                idx3 = FIL.intersectRecord[j,use,i].astype(int)
+#                if len(use) > 0:
+#                    idxTGT = idx1.searchsorted(idx3)
+#                    print(idxTGT)
+#                    E_scaled = E[use] * FIL.velocityFracs[use, j]
+#                    np.add.at(PFC.Edep[:,i], idxTGT, E_scaled)
+#
+#                #loop method
+#                #for k in range(len(use)):
+#                #    idx3 = FIL.intersectRecord[j,use[k],i].astype(int)
+#                #    idxTGT = np.where(idx1 == idx3)[0] #map location in target mesh to relative index on this PFC
+#                #    PFC.Edep[idxTGT,i] += E[use[k]] * FIL.velocityFracs[use[k], j]
+#
+#               
+                #for particle balance
+                ptclSum += len(use)
+
+        #heat flux is energy deposited per unit area per unit time
         PFC.qFil = PFC.Edep / PFC.areas[:,np.newaxis] / FIL.dt
-        print("Sum: {:f}".format(np.sum(PFC.Edep)))
-        input()
+        N_pts = FIL.N_vS*len(FIL.intersectRecord[0,:,0])
+
+        #printing
+        print("Theoretical total energy: {:f} [J]".format(FIL.E0))
+        print("Energy Deposited on Mesh: {:f} [J]".format(np.sum(PFC.Edep)))
+        print("Energy balance: {:0.3f}%".format(np.sum(PFC.Edep) / FIL.E0 * 100.0))
+        print('Peak flux: {:1.8e} [W/m^2]'.format(np.max(PFC.qFil)))
+        print('Total number of particles: {:d}'.format(N_pts))
+        print('Number of particles landed on this PFC: {:d}'.format(ptclSum))
+        print('Particle balance: {:0.3f}%'.format(ptclSum / N_pts*100.0))
+        log.info("Theoretical total energy: {:f} [J]".format(FIL.E0))
+        log.info("Energy Deposited on Mesh: {:f} [J]".format(np.sum(PFC.Edep)))
+        log.info("Energy balance: {:0.3f}%".format(np.sum(PFC.Edep) / FIL.E0 * 100.0))
+        log.info('Peak flux: {:1.8e} [W/m^2]'.format(np.max(PFC.qFil)))
+        log.info('Total number of particles: {:d}'.format(N_pts))
+        log.info('Number of particles landed on this PFC: {:d}'.format(ptclSum))
+        log.info('Particle balance: {:0.3f}%'.format(ptclSum / N_pts*100.0))
+
+
+        return
+
+
+    def filamentParticleFlux(self, FIL, PFC, ts, tIdx):
+        """
+        assigns particles from filament to targets
+
+        FIL.intersectRecord gets overwritten for each filament source timestep
+        so this function needs to be called once per filament to add 
+        the particles from each filament source timestep to the tallies on the PFC mesh
+        """
+        density = FIL.density[:,:,:,tIdx].reshape(FIL.N_b*FIL.N_r*FIL.N_p) * FIL.E0
+        ptclSum = 0
+
+        #this PFC indexes in target mesh
+        idx1 = np.where(np.array(FIL.CADtargetNames) == PFC.name)[0]
+
+        # Create an array with shape (len(ts), FIL.N_vS, FIL.intersectRecord.shape[1]) and ensure it is of integer type
+        multi_ts_use = np.array([[np.where(np.isin(FIL.intersectRecord[j, :, i], idx1))[0].astype(int) for j in range(FIL.N_vS)] for i in range(len(ts))], dtype=object)
+
+        # Iterate over the combinations of time and vS
+        for i in range(len(ts)):
+            for j in range(FIL.N_vS):
+                use = multi_ts_use[i, j]
+                if len(use) > 0:
+                    #get indexes where there was a hit from intersectRecord
+                    idx3 = FIL.intersectRecord[j, use, i].astype(int)
+                    #map location in target mesh to relative index on this PFC
+                    idxTGT = np.searchsorted(idx1, idx3) 
+                    #scale energy by the v_|| bin frac
+                    den_scaled = density[use] * FIL.velocityFracs[use, j]
+                    #add the sum for this mesh triangle
+                    np.add.at(PFC.ptclDep[:, i], idxTGT, den_scaled)
+
+
+                #for particle balance
+                ptclSum += len(use)
+
+        #particle flux is particles deposited per area per time
+        PFC.ptclFluxFil = PFC.ptclDep / PFC.areas[:,np.newaxis] / FIL.dt
+        N_pts = FIL.N_vS*len(FIL.intersectRecord[0,:,0])
+
+        print('Particle deposition fraction: {:f}'.format(np.sum(PFC.ptclDep)))
+        print('Total number of particles: {:d}'.format(N_pts))
+        print('Number of particles landed on this PFC: {:d}'.format(ptclSum))
+        print('Particle balance: {:0.3f}%'.format(ptclSum / N_pts*100.0))
+        print('Peak flux: {:1.8e} [1/m^2/s]'.format(np.max(PFC.ptclFluxFil)))
+        log.info('Particle deposition fraction: {:f}'.format(np.sum(PFC.ptclDep)))
+        log.info('Total number of particles: {:d}'.format(N_pts))
+        log.info('Number of particles landed on this PFC: {:d}'.format(ptclSum))
+        log.info('Particle balance: {:0.3f}%'.format(ptclSum / N_pts*100.0))
+        log.info('Peak flux: {:1.8e} [1/m^2/s]'.format(np.max(PFC.ptclFluxFil)))
+
+
         return
 
 
@@ -1260,9 +1595,13 @@ class heatFlux:
             HFdict['S [mm]'] = self.S
             HFdict['Background Heat Flux'] = self.qBG
 
+        elif self.hfMode == 'tophat':
+            HFdict["\u03BB Mode"] = 'TopHat'
+            HFdict["Heat Flux Width (\u03BBq) [mm]"] = self.lqCN           
+
         if self.hfMode != 'qFile':
-            HFdict["Power Injected (Pinj) [MW]"] = self.Pinj
-            HFdict["Radiated Fraction of Injected Power"] = self.coreRadFrac
+            HFdict["Source Power (P) [MW]"] = self.P
+            HFdict["Fraction of P radiated by photons"] = self.radFrac
             HFdict["Power Crossing Separatrix (Psol) [MW]"] = self.Psol
             HFdict["Upper Inner Divertor Power Fraction"] = self.fracUI
             HFdict["Upper Outer Divertor Power Fraction"] = self.fracUO

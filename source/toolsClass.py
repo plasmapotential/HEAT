@@ -83,12 +83,13 @@ class tools:
             print("No input file.  Please provide input file")
             sys.exit()
 
-        data = pd.read_csv(infile, sep=',', comment='#', names=['Var','Val'], skipinitialspace=True)
+        data = pd.read_csv(infile, sep=',', comment='#', names=['Var','Val'], skipinitialspace=True,
+                           keep_default_na=False, na_values=['NaN'])
 
         #Dynamically initialize class variables
         for i in range(len(data)):
             if data['Var'][i] in obj.allowed_vars:
-                noneList = ['none', None, 'None', 'NONE', '', 'na', 'NA', 'Na', 'nan', 'NaN', 'NAN', 'Nan']
+                noneList = ['none', None, 'None', 'NONE', '', 'na', 'NA', 'Na', 'nan', 'NaN', 'NAN', 'Nan', np.nan]
                 TrueList = ['True', 'true', 'T', 't']
                 FalseList = ['False','false','F', 'f']
                 #handle Nones
