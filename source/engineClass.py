@@ -689,8 +689,8 @@ class engineObj():
         where <XXXXXX> is shot number and <YYYYY> is timestep[ms]
         """
         #change filename to HEAT GEQDSK naming convention
-        self.MHD.tmax = int(max(timesteps))
-        self.MHD.tmin = int(min(timesteps))
+        self.MHD.tmax = max(timesteps)
+        self.MHD.tmin = min(timesteps)
         shot = self.MHD.shot
         newGfiles = []
         for i,f in enumerate(gfiles):
@@ -1368,7 +1368,7 @@ class engineObj():
         data = data.rename(columns=lambda x: x.strip())
         data = data.astype({"x[mm]": float, "y[mm]": float, "z[mm]": float, "traceDirection": int, "Length[deg]":float, "stepSize[deg]":float})
 
-        t = int(t)
+        #t = int(t)
         tIdx = np.where(float(t)==self.MHD.timesteps)[0][0]
         traceDirection=data['traceDirection']
         x = data['x[mm]'] / 1000.0
@@ -1392,7 +1392,7 @@ class engineObj():
 
         gridfile = self.MHD.shotPath + self.tsFmt.format(t) + '/struct_grid.dat'
         controlfilePath = self.MHD.shotPath + self.tsFmt.format(t) + '/'
-        structOutfile = controlfilePath + 'struct.dat'
+        #structOutfile = controlfilePath + 'struct.dat'
 
         for i in range(len(xyz)):
             self.MHD.ittStruct = data['Length[deg]'][i] / data['stepSize[deg]'][i]
@@ -1400,7 +1400,7 @@ class engineObj():
             self.MHD.writeControlFile(controlfile, t, data['traceDirection'][i], mode='struct')
             self.MHD.writeMAFOTpointfile(xyz[i,:],gridfile)
             self.MHD.getFieldpath(dphi, gridfile, controlfilePath, controlfile, paraview_mask=True, tag='pt{:03d}'.format(i))
-            os.remove(structOutfile)
+            #os.remove(structOutfile)
         return
 
 
@@ -1677,6 +1677,7 @@ class engineObj():
         allowedOptions = ['hfOpt', 'pwrDir', 'bdotn', 'B', 'psiN', 'norm', 'hfGyro', 'hfRad', 'hfFil']
         if len([i for i in runList if i in allowedOptions]) < 1:
             print("No HEAT runList option to run.  Breaking out of engineClass runHEAT loop.")
+            log.info("No HEAT runList option to run.  Breaking out of engineClass runHEAT loop.")
             return
         else:
             self.runList = runList
@@ -3279,13 +3280,6 @@ class engineObj():
         """
         #Run MAFOT laminar for 3D plasmas
         if self.plasma3D.plasma3Dmask:
-#            CTLfile=PFC.controlfilePath + PFC.controlfile
-#            self.MHD.writeControlFile(CTLfile, PFC.t, PFC.mapDirection, mode='laminar')
-#            self.MHD.writeMAFOTpointfile(PFC.centers,PFC.gridfile)
-#            self.MHD.runMAFOTlaminar(PFC.gridfile,PFC.controlfilePath,PFC.controlfile,self.NCPUs)
-#            self.HF.readMAFOTLaminarOutput(PFC,PFC.outputFile)
-#            use = np.where(PFC.psimin < 10)[0]
-#            os.remove(PFC.outputFile)
             print('Solving for 3D plasmas with MAFOT')
             log.info('Solving for 3D plasmas with MAFOT')
             self.plasma3D.updatePointsFromCenters(PFC.centers)
@@ -3808,7 +3802,7 @@ class engineObj():
 
             #set up timesteps
             N_t = int((self.OF.OFtMax - self.OF.OFtMin) / self.OF.deltaT)
-            OFtimesteps = np.linspace(self.OF.OFtMin, self.OF.OFtMax, N_t+1)
+            OFtimesteps = np.round(np.linspace(self.OF.OFtMin, self.OF.OFtMax, N_t+1), self.tsSigFigs)
 
             #create symbolic link to STL file
             print("Creating openFOAM symlink to STL")
@@ -4038,6 +4032,7 @@ class engineObj():
                     #OFcenters = pd.read_csv(HFcsv).iloc[:,0:3].values
                     #write boundary condition
                     print("Maximum qDiv for this PFC and time: {:f}".format(qDiv.max()))
+                    log.info("Maximum qDiv for this PFC and time: {:f}".format(qDiv.max()))
                     self.HF.write_openFOAM_boundary(OFcenters,qDiv,partDir,t)
                 elif (t < self.MHD.timesteps.min()) or (t > self.MHD.timesteps.max()):
                     #apply zero HF outside of discharge domain (ie tiles cooling)
@@ -4046,6 +4041,7 @@ class engineObj():
                     qDiv = np.zeros((len(OFcenters)))
                     #write boundary condition
                     print("Maximum qDiv for this PFC and time: {:f}".format(qDiv.max()))
+                    log.info("Maximum qDiv for this PFC and time: {:f}".format(qDiv.max()))
                     self.HF.write_openFOAM_boundary(OFcenters,qDiv,partDir,t)
                 else:
                     #boundary using last timestep that we calculated a HF for
