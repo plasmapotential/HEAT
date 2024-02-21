@@ -34,7 +34,6 @@ class plasma3D:
 		self.Z = None		# in m
 		self.psimin = None
 		self.Lc = None		# in km
-		self.NCPUs = 100
 		self.useVertices = False
 		
 		# Boundary Box limits
@@ -43,15 +42,41 @@ class plasma3D:
 		self.bbZmin = None
 		self.bbZmax = None
 		
+		# Default inputs
+		self.plasma3Dmask = 0
+		self.NCPUs = 100
 		self.loadHF = False
 		self.loadBasePath = None
 		
-		self.allowed_vars = ['plasma3Dmask','shot','time','tmax','gFile','itt','response',
+		
+	def allowed_class_vars(self):
+		"""
+		These variables are read in from the input file. The call is in engine_class.loadInputs
+		"""
+		self.allowed_vars = ['plasma3Dmask','itt','response',
 				'selectField','useIcoil','sigma','charge','Ekin','Lambda','Mass','loadHF',
 				'loadBasePath','NCPUs']
 	
 	
-	def initializePlasma3D(self, shot, time, gFile = None, inputFile = None, cwd = None, inputDir = None):
+	def setTypes(self):
+		"""
+		Set variable types for the stuff that isnt a string from the input file
+		"""
+		integers = ['plasma3Dmask','itt','response','selectField','useIcoil','sigma','charge','Mass','NCPUs']
+		floats = ['Ekin','Lambda']
+		bools = ['loadHF']
+		setAllTypes(self, integers, floats, bools)     # this is not a typo, but the correct syntax for this call
+
+
+	def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
+		"""
+		sets up pythonic string number formats for shot and timesteps
+		"""
+		self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
+		self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
+		
+		
+	def initializePlasma3D(self, shot, time, gFile = None, inputDir = None):
 		"""
 		Set up basic input vars
 		gfile should include the full path and file name
@@ -61,26 +86,13 @@ class plasma3D:
 		"""
 		self.shot = tools.makeInt(shot)
 		self.time = tools.makeInt(time)
-		if cwd is None: self.cwd = os.getcwd()
-		else: self.cwd = cwd
-		if inputDir is None: self.inputDir = self.cwd
-		else: self.inputDir = inputDir
-		if gFile is None: gFile = self.cwd + '/g' + format(int(self.shot),'06d') + '.' + format(int(self.time),'05d')
-		self.gFile = gFile
-		if inputFile is not None: self.read_input_file(inputFile)
-		else: self.setMAFOTctl()	# just defaults
+		if inputDir is None: inputDir = os.getcwd()
+		self.inputDir = inputDir
+		if gFile is None: gFile = self.inputDir + '/g' + format(int(self.shot),'06d') + '.' + format(int(self.time),'05d')
+		self.gFile = gFile		# this is not used for ep, but just as a string in the MAFOT control file
 		self.readM3DC1supFile()
 
 
-	def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
-		"""
-		sets up pythonic string number formats for shot and timesteps
-		"""
-		self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
-		self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
-		return
-		
-		
 	def print_settings(self):
 		"""
 		Print all inputs
@@ -91,7 +103,6 @@ class plasma3D:
 		print('shot = ' + str(self.shot))
 		print('time = ' + str(self.time))
 		print('gFile = ' + str(self.gFile))
-		print('cwd = ' + str(self.cwd))
 		print('#=============================================================')
 		print('#                3D Plasma Variables')
 		print('#=============================================================')
@@ -119,22 +130,14 @@ class plasma3D:
 			print('File ' + str(i+1) + ' = ' + self.C1Files[i])
 			print('   Scale = ' + str(self.C1scales[i]))
 			print('   Phase = ' + str(self.C1phases[i]))
-		
 
-	def setMAFOTctl(self, itt = 300, response = 0, selectField = -1, useIcoil = 0, 
-				sigma = 0, charge = -1, Ekin = 10, Lambda = 0.1, Mass = 2):
+
+	def updatePFCdata(self, cwd):
 		"""
-		Set the MAFOT specific class variables
+		Update class variables that are specific for each PFC
 		"""
-		self.itt = tools.makeInt(itt) 						# toroidal iterations
-		self.response = tools.makeInt(response) 			# M3D-C1 Plasma Response (0=no,>1=yes)
-		self.selectField = tools.makeInt(selectField) 		# MHD fields to use (-3=VMEC,-2=SIESTA,-1=gfile,M3DC1:0=Eq,1=I-coil,2=both)
-		self.useIcoil = tools.makeInt(useIcoil) 			# 0=no, 1=yes
-		self.sigma = tools.makeInt(sigma) 					# Particle Direction (1=co-pass,-1=ctr-pass,0=field-lines)
-		self.charge = tools.makeInt(charge) 				# Partile Charge (-1=electrons,>=1=ions)
-		self.Ekin = tools.makeFloat(Ekin) 					# Particle Kinetic Energy in keV
-		self.Lambda = tools.makeFloat(Lambda) 				# Ratio of perpendicular to parallel velocity
-		self.Mass = tools.makeInt(Mass) 					# Particle Ion Mass (H=1, D=2, He=4)
+		self.cwd = cwd
+		print('Plasma3D current working directory set to = ' + str(self.cwd))
 
 
 	def setBoundaryBox(self, MHD, CAD):
@@ -194,35 +197,6 @@ class plasma3D:
 			log.info('M3D-C1: ' + self.inputDir + '/' + 'm3dc1sup.in read successfully')
 			return
 		
-	
-	def read_input_file(self, file):
-		"""
-		Reads the 3D plasma csv input file
-		Format for input file is comma delimited, # are comments.
-		Example:
-		#Important Comment
-		variable_name, value
-		"""
-		if os.path.isfile(file): 
-			tools.read_input_file(self, file)
-			self.setTypes()
-			print('Input file: ' + file + ' read successfully')
-			log.info('Input file: ' + file + ' read successfully')
-		else: 
-			print('Input file: ' + file + ' not found!')
-			log.info('Input file: ' + file + ' not found!')
-			self.setMAFOTctl()	# just defaults
-
-
-	def setTypes(self):
-		"""
-		Set variable types for the stuff that isnt a string from the input file
-		"""
-		integers = ['plasma3Dmask','shot','time','tmax','itt','response','selectField','useIcoil','sigma','charge','Mass','NCPUs']
-		floats = ['Ekin','Lambda']
-		bools = ['loadHF']
-		setAllTypes(self, integers, floats, bools)     # this is not a typo, but the correct syntax for this call
-
 
 	def updatePointsFromVertices(self, xvertices, yvertices, zvertices, centers):
 		"""
@@ -508,31 +482,68 @@ class heatflux3D:
 		self.psimin = None
 		self.Lc = None		# in km
 		self.N = 1
-		self.NCPUs = 100
 		self.q = np.zeros(self.N)
 		self.q0 = None
 		self.ep = None	# equilParams_class instance for EFIT equilibrium
 		self.HFS = None	# True: use high field side SOL, False: use low field side SOL
+		
+		#Default inputs
+		self.NCPUs = 100
 		self.teProfileData = None
 		self.neProfileData = None
+		
+		
+	def allowed_class_vars(self):
+		"""
+		These variables are read in from the input file. The call is in engine_class.loadInputs
+		"""
 		self.allowed_vars = ['Lcmin', 'lcfs', 'lqCN', 'S', 'P', 'radFrac', 'qBG', 
 				'teProfileData', 'neProfileData', 'kappa', 'model','NCPUs']
 
 
-	def initializeHF3D(self, ep, inputFile = None, cwd = None, inputDir = None):
+	def setTypes(self):
+		"""
+		Set variable types for the stuff that isnt a string from the input file
+		"""
+		integers = ['NCPUs']
+		floats = ['Lcmin', 'lcfs', 'lqCN', 'S', 'P', 'radFrac', 'qBG', 'kappa']
+		bools = []
+		setAllTypes(self, integers, floats, bools)
+		
+		# data is an array or list
+		if self.teProfileData is not None:
+			if '[' in self.teProfileData:
+				from ast import literal_eval
+				self.teProfileData = self.teProfileData.replace(' ',',')
+				self.teProfileData = np.array(literal_eval(self.teProfileData))
+		if self.neProfileData is not None:
+			if '[' in self.neProfileData:
+				from ast import literal_eval
+				self.neProfileData = self.neProfileData.replace(' ',',')
+				self.neProfileData = np.array(literal_eval(self.neProfileData))
+		
+		# check if data is just a float
+		try: self.teProfileData = float(self.teProfileData)
+		except: pass	# data is a file name and remains a string or None
+		try: self.neProfileData = float(self.neProfileData)
+		except: pass	# data is a file name and remains a string or None
+			
+		
+	def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
+		"""
+		sets up pythonic string number formats for shot and timesteps
+		"""
+		self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
+		self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
+		return
+
+	
+	def initializeHF3D(self, inputDir = None):
 		"""
 		Set up basic input vars
-		"""
-		#self.N = len(self.Lc)
-		#self.q = np.zeros(self.N)
-		self.ep = ep	# equilParams_class instance for EFIT equilibrium
-		
-		if inputDir is None: self.inputDir = os.getcwd()
-		else: self.inputDir = inputDir
-		if cwd is None: self.cwd = os.getcwd()
-		else: self.cwd = cwd
-		if inputFile is not None: self.read_input_file(inputFile)
-		else: self.setHFctl()	# just defaults	
+		"""		
+		if inputDir is None: inputDir = os.getcwd()
+		self.inputDir = inputDir
 		self.Psol = (1 - self.radFrac) * self.P
 			
 		T = self.teProfileData
@@ -585,15 +596,6 @@ class heatflux3D:
 				raise RuntimeError('Invalid density profile data')
 
 
-	def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
-		"""
-		sets up pythonic string number formats for shot and timesteps
-		"""
-		self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
-		self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
-		return
-
-	
 	def print_settings(self):
 		"""
 		Print all inputs
@@ -616,71 +618,15 @@ class heatflux3D:
 		print('neProfileData = ' + str(self.neProfileData))
 		print('model = ' + str(self.model))
 		
-
-	def setHFctl(self, Lcmin = 0.075, lcfs = 0.97, lqCN = 5, S = 2, P = 10, radFrac = 0.0, qBG = 0, kappa = 2000):
-		"""
-		Set the specific class variables
-		"""
-		self.Lcmin = tools.makeFloat(Lcmin) 		# minimum connection length in SOL to separateout the PFR, in km
-		self.lcfs = tools.makeFloat(lcfs) 			# psi of the Last Closed Flux Surface inside the stochastic layer
-		self.lqCN = tools.makeFloat(lqCN) 		    # heat flux layer width for Eich profile, in mm
-		self.S = tools.makeFloat(S) 				# heat flux layer extension width in PFR, in mm
-		self.P = tools.makeFloat(P) 				# total power into SOL, in MW
-		self.radFrac = tools.makeFloat(radFrac)  	# fraction of radiated power
-		self.qBG = tools.makeFloat(qBG) 			# background heat flux in MW/m^2
-		self.kappa = tools.makeFloat(kappa) 		# electron heat conductivity in W/m/eV^3.5
-		self.teProfileData = None
-		self.neProfileData = None
-		self.model = None
 	
-	
-	def read_input_file(self, file):
+	def updatePFCdata(self, ep, cwd):
 		"""
-		Reads the 3D plasma csv input file
-		Format for input file is comma delimited, # are comments.
-		Example:
-		#Important Comment
-		variable_name, value
+		Update class variables that are specific for each PFC
 		"""
-		if os.path.isfile(file): 
-			tools.read_input_file(self, file)
-			self.setTypes()
-			print('Input file: ' + file + ' read successfully')
-			log.info('Input file: ' + file + ' read successfully')
-		else: 
-			print('Input file: ' + file + ' not found!')
-			log.info('Input file: ' + file + ' not found!')
-			self.setHFctl()	# just defaults
+		self.ep = ep	# equilParams_class instance for EFIT equilibrium
+		self.cwd = cwd
 		
 
-	def setTypes(self):
-		"""
-		Set variable types for the stuff that isnt a string from the input file
-		"""
-		integers = ['NCPUs']
-		floats = ['Lcmin', 'lcfs', 'lqCN', 'S', 'P', 'radFrac', 'qBG', 'kappa']
-		bools = []
-		setAllTypes(self, integers, floats, bools)
-		
-		# data is an array or list
-		if self.teProfileData is not None:
-			if '[' in self.teProfileData:
-				from ast import literal_eval
-				self.teProfileData = self.teProfileData.replace(' ',',')
-				self.teProfileData = np.array(literal_eval(self.teProfileData))
-		if self.neProfileData is not None:
-			if '[' in self.neProfileData:
-				from ast import literal_eval
-				self.neProfileData = self.neProfileData.replace(' ',',')
-				self.neProfileData = np.array(literal_eval(self.neProfileData))
-		
-		# check if data is just a float
-		try: self.teProfileData = float(self.teProfileData)
-		except: pass	# data is a file name and remains a string or None
-		try: self.neProfileData = float(self.neProfileData)
-		except: pass	# data is a file name and remains a string or None
-			
-		
 	def updateLaminarData(self, psimin, Lc):
 		"""
 		updates member variables for psimin, connection length, 

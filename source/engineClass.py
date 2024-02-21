@@ -1722,7 +1722,17 @@ class engineObj():
                 self.inputDicts.append(self.loadInputs(inFile=self.inputFileList[tIdx]))
             else:
                 self.inputDicts.append(self.getCurrentInputs())
-
+                
+			# 3Dplasma general setup
+			if self.plasma3D.plasma3Dmask == 1:
+				gFile = self.MHD.shotPath + self.tsFmt.format(t) + '/' + self.MHD.gFiles[tIdx]
+				self.plasma3D.initializePlasma3D(self.MHD.shot, t, gFile, self.MHD.tmpDir[0:-1])   # remove / at the end of paths	Also: this no longer reads the input file. This is now done by self.loadInputs
+				self.plasma3D.setBoundaryBox(self.MHD, self.CAD)
+				self.hf3D.initializeHF3D(self.MHD.tmpDir[0:-1])		# this no longer reads the input file. This is now done by self.loadInputs
+				self.plasma3D.print_settings()
+				self.hf3D.print_settings()
+			
+			# Loop through all PFCs
             for PFC in self.PFCs:
                 if t not in PFC.timesteps:
                     pass
@@ -1756,14 +1766,11 @@ class engineObj():
                     print("*"*80)
                     print('\n')
                     
-                    #3Dplasma setup
-                    if self.plasma3D.plasma3Dmask == 1:
-                        gFile = self.MHD.shotPath + self.tsFmt.format(t) + '/' + self.MHD.gFiles[tIdx]
-                        self.plasma3D.initializePlasma3D(self.MHD.shot, t, gFile, self.inputFileList[tIdx], PFC.controlfilePath[0:-1], self.MHD.tmpDir[0:-1])   # remove / at the end of paths
-                        self.plasma3D.setBoundaryBox(self.MHD, self.CAD)
-                        self.hf3D.initializeHF3D(PFC.ep, self.inputFileList[tIdx], PFC.controlfilePath[0:-1], self.MHD.tmpDir[0:-1])
-                        self.plasma3D.print_settings()
-                        self.hf3D.print_settings()
+                    # 3Dplasma PFC specific setup
+					if self.plasma3D.plasma3Dmask == 1:
+						self.plasma3D.updatePFCdata(PFC.controlfilePath[0:-1])	# remove / at the end of paths
+						self.hf3D.updatePFCdata(PFC.ep, PFC.controlfilePath[0:-1])
+                    
                     if 'hfOpt' in runList:
                         #load HF settings for this timestep if applicable (terminal mode)
                         try:
@@ -2007,7 +2014,7 @@ class engineObj():
                 self.combineTimeSteps(runList, t)
 
         #copy HEAT logfile to shotpath
-        #shutil.copyfile(self.logFile, self.MHD.shotPath+'HEATlog.txt')
+        #shutil.copyfile(self.logFile, self.MHD.shotPath+'HEATlog.txt')			#AW: this is a strange place for this command, runHEAT is not complete yet. The same call is already in terminalUI, just after runHEAT is complete
 
         #set tree permissions
         tools.recursivePermissions(self.MHD.shotPath, self.UID, self.GID, self.chmod)
@@ -3369,6 +3376,39 @@ class engineObj():
                     'meshMinLev': None,
                     'meshMaxLev': None,
                     'material': None,
+                    'N_gyroSteps': None,
+                    'gyroTraceLength': None,
+                    'gyroT_eV': None,
+                    'N_vSlice': None,
+                    'N_vPhase': None,
+                    'N_gyroPhase': None,
+                    'ionMassAMU': None,
+                    'vMode': None,
+                    'ionFrac': None,
+                    'gyroSources': None,
+                    'phiMin':None,
+                    'phiMax':None,
+                    'Ntor':None,
+                    'Nref':None,
+                    'plasma3Dmask':None,
+                    'itt':None,
+                    'response':None,
+					'selectField':None,
+					'useIcoil':None,
+					'sigma':None,
+					'charge':None,
+					'Ekin':None,
+					'Lambda':None,
+					'Mass':None,
+					'loadHF':None,
+					'loadBasePath':None,
+					'NCPUs':None,
+					'Lcmin':None,
+					'lcfs':None,
+					'teProfileData':None,
+					'neProfileData':None,
+					'kappa':None,
+					'model':None,
                     }
         return emptyDict
 
@@ -3388,6 +3428,8 @@ class engineObj():
         tools.initializeInput(self.FIL, self.infile)
         tools.initializeInput(self.RAD, self.infile)
         tools.initializeInput(self.OF, self.infile)
+        tools.initializeInput(self.plasma3D, self.infile)
+        tools.initializeInput(self.hf3D, self.infile)
 
         inputDict = {
                     'shot': self.MHD.shot,
@@ -3445,6 +3487,25 @@ class engineObj():
                     'phiMax':self.RAD.phiMax,
                     'Ntor':self.RAD.Ntor,
                     'Nref':self.RAD.Nref,
+                    'plasma3Dmask':self.plasma3D.plasma3Dmask,
+                    'itt':self.plasma3D.itt,
+                    'response':self.plasma3D.response,
+					'selectField':self.plasma3D.selectField,
+					'useIcoil':self.plasma3D.useIcoil,
+					'sigma':self.plasma3D.sigma,
+					'charge':self.plasma3D.charge,
+					'Ekin':self.plasma3D.Ekin,
+					'Lambda':self.plasma3D.Lambda,
+					'Mass':self.plasma3D.Mass,
+					'loadHF':self.plasma3D.loadHF,
+					'loadBasePath':self.plasma3D.loadBasePath,
+					'NCPUs':self.plasma3D.NCPUs,
+					'Lcmin':self.hf3D.Lcmin,
+					'lcfs':self.hf3D.lcfs, 
+					'teProfileData':self.hf3D.teProfileData,
+					'neProfileData':self.hf3D.neProfileData,
+					'kappa':self.hf3D.kappa,
+					'model':self.hf3D.model
                     }
         print("Loaded inputs")
 
@@ -3509,7 +3570,26 @@ class engineObj():
                     'phiMin':self.RAD.phiMin,
                     'phiMax':self.RAD.phiMax,
                     'Ntor':self.RAD.Ntor,
-                    'Nref':self.RAD.Nref,
+                    'Nref':self.RAD.Nref
+                    'plasma3Dmask':self.plasma3D.plasma3Dmask,
+                    'itt':self.plasma3D.itt,
+                    'response':self.plasma3D.response,
+					'selectField':self.plasma3D.selectField,
+					'useIcoil':self.plasma3D.useIcoil,
+					'sigma':self.plasma3D.sigma,
+					'charge':self.plasma3D.charge,
+					'Ekin':self.plasma3D.Ekin,
+					'Lambda':self.plasma3D.Lambda,
+					'Mass':self.plasma3D.Mass,
+					'loadHF':self.plasma3D.loadHF,
+					'loadBasePath':self.plasma3D.loadBasePath,
+					'NCPUs':self.plasma3D.NCPUs,
+					'Lcmin':self.hf3D.Lcmin,
+					'lcfs':self.hf3D.lcfs, 
+					'teProfileData':self.hf3D.teProfileData,
+					'neProfileData':self.hf3D.neProfileData,
+					'kappa':self.hf3D.kappa,
+					'model':self.hf3D.model
                     }
         print("Loaded current inputs")
 
