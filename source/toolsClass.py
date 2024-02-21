@@ -125,7 +125,8 @@ class tools:
         import gyroClass
         import radClass
         import ioClass
-
+		import plasma3DClass
+		
         MHD = MHDClass.MHD(rootDir, dataPath)
         CAD = CADClass.CAD(rootDir, dataPath)
         HF = heatfluxClass.heatFlux(rootDir, dataPath)
@@ -133,6 +134,8 @@ class tools:
         GYRO = gyroClass.GYRO(rootDir, dataPath)
         RAD = radClass.RAD(rootDir, dataPath)
         IO = ioClass.IO_HEAT()
+        plasma3D = plasma3DClass.plasma3D()
+    	hf3D = plasma3DClass.heatflux3D()
 
         MHD.allowed_class_vars()
         CAD.allowed_class_vars()
@@ -141,6 +144,8 @@ class tools:
         GYRO.allowed_class_vars()
         RAD.allowed_class_vars()
         IO.allowed_class_vars()
+        plasma3D.allowed_class_vars()
+        hf3D.allowed_class_vars()
 
         if path[-1] == '/':
             file = path + 'HEATinput.csv'
@@ -221,6 +226,26 @@ class tools:
             print(data)
             for var in OF.allowed_vars:
                 print(var)
+                if var in data:
+                    if (data[var] == None) or (data[var] == 'None'):
+                        f.write(var + ',  None \n')
+                    else:
+                        f.write(var + ', ' + str(data[var]) + '\n')
+                else:
+                    f.write(var + ',  None \n')
+            f.write("#=============================================================\n")
+            f.write("#                3D Plasma Variables\n")
+            f.write("#=============================================================\n")
+            for var in plasma3D.allowed_vars:
+                if var in data:
+                    if (data[var] == None) or (data[var] == 'None'):
+                        f.write(var + ',  None \n')
+                    else:
+                        f.write(var + ', ' + str(data[var]) + '\n')
+                else:
+                    f.write(var + ',  None \n')
+            for var in hf3D.allowed_vars:
+            	if var in HF.allowed_vars: continue
                 if var in data:
                     if (data[var] == None) or (data[var] == 'None'):
                         f.write(var + ',  None \n')
