@@ -410,7 +410,6 @@ class PFC:
         facingOut = self.removeOutsideFacingFacets(self.centers, self.norms, MHD, threshold = self.outsideFacingThreshold)
         self.shadowed_mask[facingOut] = 1
         use = np.where(self.shadowed_mask == 0)[0]
-        intersectMask = np.zeros((len(self.centers[use])))
 
         print("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
         log.info("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
@@ -440,51 +439,44 @@ class PFC:
             print("\n----Intersection Step 1----")
             log.info("\n----Intersection Step 1----")
             CTLfile = self.controlfilePath + self.controlfileStruct
-            q1 = np.zeros((len(self.centers),3))
-            q2 = np.zeros((len(self.centers),3))
 
             #run forward mesh elements
             print("-Forward Trace-")
             log.info("-Forward Trace-")
             mapDirectionStruct = 1.0
             startIdx = 1 #Match MAFOT sign convention for toroidal direction (CCW=+)
-            #fwdUse = np.where(self.powerDir==-1)[0]
             fwdUse = np.where(self.powerDir[use]==-1)[0]
             if len(fwdUse) != 0:
                 MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
                 #Perform first integration step
                 #MHD.writeMAFOTpointfile(self.centers[fwdUse],self.gridfileStruct)
-                MHD.writeMAFOTpointfile(self.centers[use][fwdUse],self.gridfileStruct)
+                MHD.writeMAFOTpointfile(self.centers[use[fwdUse]],self.gridfileStruct)
                 MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
                 structData = tools.readStructOutput(self.structOutfile)
-                #os.remove(self.structOutfile) #clean up
                 os.rename(self.structOutfile,self.structOutfile + '_fwdUse_step1')
-                q1[fwdUse] = structData[0::2,:] #even indexes are first trace point
-                q2[fwdUse] = structData[1::2,:] #odd indexes are second trace point
-                intersect_mask = self.intersectTestOpen3D(q1[fwdUse],q2[fwdUse],targetPoints[fwdUseTgt],targetNorms[fwdUseTgt])
-                #self.shadowed_mask[fwdUse] = intersect_mask
-                self.shadowed_mask[use][fwdUse] = intersect_mask
+                q1 = structData[0::2,:] #even indexes are first trace point
+                q2 = structData[1::2,:] #odd indexes are second trace point
+                intersect_mask = self.intersectTestOpen3D(q1,q2,targetPoints[fwdUseTgt],targetNorms[fwdUseTgt])
+                self.shadowed_mask[use[fwdUse]] = intersect_mask
+
             #run reverse mesh elements
             print("-Reverse Trace-")
             log.info("-Reverse Trace-")
             mapDirectionStruct = -1.0
             startIdx = 0 #Match MAFOT sign convention for toroidal direction
-            #revUse = np.where(self.powerDir==1)[0]
             revUse = np.where(self.powerDir[use]==1)[0]
             if len(revUse) != 0:
                 MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
                 #Perform first integration step
                 #MHD.writeMAFOTpointfile(self.centers[revUse],self.gridfileStruct)
-                MHD.writeMAFOTpointfile(self.centers[use][revUse],self.gridfileStruct)
+                MHD.writeMAFOTpointfile(self.centers[use[revUse]],self.gridfileStruct)
                 MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
                 structData = tools.readStructOutput(self.structOutfile)
-                #os.remove(self.structOutfile) #clean up
                 os.rename(self.structOutfile,self.structOutfile + '_revUse_step1')
-                q1[revUse] = structData[1::2,:] #even indexes are first trace point
-                q2[revUse] = structData[0::2,:] #odd indexes are second trace point
-                intersect_mask = self.intersectTestOpen3D(q1[revUse],q2[revUse],targetPoints[revUseTgt],targetNorms[revUseTgt])
-                #self.shadowed_mask[revUse] = intersect_mask
-                self.shadowed_mask[use][revUse] = intersect_mask
+                q1 = structData[1::2,:] #odd indexes are first trace point
+                q2 = structData[0::2,:] #even indexes are second trace point                
+                intersect_mask = self.intersectTestOpen3D(q1,q2,targetPoints[revUseTgt],targetNorms[revUseTgt])
+                self.shadowed_mask[use[revUse]] = intersect_mask
 
             #this is for printing information about a specific mesh element
             #you can get the element # from paraview Point ID
