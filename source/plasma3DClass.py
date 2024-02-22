@@ -12,6 +12,11 @@ import shutil
 import logging
 import subprocess
 import toolsClass
+try:
+    from subprocess import DEVNULL  # Python 3.
+except ImportError:
+    DEVNULL = open(os.devnull, 'wb')
+    
 tools = toolsClass.tools()
 log = logging.getLogger(__name__)
 
@@ -269,7 +274,7 @@ class plasma3D:
 		bbLimits = str(self.bbRmin) + ',' + str(self.bbRmax) + ',' + str(self.bbZmin) + ',' + str(self.bbZmax)
 		args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points3DHF.dat','-B',bbLimits,'_lamCTL.dat',tag]
 		current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-		subprocess.run(args, env=current_env, cwd=self.cwd)
+		subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
 		#print('mpirun -n ' + str(self.NCPUs) + ' heatlaminar_mpi' + ' -P points3DHF.dat' + ' _lamCTL.dat' + ' ' + tag)
 		
 		#self.wait2finish(self.NCPUs, tag)
@@ -793,7 +798,7 @@ class heatflux3D:
 			#nproc = 10
 			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-			subprocess.run(args, env=current_env, cwd=self.cwd)
+			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
 			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
 			# move one folder down
 			src = self.cwd + '/' + 'lam_' + tag + '.dat'
@@ -987,7 +992,7 @@ class heatflux3D:
 			# call MAFOT
 			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','-B',bbLimits,'_lamCTL.dat',tag]
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-			subprocess.run(args, env=current_env, cwd=self.cwd)
+			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
 			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
 			
 			# move one folder down
@@ -1151,7 +1156,7 @@ class heatflux3D:
 			# call MAFOT
 			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','-B',bbLimits,'_lamCTL.dat',tag]
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-			subprocess.run(args, env=current_env, cwd=self.cwd)
+			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
 			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
 			
 			# move one folder down
@@ -1259,7 +1264,7 @@ class heatflux3D:
 			#nproc = 10
 			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-			subprocess.run(args, env=current_env, cwd=self.cwd)
+			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
 			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
 			# move one folder down
 			src = self.cwd + '/' + 'lam_' + tag + '.dat'
@@ -1339,7 +1344,7 @@ class heatflux3D:
 			#nproc = 10
 			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-			subprocess.run(args, env=current_env, cwd=self.cwd)
+			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
 			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
 			# move one folder down
 			src = self.cwd + '/' + 'lam_' + tag + '.dat'
