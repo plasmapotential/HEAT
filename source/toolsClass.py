@@ -125,8 +125,8 @@ class tools:
         import gyroClass
         import radClass
         import ioClass
-		import plasma3DClass
-		
+        import plasma3DClass
+
         MHD = MHDClass.MHD(rootDir, dataPath)
         CAD = CADClass.CAD(rootDir, dataPath)
         HF = heatfluxClass.heatFlux(rootDir, dataPath)
@@ -135,7 +135,7 @@ class tools:
         RAD = radClass.RAD(rootDir, dataPath)
         IO = ioClass.IO_HEAT()
         plasma3D = plasma3DClass.plasma3D()
-    	hf3D = plasma3DClass.heatflux3D()
+        hf3D = plasma3DClass.heatflux3D()
 
         MHD.allowed_class_vars()
         CAD.allowed_class_vars()
@@ -245,7 +245,7 @@ class tools:
                 else:
                     f.write(var + ',  None \n')
             for var in hf3D.allowed_vars:
-            	if var in HF.allowed_vars: continue
+                if var in HF.allowed_vars: continue
                 if var in data:
                     if (data[var] == None) or (data[var] == 'None'):
                         f.write(var + ',  None \n')
