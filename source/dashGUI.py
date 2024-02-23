@@ -771,8 +771,8 @@ def loadMHD(n_clicks,shot,traceLength,dpinit,gFileList,gFileData,plasma3Dmask,da
     #if data directory doesn't exist, create it
     tools.makeDir(dataPath, clobberFlag=False, mode=chmod, UID=UID, GID=GID)
 
-    if plasma3Dmask == 'plasma3D': plasma3Dmask=1
-    else:  plasma3Dmask=0
+    if plasma3Dmask == 'plasma3D': plasma3Dmask = True
+    else:  plasma3Dmask = False
 
     if (shot is None) and (gFileList is None):
         raise PreventUpdate

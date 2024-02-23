@@ -118,8 +118,6 @@ class MHD:
         :traceLength: number of steps to trace along magnetic field lines looking for
           intersections
         :dpinit: toroidal length of each trace step up magnetic field line [degrees]
-        :plasma3Dmask: True or False. Set to true if using a 3D magnetic equilibrium,
-          (ie M3DC1).  Set to False for axisymmetric equilibria
         
 
         """

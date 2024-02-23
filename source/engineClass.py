@@ -1725,7 +1725,7 @@ class engineObj():
                 self.inputDicts.append(self.getCurrentInputs())
                 
             # 3Dplasma general setup
-            if self.plasma3D.plasma3Dmask == 1:
+            if self.plasma3D.plasma3Dmask:
                 gFile = self.MHD.shotPath + self.tsFmt.format(t) + '/' + self.MHD.gFiles[tIdx]
                 self.plasma3D.initializePlasma3D(self.MHD.shot, t, gFile, self.MHD.tmpDir[0:-1])   # remove / at the end of paths   Also: this no longer reads the input file. This is now done by self.loadInputs
                 self.plasma3D.setBoundaryBox(self.MHD, self.CAD)
@@ -1772,7 +1772,7 @@ class engineObj():
                     log.info('\n')
                     
                     # 3Dplasma PFC specific setup
-                    if self.plasma3D.plasma3Dmask == 1:
+                    if self.plasma3D.plasma3Dmask:
                         self.plasma3D.updatePFCdata(PFC.controlfilePath[0:-1])  # remove / at the end of paths
                         self.hf3D.updatePFCdata(PFC.ep, PFC.controlfilePath[0:-1])
                     

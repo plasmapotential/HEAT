@@ -46,7 +46,7 @@ class tools:
         #Get class variables
         obj.allowed_class_vars()
 
-        #Set all variables to None
+        #Set all variables that are not yet initialised to None
         self.vars2None(obj)
         if infile == None:
             print("You must provide an input file!")
@@ -60,10 +60,11 @@ class tools:
 
     def vars2None(self,obj):
         """
-        Set all variables in allowed_vars to None
+        Set all variables in allowed_vars that do net yet exist to None
         """
         for var in obj.allowed_vars:
-            setattr(obj, var, None)
+            if hasattr(obj, var): continue
+            else: setattr(obj, var, None)
         return
 
     def read_input_file(self, obj, infile):

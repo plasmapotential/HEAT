@@ -48,8 +48,8 @@ class plasma3D:
 		self.bbZmax = None
 		
 		# Default inputs
-		self.plasma3Dmask = 0
-		self.NCPUs = 100
+		self.plasma3Dmask = False
+		self.NCPUs = 10
 		self.loadHF = False
 		self.loadBasePath = None
 		
@@ -67,9 +67,9 @@ class plasma3D:
 		"""
 		Set variable types for the stuff that isnt a string from the input file
 		"""
-		integers = ['plasma3Dmask','itt','response','selectField','useIcoil','sigma','charge','Mass','NCPUs']
+		integers = ['itt','response','selectField','useIcoil','sigma','charge','Mass','NCPUs']
 		floats = ['Ekin','Lambda']
-		bools = ['loadHF']
+		bools = ['plasma3Dmask','loadHF']
 		setAllTypes(self, integers, floats, bools)     # this is not a typo, but the correct syntax for this call
 
 

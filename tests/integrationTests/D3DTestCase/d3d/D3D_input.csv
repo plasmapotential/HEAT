@@ -20,7 +20,6 @@ tmax, 5000
 traceLength, 5
 dpinit, 0.5
 dataPath, /home/wingen/HEAT/data
-plasma3Dmask, 1 #1=true, 0=false
 torFilt, True
 psiFilt, True
 #==============================================================
@@ -86,6 +85,7 @@ material, SGL
 #=============================================================
 #                3D Plasma Variables
 #=============================================================
+plasma3Dmask, True
 itt, 335
 response, 1
 selectField, -1
