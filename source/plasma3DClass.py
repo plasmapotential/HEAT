@@ -532,7 +532,7 @@ class heatflux3D:
 		self.teProfileData = None
 		self.neProfileData = None
 		
-		
+    
 	def allowed_class_vars(self):
 		"""
 		These variables are read in from the input file. The call is in engine_class.loadInputs
@@ -584,6 +584,7 @@ class heatflux3D:
 		"""		
 		if inputDir is None: inputDir = os.getcwd()
 		self.inputDir = inputDir
+
 		self.Psol = (1 - self.radFrac) * self.P
 			
 		T = self.teProfileData
@@ -675,7 +676,7 @@ class heatflux3D:
 		log.info('teProfileData = ' + str(self.teProfileData))
 		log.info('neProfileData = ' + str(self.neProfileData))
 		log.info('model = ' + str(self.model))
-		
+
 	
 	def updatePFCdata(self, ep, cwd):
 		"""

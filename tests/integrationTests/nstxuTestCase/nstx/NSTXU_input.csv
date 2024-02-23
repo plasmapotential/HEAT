@@ -86,7 +86,7 @@ material, SGL
 #=============================================================
 #                3D Plasma Variables
 #=============================================================
-plasma3Dmask, 0 #1=true, 0=false
+plasma3Dmask, False
 itt, 300
 response, 1
 selectField, 2
@@ -104,4 +104,4 @@ teProfileData, None
 neProfileData, None
 loadHF, False
 loadBasePath, None
-NCPUs, 100
+NCPUs, 10

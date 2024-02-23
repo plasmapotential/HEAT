@@ -2021,6 +2021,7 @@ class engineObj():
         #copy HEAT logfile to shotpath
         #shutil.copyfile(self.logFile, self.MHD.shotPath+'HEATlog.txt')			#AW: this is a strange place for this command, runHEAT is not complete yet. The same call is already in terminalUI, just after runHEAT is complete
 
+
         #set tree permissions
         tools.recursivePermissions(self.MHD.shotPath, self.UID, self.GID, self.chmod)
 
@@ -2486,7 +2487,7 @@ class engineObj():
         print("Intersection calculation took {:f} [s]\n".format(time.time() - t0))
 
         #Run MAFOT laminar for 3D plasmas
-        if self.plasma3D.plasma3Dmask:
+        if self.MHD.plasma3Dmask:
             print('-'*80)
             print('\n----Solving for 3D plasmas with MAFOT----')
             log.info('\n----Solving for 3D plasmas with MAFOT----')

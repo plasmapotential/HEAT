@@ -118,6 +118,7 @@ class MHD:
         :traceLength: number of steps to trace along magnetic field lines looking for
           intersections
         :dpinit: toroidal length of each trace step up magnetic field line [degrees]
+
         
 
         """
