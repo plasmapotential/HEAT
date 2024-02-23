@@ -328,14 +328,14 @@ class MHD:
             else:
                 BpMult *= -1.0
 
-            print("#====  Bfield helicity check ====")
+            print("\n#====  Bfield helicity check ====")
             print("Fpol sign: {:f}".format(FSign))
             print("Bt0 sign: {:f}".format(Bt0Sign))
             print("Ip sign: {:f}".format(IpSign))
             print("psiRZ sign [0]: {:f}".format(psiSign[0]))
             print("BtMult: {:f}".format(BtMult))
             print("BpMult: {:f}".format(BpMult))
-            log.info("#====  Bfield helicity check ====")
+            log.info("\n#====  Bfield helicity check ====")
             log.info("Fpol sign: {:f}".format(FSign))
             log.info("Bt0 sign: {:f}".format(Bt0Sign))
             log.info("Ip sign: {:f}".format(IpSign))
