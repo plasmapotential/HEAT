@@ -136,6 +136,40 @@ class plasma3D:
 			print('   Scale = ' + str(self.C1scales[i]))
 			print('   Phase = ' + str(self.C1phases[i]))
 
+		log.info('#=============================================================')
+		log.info('#                Equilibrium Variables')
+		log.info('#=============================================================')
+		log.info('shot = ' + str(self.shot))
+		log.info('time = ' + str(self.time))
+		log.info('gFile = ' + str(self.gFile))
+		log.info('#=============================================================')
+		log.info('#                3D Plasma Variables')
+		log.info('#=============================================================')
+		log.info('plasma3Dmask = ' + str(self.plasma3Dmask))
+		log.info('itt = ' + str(self.itt))
+		log.info('useIcoil = ' + str(self.useIcoil))
+		log.info('sigma = ' + str(self.sigma))
+		log.info('charge = ' + str(self.charge))
+		log.info('Ekin = ' + str(self.Ekin))
+		log.info('Lambda = ' + str(self.Lambda))
+		log.info('Mass = ' + str(self.Mass))
+		log.info('#=============================================================')
+		log.info('#                Boundary Box Variables')
+		log.info('#=============================================================')
+		log.info('Rmin = ' + str(self.bbRmin))
+		log.info('Rmax = ' + str(self.bbRmax))
+		log.info('Zmin = ' + str(self.bbZmin))
+		log.info('Zmax = ' + str(self.bbZmax))
+		log.info('#=============================================================')
+		log.info('#                M3D-C1 Variables')
+		log.info('#=============================================================')
+		log.info('response = ' + str(self.response))
+		log.info('selectField = ' + str(self.selectField))
+		for i in range(len(self.C1Files)):
+			log.info('File ' + str(i+1) + ' = ' + self.C1Files[i])
+			log.info('   Scale = ' + str(self.C1scales[i]))
+			log.info('   Phase = ' + str(self.C1phases[i]))
+
 
 	def updatePFCdata(self, cwd):
 		"""
@@ -143,6 +177,7 @@ class plasma3D:
 		"""
 		self.cwd = cwd
 		print('Plasma3D current working directory set to = ' + str(self.cwd))
+		log.info('Plasma3D current working directory set to = ' + str(self.cwd))
 
 
 	def setBoundaryBox(self, MHD, CAD):
@@ -622,6 +657,24 @@ class heatflux3D:
 		print('teProfileData = ' + str(self.teProfileData))
 		print('neProfileData = ' + str(self.neProfileData))
 		print('model = ' + str(self.model))
+
+		log.info('#=============================================================')
+		log.info('#                Optical HF Variables')
+		log.info('#=============================================================')
+		log.info('lqCN = ' + str(self.lqCN))
+		log.info('S = ' + str(self.S))
+		log.info('P = ' + str(self.P))
+		log.info('radFrac = ' + str(self.radFrac))
+		log.info('qBG = ' + str(self.qBG))
+		log.info('kappa = ' + str(self.kappa))
+		log.info('#=============================================================')
+		log.info('#                3D Plasma Variables')
+		log.info('#=============================================================')
+		log.info('Lcmin = ' + str(self.Lcmin))
+		log.info('lcfs = ' + str(self.lcfs))
+		log.info('teProfileData = ' + str(self.teProfileData))
+		log.info('neProfileData = ' + str(self.neProfileData))
+		log.info('model = ' + str(self.model))
 		
 	
 	def updatePFCdata(self, ep, cwd):

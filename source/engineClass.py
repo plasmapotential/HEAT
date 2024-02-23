@@ -1763,9 +1763,13 @@ class engineObj():
                     print('\n')
                     print("*"*80)
                     print('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
-                    log.info('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
                     print("*"*80)
                     print('\n')
+                    log.info('\n')
+                    log.info("*"*80)
+                    log.info('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+                    log.info("*"*80)
+                    log.info('\n')
                     
                     # 3Dplasma PFC specific setup
                     if self.plasma3D.plasma3Dmask == 1:
@@ -1805,7 +1809,7 @@ class engineObj():
                         print('Theoretical optical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac*self.HF.elecFrac))
                         print('Tessellated divertor power to this PFC = {:f}'.format(PFC.powerSumOptical[tIdx]))
                         log.info('\nMaximum heat load on tile: {:f}'.format(max(PFC.qDiv)))
-                        log.info('Power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
+                        log.info('Theoretical optical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac*self.HF.elecFrac))
                         log.info('Tessellated Total Power = {:f}'.format(PFC.powerSumOptical[tIdx]))
                         print("Optical Calculation Time Elapsed: {:f}".format(time.time() - t0))
                         log.info("Optical Calculation Time Elapsed: {:f}\n".format(time.time() - t0))
