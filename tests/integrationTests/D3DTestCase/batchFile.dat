@@ -71,4 +71,4 @@
 #
 #
 MachFlag, Tag, Shot, TimeStep, GEQDSK, CAD, PFC, Input, Output
-d3d, plasma3D_noP, 154859, 4300, g154859.04300, d3d_sector.step, PFCinput.csv, D3D_input.csv, hfOpt
+d3d, plasma3D, 154859, 4300, g154859.04300, d3d_sector.step, PFCinput.csv, D3D_input.csv, hfOpt

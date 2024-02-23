@@ -97,7 +97,7 @@ Lambda, 0.1
 Mass, 2
 kappa, 200
 Lcmin, 0.075
-lcfs, 1.0
+lcfs, 0.986
 model, layer
 teProfileData, None
 neProfileData, None
