@@ -1071,6 +1071,11 @@ class heatFlux:
         #Reinke's method (also see integral in scaling coeffs)
         q_div[use] = q[use] * B_div[use]/B_omp * PFC.bdotn[use]
 
+        #set mesh sliver artifacts to 0 flux so they dont skew the distribution
+        #sizeThresh = 1e-6
+        #tooSmall = np.where(PFC.areas[use] < sizeThresh)[0]
+        #q_div[tooSmall] = 0.0
+
         #for i in range(len(q_div)):
         #	if q_div[i] > 8.0: q_div[i] = 0.0
         #Plot q|| and qdiv
