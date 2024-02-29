@@ -131,6 +131,7 @@ class TUI():
           :hfOpt:   optical heat flux point cloud
           :hfGyro:  gyro orbit heat flux point cloud
           :hfRad:   radiated power heat flux point cloud
+          :hfFil:   filament heat flux point cloud
           :B:       magnetic field glyph cloud
           :psiN:    normalized poloidal flux point cloud
           :pwrDir:  powerDir point cloud
