@@ -4039,7 +4039,13 @@ class engineObj():
         """
         #build Elmer FEM output directory
         self.FEM.elmerOutDir = self.MHD.shotPath + 'elmer/'
-        tools.makeDir(self.FEM.elmerOutDir, clobberFlag=True, mode=self.chmod, UID=self.UID, GID=self.GID)
+
+        HFvars = ['hfOpt', 'hfRad', 'hfGyro', 'hfFil']
+        #only clobber if we created a new HF
+        if len(set(HFvars).intersection(self.runList)) > 0:
+            tools.makeDir(self.FEM.elmerOutDir, clobberFlag=True, mode=self.chmod, UID=self.UID, GID=self.GID)
+        else:
+            tools.makeDir(self.FEM.elmerOutDir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
         
         #initialize list of variables we accept as none in elmerFile
         noneArray = ['None', 'NA', 'none', 'NONE', 'na', '']
@@ -4116,8 +4122,6 @@ class engineObj():
         #flux when the Elmer timesteps fall between MHD timesteps.
         #If the Elmer timesteps fall outside of the MHD timestep domain,
         #assigns 0.
-        HFvars = ['hfOpt', 'hfRad', 'hfGyro', 'hfFil']
-
         #only assign HF values if we ran a heat flux calculation,
         #otherwise we assume the (node, HF) .dat files are already in the ElmerDir
         if len(set(HFvars).intersection(self.runList)) > 0:

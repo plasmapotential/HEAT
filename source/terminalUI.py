@@ -320,7 +320,7 @@ class TUI():
         print("Total time: {:f}".format(time.time() - t0))
         return
 
-    def prepareDirectories(self,mach,tag, clobber='y'):
+    def prepareDirectories(self,mach,tag):
         """
         build HEAT tree for mach + tag combo
         """
