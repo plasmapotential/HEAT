@@ -32,7 +32,7 @@ Some examples of what HEAT can predict:
  * Many other quantities
 
 
-The latest release of HEAT is v3.0, which includes the following notable additions / patches:
+The latest release of HEAT is v4.0, which includes the following notable additions / patches:
  * A filament tracer, based upon the Fundamenski Free Streaming Model (W Fundamenski et al 2006 Plasma Phys. Control. Fusion 48 109)
  * Compatibility with M3DC1 equilibria for 3D field tracing and footprints
  * Patch for photon tracing which results in 10X speedup in some cases
