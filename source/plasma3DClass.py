@@ -56,7 +56,35 @@ class plasma3D:
 		
 	def allowed_class_vars(self):
 		"""
-		These variables are read in from the input file. The call is in engine_class.loadInputs
+		.. Writes a list of recognized class variables to HEAT object
+		.. Used for error checking input files and for initialization
+		.. These variables are read in from the input file. 
+		.. The call is in engine_class.loadInputs
+
+		plasma3D Variables:
+		----------------------------
+
+		:plasma3Dmask:  boolean that determines if 3D plasmas should be turned on
+		  If True, uses M3DC1 equilibrium
+		:itt: integer number of toroidal iterations for the MAFOT 'heatlaminar_mpi' run
+		:response: integer to select the M3D-C1 time_xxx.h5 file to use. 
+		  For linear M3D-C1, time_001.h5 includes the plasma response and 
+		  time_000.h5 is the vacuum field only
+		:selectField: integer to switch between g-file (-1) or M3D-C1 (2) in MAFOT run
+		:useIcoil: integer to turn on vacuum field perturbation coils, default is 0
+		:sigma: integer to switch between tracing field lines (0), co-passing (+1) or 
+		  counter-passing (-1) particles in MAFOT
+		:charge: integer, charge of particles, -1 for electrons, >0 for ions
+		  ignored for sigma = 0
+		:Ekin: float, inetic energy of particles in keV; ignored for sigma = 0
+		:Lambda: float, ratio of perpendicular to parallel particle velocity
+		  ignored for sigma = 0
+		:Mass: integer, mass number of particles, 1 for electrons and H, 2 for D, 4 for He
+		  ignored for sigma = 0
+		:loadHF: boolean, True means load previous heat flux results instead of 
+		  running MAFOT, False means run MAFOT
+		:loadBasePath: string, Path for find previous results if loadHF is True
+		:NCPUs: integer, number of CPUs to use in MAFOT, default is 10
 		"""
 		self.allowed_vars = ['plasma3Dmask','itt','response',
 				'selectField','useIcoil','sigma','charge','Ekin','Lambda','Mass','loadHF',
@@ -86,8 +114,10 @@ class plasma3D:
 		Set up basic input vars
 		gfile should include the full path and file name
 		inputFile is the main .csv file with input variables
-		cwd is the HEAT data folder on the host machine for this shot and pfc, typically ~/HEAT/data/<machine>_<shot>_<tag>/<time>/<pfcName>
-		inputDir is the folder in the docker container with input files, typically $HEAT_HOME/terminal/<machine>
+		cwd is the HEAT data folder on the host machine for this shot and pfc, 
+		  typically ~/HEAT/data/<machine>_<shot>_<tag>/<time>/<pfcName>
+		inputDir is the folder in the docker container with input files, 
+		  typically $HEAT_HOME/terminal/<machine>
 		"""
 		self.shot = tools.makeInt(shot)
 		self.time = tools.makeInt(time)
@@ -535,7 +565,36 @@ class heatflux3D:
     
 	def allowed_class_vars(self):
 		"""
-		These variables are read in from the input file. The call is in engine_class.loadInputs
+		.. Writes a list of recognized class variables to HEAT object
+		.. Used for error checking input files and for initialization
+		.. These variables are read in from the input file. 
+		.. The call is in engine_class.loadInputs
+		
+		heatflux3D Variables:
+		----------------------------
+
+		:Lcmin:  float, maximum scrape-off-layer connection length
+		:lcfs: float, <= 1, normalized poloidal flux of last closed flux surface location
+		:lqCN: float, heat flux layer width lambda_q in mm for Eich profile
+		  same as in 2D, see heatfluxClass.py
+		:S: float, spread width in mm into private flux region for Eich profile
+		  same as in 2D, see heatfluxClass.py
+		:P: float, total power in MW into SOL; same as in 2D, see heatfluxClass.py
+		:radFrac: float, 0<=x<=1, fraction of radiative power
+		  same as in 2D, see heatfluxClass.py
+		:qBG: float, background heat flux in MW/m^2; same as in 2D, see heatfluxClass.py
+		:teProfileData: None (defaults to 2.0) 
+		  or string (Name of Te data file) 
+		  or float (scaler for generic Te profile) 
+		  or comma-separated array (Te data vs psi=linspace(0,1.1,len(Te)))
+		:neProfileData: None (defaults to 0.5) 
+		  or string (Name of ne data file) 
+		  or float (scaler for generic ne profile) 
+		  or comma-separated array (ne data vs psi=linspace(0,1.1,len(ne)))
+		:kappa: float, electron heat conductivity
+		:model: string in [layer, conductive, convective] to select heat flux model 
+		:NCPUs: integer, number of CPUs to use in MAFOT, default is 10
+		  same as in plasma3D class
 		"""
 		self.allowed_vars = ['Lcmin', 'lcfs', 'lqCN', 'S', 'P', 'radFrac', 'qBG', 
 				'teProfileData', 'neProfileData', 'kappa', 'model','NCPUs']
