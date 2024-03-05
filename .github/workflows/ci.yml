@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ v4.0 ]
+    branches: [ plasma3D ]
   pull_request:
-    branches: [ v4.0 ]
+    branches: [ plasma3D ]
 
 jobs:
   test:
