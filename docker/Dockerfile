@@ -66,6 +66,11 @@ RUN apt-get -yqq install software-properties-common && \
     apt-get update && \
     apt-get install -yqq freecad-python3
 
+# elmer layer
+RUN apt-add-repository ppa:elmer-csc-ubuntu/elmer-csc-ppa && \
+    apt-get update && \
+    apt-get install elmerfem-csc
+
 #utility tools/libs layers
 RUN apt-get -yqq install coreutils libnglib-6.2 libcurl4 libunwind-dev nano git gfortran iputils-ping iproute2 htop
 
