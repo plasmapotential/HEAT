@@ -43,6 +43,8 @@ services:
     - dockerGID=$dockerGID
     - UID=$dockerUID
     - GID=$dockerGID
+    - OMPI_ALLOW_RUN_AS_ROOT=1
+    - OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
 
 #NOTES:
 #to run HEAT in batch mode, first bind mount the /root/terminal directory to your

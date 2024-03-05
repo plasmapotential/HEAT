@@ -113,13 +113,12 @@ class MHD:
         -----------------
 
         :shot: integer pulse number
-        :tmin: minimum timestep of any MHD equilibrium in simulation [ms]
-        :tmax: maximum timestep of any MHD equilibrium in simulation [ms]
+        :tmin: minimum timestep of any MHD equilibrium in simulation [s]
+        :tmax: maximum timestep of any MHD equilibrium in simulation [s]
         :traceLength: number of steps to trace along magnetic field lines looking for
           intersections
         :dpinit: toroidal length of each trace step up magnetic field line [degrees]
-        :plasma3Dmask: True or False. Set to true if using a 3D magnetic equilibrium,
-          (ie M3DC1).  Set to False for axisymmetric equilibria
+
         
 
         """
@@ -140,11 +139,11 @@ class MHD:
         """
         integers = [
                     'shot',
-                    'tmin',
-                    'tmax',
                     'traceLength',
                     ]
         floats = [
+                    'tmin',
+                    'tmax',
                     'dpinit',
                 ]
 
@@ -194,6 +193,11 @@ class MHD:
                 try: time = float(time)
                 except: useHeatTimeFmt = False
             else: useHeatTimeFmt = False
+
+        print("HEAT time format: " + str(useHeatTimeFmt))
+        print("D3D time format: " + str(useD3DtimeFmt))
+        log.info("HEAT time format: " + str(useHeatTimeFmt))
+        log.info("D3D time format: " + str(useD3DtimeFmt))        
         
         ts = []
         for i,g in enumerate(gFileList):
@@ -205,9 +209,7 @@ class MHD:
                 ts.append(float(g.split('.')[-1]))
             #GEQDSKs do not follow HEAT or D3D naming convention
             else:
-                ts.append(i)
-
-        #print('Timesteps:', ts)
+                ts.append(float(i))
         return np.array(ts)
 
     def getGEQDSK(self, ts, gFileList):
@@ -325,12 +327,14 @@ class MHD:
             else:
                 BpMult *= -1.0
 
+            print("\n#====  Bfield helicity check ====")
             print("Fpol sign: {:f}".format(FSign))
             print("Bt0 sign: {:f}".format(Bt0Sign))
             print("Ip sign: {:f}".format(IpSign))
             print("psiRZ sign [0]: {:f}".format(psiSign[0]))
             print("BtMult: {:f}".format(BtMult))
             print("BpMult: {:f}".format(BpMult))
+            log.info("\n#====  Bfield helicity check ====")
             log.info("Fpol sign: {:f}".format(FSign))
             log.info("Bt0 sign: {:f}".format(Bt0Sign))
             log.info("Ip sign: {:f}".format(IpSign))
@@ -573,7 +577,13 @@ class MHD:
         #run MAFOT structure for points in gridfile
         from subprocess import run
         run(args, env=current_env, cwd=controlfilePath)
-        run(['rm', 'log_*'], env=current_env, cwd=controlfilePath)
+        try:
+            print("Removing MAFOT logs")
+            log.info("Removing MAFOT logs")
+            run(['rm', 'log_*'], env=current_env, cwd=controlfilePath)
+        except:
+            print("Cannot delete MAFOT logs")
+            log.info("Cannot delete MAFOT logs")
 
         if paraview_mask:
             #This file is not in the format we want, so we read it in, and then

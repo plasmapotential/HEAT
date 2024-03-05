@@ -771,8 +771,8 @@ def loadMHD(n_clicks,shot,traceLength,dpinit,gFileList,gFileData,plasma3Dmask,da
     #if data directory doesn't exist, create it
     tools.makeDir(dataPath, clobberFlag=False, mode=chmod, UID=UID, GID=GID)
 
-    if plasma3Dmask == 'plasma3D': plasma3Dmask=1
-    else:  plasma3Dmask=0
+    if plasma3Dmask == 'plasma3D': plasma3Dmask = True
+    else:  plasma3Dmask = False
 
     if (shot is None) and (gFileList is None):
         raise PreventUpdate
@@ -815,8 +815,7 @@ def loadMHD(n_clicks,shot,traceLength,dpinit,gFileList,gFileData,plasma3Dmask,da
     marks = {}
     for t in ts:
         if t in tAll:
-            marks.update({int(t):'{}'.format(t)})
-
+            marks.update({t:'{}'.format(t)})
     value = ts[0]
 
 
@@ -2827,6 +2826,8 @@ def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
 
     #Bfield trace
     if 'Btrace' in Btrace:
+        print("Tracing magnetic field lines...")
+        log.info("Tracing magnetic field lines...")
         gui.BtraceMultiple(BtraceTableData, t)
 
     #gyro orbit trace
@@ -2866,6 +2867,7 @@ def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
     #set tree permissions
     tools.recursivePermissions(gui.MHD.shotPath, gui.UID, gui.GID, gui.chmod)
     print("\nReturned to GUI.  HEAT run complete.\n")
+    log.info("\nReturned to GUI.  HEAT run complete.\n")
 
     return ([html.Label("HEAT Run Complete", className="text-success")],
             qDistFig,

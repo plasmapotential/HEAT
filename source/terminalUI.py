@@ -97,6 +97,7 @@ class TUI():
 
         :Tag:  user specified tag to label the simulation by.  Tags represent
           independent HEAT runs.  For time varying discharges with multiple
+
           GEQDSK files, tag should be repeated on multiple lines with the 
           TimeStep column changing.
 
@@ -152,6 +153,7 @@ class TUI():
         - <path>/MachFlag/CAD
         - <path>/MachFlag/PFC
         - <path>/MachFlag/Input
+
 
         Example line for an NSTX-U run for pulse 204118 timestep 4ms:
 
@@ -364,21 +366,14 @@ class TUI():
         """
         loads GEQDSK file into HEAT tree and MHD object
         """
-        #2D plasmas for now
-        self.ENG.MHD.plasma3Dmask = 0
-
-        if self.ENG.MHD.plasma3Dmask == 0:
-            #initialize MHD
-            self.ENG.MHD.tmpDir = tmpDir
-            self.ENG.MHD.tree = 'EFIT02'
-            self.ENG.MHD.getGEQDSK(ts, gFiles)
-            self.ENG.MHD.makeEFITobjects()
-            self.ENG.MHD.psiSepLimiter = None
-            self.ENG.MHD.setTypes()
-            self.ENG.MHD.nTrace = int(self.ENG.MHD.traceLength / self.ENG.MHD.dpinit)
-        else:
-            print('3D plasmas not yet available in HEAT!')
-            sys.exit()
+        #initialize MHD
+        self.ENG.MHD.tmpDir = tmpDir
+        self.ENG.MHD.tree = 'EFIT02'
+        self.ENG.MHD.getGEQDSK(ts, gFiles)
+        self.ENG.MHD.makeEFITobjects()
+        self.ENG.MHD.psiSepLimiter = None
+        self.ENG.MHD.setTypes()
+        self.ENG.MHD.nTrace = int(self.ENG.MHD.traceLength / self.ENG.MHD.dpinit)
         return
 
     def loadCAD(self, STPfile):
