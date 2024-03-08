@@ -12,6 +12,11 @@ import shutil
 import logging
 import subprocess
 import toolsClass
+try:
+    from subprocess import DEVNULL  # Python 3.
+except ImportError:
+    DEVNULL = open(os.devnull, 'wb')
+    
 tools = toolsClass.tools()
 log = logging.getLogger(__name__)
 
@@ -34,7 +39,6 @@ class plasma3D:
 		self.Z = None		# in m
 		self.psimin = None
 		self.Lc = None		# in km
-		self.NCPUs = 100
 		self.useVertices = False
 		
 		# Boundary Box limits
@@ -43,38 +47,58 @@ class plasma3D:
 		self.bbZmin = None
 		self.bbZmax = None
 		
+		# Default inputs
+		self.plasma3Dmask = False
+		self.NCPUs = 10
 		self.loadHF = False
 		self.loadBasePath = None
 		
-		self.allowed_vars = ['plasma3Dmask','shot','time','tmax','gFile','itt','response',
+		
+	def allowed_class_vars(self):
+		"""
+		.. Writes a list of recognized class variables to HEAT object
+		.. Used for error checking input files and for initialization
+		.. These variables are read in from the input file. 
+		.. The call is in engine_class.loadInputs
+
+		plasma3D Variables:
+		----------------------------
+
+		:plasma3Dmask:  boolean that determines if 3D plasmas should be turned on
+		  If True, uses M3DC1 equilibrium
+		:itt: integer number of toroidal iterations for the MAFOT 'heatlaminar_mpi' run
+		:response: integer to select the M3D-C1 time_xxx.h5 file to use. 
+		  For linear M3D-C1, time_001.h5 includes the plasma response and 
+		  time_000.h5 is the vacuum field only
+		:selectField: integer to switch between g-file (-1) or M3D-C1 (2) in MAFOT run
+		:useIcoil: integer to turn on vacuum field perturbation coils, default is 0
+		:sigma: integer to switch between tracing field lines (0), co-passing (+1) or 
+		  counter-passing (-1) particles in MAFOT
+		:charge: integer, charge of particles, -1 for electrons, >0 for ions
+		  ignored for sigma = 0
+		:Ekin: float, inetic energy of particles in keV; ignored for sigma = 0
+		:Lambda: float, ratio of perpendicular to parallel particle velocity
+		  ignored for sigma = 0
+		:Mass: integer, mass number of particles, 1 for electrons and H, 2 for D, 4 for He
+		  ignored for sigma = 0
+		:loadHF: boolean, True means load previous heat flux results instead of 
+		  running MAFOT, False means run MAFOT
+		:loadBasePath: string, Path for find previous results if loadHF is True
+		:NCPUs: integer, number of CPUs to use in MAFOT, default is 10
+		"""
+		self.allowed_vars = ['plasma3Dmask','itt','response',
 				'selectField','useIcoil','sigma','charge','Ekin','Lambda','Mass','loadHF',
 				'loadBasePath','NCPUs']
-
-	def allowed_class_vars(self):
-		self.allowed_vars = ['plasma3Dmask','shot','time','tmax','gFile','itt','response',
-		'selectField','useIcoil','sigma','charge','Ekin','Lambda','Mass','loadHF',
-		'loadBasePath','NCPUs']	
-		return
-
-	def initializePlasma3D(self, shot, time, gFile = None, inputFile = None, cwd = None, inputDir = None):
+	
+	
+	def setTypes(self):
 		"""
-		Set up basic input vars
-		gfile should include the full path and file name
-		inputFile is the main .csv file with input variables
-		cwd is the HEAT data folder on the host machine for this shot and pfc, typically ~/HEAT/data/<machine>_<shot>_<tag>/<time>/<pfcName>
-		inputDir is the folder in the docker container with input files, typically $HEAT_HOME/terminal/<machine>
+		Set variable types for the stuff that isnt a string from the input file
 		"""
-		self.shot = tools.makeInt(shot)
-		self.time = tools.makeInt(time)
-		if cwd is None: self.cwd = os.getcwd()
-		else: self.cwd = cwd
-		if inputDir is None: self.inputDir = self.cwd
-		else: self.inputDir = inputDir
-		if gFile is None: gFile = self.cwd + '/g' + format(int(self.shot),'06d') + '.' + format(int(self.time),'05d')
-		self.gFile = gFile
-		if inputFile is not None: self.read_input_file(inputFile)
-		else: self.setMAFOTctl()	# just defaults
-		self.readM3DC1supFile()
+		integers = ['itt','response','selectField','useIcoil','sigma','charge','Mass','NCPUs']
+		floats = ['Ekin','Lambda']
+		bools = ['plasma3Dmask','loadHF']
+		setAllTypes(self, integers, floats, bools)     # this is not a typo, but the correct syntax for this call
 
 
 	def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
@@ -83,9 +107,27 @@ class plasma3D:
 		"""
 		self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
 		self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
-		return
 		
 		
+	def initializePlasma3D(self, shot, time, gFile = None, inputDir = None):
+		"""
+		Set up basic input vars
+		gfile should include the full path and file name
+		inputFile is the main .csv file with input variables
+		cwd is the HEAT data folder on the host machine for this shot and pfc, 
+		  typically ~/HEAT/data/<machine>_<shot>_<tag>/<time>/<pfcName>
+		inputDir is the folder in the docker container with input files, 
+		  typically $HEAT_HOME/terminal/<machine>
+		"""
+		self.shot = tools.makeInt(shot)
+		self.time = tools.makeInt(time)
+		if inputDir is None: inputDir = os.getcwd()
+		self.inputDir = inputDir
+		if gFile is None: gFile = self.inputDir + '/g' + format(int(self.shot),'06d') + '.' + format(int(self.time),'05d')
+		self.gFile = gFile		# this is not used for ep, but just as a string in the MAFOT control file
+		self.readM3DC1supFile()
+
+
 	def print_settings(self):
 		"""
 		Print all inputs
@@ -96,7 +138,6 @@ class plasma3D:
 		print('shot = ' + str(self.shot))
 		print('time = ' + str(self.time))
 		print('gFile = ' + str(self.gFile))
-		print('cwd = ' + str(self.cwd))
 		print('#=============================================================')
 		print('#                3D Plasma Variables')
 		print('#=============================================================')
@@ -124,22 +165,49 @@ class plasma3D:
 			print('File ' + str(i+1) + ' = ' + self.C1Files[i])
 			print('   Scale = ' + str(self.C1scales[i]))
 			print('   Phase = ' + str(self.C1phases[i]))
-		
 
-	def setMAFOTctl(self, itt = 300, response = 0, selectField = -1, useIcoil = 0, 
-				sigma = 0, charge = -1, Ekin = 10, Lambda = 0.1, Mass = 2):
+		log.info('#=============================================================')
+		log.info('#                Equilibrium Variables')
+		log.info('#=============================================================')
+		log.info('shot = ' + str(self.shot))
+		log.info('time = ' + str(self.time))
+		log.info('gFile = ' + str(self.gFile))
+		log.info('#=============================================================')
+		log.info('#                3D Plasma Variables')
+		log.info('#=============================================================')
+		log.info('plasma3Dmask = ' + str(self.plasma3Dmask))
+		log.info('itt = ' + str(self.itt))
+		log.info('useIcoil = ' + str(self.useIcoil))
+		log.info('sigma = ' + str(self.sigma))
+		log.info('charge = ' + str(self.charge))
+		log.info('Ekin = ' + str(self.Ekin))
+		log.info('Lambda = ' + str(self.Lambda))
+		log.info('Mass = ' + str(self.Mass))
+		log.info('#=============================================================')
+		log.info('#                Boundary Box Variables')
+		log.info('#=============================================================')
+		log.info('Rmin = ' + str(self.bbRmin))
+		log.info('Rmax = ' + str(self.bbRmax))
+		log.info('Zmin = ' + str(self.bbZmin))
+		log.info('Zmax = ' + str(self.bbZmax))
+		log.info('#=============================================================')
+		log.info('#                M3D-C1 Variables')
+		log.info('#=============================================================')
+		log.info('response = ' + str(self.response))
+		log.info('selectField = ' + str(self.selectField))
+		for i in range(len(self.C1Files)):
+			log.info('File ' + str(i+1) + ' = ' + self.C1Files[i])
+			log.info('   Scale = ' + str(self.C1scales[i]))
+			log.info('   Phase = ' + str(self.C1phases[i]))
+
+
+	def updatePFCdata(self, cwd):
 		"""
-		Set the MAFOT specific class variables
+		Update class variables that are specific for each PFC
 		"""
-		self.itt = tools.makeInt(itt) 						# toroidal iterations
-		self.response = tools.makeInt(response) 			# M3D-C1 Plasma Response (0=no,>1=yes)
-		self.selectField = tools.makeInt(selectField) 		# MHD fields to use (-3=VMEC,-2=SIESTA,-1=gfile,M3DC1:0=Eq,1=I-coil,2=both)
-		self.useIcoil = tools.makeInt(useIcoil) 			# 0=no, 1=yes
-		self.sigma = tools.makeInt(sigma) 					# Particle Direction (1=co-pass,-1=ctr-pass,0=field-lines)
-		self.charge = tools.makeInt(charge) 				# Partile Charge (-1=electrons,>=1=ions)
-		self.Ekin = tools.makeFloat(Ekin) 					# Particle Kinetic Energy in keV
-		self.Lambda = tools.makeFloat(Lambda) 				# Ratio of perpendicular to parallel velocity
-		self.Mass = tools.makeInt(Mass) 					# Particle Ion Mass (H=1, D=2, He=4)
+		self.cwd = cwd
+		print('Plasma3D current working directory set to = ' + str(self.cwd))
+		log.info('Plasma3D current working directory set to = ' + str(self.cwd))
 
 
 	def setBoundaryBox(self, MHD, CAD):
@@ -199,35 +267,6 @@ class plasma3D:
 			log.info('M3D-C1: ' + self.inputDir + '/' + 'm3dc1sup.in read successfully')
 			return
 		
-	
-	def read_input_file(self, file):
-		"""
-		Reads the 3D plasma csv input file
-		Format for input file is comma delimited, # are comments.
-		Example:
-		#Important Comment
-		variable_name, value
-		"""
-		if os.path.isfile(file): 
-			tools.read_input_file(self, file)
-			self.setTypes()
-			print('Input file: ' + file + ' read successfully')
-			log.info('Input file: ' + file + ' read successfully')
-		else: 
-			print('Input file: ' + file + ' not found!')
-			log.info('Input file: ' + file + ' not found!')
-			self.setMAFOTctl()	# just defaults
-
-
-	def setTypes(self):
-		"""
-		Set variable types for the stuff that isnt a string from the input file
-		"""
-		integers = ['plasma3Dmask','shot','time','tmax','itt','response','selectField','useIcoil','sigma','charge','Mass','NCPUs']
-		floats = ['Ekin','Lambda']
-		bools = ['loadHF']
-		setAllTypes(self, integers, floats, bools)     # this is not a typo, but the correct syntax for this call
-
 
 	def updatePointsFromVertices(self, xvertices, yvertices, zvertices, centers):
 		"""
@@ -300,7 +339,7 @@ class plasma3D:
 		bbLimits = str(self.bbRmin) + ',' + str(self.bbRmax) + ',' + str(self.bbZmin) + ',' + str(self.bbZmax)
 		args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points3DHF.dat','-B',bbLimits,'_lamCTL.dat',tag]
 		current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-		subprocess.run(args, env=current_env, cwd=self.cwd)
+		subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
 		#print('mpirun -n ' + str(self.NCPUs) + ' heatlaminar_mpi' + ' -P points3DHF.dat' + ' _lamCTL.dat' + ' ' + tag)
 		
 		#self.wait2finish(self.NCPUs, tag)
@@ -513,33 +552,98 @@ class heatflux3D:
 		self.psimin = None
 		self.Lc = None		# in km
 		self.N = 1
-		self.NCPUs = 100
 		self.q = np.zeros(self.N)
 		self.q0 = None
 		self.ep = None	# equilParams_class instance for EFIT equilibrium
 		self.HFS = None	# True: use high field side SOL, False: use low field side SOL
+		
+		#Default inputs
+		self.NCPUs = 100
 		self.teProfileData = None
 		self.neProfileData = None
-
+		
+    
 	def allowed_class_vars(self):
+		"""
+		.. Writes a list of recognized class variables to HEAT object
+		.. Used for error checking input files and for initialization
+		.. These variables are read in from the input file. 
+		.. The call is in engine_class.loadInputs
+		
+		heatflux3D Variables:
+		----------------------------
+
+		:Lcmin:  float, maximum scrape-off-layer connection length
+		:lcfs: float, <= 1, normalized poloidal flux of last closed flux surface location
+		:lqCN: float, heat flux layer width lambda_q in mm for Eich profile
+		  same as in 2D, see heatfluxClass.py
+		:S: float, spread width in mm into private flux region for Eich profile
+		  same as in 2D, see heatfluxClass.py
+		:P: float, total power in MW into SOL; same as in 2D, see heatfluxClass.py
+		:radFrac: float, 0<=x<=1, fraction of radiative power
+		  same as in 2D, see heatfluxClass.py
+		:qBG: float, background heat flux in MW/m^2; same as in 2D, see heatfluxClass.py
+		:teProfileData: None (defaults to 2.0) 
+		  or string (Name of Te data file) 
+		  or float (scaler for generic Te profile) 
+		  or comma-separated array (Te data vs psi=linspace(0,1.1,len(Te)))
+		:neProfileData: None (defaults to 0.5) 
+		  or string (Name of ne data file) 
+		  or float (scaler for generic ne profile) 
+		  or comma-separated array (ne data vs psi=linspace(0,1.1,len(ne)))
+		:kappa: float, electron heat conductivity
+		:model: string in [layer, conductive, convective] to select heat flux model 
+		:NCPUs: integer, number of CPUs to use in MAFOT, default is 10
+		  same as in plasma3D class
+		"""
 		self.allowed_vars = ['Lcmin', 'lcfs', 'lqCN', 'S', 'P', 'radFrac', 'qBG', 
 				'teProfileData', 'neProfileData', 'kappa', 'model','NCPUs']
+
+
+	def setTypes(self):
+		"""
+		Set variable types for the stuff that isnt a string from the input file
+		"""
+		integers = ['NCPUs']
+		floats = ['Lcmin', 'lcfs', 'lqCN', 'S', 'P', 'radFrac', 'qBG', 'kappa']
+		bools = []
+		setAllTypes(self, integers, floats, bools)
+		
+		# data is an array or list
+		if self.teProfileData is not None:
+			if '[' in self.teProfileData:
+				from ast import literal_eval
+				self.teProfileData = self.teProfileData.replace(' ',',')
+				self.teProfileData = np.array(literal_eval(self.teProfileData))
+		if self.neProfileData is not None:
+			if '[' in self.neProfileData:
+				from ast import literal_eval
+				self.neProfileData = self.neProfileData.replace(' ',',')
+				self.neProfileData = np.array(literal_eval(self.neProfileData))
+		
+		# check if data is just a float
+		try: self.teProfileData = float(self.teProfileData)
+		except: pass	# data is a file name and remains a string or None
+		try: self.neProfileData = float(self.neProfileData)
+		except: pass	# data is a file name and remains a string or None
+			
+		
+	def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
+		"""
+		sets up pythonic string number formats for shot and timesteps
+		"""
+		self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
+		self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
 		return
 
-	def initializeHF3D(self, ep, inputFile = None, cwd = None, inputDir = None):
+	
+	def initializeHF3D(self, inputDir = None):
 		"""
 		Set up basic input vars
-		"""
-		#self.N = len(self.Lc)
-		#self.q = np.zeros(self.N)
-		self.ep = ep	# equilParams_class instance for EFIT equilibrium
-		
-		if inputDir is None: self.inputDir = os.getcwd()
-		else: self.inputDir = inputDir
-		if cwd is None: self.cwd = os.getcwd()
-		else: self.cwd = cwd
-		if inputFile is not None: self.read_input_file(inputFile)
-		else: self.setHFctl()	# just defaults	
+		"""		
+		if inputDir is None: inputDir = os.getcwd()
+		self.inputDir = inputDir
+
 		self.Psol = (1 - self.radFrac) * self.P
 			
 		T = self.teProfileData
@@ -592,15 +696,6 @@ class heatflux3D:
 				raise RuntimeError('Invalid density profile data')
 
 
-	def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
-		"""
-		sets up pythonic string number formats for shot and timesteps
-		"""
-		self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
-		self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
-		return
-
-	
 	def print_settings(self):
 		"""
 		Print all inputs
@@ -622,72 +717,34 @@ class heatflux3D:
 		print('teProfileData = ' + str(self.teProfileData))
 		print('neProfileData = ' + str(self.neProfileData))
 		print('model = ' + str(self.model))
+
+		log.info('#=============================================================')
+		log.info('#                Optical HF Variables')
+		log.info('#=============================================================')
+		log.info('lqCN = ' + str(self.lqCN))
+		log.info('S = ' + str(self.S))
+		log.info('P = ' + str(self.P))
+		log.info('radFrac = ' + str(self.radFrac))
+		log.info('qBG = ' + str(self.qBG))
+		log.info('kappa = ' + str(self.kappa))
+		log.info('#=============================================================')
+		log.info('#                3D Plasma Variables')
+		log.info('#=============================================================')
+		log.info('Lcmin = ' + str(self.Lcmin))
+		log.info('lcfs = ' + str(self.lcfs))
+		log.info('teProfileData = ' + str(self.teProfileData))
+		log.info('neProfileData = ' + str(self.neProfileData))
+		log.info('model = ' + str(self.model))
+
+	
+	def updatePFCdata(self, ep, cwd):
+		"""
+		Update class variables that are specific for each PFC
+		"""
+		self.ep = ep	# equilParams_class instance for EFIT equilibrium
+		self.cwd = cwd
 		
 
-	def setHFctl(self, Lcmin = 0.075, lcfs = 0.97, lqCN = 5, S = 2, P = 10, radFrac = 0.0, qBG = 0, kappa = 2000):
-		"""
-		Set the specific class variables
-		"""
-		self.Lcmin = tools.makeFloat(Lcmin) 		# minimum connection length in SOL to separateout the PFR, in km
-		self.lcfs = tools.makeFloat(lcfs) 			# psi of the Last Closed Flux Surface inside the stochastic layer
-		self.lqCN = tools.makeFloat(lqCN) 		    # heat flux layer width for Eich profile, in mm
-		self.S = tools.makeFloat(S) 				# heat flux layer extension width in PFR, in mm
-		self.P = tools.makeFloat(P) 				# total power into SOL, in MW
-		self.radFrac = tools.makeFloat(radFrac)  	# fraction of radiated power
-		self.qBG = tools.makeFloat(qBG) 			# background heat flux in MW/m^2
-		self.kappa = tools.makeFloat(kappa) 		# electron heat conductivity in W/m/eV^3.5
-		self.teProfileData = None
-		self.neProfileData = None
-		self.model = None
-	
-	
-	def read_input_file(self, file):
-		"""
-		Reads the 3D plasma csv input file
-		Format for input file is comma delimited, # are comments.
-		Example:
-		#Important Comment
-		variable_name, value
-		"""
-		if os.path.isfile(file): 
-			tools.read_input_file(self, file)
-			self.setTypes()
-			print('Input file: ' + file + ' read successfully')
-			log.info('Input file: ' + file + ' read successfully')
-		else: 
-			print('Input file: ' + file + ' not found!')
-			log.info('Input file: ' + file + ' not found!')
-			self.setHFctl()	# just defaults
-		
-
-	def setTypes(self):
-		"""
-		Set variable types for the stuff that isnt a string from the input file
-		"""
-		integers = ['NCPUs']
-		floats = ['Lcmin', 'lcfs', 'lqCN', 'S', 'P', 'radFrac', 'qBG', 'kappa']
-		bools = []
-		setAllTypes(self, integers, floats, bools)
-		
-		# data is an array or list
-		if self.teProfileData is not None:
-			if '[' in self.teProfileData:
-				from ast import literal_eval
-				self.teProfileData = self.teProfileData.replace(' ',',')
-				self.teProfileData = np.array(literal_eval(self.teProfileData))
-		if self.neProfileData is not None:
-			if '[' in self.neProfileData:
-				from ast import literal_eval
-				self.neProfileData = self.neProfileData.replace(' ',',')
-				self.neProfileData = np.array(literal_eval(self.neProfileData))
-		
-		# check if data is just a float
-		try: self.teProfileData = float(self.teProfileData)
-		except: pass	# data is a file name and remains a string or None
-		try: self.neProfileData = float(self.neProfileData)
-		except: pass	# data is a file name and remains a string or None
-			
-		
 	def updateLaminarData(self, psimin, Lc):
 		"""
 		updates member variables for psimin, connection length, 
@@ -854,7 +911,7 @@ class heatflux3D:
 			#nproc = 10
 			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-			subprocess.run(args, env=current_env, cwd=self.cwd)
+			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
 			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
 			# move one folder down
 			src = self.cwd + '/' + 'lam_' + tag + '.dat'
@@ -936,7 +993,7 @@ class heatflux3D:
 		if lobes:
 			q[psi < lcfs] = qmax
 		
-		return q*q0, qsep*q0
+		return q*q0/qmax, qsep*q0/qmax
 
 
 	def map_R_psi(self, psi, HFS = None):
@@ -958,8 +1015,7 @@ class heatflux3D:
 		return f(psi)
 
 
-
-	def scale_layer(self, lq, S, P, DivCode):
+	def scale_layer(self, lq, S, P, DivCode, verfyScaling = True):
 		"""
 		scales HF using a part of the limiter outline in the g-file 
 		q-profile is obtained using laminar and apply the heat flux layer to psimin
@@ -1049,7 +1105,7 @@ class heatflux3D:
 			# call MAFOT
 			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','-B',bbLimits,'_lamCTL.dat',tag]
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-			subprocess.run(args, env=current_env, cwd=self.cwd)
+			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
 			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
 			
 			# move one folder down
@@ -1078,11 +1134,46 @@ class heatflux3D:
 		# get parallel heat flux
 		qpar, q0tmp = self.set_layer(psimin, lq, S, lcfs = self.lcfs, lobes = True)
 		if np.sum(mask > 0): qpar[mask],_ = self.set_layer(psimin[mask], lq, S, q0 = q0tmp)
-
-		# average over the toroidal angles
 		qpar = qpar.reshape(Nphi,len(R))
-		qpar = qpar.mean(0)
-		
+
+		# filter for outliers
+		threshold = qpar.max(1).mean() + qpar.max(1).std()	# get max at each angle. outliers are > than average maximum + one standard deviation of all maxima
+		idx = np.where(qpar > threshold)
+
+		if verfyScaling:
+			with open(self.cwd + '/../' + 'qpar_' + tag + '.dat','w') as f:
+				f.write('# Parallel heat flux along g-file limiter for this divertor at multiple toroidal angles\n')
+				f.write('# The field line tracing is in file: ' + file + '\n')			
+				f.write('# Nphi = ' + str(Nphi) + '\n')
+				f.write('# lq = ' + str(lq) + '\n')
+				f.write('# S = ' + str(S) + '\n')
+				f.write('# lcfs = ' + str(self.lcfs) + '\n')
+				f.write('# Lcmin = ' + str(self.Lcmin) + '\n')
+				f.write('# Number of outliers = ' + str(len(idx[0])) + '\n')
+				f.write('# Filter threshold = ' + str(threshold) + '  Use: idx = np.where(qpar > threshold)' + '\n')
+				if len(idx[0]) > 0: f.write('# Average outlier value = ' + str(qpar[idx].mean()) + '\n')
+				else: f.write('# Average outlier value = None\n')
+				f.write('# Each column of qpar is at another angle with phi[i] = i * 2pi/Nphi\n')
+				f.write('#\n')
+				f.write('# R[m]  Z[m]  swall[m]  qpar[phi,swall]\n')
+				f.write('#\n')
+				for i in range(len(R)):
+					f.write(str(R[i]) + '\t' + str(Z[i]) + '\t' + str(swall[i]))
+					for j in range(Nphi):
+						f.write('\t' + str(qpar[j,i]))
+					f.write('\n')
+
+		if len(idx[0]) > 0:
+			print('Filtering outliers: number = ' + str(len(idx[0])) + ', threshold = ' + str(threshold) + ', <outlier value> = ' + str(qpar[idx].mean()))
+			log.info('Filtering outliers: number = ' + str(len(idx[0])) + ', threshold = ' + str(threshold) + ', <outlier value> = ' + str(qpar[idx].mean()))
+			qpar[idx] = 0
+		else:
+			print('Filtering outliers: None found')
+			log.info('Filtering outliers: None found')
+			
+		# average over the toroidal angles
+		qparm = qpar.mean(0)
+
 		# get incident angle
 		BR = self.ep.BRFunc.ev(R,Z)
 		Bt = self.ep.BtFunc.ev(R,Z)
@@ -1096,7 +1187,7 @@ class heatflux3D:
 		nB = np.abs(nR*BR + nZ*BZ)/B
 		
 		# perpendicular heat flux
-		q = qpar*nB
+		q = qparm*nB
 		
 		# Integrate along line and along toroidal angle (axisymm) to get total power
 		P0 = 2*np.pi * integ.simps(R*q, swall)
@@ -1105,21 +1196,6 @@ class heatflux3D:
 		#Scale to input power
 		q0 = P/P0
 		return q0	#, q,mask,nB,qpar
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 	def scale_layer_circle(self, lq, S, P, DivCode):
@@ -1193,7 +1269,7 @@ class heatflux3D:
 			# call MAFOT
 			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','-B',bbLimits,'_lamCTL.dat',tag]
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-			subprocess.run(args, env=current_env, cwd=self.cwd)
+			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
 			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
 			
 			# move one folder down
@@ -1301,7 +1377,7 @@ class heatflux3D:
 			#nproc = 10
 			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-			subprocess.run(args, env=current_env, cwd=self.cwd)
+			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
 			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
 			# move one folder down
 			src = self.cwd + '/' + 'lam_' + tag + '.dat'
@@ -1381,7 +1457,7 @@ class heatflux3D:
 			#nproc = 10
 			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-			subprocess.run(args, env=current_env, cwd=self.cwd)
+			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
 			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
 			# move one folder down
 			src = self.cwd + '/' + 'lam_' + tag + '.dat'
@@ -1578,3 +1654,123 @@ def readShadowFile(f, PFC):
 	return val
 
 
+def gridMaker(ep, DivCode, ds = 0.0001, srange = 0.3, write = False, cwd = None, Nphi = 1, plotme = True):
+	"""
+	Generates the grid on the g-file limiter for field line tracing to be used in scaling the heat flux models.
+	"""
+	# strike lines
+	d = ep.strikeLines()
+	if d is None: 		
+		# this means inner wall limited
+		s0 = 0	# inner wall at Z = Zaxis 						!!!!!!! this needs to be computed properly !!!!!!!!!
+		swall = np.arange(s0-srange, s0+srange, ds)
+	else:				
+		# find strike point for DivCode (this is to double check and prevent missmatches)
+		if 'Rin2' in d: N = 4
+		else: N = 2
+		Rstr = np.zeros(N)
+		Zstr = np.zeros(N)
+		Sstr = np.zeros(N)
+		keys = ['in','out','in2','out2']
+		for i in range(N):
+			Rstr[i] = d['R' + keys[i]]
+			Zstr[i] = d['Z' + keys[i]]
+			Sstr[i] = d['swall' + keys[i]]
+		
+		if 'L' in DivCode:					# Lower divertor, always 2 strike points
+			Rtmp = Rstr[Zstr < 0]
+			Ztmp = Zstr[Zstr < 0]
+			Stmp = Sstr[Zstr < 0]
+		elif 'U' in DivCode:				# Upper divertor
+			Rtmp = Rstr[Zstr > 0]
+			Ztmp = Zstr[Zstr > 0]
+			Stmp = Sstr[Zstr > 0]
+		
+		if len(Rtmp) < 2: 
+			raise RuntimeError('No strike points found for divertor ' + DivCode)
+	
+		# s0 is the strike point and s1 is the "other" strike point we don't want
+		if 'I' in DivCode:
+			if Rtmp[0] < Rtmp[1]: s0,s1 = Stmp[0],Stmp[1]
+			else: s0,s1 = Stmp[1],Stmp[0]
+		elif 'O' in DivCode:
+			if Rtmp[0] < Rtmp[1]: s0,s1 = Stmp[1],Stmp[0]
+			else: s0,s1 = Stmp[0],Stmp[1]
+
+		# set swall range
+		if s0 < s1:		# swall goes ccw for inner and cw for outer
+			dpfr = s1 - s0
+			swall = np.arange(s0 - srange, s0 + 0.4*dpfr, ds)
+		else:
+			dpfr = s0 - s1
+			swall = np.arange(s0 - 0.4*dpfr, s0 + srange, ds)
+
+	# get R,Z and write points file
+	R,Z,nR,nZ = ep.all_points_along_wall(swall, get_normal = True)
+
+	if write:
+		if cwd is None: cwd = os.getcwd()
+		with open(cwd + '/' + 'points_' + DivCode + '.dat','w') as f:
+			for j in range(Nphi):
+				phi = j*(360.0/Nphi)
+				for i in range(len(R)):
+					f.write(str(R[i]) + '\t' + str(phi) + '\t' + str(Z[i]) + '\n')
+
+	# plot stuff
+	if plotme:
+		import matplotlib.pyplot as plt
+		ep.plot()
+		plt.plot(R,Z,'r-')
+	
+		bbRmin = np.round(min([R.min()-0.1, ep.g['wall'][:,0].min()-0.1]),3)
+		bbRmax = np.round(max([R.max()+0.1, ep.g['wall'][:,0].max()+0.1]),3)
+		bbZmin = np.round(min([Z.min()-0.1, ep.g['wall'][:,1].min()-0.1]),3)
+		bbZmax = np.round(max([Z.max()+0.1, ep.g['wall'][:,1].max()+0.1]),3)
+		bbLimits = str(bbRmin) + ',' + str(bbRmax) + ',' + str(bbZmin) + ',' + str(bbZmax)
+		print(bbLimits)
+	
+		plt.plot([bbRmin,bbRmax],[bbZmin,bbZmin],'g--')
+		plt.plot([bbRmax,bbRmax],[bbZmin,bbZmax],'g--')
+		plt.plot([bbRmin,bbRmax],[bbZmax,bbZmax],'g--')
+		plt.plot([bbRmin,bbRmin],[bbZmin,bbZmax],'g--')
+	
+		plt.xlim(bbRmin-0.05,bbRmax+0.05)
+		plt.ylim(bbZmin-0.05,bbZmax+0.05)
+
+	return R,Z,nR,nZ,swall
+
+
+def checkScaling(file, plotme =True):
+	"""
+	Reads the output file for heat flux scaling and plots the results to allow for visual verification
+	"""
+	data = np.genfromtxt(file,comments='#')
+	R = data[:,0] 
+	Z = data[:,1] 
+	swall = data[:,2] 
+	qpar = data[:,3::].T	# transpose to be consistent with array structure inside the class 
+	Ns, Nphi = qpar.shape
+	qparm = qpar.mean(0)
+	
+	threshold = qpar.max(1).mean() + qpar.max(1).std()	# get max at each angle. outliers are > than average maximum + one standard deviation of all maxima
+	idx = np.where(qpar > threshold)	
+	if len(idx[0]) > 0:
+		print('Filtering outliers: number = ' + str(len(idx[0])) + ', threshold = ' + str(threshold) + ', <outlier value> = ' + str(qpar[idx].mean()))
+		qpar[idx] = 0
+	else:
+		print('Filtering outliers: None found')
+	
+	# plot stuff
+	if plotme:
+		import matplotlib.pyplot as plt
+		plt.figure()
+		plt.plot(swall,qparm,'k-', label = 'original')
+		if len(idx[0]) > 0: plt.plot(swall,qpar.mean(0),'r-', label = 'filtered')
+		plt.legend(fontsize = 14)
+		plt.xlabel('S$_{wall}$ [m]')
+		plt.ylabel('q$_{||}$ [a.u.]')
+		
+	return swall, qpar
+	
+	
+	

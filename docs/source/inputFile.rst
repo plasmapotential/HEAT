@@ -22,6 +22,8 @@ where X is the machine name.
 .. autofunction:: gyroClass.GYRO.allowed_class_vars    
 .. autofunction:: radClass.RAD.allowed_class_vars    
 .. autofunction:: openFOAMclass.OpenFOAM.allowed_class_vars  
+.. autofunction:: plasma3DClass.plasma3D.allowed_class_vars
+.. autofunction:: plasma3DClass.heatflux3D.allowed_class_vars
 
 
 References:

@@ -30,8 +30,8 @@ else
 fi
 
 #for heatuser mode
-export UID=$(id -u)
-export GID=$(id -g)
+#export UID=$(id -u)
+#export GID=$(id -g)
 #export USER=$(whoami)
 
 #run docker compose

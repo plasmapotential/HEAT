@@ -1372,6 +1372,7 @@ class engineObj():
         data = data.rename(columns=lambda x: x.strip())
         data = data.astype({"x[mm]": float, "y[mm]": float, "z[mm]": float, "traceDirection": int, "Length[deg]":float, "stepSize[deg]":float})
 
+        #t = int(t)
         tIdx = np.where(float(t)==self.MHD.timesteps)[0][0]
         traceDirection=data['traceDirection']
         x = data['x[mm]'] / 1000.0
@@ -1396,6 +1397,7 @@ class engineObj():
         gridfile = self.MHD.shotPath + self.tsFmt.format(t) + '/struct_grid.dat'
         controlfilePath = self.MHD.shotPath + self.tsFmt.format(t) + '/'
         #structOutfile = controlfilePath + 'struct.dat'
+
         for i in range(len(xyz)):
             self.MHD.ittStruct = data['Length[deg]'][i] / data['stepSize[deg]'][i]
             self.MHD.dpinit = data['stepSize[deg]'][i]
@@ -1403,8 +1405,6 @@ class engineObj():
             self.MHD.writeMAFOTpointfile(xyz[i,:],gridfile)
             self.MHD.getFieldpath(dphi, gridfile, controlfilePath, controlfile, paraview_mask=True, tag='pt{:03d}'.format(i))
             #os.remove(structOutfile)
-
-
         return
 
 
@@ -1728,7 +1728,17 @@ class engineObj():
                 self.inputDicts.append(self.loadInputs(inFile=self.inputFileList[tIdx]))
             else:
                 self.inputDicts.append(self.getCurrentInputs())
-
+                
+            # 3Dplasma general setup
+            if self.plasma3D.plasma3Dmask:
+                gFile = self.MHD.shotPath + self.tsFmt.format(t) + '/' + self.MHD.gFiles[tIdx]
+                self.plasma3D.initializePlasma3D(self.MHD.shot, t, gFile, self.MHD.tmpDir[0:-1])   # remove / at the end of paths   Also: this no longer reads the input file. This is now done by self.loadInputs
+                self.plasma3D.setBoundaryBox(self.MHD, self.CAD)
+                self.hf3D.initializeHF3D(self.MHD.tmpDir[0:-1])     # this no longer reads the input file. This is now done by self.loadInputs
+                self.plasma3D.print_settings()
+                self.hf3D.print_settings()
+            
+            # Loop through all PFCs
             for PFC in self.PFCs:
                 if t not in PFC.timesteps:
                     pass
@@ -1758,18 +1768,19 @@ class engineObj():
                     print('\n')
                     print("*"*80)
                     print('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
-                    log.info('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
                     print("*"*80)
                     print('\n')
+                    log.info('\n')
+                    log.info("*"*80)
+                    log.info('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+                    log.info("*"*80)
+                    log.info('\n')
                     
-                    #3Dplasma setup
-                    if self.MHD.plasma3Dmask == 1:
-                        gFile = self.MHD.shotPath + self.tsFmt.format(t) + '/' + self.MHD.gFiles[tIdx]
-                        self.plasma3D.initializePlasma3D(self.MHD.shot, t, gFile, self.inputFileList[tIdx], PFC.controlfilePath[0:-1], self.MHD.tmpDir[0:-1])   # remove / at the end of paths
-                        self.plasma3D.setBoundaryBox(self.MHD, self.CAD)
-                        self.hf3D.initializeHF3D(PFC.ep, self.inputFileList[tIdx], PFC.controlfilePath[0:-1], self.MHD.tmpDir[0:-1])
-                        self.plasma3D.print_settings()
-                        self.hf3D.print_settings()
+                    # 3Dplasma PFC specific setup
+                    if self.plasma3D.plasma3Dmask:
+                        self.plasma3D.updatePFCdata(PFC.controlfilePath[0:-1])  # remove / at the end of paths
+                        self.hf3D.updatePFCdata(PFC.ep, PFC.controlfilePath[0:-1])
+                    
                     if 'hfOpt' in runList:
                         #load HF settings for this timestep if applicable (terminal mode)
                         try:
@@ -1803,7 +1814,7 @@ class engineObj():
                         print('Theoretical optical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac*self.HF.elecFrac))
                         print('Tessellated divertor power to this PFC = {:f}'.format(PFC.powerSumOptical[tIdx]))
                         log.info('\nMaximum heat load on tile: {:f}'.format(max(PFC.qDiv)))
-                        log.info('Power to this Divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac))
+                        log.info('Theoretical optical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac*self.HF.elecFrac))
                         log.info('Tessellated Total Power = {:f}'.format(PFC.powerSumOptical[tIdx]))
                         print("Optical Calculation Time Elapsed: {:f}".format(time.time() - t0))
                         log.info("Optical Calculation Time Elapsed: {:f}\n".format(time.time() - t0))
@@ -2013,11 +2024,10 @@ class engineObj():
                 self.combineTimeSteps(runList, t)
 
         #copy HEAT logfile to shotpath
-        shutil.copyfile(self.logFile, self.MHD.shotPath+'HEATlog.txt')
+        #shutil.copyfile(self.logFile, self.MHD.shotPath+'HEATlog.txt')			#AW: this is a strange place for this command, runHEAT is not complete yet. The same call is already in terminalUI, just after runHEAT is complete
 
         #set tree permissions
         tools.recursivePermissions(self.MHD.shotPath, self.UID, self.GID, self.chmod)
-
 
 
         #=========================
@@ -2480,7 +2490,7 @@ class engineObj():
         print("Intersection calculation took {:f} [s]\n".format(time.time() - t0))
 
         #Run MAFOT laminar for 3D plasmas
-        if self.MHD.plasma3Dmask:
+        if self.plasma3D.plasma3Dmask:
             print('-'*80)
             print('\n----Solving for 3D plasmas with MAFOT----')
             log.info('\n----Solving for 3D plasmas with MAFOT----')
@@ -2519,7 +2529,7 @@ class engineObj():
             q = np.zeros(PFC.centers[:,0].shape)
             q[use] = self.hf3D.q                                          # this is the parallel heat flux q||
             qDiv = np.zeros(PFC.centers[:,0].shape)
-            qDiv[use] = q[use] * PFC.bdotn[use] * self.HF.elecFrac        # this is the incident heat flux
+            qDiv[use] = q[use] * np.abs(PFC.bdotn[use]) * self.HF.elecFrac        # this is the incident heat flux
 
         #get psi from gfile for 2D plasmas
         else:
@@ -3278,13 +3288,6 @@ class engineObj():
         """
         #Run MAFOT laminar for 3D plasmas
         if self.plasma3D.plasma3Dmask:
-#            CTLfile=PFC.controlfilePath + PFC.controlfile
-#            self.MHD.writeControlFile(CTLfile, PFC.t, PFC.mapDirection, mode='laminar')
-#            self.MHD.writeMAFOTpointfile(PFC.centers,PFC.gridfile)
-#            self.MHD.runMAFOTlaminar(PFC.gridfile,PFC.controlfilePath,PFC.controlfile,self.NCPUs)
-#            self.HF.readMAFOTLaminarOutput(PFC,PFC.outputFile)
-#            use = np.where(PFC.psimin < 10)[0]
-#            os.remove(PFC.outputFile)
             print('Solving for 3D plasmas with MAFOT')
             log.info('Solving for 3D plasmas with MAFOT')
             self.plasma3D.updatePointsFromCenters(PFC.centers)
@@ -3375,6 +3378,39 @@ class engineObj():
                     'meshMinLev': None,
                     'meshMaxLev': None,
                     'material': None,
+                    'N_gyroSteps': None,
+                    'gyroTraceLength': None,
+                    'gyroT_eV': None,
+                    'N_vSlice': None,
+                    'N_vPhase': None,
+                    'N_gyroPhase': None,
+                    'ionMassAMU': None,
+                    'vMode': None,
+                    'ionFrac': None,
+                    'gyroSources': None,
+                    'phiMin':None,
+                    'phiMax':None,
+                    'Ntor':None,
+                    'Nref':None,
+                    'plasma3Dmask':None,
+                    'itt':None,
+                    'response':None,
+                    'selectField':None,
+                    'useIcoil':None,
+                    'sigma':None,
+                    'charge':None,
+                    'Ekin':None,
+                    'Lambda':None,
+                    'Mass':None,
+                    'loadHF':None,
+                    'loadBasePath':None,
+                    'NCPUs':None,
+                    'Lcmin':None,
+                    'lcfs':None,
+                    'teProfileData':None,
+                    'neProfileData':None,
+                    'kappa':None,
+                    'model':None,
                     }
         return emptyDict
 
@@ -3455,10 +3491,24 @@ class engineObj():
                     'Ntor':self.RAD.Ntor,
                     'Nref':self.RAD.Nref,
                     'plasma3Dmask':self.plasma3D.plasma3Dmask,
-                    'meshFEMres':self.FEM.meshFEMres,
-                    'elmerDir':self.FEM.elmerDir,
-                    'elmerFile':self.FEM.elmerFile,
-                    'elmerHEATlib':self.FEM.elmerHEATlib
+                    'itt':self.plasma3D.itt,
+                    'response':self.plasma3D.response,
+                    'selectField':self.plasma3D.selectField,
+                    'useIcoil':self.plasma3D.useIcoil,
+                    'sigma':self.plasma3D.sigma,
+                    'charge':self.plasma3D.charge,
+                    'Ekin':self.plasma3D.Ekin,
+                    'Lambda':self.plasma3D.Lambda,
+                    'Mass':self.plasma3D.Mass,
+                    'loadHF':self.plasma3D.loadHF,
+                    'loadBasePath':self.plasma3D.loadBasePath,
+                    'NCPUs':self.plasma3D.NCPUs,
+                    'Lcmin':self.hf3D.Lcmin,
+                    'lcfs':self.hf3D.lcfs, 
+                    'teProfileData':self.hf3D.teProfileData,
+                    'neProfileData':self.hf3D.neProfileData,
+                    'kappa':self.hf3D.kappa,
+                    'model':self.hf3D.model
                     }
         print("Loaded inputs")
 
@@ -3525,6 +3575,24 @@ class engineObj():
                     'Ntor':self.RAD.Ntor,
                     'Nref':self.RAD.Nref,
                     'plasma3Dmask':self.plasma3D.plasma3Dmask,
+                    'itt':self.plasma3D.itt,
+                    'response':self.plasma3D.response,
+                    'selectField':self.plasma3D.selectField,
+                    'useIcoil':self.plasma3D.useIcoil,
+                    'sigma':self.plasma3D.sigma,
+                    'charge':self.plasma3D.charge,
+                    'Ekin':self.plasma3D.Ekin,
+                    'Lambda':self.plasma3D.Lambda,
+                    'Mass':self.plasma3D.Mass,
+                    'loadHF':self.plasma3D.loadHF,
+                    'loadBasePath':self.plasma3D.loadBasePath,
+                    'NCPUs':self.plasma3D.NCPUs,
+                    'Lcmin':self.hf3D.Lcmin,
+                    'lcfs':self.hf3D.lcfs, 
+                    'teProfileData':self.hf3D.teProfileData,
+                    'neProfileData':self.hf3D.neProfileData,
+                    'kappa':self.hf3D.kappa,
+                    'model':self.hf3D.model,
                     'meshFEMres':self.FEM.meshFEMres,
                     'elmerDir':self.FEM.elmerDir,
                     'elmerFile':self.FEM.elmerFile,
@@ -3748,7 +3816,6 @@ class engineObj():
             #set up timesteps
             N_t = int((self.OF.OFtMax - self.OF.OFtMin) / self.OF.deltaT)
             OFtimesteps = np.round(np.linspace(self.OF.OFtMin, self.OF.OFtMax, N_t+1), self.tsSigFigs)
-            
 
             #create symbolic link to STL file
             print("Creating openFOAM symlink to STL")
@@ -3978,6 +4045,7 @@ class engineObj():
                     #OFcenters = pd.read_csv(HFcsv).iloc[:,0:3].values
                     #write boundary condition
                     print("Maximum qDiv for this PFC and time: {:f}".format(qDiv.max()))
+                    log.info("Maximum qDiv for this PFC and time: {:f}".format(qDiv.max()))
                     self.HF.write_openFOAM_boundary(OFcenters,qDiv,partDir,t)
                 elif (t < self.MHD.timesteps.min()) or (t > self.MHD.timesteps.max()):
                     #apply zero HF outside of discharge domain (ie tiles cooling)

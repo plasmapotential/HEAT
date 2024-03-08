@@ -60,22 +60,39 @@ A Dec 2021 presentation available [here](https://docs.google.com/presentation/d/
 
 There is a HEAT presentation from Aug 2020 available [here](https://docs.google.com/presentation/d/1aqJRaxt97P6R4Kqz7xyaoegtxssHQQPuwvJgVM4cCII/edit?usp=sharing)
 
-Example output for 30 degree section of the NSTX-U divertor with Equilibrium, Heat Flux, Temperature:
-![Alt text](HF_T_EQ.gif "Example output of EQ, HF, T, video")
+**Example output for 30 degree section of the NSTX-U divertor with Equilibrium, Heat Flux, Temperature:**
 
-Example output of PFC tile temperature for various strike points sweep frequencies:
-![Alt text](sideBySide.gif "Example output of EQ, HF, T, video")
+![Alt text](./assets/HF_T_EQ.gif "Example output of EQ, HF, T, video")
 
-Example trace for ion gyro orbit tracing from T. Looby et al 2022 Nucl. Fusion 62 106020:
-![Alt text](helixVisual2.png "Example ion gyro orbit trajectory from T. Looby et al 2022 Nucl. Fusion 62 106020")
+**Example output of PFC tile temperature for various strike points sweep frequencies:**
 
-Example output for ion gyro orbit tracing from T. Looby et al 2022 Nucl. Fusion 62 106020:
-![Alt text](gyroHF.png "Example ion gyro orbit heat fluxes from T. Looby et al 2022 Nucl. Fusion 62 106020")
+![Alt text](./assets/sideBySide.gif "Example output of EQ, HF, T, video")
 
-Example output for limited discharges:
-![Alt text](limiter.gif "Example output of EQ, HF, T, video")
+**Example trace for ion gyro orbit tracing from T. Looby et al 2022 Nucl. Fusion 62 106020:**
 
-HEAT Dash GUI Theme Example 1:
-![Alt text](gui1.png "HEAT Dash GUI Theme Example 1")
-HEAT Dash GUI Theme Example 2:
-![Alt text](gui2.png "HEAT Dash GUI Theme Example 2")
+![Alt text](./assets/helixVisual2.png "Example ion gyro orbit trajectory from T. Looby et al 2022 Nucl. Fusion 62 106020")
+
+**Example output for ion gyro orbit tracing from T. Looby et al 2022 Nucl. Fusion 62 106020:**
+
+![Alt text](./assets/gyroHF.png "Example ion gyro orbit heat fluxes from T. Looby et al 2022 Nucl. Fusion 62 106020")
+
+**Example output for limited discharges:**
+
+![Alt text](./assets/limiter.gif "Example output of EQ, HF, T, video")
+
+**HEAT Dash GUI Theme Example 1:**
+
+![Alt text](./assets/gui1.png "HEAT Dash GUI Theme Example 1")
+
+**HEAT Dash GUI Theme Example 2:**
+
+![Alt text](./assets/gui2.png "HEAT Dash GUI Theme Example 2")
+
+
+## Contributing
+
+As an open-source software, HEAT is extremely open to contributions. You have many ways to contribute:
+1. Discussion (asking for use cases or features)
+2. Documentation (add clearest examples or fill non-documented code sections)
+3. Code (Add new features or enhance the existing ones)
+4. Issues (Help another to achieve the expected use of HEAT or report any problem, bug or misoperation that you can note)
