@@ -1524,11 +1524,11 @@ class CAD:
         return mesh
 
 
-    def createFEMmeshGmsh(self, obj, maxLength=0, name='FEMMeshGmsh'):
+    def createFEMmeshGmsh(self, obj, minLength=0, maxLength=0, name='FEMMeshGmsh'):
         """
         Creates a FEM mesh object using the Gmsh mesher.  User specifies
-        the maximum length of the mesh elements, which defaults to 0 (auto).
-        Uses freecad api to gmsh
+        the minimum / maximum length of the mesh elements, which defaults 
+        to 0 (auto).  Uses freecad api to gmsh
 
         Some of the functionality in this function may not work depending on the 
         freecad version.  older versions do not have ObjectsFem module.
@@ -1541,6 +1541,7 @@ class CAD:
         mesh.Label = name
         mesh.Part = obj
         #mesh.ElementDimension = "From Shape"
+        mesh.CharacteristicLengthMin = minLength
         mesh.CharacteristicLengthMax = maxLength
         #mesh.ElementOrder = 2  # Set to 2 for second order elements   
 

@@ -3593,7 +3593,8 @@ class engineObj():
                     'neProfileData':self.hf3D.neProfileData,
                     'kappa':self.hf3D.kappa,
                     'model':self.hf3D.model,
-                    'meshFEMres':self.FEM.meshFEMres,
+                    'meshFEMminRes':self.FEM.meshFEMminRes,
+                    'meshFEMmaxRes':self.FEM.meshFEMmaxRes,
                     'elmerDir':self.FEM.elmerDir,
                     'elmerFile':self.FEM.elmerFile,
                     'elmerHEATlib':self.FEM.elmerHEATlib
@@ -4133,13 +4134,13 @@ class engineObj():
                 if meshAlg == 'gmsh':
                     print("Using GMSH mesh algorithm")
                     log.info("Using GMSH mesh algorithm")
-                    meshName = PFC.name + '_GMSH_{:0.3f}mm'.format(self.FEM.meshFEMres)
-                    mesh = self.CAD.createFEMmeshGmsh(part, maxLength=self.FEM.meshFEMres, name=meshName)
+                    meshName = PFC.name + '_GMSH_{:0.3f}mm_{:0.3f}mm'.format(self.FEM.meshFEMminRes, self.FEM.meshFEMmaxRes)
+                    mesh = self.CAD.createFEMmeshGmsh(part, minLength=self.FEM.meshFEMminRes, maxLength=self.FEM.meshFEMmaxRes, name=meshName)
                 else:
                     print("Using NETGEN mesh algorithm")
                     log.info("Using NETGEN mesh algorithm")
-                    meshName = PFC.name + '_NETGEN_{:0.3f}mm'.format(self.FEM.meshFEMres)
-                    mesh = self.CAD.createFEMmeshNetgen(part, MaxSize=self.FEM.meshFEMres, name=meshName)
+                    meshName = PFC.name + '_NETGEN_{:0.3f}mm'.format(self.FEM.meshFEMmaxRes)
+                    mesh = self.CAD.createFEMmeshNetgen(part, MaxSize=self.FEM.meshFEMmaxRes, name=meshName)
 
                 meshFile = self.FEM.elmerOutDir + meshName + '.unv'
                 self.CAD.exportFEMmesh(mesh, meshFile)
@@ -4157,13 +4158,13 @@ class engineObj():
                     if meshAlg == 'gmsh':
                         print("Using GMSH mesh algorithm")
                         log.info("Using GMSH mesh algorithm")
-                        meshName = PFC.name + '_GMSH_{:0.3f}mm'.format(self.FEM.meshFEMres)
-                        mesh = self.CAD.createFEMmeshGmsh(part, maxLength=self.FEM.meshFEMres, name=meshName)
+                        meshName = PFC.name + '_GMSH_{:0.3f}mm_{:0.3f}mm'.format(self.FEM.meshFEMminRes, self.FEM.meshFEMmaxRes)
+                        mesh = self.CAD.createFEMmeshGmsh(part, minLength=self.FEM.meshFEMminRes, maxLength=self.FEM.meshFEMmaxRes, name=meshName)
                     else:
                         print("Using NETGEN mesh algorithm")
                         log.info("Using NETGEN mesh algorithm")
-                        meshName = PFC.name + '_NETGEN_{:0.3f}mm'.format(self.FEM.meshFEMres)
-                        mesh = self.CAD.createFEMmeshNetgen(part, MaxSize=self.FEM.meshFEMres, name=meshName)
+                        meshName = PFC.name + '_NETGEN_{:0.3f}mm'.format(self.FEM.meshFEMmaxRes)
+                        mesh = self.CAD.createFEMmeshNetgen(part, MaxSize=self.FEM.meshFEMmaxRes, name=meshName)
                     meshFile = self.FEM.elmerOutDir + meshName + '.unv'
                     self.CAD.exportFEMmesh(mesh, meshFile)
                 #mesh exists

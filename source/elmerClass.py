@@ -63,7 +63,8 @@ class FEM:
         Elmer Variables:
         -------------------
 
-        :meshFEMRes: float that indicated maximum mesh size in [mm].  0.0 means auto meshing
+        :meshFEMmaxRes: float that indicated maximum mesh size in [mm].  0.0 means auto meshing
+        :meshFEMminRes: float that indicated minimum mesh size in [mm].  0.0 means auto meshing
         :elmerDir: path to the Elmer case directory.  In container should be location that
           is bind mounted into container.  Requires full path.
         :elmerFile: CSV file that contains information about the Elmer run.  See
@@ -75,7 +76,8 @@ class FEM:
                 
         """
         self.allowed_vars = [
-                             'meshFEMres',
+                             'meshFEMminRes',
+                             'meshFEMmaxRes',
                              'elmerDir',
                              'elmerFile',
                              'elmerHEATlib'
@@ -90,7 +92,8 @@ class FEM:
         integers = [
                     ]
         floats = [
-            'meshFEMres'
+            'meshFEMminRes',
+            'meshFEMmaxRes'
                 ]
 
         for var in integers:
@@ -138,6 +141,7 @@ class FEM:
             sys.exit()
 
         print("Reading elmerFile: " + self.elmerDir + self.elmerFile)
+        log.info("Reading elmerFile: " + self.elmerDir + self.elmerFile)
         try:
             #self.elmerData = pd.read_csv(self.elmerDir + self.elmerFile, comment='#')
             #self.elmerData = self.elmerData.rename(columns=lambda x: x.strip())
@@ -153,6 +157,10 @@ class FEM:
                         header = row
                     else:
                         self.elmerData[row[0].strip()] = {header[1].strip():row[1].strip(), header[2].strip():row[2].strip()}
+            print("Elmer Data:")
+            print(self.elmerData)
+            log.info("Elmer Data:")
+            log.info(self.elmerData)
 
         except Exception as e:
             print(str(e))
