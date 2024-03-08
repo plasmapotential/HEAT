@@ -23,7 +23,6 @@ tmin, 0
 tmax, 15000
 traceLength, 10
 dpinit, 0.25
-plasma3Dmask, 0 #1=true, 0=false
 #==============================================================
 #                Optical HF Variables
 #==============================================================
@@ -84,3 +83,32 @@ STLscale, 1.0
 meshMinLevel, 1
 meshMaxLevel, 2
 material, SGL
+#==============================================================
+#                Elmer FEM Variables
+#==============================================================
+meshFEMres, 1.0
+elmerDir, /root/terminal/sparc/elmer/
+elmerFile, elmerFile.csv
+elmerHEATlib, HEATLibrary.so
+#=============================================================
+#                3D Plasma Variables
+#=============================================================
+plasma3Dmask, True
+itt, 335
+response, 1
+selectField, 2
+useIcoil, 0
+sigma, 0
+charge, -1
+Ekin, 10
+Lambda, 0.1
+Mass, 2
+kappa, 200
+Lcmin, 0.075
+lcfs, 0.986
+model, layer
+teProfileData, None
+neProfileData, None
+loadHF, False
+loadBasePath, None
+NCPUs, 10
