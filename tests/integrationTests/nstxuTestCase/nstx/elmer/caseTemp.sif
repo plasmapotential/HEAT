@@ -13,8 +13,8 @@ Simulation
   Simulation Type = Transient
   Steady State Max Iterations = 1
   Output Intervals(1) = 1
-  Timestep intervals(1) = 55
-  Timestep Sizes(1) = 0.001
+  Timestep intervals(1) = 5
+  Timestep Sizes(1) = 0.05
   Timestepping Method = BDF
   BDF Order = 1
   Solver Input File = caseTemp.sif

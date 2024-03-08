@@ -67,7 +67,7 @@ gyroSources, gyroSourcePlane
 #==============================================================
 #                Radiated Power HF Variables
 #==============================================================
-radFile, /root/source/HEAT/source/tests/integrationTests/nstxuTestCase/nstx/RZpower.csv
+radFile, /root/source/HEAT/tests/integrationTests/nstxuTestCase/nstx/RZpower.csv
 Ntor, 5
 Nref, 1
 phiMin, 20
@@ -86,14 +86,15 @@ material, SGL
 #==============================================================
 #                Elmer FEM Variables
 #==============================================================
-meshFEMres, 1.0
-elmerDir, /root/terminal/sparc/elmer/
+meshFEMminRes, 5.0
+meshFEMmaxRes, 20.0
+elmerDir, /root/source/HEAT/tests/integrationTests/nstxuTestCase/nstx/elmer/
 elmerFile, elmerFile.csv
 elmerHEATlib, HEATLibrary.so
 #=============================================================
 #                3D Plasma Variables
 #=============================================================
-plasma3Dmask, True
+plasma3Dmask, False
 itt, 335
 response, 1
 selectField, 2

@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ plasma3D ]
+    branches: [ elmer ]
   pull_request:
-    branches: [ plasma3D ]
+    branches: [ elmer ]
 
 jobs:
   test:
@@ -22,6 +22,10 @@ jobs:
     - name: NSTX-U Optical HEAT Calculation
       run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.0 /root/source/HEAT/source/runTerminalModeTestOptical
 
+    - name: NSTX-U Optical Elmer FEM HEAT Calculation
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.0 /root/source/HEAT/source/runTerminalModeTestOpticalElmer
+
+      
 #    - name: NSTX-U Gyro-orbit HEAT Calculation
 #      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.0 /root/source/HEAT/source/runTerminalModeTestGyro
 #

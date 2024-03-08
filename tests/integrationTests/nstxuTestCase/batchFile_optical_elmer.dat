@@ -84,5 +84,5 @@
 #
 MachFlag, Tag, Shot, TimeStep, GEQDSK, CAD, PFC, Input, Output
 #example for optical approximation temperature calculation (HF + T) using Elmer FEM
-nstx,opticalExampleElmer, 204118, 0.004, g204118.00004, testCaseIBDH_v3.0.0.step, PFCs.csv, NSTXU_input.csv, hfOpt:elmer
 nstx,opticalExampleElmer, 204118, 0.050, g204118.00050, testCaseIBDH_v3.0.0.step, PFCs.csv, NSTXU_input.csv, hfOpt:elmer
+nstx,opticalExampleElmer, 204118, 0.200, g204118.00200, testCaseIBDH_v3.0.0.step, PFCs.csv, NSTXU_input.csv, hfOpt:elmer
