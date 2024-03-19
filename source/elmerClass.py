@@ -121,7 +121,7 @@ class FEM:
 
         The elmerFile is a file that describes the Elmer FEM analysis to run.
         It defines which PFCs to run through the FEM solver, as well as the
-        Elmer FEM Solver Input Files (.SIF) for each PFC  The columns are:
+        Elmer FEM Solver Input Files (.SIF) for each PFC.  The columns are:
 
         :PFCname:  the name of the PFC to solve on.  Should match the CAD.
         :SIF:  the name of the .SIF file to use.  The SIF must be saved in 
@@ -130,7 +130,9 @@ class FEM:
           (.unv) format, then they may include the name of the file here.
           The meshFile must be saved in the Elmer Directory as declared in
           the HEAT input file.  If the user wants HEAT to create a FEM mesh,
-          then leave this field blank or write 'None'
+          then leave this field blank or write 'None'.  Keep in mind that if
+          HEAT creates the mesh file autonomously, then there will not be 
+          boundary groups used to constrain the model.
 
 
         """
