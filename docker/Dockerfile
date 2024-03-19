@@ -113,27 +113,31 @@ RUN git clone -b HEATv4.1 --single-branch https://github.com/ORNL-Fusion/MAFOT.g
 COPY buildMAFOT /root/source/mafot/buildMAFOT
 RUN /root/source/mafot/buildMAFOT
 
-#clone openfoam
-RUN git clone https://develop.openfoam.com/Development/openfoam.git /root/source/openfoam/OpenFOAM-v2312 && \
-    git clone https://develop.openfoam.com/Development/ThirdParty-common.git /root/source/openfoam/ThirdParty-v2312 && \
-    apt-get install -yqq mercurial && \
-    hg clone http://hg.code.sf.net/p/openfoam-extend/swak4Foam /root/source/openfoam/swak4Foam && \
-    mkdir /root/source/openfoam/OpenFOAM-v2312/applications/solvers/custom && \
-    cp -au /root/source/HEAT/source/heatFoam /root/source/openfoam/OpenFOAM-v2312/applications/solvers/custom/heatFoam
+#clone openfoam, third party libs, swak4foam
+ARG OFversion=2306
+RUN apt-get -yqq update && \
+    apt-get install -yqq python-is-python3 flex bison wget mercurial && \
+    wget -P /root/source/openfoam/ https://dl.openfoam.com/source/v${OFversion}/ThirdParty-v${OFversion}.tgz && \
+    wget -P /root/source/openfoam/ https://dl.openfoam.com/source/v${OFversion}/OpenFOAM-v${OFversion}.tgz && \
+    tar -xzf /root/source/openfoam/ThirdParty-v${OFversion}.tgz -C /root/source/openfoam/ && \
+    tar -xzf /root/source/openfoam/OpenFOAM-v${OFversion}.tgz -C /root/source/openfoam/ && \
+    mkdir -p /root/source/openfoam/swak4foam && \
+    hg clone http://hg.code.sf.net/p/openfoam-extend/swak4Foam /root/source/openfoam/swak4foam
 
 #build openfoam
 ENV SHELL /bin/bash
-ENV WM_THIRD_PARTY_DIR /root/source/openfoam/ThirdParty-v2312
-WORKDIR /root/source/openfoam/OpenFOAM-v2312
-RUN apt-get -yqq update && \
-    apt-get install -yqq python-is-python3 flex bison && \
-    source /root/source/openfoam/OpenFOAM-v2312/etc/bashrc && \
-#    foamSystemCheck && \
-#    foam 
+ENV WM_THIRD_PARTY_DIR /root/source/openfoam/ThirdParty-v${OFversion}
+WORKDIR /root/source/openfoam/OpenFOAM-v${OFversion}
+RUN mkdir -p /root/source/openfoam/OpenFOAM-v${OFversion}/applications/solvers/custom && \
+    cp -au /root/source/HEAT/source/heatFoam /root/source/openfoam/OpenFOAM-v${OFversion}/applications/solvers/custom/heatFoam && \
+    source /root/source/openfoam/OpenFOAM-v${OFversion}/etc/bashrc && \
     ./Allwmake -j -s -q -l 
-#    cd /root/source/openfoam/swak4Foam && \
-#    hg update develop && \
-#    ./Allwmake
+
+#build swak4foam
+WORKDIR /root/source/openfoam/swak4Foam
+RUN source /root/source/openfoam/OpenFOAM-v${OFversion}/etc/bashrc && \
+    hg update develop && \
+    ./AllwmakeAll
 
 
 
