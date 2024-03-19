@@ -1,0 +1,12 @@
+#!/bin/bash
+#builds M3DC1 Fusion-io libs inside the container
+echo "Building M3DC1 fusion-io..."
+#sets up environment and builds fusion-io libs
+export FIO_ROOT=/root/source/M3DC1/fusion-io
+export FIO_ARCH="ubuntu_x86"
+export FIO_INSTALL_DIR=/root/source/M3DC1/build
+export PYTHON=python3
+
+cd /root/source/M3DC1/fusion-io
+make
+make install
