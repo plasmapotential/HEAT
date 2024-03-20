@@ -121,8 +121,7 @@ RUN apt-get -yqq update && \
     wget -P /root/source/openfoam/ https://dl.openfoam.com/source/v${OFversion}/OpenFOAM-v${OFversion}.tgz && \
     tar -xzf /root/source/openfoam/ThirdParty-v${OFversion}.tgz -C /root/source/openfoam/ && \
     tar -xzf /root/source/openfoam/OpenFOAM-v${OFversion}.tgz -C /root/source/openfoam/ && \
-    mkdir -p /root/source/openfoam/swak4foam && \
-    hg clone http://hg.code.sf.net/p/openfoam-extend/swak4Foam /root/source/openfoam/swak4foam
+    mkdir -p /root/source/openfoam/swak4foam
 
 #build openfoam
 ENV SHELL /bin/bash
@@ -136,6 +135,7 @@ RUN mkdir -p /root/source/openfoam/OpenFOAM-v${OFversion}/applications/solvers/c
 #build swak4foam
 WORKDIR /root/source/openfoam/swak4Foam
 RUN source /root/source/openfoam/OpenFOAM-v${OFversion}/etc/bashrc && \
+    hg clone http://hg.code.sf.net/p/openfoam-extend/swak4Foam && \
     hg update develop && \
     ./AllwmakeAll
 
