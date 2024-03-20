@@ -27,7 +27,7 @@ def loadEnviron():
         runMode = 'local'
         os.environ["runMode"] = runMode
 
-    #default HEAT output directory
+    #default home directory
     try:
         homeDir = os.path.expanduser("~")
     except:
@@ -36,63 +36,24 @@ def loadEnviron():
         sys.exit()
 
     dataPath = homeDir + '/HEAT/data'
-    OFversion = 'v2112'
+    OFversion = os.environ['OFversion']
 
     #=== Set up paths and environment vars
-    ### appImage
-    if runMode == 'appImage':
-        print("Running in appImage mode")
-
-        ### USER ROOT HEATDIR
-        AppDir = os.environ["APPDIR"]
-        #Root HEAT source code directory
-        rootDir = AppDir + '/usr/src'
-
-        ### PARAVIEW
-        #Include the location of the paraview binaries
-        #Specifically we need the python libs and pvpython
-        PVPath = os.environ["PVPath"]
-        pvpythonCMD = os.environ["pvpythonCMD"]
-
-        ### OPENFOAM
-        #openFOAM bashrc location v1912
-        #OFbashrc = AppDir + '/usr/opt/openfoam/openfoam1912/etc/bashrc'
-        #OFdir = AppDir+'/usr/opt/openfoam/openfoam1912'
-        #openFOAM bashrc location v2106
-        OFbashrc = AppDir + '/opt/openfoam/etc/bashrc'
-        OFdir = AppDir+'/opt/openfoam'
-        #python site packages where PyFoam resides
-        pyFoamPath = AppDir + '/lib/python3.8/site-packages'
-
-        ### FREECAD
-        #default freecad path
-        #FreeCADPath = AppDir + '/opt/freecad/squashfs-root/usr/lib'
-        FreeCADPath = AppDir + '/usr/lib/freecad-python3/lib'
-        FreeCADFEMPath = AppDir + '/lib/freecad/Mod/Fem'
-
-        ### ORNL EFIT MODULE
-        #default source code location (EFIT class should be here)
-        EFITPath = AppDir + '/usr/src'
-
-        ### Open3D
-        O3Dpath = AppDir + '/usr/lib/open3d/lib/python_package/open3d'
-
-
-        ###  Docker container
-    elif runMode == 'docker':
+    ###  Docker container
+    if runMode == 'docker':
         print("Running in Docker mode")
 
         ### USER ROOT HEATDIR
         #Root HEAT source code directory
         rootDir = homeDir + '/source/HEAT/source'
-        #default AppDir for when running in docker mode
-        AppDir = os.environ["APPDIR"]
 
         ### PARAVIEW
-        #Include the location of the paraview binaries.
+        #Include the location of the paraview binaries if we 
         #Specifically we need the python libs and pvpython
-        PVPath = homeDir + '/lib/python3.8/site-packages'
-        pvpythonCMD = homeDir + '/opt/paraview/bin/pvpython'
+        #PVPath = homeDir + '/lib/python3.8/site-packages'
+        #pvpythonCMD = homeDir + '/opt/paraview/bin/pvpython'
+        PVPath = '/usr/lib/python3/dist-packages'
+        pvpythonCMD = '/bin/pvpython'
 
         ### FREECAD
         #docker ubuntu repo freecad path
@@ -105,22 +66,14 @@ def loadEnviron():
         EFITPath = homeDir + '/source'
 
         ### OPENFOAM
-        #default openFOAM source path v1912
-        #OFbashrc = '/opt/openfoam/openfoam-OpenFOAM-v1912/etc/bashrc'
-        #default openFOAM source path v2106
-        OFbashrc = AppDir + '/opt/openfoam/etc/bashrc'
+        #default openFOAM source path
+        OFbashrc = homeDir + '/builds/openfoam/etc/bashrc'
         #python site packages where PyFoam resides
-        pyFoamPath = homeDir + '/.local/lib/python3.8/site-packages'
-        #pyFoam python scripts
-        pyFoamPath = '/'
+        pyFoamPath = '/usr/local/lib/python3.10/dist-packages'
 
-        ### Open3D
-        O3Dpath = AppDir + '/opt/open3d/lib/python_package'
+        #open3d is now installed via package manager
+        O3Dpath = None
 
-        #ENV VARS
-        #create necessary environment variables when outside appImage
-        os.environ["PVPath"] = PVPath
-        os.environ["pvpythonCMD"] = pvpythonCMD
 
         #local development mode
     else:
@@ -166,17 +119,13 @@ def loadEnviron():
         ### Open3D
         O3Dpath = '/opt/open3d/Open3D/build/lib/python_package/open3d'
 
-        #ENV VARS
-        #default AppDir for when running in dev mode
-        AppDir = 'not in appImage mode'
-        #create necessary environment variables when outside appImage
-        os.environ["PVPath"] = PVPath
-        os.environ["pvpythonCMD"] = pvpythonCMD
+
 
     #default logfile location
     logFile = dataPath + '/HEATlog.txt'
 
     #Now set the relevant environment variables
+    os.environ["homeDir"] = homeDir
     os.environ["logFile"] = logFile
     os.environ["rootDir"] = rootDir
     os.environ["dataPath"] = dataPath
@@ -184,6 +133,8 @@ def loadEnviron():
     os.environ["FreeCADPath"] = FreeCADPath
     os.environ["HEATchmod"] = '0o774' #chmod in base 8 (octal)
     os.environ["WM_PROJECT_VERSION"] = OFversion
+    os.environ["PVPath"] = PVPath
+    os.environ["pvpythonCMD"] = pvpythonCMD
 
     #clear uname mask for docker saving
     os.umask(0)
@@ -206,7 +157,8 @@ def loadEnviron():
     oldEnv = os.environ["PATH"]
     #os.environ["PATH"] = oldEnv + ':' + pvpythonCMD
     #append Open3D to python path
-    sys.path.append(O3Dpath)
+    if O3Dpath is not None:
+        sys.path.append(O3Dpath)
     #===============================================================================
 
     #Create dataPath

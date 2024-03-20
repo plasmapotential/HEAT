@@ -3686,6 +3686,7 @@ class engineObj():
 
         print("Loaded OF data")
         log.info("Loaded OF data")
+
         return
 
     def runOpenFOAM(self):
@@ -3949,32 +3950,6 @@ class engineObj():
             self.OF.xMid = (ctrs[0,0] - smallStep*norms[0,0])*1000.0
             self.OF.yMid = (ctrs[0,1] - smallStep*norms[0,1])*1000.0
             self.OF.zMid = (ctrs[0,2] - smallStep*norms[0,2])*1000.0
-
-#            #setup openfoam environment
-#            try:
-#                AppImage = os.environ["APPIMAGE"]
-#                AppDir = os.environ["APPDIR"]
-#                inAppImage = True
-#            except:
-#                inAppImage = False
-#                AppDir = ''
-#            if inAppImage == True:
-#                print("Setting up OF apppImage environment")
-#                log.info("Setting up OF apppImage environment")
-#                OFplatformDir = AppDir + '/usr/share/openfoam/platforms/linux64GccDPInt32pt'
-#                OFbinDir = OFplatformDir + '/bin'
-#                OFlibDir = OFplatformDir + '/lib'
-#                #make openfoam platform directory
-#                tools.makeDir(OFplatformDir, clobberFlag=False, mode=self.chmod, self.UID,self.GID)
-#                #symlink AppDir/usr/bin to openfoam bin (same for lib)
-#                try:
-#                    os.symlink('/usr/bin', OFbinDir)
-#                    os.symlink('/usr/lib', OFlibDir)
-#                except:
-#                    print("could not link openfoam libs and bins")
-#                    log.info("could not link openfoam libs and bins")
-
-
 
             #dynamically write template variables to templateVarFile
             print("Building openFOAM templates and shell scripts")

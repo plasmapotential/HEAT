@@ -79,30 +79,6 @@ class OpenFOAM():
     def setTypes(self):
         """
         Set variable types for the stuff that isnt a string from the input file
-
-        Template Variables:
-        xMin            minimum X coordinate for blockMesh box
-        xMax            maximum X coordinate for blockMesh box
-        yMin            minimum Y coordinate for blockMesh box
-        yMax            maximum Y coordinate for blockMesh box
-        zMin            minimum Z coordinate for blockMesh box
-        zMax            maximum Z coordinate for blockMesh box
-        OFtMin          minimum timestep for controlDict
-        OFtMax          maximum timestep for controlDict
-        deltaT        solution time resolution for controlDict
-        writeDeltaT   write time resolution for controlDict
-        xProbe          x coordinate for temperature probe for postProcess
-        yProbe          y coordinate for temperature probe for postProcess
-        zProbe          z coordinate for temperature probe for postProcess
-        STLfileName     STL file name for use with snappyHexMesh
-        STLlayerName    STL layer name for snappyHexMesh
-        STLscale      scale for unit conversion (1.0 = keep STL units)
-        meshMinLevel  minimum level for snappyHexMesh refinement
-        meshMaxLevel  maximum level for snappyHexMesh refinement
-        xMid            x coordinate in center of tile of interest for snappyHexMesh
-        yMid            x coordinate in center of tile of interest for snappyHexMesh
-        zMid            x coordinate in center of tile of interest for snappyHexMesh
-        OFbashrc        location of OpenFOAM installation bashrc file
         """
         integers = [
                     'meshMinLevel',
@@ -138,27 +114,26 @@ class OpenFOAM():
         """
         build heatFoam if we are in appImage mode.  This is useful if you
         including the binary heatFoam + libs doesn't work when constructing
-        the appImage.  This function compiles heatFoam inside the appImage.
+        the appImage.  This function compiles heatFoam inside the container.
         """
         try:
-            AppImage = os.environ["APPIMAGE"]
-            inAppImage = True
-            print("Compiling heatFoam solver for openFOAM inside appImage")
-            log.info("Compiling heatFoam solver for openFOAM inside appImage")
+            print("Compiling heatFoam solver for openFOAM inside container")
+            log.info("Compiling heatFoam solver for openFOAM inside container")
             #Copy the current environment
             current_env = os.environ.copy()
             #run blockMesh, snappyHexMesh, topoSet, createPatch
-            AppDir = os.environ["APPDIR"]
-            heatFoamDir = AppDir+'/usr/lib/openfoam/openfoam1912/applications/solvers/custom/heatFoam'
-            buildFile = heatFoamDir + '/buildHEATinAppImage'
+            homeDir = os.environ["homeDir"]
+            OFversion = os.environ["OFversion"]
+            heatFoamDir = homeDir+'/source/openfoam/OpenFOAM-v'+OFversion+'/applications/solvers/custom/heatFoam'
+            buildFile = heatFoamDir + '/buildHEATfoam'
             with open(buildFile, 'w') as f:
                 f.write('#!/bin/bash\n')
                 f.write(self.cmdSourceOF + '\n')
                 f.write('wclean\n')
                 f.write('wmake\n')
             subprocess.run([buildFile], env=current_env, cwd=heatFoamDir)
-            print("Compiled heatFoam inside appImage")
-            log.info("Compiled heatFoam inside appImage")
+            print("Compiled heatFoam")
+            log.info("Compiled heatFoam")
         except:
             print("Did not build heatFoam")
             log.info("Did not build heatFoam")
@@ -264,24 +239,7 @@ class OpenFOAM():
 
         """
         #check if we are in appImage mode to get correct bash location
-
-        try:
-            runMode = os.environ["runMode"]
-            if runMode == 'appImage':
-                shebang = '#!' + os.environ["APPDIR"] + '/bin/bash'
-                AppDir = os.environ["APPDIR"]
-                inAppImage = True
-            elif runMode == 'docker':
-                shebang = '#!/bin/bash'
-                AppDir = os.environ["APPDIR"]
-                inAppImage = False
-            else:
-                shebang = '#!/bin/bash'
-                inAppImage = False
-        except:
-            inAppImage = False
-            shebang = '#!/bin/bash'
-            AppDir = ''
+        shebang = '#!/bin/bash'
 
         #get part directory
         if self.partDir[-1] != '/':
@@ -295,35 +253,12 @@ class OpenFOAM():
         #    self.NCPU = psutil.cpu_count(logical=True) - 1
 
 
-#        #write openfoam sourcing script to generate environment variables
-#        #basically replaces the default OF bashrc if in appimage
-#        sourceFile = self.partDir + 'sourceOF'
-#        with open(sourceFile, 'w') as f:
-#            f.write(shebang + '\n')
-#            if inAppImage == True:
-#                f.write('export WM_PROJECT=OpenFOAM\n')
-#                f.write('export WM_PROJECT_VERSION=v1912\n')
-#                f.write('export WM_COMPILER_TYPE=system\n')
-#                f.write('export WM_COMPILER=Gcc\n')
-#                f.write('export WM_PRECISION_OPTION=DP\n')
-#                f.write('export WM_LABEL_SIZE=32\n')
-#                f.write('export WM_COMPILE_OPTION=Opt\n')
-#                f.write('export WM_MPLIB=SYSTEMOPENMPI\n')
-#                f.write('export WM_PROJECT_DIR='+AppDir+'/usr/lib/openfoam/openfoam1912\n')
-#                f.write('source $WM_PROJECT_DIR/etc/config.sh/setup')
-#
-#            else:
-#                f.write(self.cmdSourceOF + '\n')
-#
-#        os.chmod(sourceFile, self.chmod)
-
         #Write 3D meshing script
         file = self.partDir + self.cmd3Dmesh
         with open(file, 'w') as f:
             f.write(shebang + '\n')
-            #source OF bashrc if in dev mode (already sourced in appImage)
-            if inAppImage == False:
-                f.write(self.cmdSourceOF + '\n')
+            #source OF bashrc
+            f.write(self.cmdSourceOF + '\n')
 
             #for tricky meshes, extract features
             #f.write('surfaceFeatureExtract | tee -a ' + logFile + '\n')
@@ -351,9 +286,8 @@ class OpenFOAM():
         foamFile = self.partDir + '*.foam'
         with open(file, 'w') as f:
             f.write(shebang + '\n')
-            #source OF bashrc if in dev mode (already sourced in appImage)
-            if inAppImage == False:
-                f.write(self.cmdSourceOF + '\n')
+            #source OF bashrc
+            f.write(self.cmdSourceOF + '\n')
             f.write('topoSet | tee -a '+logFile+ '\n')
             f.write('createPatch -overwrite | tee -a '+logFile+ '\n')
             f.write('heatFoam | tee -a '+logFile+ '\n')
@@ -368,9 +302,8 @@ class OpenFOAM():
         file = self.partDir + self.cmdTprobe
         with open(file, 'w') as f:
             f.write(shebang + '\n')
-            #source OF bashrc if in dev mode (already sourced in appImage)
-            if inAppImage == False:
-                f.write(self.cmdSourceOF + '\n')
+            #source OF bashrc
+            f.write(self.cmdSourceOF + '\n')
             f.write('topoSet | tee -a '+logFile+ '\n')
             f.write('createPatch -overwrite | tee -a '+logFile+ '\n')
             f.write('postProcess -func "probes" | tee -a '+logFile+ '\n')
@@ -430,18 +363,12 @@ class OpenFOAM():
         """
         #Copy the current environment
         current_env = os.environ.copy()
-        #point to correct path for bash (varies depending upon runMode)
-        try:
-            runMode = os.environ["runMode"]
-            if runMode == 'appImage':
-                appDir = os.environ["APPDIR"]
-                bashExec = appDir+'/bin/bash'
-            else:
-                bashExec = '/bin/bash'
-        except:
-            bashExec = '/bin/bash'
+        #point to correct path for bash
+        bashExec = '/bin/bash'
         #run blockMesh, snappyHexMesh
         meshCMD = self.partDir+self.cmd3Dmesh
+        print(self.cmd3Dmesh)
+        print()
         try:
             p = subprocess.run([meshCMD], env=current_env, cwd=self.partDir, shell=True, executable=bashExec)
             retcode = p.returncode
@@ -478,16 +405,8 @@ class OpenFOAM():
         log.info('See HEAT LogFile Tab for Status')
         #Copy the current environment
         current_env = os.environ.copy()
-        #point to correct path for bash (varies depending upon runMode)
-        try:
-            runMode = os.environ["runMode"]
-            if runMode == 'appImage':
-                appDir = os.environ["APPDIR"]
-                bashExec = appDir+'/bin/bash'
-            else:
-                bashExec = '/bin/bash'
-        except:
-            bashExec = '/bin/bash'
+        #point to correct path for bash
+        bashExec = '/bin/bash'
 
         #run topoSet, createPatch, heatFoam, paraFoam -touchAll
         thermalCMD = self.partDir+self.cmdThermal
@@ -520,15 +439,6 @@ class OpenFOAM():
         from subprocess import run
         #Copy the current environment
         current_env = os.environ.copy()
-        if os.environ.get('APPDIR') is not None:
-            appDir = os.environ["APPDIR"]
-        else:
-            appDir = ''
-
-        try:
-            runMode = os.environ["runMode"]
-        except:
-            runMode = 'local'
 
         #write probe file to partDir
         file = partDir+'system/probes'
@@ -541,11 +451,7 @@ class OpenFOAM():
         #run topoSet, createPatch, postProcess -func "probes"
         TprobeCMD = partDir+self.cmdTprobe
         try:
-            if runMode == 'docker':
-                p = run([TprobeCMD], env=current_env, cwd=self.partDir, shell=True, executable='/bin/bash')
-            else:
-                p = run([TprobeCMD], env=current_env, cwd=self.partDir, shell=True, executable=appDir+'/bin/bash')
-
+            p = run([TprobeCMD], env=current_env, cwd=self.partDir, shell=True, executable='/bin/bash')
             retcode = p.returncode
             if retcode < 0:
                 print("thermal probe child was terminated by signal", -retcode, file=sys.stderr)

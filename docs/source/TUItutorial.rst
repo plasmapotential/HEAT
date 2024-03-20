@@ -18,3 +18,15 @@ the test case:
         <div style="position: relative; padding-bottom: 2%; height: 0; overflow: hidden; max-width: 100%; height: auto;">
             <iframe width="560" height="315" src="https://www.youtube.com/embed/VMBBddutibo" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
         </div>
+
+Running a filament heat flux simulation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TO BE COMPLETED
+
+Running an Elmer FEM simulation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TO BE COMPLETED
+
+Running a 3D Plasma heat flux simulation using M3DC1
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TO BE COMPLETED

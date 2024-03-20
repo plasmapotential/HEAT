@@ -2,19 +2,31 @@ name: CI
 
 on:
   push:
-    branches: [ elmer ]
+    branches: [ main ]
   pull_request:
-    branches: [ elmer ]
+    branches: [ main ]
 
 jobs:
-  test:
+  check-final-image:
     runs-on: ubuntu-latest
+    steps:
+    - name: Check if final Docker image exists on Docker Hub
+      id: check-final-image
+      run: |
+        if docker pull plasmapotential/heat:v4.1; then
+          echo "Image exists on Docker Hub."
+        else
+          echo "::error ::Final HEAT Docker image v4.1 does not exist."
+          exit 1 
 
+  test:
+    needs: check-final-image
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
 
     - name: Pull Docker image
-      run: docker pull plasmapotential/heat:v4.0
+      run: docker pull plasmapotential/heat:v4.1
 
     - name: Run simple CI configuration test 
       run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.0 python3 /root/source/HEAT/tests/integrationTests/ciTest.py

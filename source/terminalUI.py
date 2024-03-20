@@ -27,14 +27,8 @@ try:
     dataPath = os.environ["dataPath"]
     OFbashrc = os.environ["OFbashrc"]
     FreeCADPath = os.environ["FreeCADPath"]
-    PVPath = os.environ["PVPath"]
-    pvpythonCMD = os.environ["pvpythonCMD"]
 except:
     print("Could not properly set up environment.  Proceed with caution!")
-try:
-    AppDir = os.environ["APPDIR"]
-except:
-    AppDir = 'Not in appImage'
 
 try:
     chmod = int(os.environ["HEATchmod"], 8) #convert from base 8
