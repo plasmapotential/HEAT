@@ -137,9 +137,6 @@ def loadEnviron():
     os.environ["PVPath"] = PVPath
     os.environ["pvpythonCMD"] = pvpythonCMD
 
-    #clear old logfile
-    Path(logFile).touch()
-
     #clear uname mask for docker saving
     os.umask(0)
 
