@@ -27,6 +27,7 @@ import Mesh
 import MeshPart
 #sys.path = oldpath
 import Import
+import Fem
 import stl
 
 
@@ -41,6 +42,7 @@ import logging
 log = logging.getLogger(__name__)
 
 import open3d as o3d
+
 
 
 class CAD:
@@ -776,7 +778,8 @@ class CAD:
                 areas.append(self.faceAreas(mesh))
                 if bndybox:
                     print('Part:',self.intersectParts[k].Label)
-                    self.minmaxExtent(x,y,z)
+                    if len(x) > 0:
+                        self.minmaxExtent(x,y,z)
         return norms,centers,areas
 
 
@@ -1489,3 +1492,107 @@ class CAD:
         colors[:] = color
         ls.colors = o3d.utility.Vector3dVector(colors)
         return ls
+    
+    def createFEMmeshNetgen(self, obj, MaxSize=1000, Fineness="Moderate",
+                          Optimize = True, SecondOrder=True, name='FEMMeshNetgen'):
+        """
+        Creates a FEM mesh object using the netgen mesher.  User specifies
+        the size and fineness of the mesh.  Uses freecad api to netgen
+
+        Some of the functionality in this function may not work depending on the 
+        freecad version.  older versions do not have netgen module.
+        also requires an environment with netgen installed (from apt repo)
+
+        """
+        print("Generating Mesh Obj")
+        doc = self.CADdoc
+        mesh = doc.addObject('Fem::FemMeshShapeNetgenObject', name)
+        mesh.Shape = obj
+        mesh.MaxSize = MaxSize
+        mesh.Fineness = Fineness
+        mesh.Optimize = Optimize
+        mesh.SecondOrder = SecondOrder
+        doc.recompute()
+        
+        if hasattr(self, 'FEMmeshes'):
+            if self.FEMmeshes is None:
+                self.FEMmeshes = [mesh]
+            else:
+                self.FEMmeshes.append(mesh)
+        else:
+            self.FEMmeshes = [mesh]
+        return mesh
+
+
+    def createFEMmeshGmsh(self, obj, minLength=0, maxLength=0, name='FEMMeshGmsh'):
+        """
+        Creates a FEM mesh object using the Gmsh mesher.  User specifies
+        the minimum / maximum length of the mesh elements, which defaults 
+        to 0 (auto).  Uses freecad api to gmsh
+
+        Some of the functionality in this function may not work depending on the 
+        freecad version.  older versions do not have ObjectsFem module.
+        also requires an environment with gmsh installed (from apt repo)
+        """
+        import ObjectsFem
+        print("Generating Mesh Obj")
+        doc = self.CADdoc
+        mesh = ObjectsFem.makeMeshGmsh(doc, name + "_Mesh")
+        mesh.Label = name
+        mesh.Part = obj
+        #mesh.ElementDimension = "From Shape"
+        mesh.CharacteristicLengthMin = minLength
+        mesh.CharacteristicLengthMax = maxLength
+        #mesh.SecondOrderLinear = True
+        #mesh.ElementOrder = 2  # Set to 2 for second order elements   
+
+        #optimizations that prevent degenerate mesh elements
+        mesh.MeshSizeFromCurvature = 12
+        mesh.Recombine3DAll = True
+        mesh.RecombinationAlgorithm = "Simple"
+        mesh.OptimizeNetgen = True
+        doc.recompute()
+
+        from femmesh.gmshtools import GmshTools as gt
+        gmsh_mesh = gt(mesh)
+
+        error = None
+        try:
+            error = gmsh_mesh.create_mesh()
+        except:
+            print("Could not create 3D mesh...")
+            print(error)
+            print("Do you have the python-is-python3 package installed?")
+            log.info("Could not create 3D mesh...")
+            log.info(error)
+            log.info("Do you have the python-is-python3 package installed?")
+        
+        if hasattr(self, 'FEMmeshes'):
+            if self.FEMmeshes is None:
+                self.FEMmeshes = [mesh]
+            else:
+                self.FEMmeshes.append(mesh)
+        else:
+            self.FEMmeshes = [mesh]
+
+        return mesh
+    
+    def importFEMmesh(self, file):
+        """
+        imports FEM mesh and returns FEM mesh object
+        """
+        print(file)
+        mesh = Fem.open(file)
+        self.CADdoc = FreeCAD.ActiveDocument
+        self.FEMmeshes = self.CADdoc.Objects
+        return
+
+    def exportFEMmesh(self, mesh, file):
+        """
+        exports FEM mesh
+        """
+        print(file)
+        if type(mesh) != 'list':
+            mesh = [mesh]
+        Fem.export(mesh, file)
+        return

@@ -1,0 +1,101 @@
+Header
+  CHECK KEYWORDS Warn
+  Mesh DB "." "." 
+  Include Path ""
+  Results Directory ""
+End
+
+Simulation
+  Max Output Level = 5
+  Coordinate System = Cartesian
+  Coordinate Mapping(3) = 1 2 3
+  coordinate scaling = 0.001
+  Simulation Type = Transient
+  Steady State Max Iterations = 1
+  Output Intervals(1) = 1
+  Timestep intervals(1) = 5
+  Timestep Sizes(1) = 0.05
+  Timestepping Method = BDF
+  BDF Order = 1
+  Solver Input File = caseTemp.sif
+  Post File = case.vtu
+End
+
+Constants
+  Gravity(4) = 0 -1 0 9.82
+  Stefan Boltzmann = 5.670374419e-08
+  Permittivity of Vacuum = 8.85418781e-12
+  Permeability of Vacuum = 1.25663706e-6
+  Boltzmann Constant = 1.380649e-23
+  Unit Charge = 1.6021766e-19
+End
+
+Body 1
+  Target Bodies(1) = 1
+  Name = "Body Property 1"
+  Equation = 1
+  Material = 1
+  Body Force = 1
+  Initial condition = 1
+End
+
+Solver 1
+  Equation = Heat Equation
+  Variable = Temperature
+  Procedure = "HeatSolve" "HeatSolver"
+  Exec Solver = Always
+  Stabilize = True
+  Optimize Bandwidth = True
+  Steady State Convergence Tolerance = 1.0e-3
+  Nonlinear System Convergence Tolerance = 1.0e-3
+  Nonlinear System Max Iterations = 10
+  Nonlinear System Newton After Iterations = 3
+  Nonlinear System Newton After Tolerance = 1.0e-3
+  Nonlinear System Relaxation Factor = 1
+  Linear System Solver = Direct
+  Linear System Direct Method = MUMPS
+End
+
+
+Solver 2
+  Equation = "save bc params"
+  Procedure = "SaveData" "SaveBoundaryValues"
+  Parameter 1 = String Heat Flux
+End
+
+
+Equation 1
+  Name = "Equation 1"
+  Active Solvers(2) = 1 2
+End
+
+Material 1
+  Name = "Steel (alloy - generic)"
+  Heat Capacity = 976.0
+  Density = 7850.0
+  Heat expansion Coefficient = 12.0e-6
+  Sound speed = 5100.0
+  Poisson ratio = 0.285
+  Heat Conductivity = 37.2
+  Youngs modulus = 200.0e9
+End
+
+Body Force 1
+  Name = "BodyForce 1"
+  Heat Source = 0.0
+End
+
+Initial Condition 1
+  Name = "InitialCondition 1"
+  Temperature = 20.0
+End
+
+Boundary Condition 1
+  Boundary Type = String "Heat Flux"
+  Target Boundaries(1) = 1
+  Name = "HFreader"
+  Heat Flux = Variable Time
+    Real Procedure "HEATLibrary" "heatfluxonnodes"
+  nodalHFprefix = String nodehf
+End
+

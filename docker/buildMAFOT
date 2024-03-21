@@ -1,0 +1,15 @@
+#!/bin/bash
+#builds MAFOT inside the container
+echo "Building Blitz..."
+cd ./source/MAFOT/blitz++
+tar -xvzf blitz-0.9_cstdlibPatched.tar.gz
+cd blitz-0.9
+./configure 
+make lib
+make install
+cd /root/source/MAFOT
+rm make.inc
+ln -s install/make.inc.HEAT make.inc
+ls /
+echo "Building MAFOT..."
+make heat

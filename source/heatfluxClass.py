@@ -763,8 +763,8 @@ class heatFlux:
         # transform hf width into flux space
         lqCN_hat = lqCN*xfm
         lqCF_hat = lqCF*xfm
-
-
+        print("Avg. lqCN_hat: {:f}".format(np.average(lqCN_hat)))
+        print("Avg. lqCF_hat: {:f}".format(np.average(lqCF_hat)))
         #Calculate flux at midplane using gfile
         psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
         psi = psiN*(psiedge - psiaxis) + psiaxis
@@ -1070,6 +1070,11 @@ class heatFlux:
         #q_div[use] = q[use] * B_div[use] * PFC.bdotn[use]
         #Reinke's method (also see integral in scaling coeffs)
         q_div[use] = q[use] * B_div[use]/B_omp * PFC.bdotn[use]
+
+        #set mesh sliver artifacts to 0 flux so they dont skew the distribution
+        #sizeThresh = 1e-6
+        #tooSmall = np.where(PFC.areas[use] < sizeThresh)[0]
+        #q_div[tooSmall] = 0.0
 
         #for i in range(len(q_div)):
         #	if q_div[i] > 8.0: q_div[i] = 0.0

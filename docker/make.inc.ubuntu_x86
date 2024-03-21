@@ -1,0 +1,21 @@
+CC = mpicc
+CXX = mpic++
+CFLAGS = -Wall -fPIC
+
+F90 = mpif90
+F90FLAGS = -Wall -fdefault-real-8 -fimplicit-none -fPIC
+
+PYTHON = python3
+
+ARCH = ar cr
+
+LDD = $(CXX) -shared
+LD = $(CXX)
+LDFLAGS = -fPIC
+
+INCLUDE = -I/usr/local/include -I/lib/x86_64-linux-gnu/hdf5/serial/include
+
+LIBS = -L/lib/x86_64-linux-gnu -lgfortran -L/lib/x86_64-linux-gnu -lnetcdf -lstdc++
+
+HDF5_LIBS = -L/lib/x86_64-linux-gnu/hdf5/serial -lhdf5 
+LAPACK = -llapack
