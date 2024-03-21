@@ -18,6 +18,7 @@ jobs:
         else
           echo "::error ::Final HEAT Docker image v4.1 does not exist."
           exit 1 
+        fi
 
   test:
     needs: check-final-image
