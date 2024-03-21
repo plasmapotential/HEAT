@@ -25,6 +25,5 @@ mpi4py
 gmsh
 scikit-image
 open3d
-python-is-python3
 
 
