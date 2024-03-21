@@ -179,8 +179,8 @@ RUN ln -s /usr/lib/x86_64-linux-gnu/libunwind.so /usr/lib/x86_64-linux-gnu/libun
 #clone EFIT
 RUN git clone https://github.com/ORNL-Fusion/EFIT.git /root/source/EFIT
 
-#clone HEAT
-RUN git clone https://github.com/plasmapotential/HEAT.git /root/source/HEAT
+#clone HEAT (note v4.1 branch can be changed)
+RUN git clone -b HEATv4.1 https://github.com/plasmapotential/HEAT.git /root/source/HEAT
 
 # fetch HEAT specific python dependencies
 RUN python3 -m pip install --upgrade pip && \
