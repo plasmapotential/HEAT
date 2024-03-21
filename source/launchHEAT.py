@@ -15,7 +15,8 @@ import os
 import sys
 import subprocess
 import argparse
-
+import logging
+from pathlib import Path
 
 def loadEnviron():
     """
@@ -136,6 +137,9 @@ def loadEnviron():
     os.environ["PVPath"] = PVPath
     os.environ["pvpythonCMD"] = pvpythonCMD
 
+    #clear old logfile
+    Path(logFile).touch()
+
     #clear uname mask for docker saving
     os.umask(0)
 
@@ -166,19 +170,6 @@ def loadEnviron():
         os.makedirs(dataPath)
     return
 
-def getLogger():
-    """
-    starts logFile logging
-    """
-    logFile = os.environ["logFile"]
-    from pathlib import Path
-    Path(logFile).touch()
-    import logging
-    logFlask = logging.getLogger('werkzeug')
-    logFlask.disabled = True
-    logging.basicConfig(filename=logFile, filemode="w", level=logging.INFO, format='%(message)s')
-    log = logging.getLogger(__name__)
-    return log
 
 #=======HEAT Launch Point=======================================================
 def launchHEAT(args):
@@ -195,6 +186,7 @@ def launchHEAT(args):
 
     #run HEAT in terminal mode
     if mode=='t':
+        log = logging.getLogger(__name__)
         print('\nRunning HEAT via Terminal User Interface (TUI)...\n')
         log.info('\nRunning HEAT via Terminal User Interface (TUI)...\n')
         import terminalUI
@@ -269,7 +261,8 @@ if __name__ == '__main__':
     loadEnviron()
 
     #initialize logs
-    log = getLogger()
+    from logConfig import setup_logging
+    setup_logging()
 
     #launch HEAT
     launchHEAT(args)
