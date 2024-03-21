@@ -132,6 +132,9 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 #dockerhub using the following command (need to comment out first stage too):
 #FROM plasmapotential/HEATbuilder:<tag> as HEATbuilder
 
+# Use ARG to introduce a cache buster variable.  change to not recycle cache
+ARG CACHEBUSTER=unknown
+
 FROM ubuntu:22.04
 LABEL maintainer="tlooby@cfs.energy"
 ARG DEBIAN_FRONTEND=noninteractive
@@ -180,7 +183,8 @@ RUN ln -s /usr/lib/x86_64-linux-gnu/libunwind.so /usr/lib/x86_64-linux-gnu/libun
 RUN git clone https://github.com/ORNL-Fusion/EFIT.git /root/source/EFIT
 
 #clone HEAT (note v4.1 branch can be changed)
-RUN git clone -b v4.1 https://github.com/plasmapotential/HEAT.git /root/source/HEAT
+RUN echo "Cache buster: ${CACHEBUSTER}" && \
+    git clone -b v4.1 https://github.com/plasmapotential/HEAT.git /root/source/HEAT
 
 # fetch HEAT specific python dependencies
 RUN python3 -m pip install --upgrade pip && \
