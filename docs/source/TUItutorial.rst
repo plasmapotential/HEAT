@@ -10,18 +10,18 @@ Start docker container in terminal mode
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 To run HEAT in terminal mode, the user needs to launch a bash shell inside the
 docker container.  In order to ensure that the docker container maps the correct
-user id and group id into the container, the `runDockerCompose` script is used.
+user id and group id into the container, the ``runDockerCompose`` script is used.
 This script assigns the user id (UID) and group id (GID) from the host machine
 into environment variables in the container, then launches the docker container.  
 
-To run HEAT in terminal mode, ensure the last line of `runDockerCompose` reads 
-`docker-compose run HEAT /bin/bash`.  This command uses the docker-compose.yml
+To run HEAT in terminal mode, ensure the last line of ``runDockerCompose`` reads 
+``docker-compose run HEAT /bin/bash``.  This command uses the docker-compose.yml
 and launches a bash shell inside the container.
 
 Mapping host directories into the container
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 One benefit of docker is that you can bind mount directories from your host
-machine directly into the container.  This is achieved by editing the `volumes`
+machine directly into the container.  This is achieved by editing the ``volumes``
 section in the docker-compose.yml file.  The steps are as follows
 
   1) Navigate to the HEAT source code docker directory, <sourcePath>/docker
@@ -56,7 +56,7 @@ HEAT ships with a series of test cases.  These test cases are used by HEAT
 developers as integration tests, but also can be used for validating a HEAT
 install or getting familiar with running the code in terminal mode.  All the 
 HEAT integration tests live at this location in the container: 
-`/root/source/HEAT/tests/integrationTests`.  After launching a bash terminal
+``/root/source/HEAT/tests/integrationTests``.  After launching a bash terminal
 in the container (see section above), navigate to the HEAT source directory, 
 and run a provided bash script that launches the optical heat flux test case
 
@@ -107,8 +107,8 @@ docker-compose.yaml file:
     #      # Batch mode directory
           - <path/to/HEATrun/on/host/machine>:/root/terminal
 
-This will bind the `<path/to/HEATrun/on/host/machine>` path on the host machine to
-the `/root/terminal` path inside the container.  After launching a bash shell in the 
+This` will bind the ``<path/to/HEATrun/on/host/machine>`` path on the host machine to
+the ``/root/terminal`` path inside the container.  After launching a bash shell in the 
 container (see section above for instructions) the user can navigate to the HEAT case 
 inside the container:
 
@@ -125,7 +125,7 @@ to the HEAT source directory and runs HEAT:
     cd /root/source/HEAT/source
     ./runTerminalMode
 
-This will launch HEAT and run the HEAT case bind mounted at `/root/terminal`.
+This will launch HEAT and run the HEAT case bind mounted at ``/root/terminal``.
 
 
 Running a filament heat flux simulation
