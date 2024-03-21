@@ -3,7 +3,7 @@ Installation
 
 To run HEAT you will need to install the HEAT docker container from dockerhub.
 
-The link below explains how to install the HEAT docker container and get HEAT up and running.
+The links below explain how to install the HEAT docker container and get HEAT up and running.
 
 .. toctree::
    :maxdepth: 0
