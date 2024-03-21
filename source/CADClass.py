@@ -1543,6 +1543,7 @@ class CAD:
         #mesh.ElementDimension = "From Shape"
         mesh.CharacteristicLengthMin = minLength
         mesh.CharacteristicLengthMax = maxLength
+        #mesh.SecondOrderLinear = True
         #mesh.ElementOrder = 2  # Set to 2 for second order elements   
 
         #optimizations that prevent degenerate mesh elements
@@ -1555,6 +1556,7 @@ class CAD:
         from femmesh.gmshtools import GmshTools as gt
         gmsh_mesh = gt(mesh)
 
+        error = None
         try:
             error = gmsh_mesh.create_mesh()
         except:

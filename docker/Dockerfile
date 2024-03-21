@@ -165,7 +165,7 @@ RUN apt-get -yqq install software-properties-common && \
 RUN apt-get -yqq update && \
     apt-add-repository ppa:elmer-csc-ubuntu/elmer-csc-ppa && \
     apt-get update && \
-    apt-get install -yqq elmerfem-csc libglu1 libscotch-dev libptscotch-dev
+    apt-get install -yqq elmerfem-csc libglu1 libscotch-dev libptscotch-dev python-is-python3
 
 #RUN apt-get -yqq libnglib-6.2 
 RUN apt-get -yqq install coreutils libcurl4 libunwind-dev nano git gfortran iputils-ping iproute2 htop

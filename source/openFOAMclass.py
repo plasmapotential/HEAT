@@ -401,8 +401,8 @@ class OpenFOAM():
         """
         print('Running Thermal Analysis')
         log.info('Running Thermal Analysis')
-        print('See HEAT LogFile Tab for Status')
-        log.info('See HEAT LogFile Tab for Status')
+        print('See HEAT LogFile for Status')
+        log.info('See HEAT LogFile  for Status')
         #Copy the current environment
         current_env = os.environ.copy()
         #point to correct path for bash
