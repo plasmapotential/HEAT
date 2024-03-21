@@ -180,10 +180,10 @@ def launchHEAT(args):
 
     #list of tokamak flags that are options in HEAT (if adding new tokamak add flag to list)
     machineList = ['d3d','nstx','st40','step','sparc','west','kstar']
-
+    log = logging.getLogger(__name__)
+    
     #run HEAT in terminal mode
     if mode=='t':
-        log = logging.getLogger(__name__)
         print('\nRunning HEAT via Terminal User Interface (TUI)...\n')
         log.info('\nRunning HEAT via Terminal User Interface (TUI)...\n')
         import terminalUI

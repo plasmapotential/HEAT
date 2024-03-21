@@ -47,7 +47,7 @@
 #
 timesteps, PFCname, resolution, DivCode, intersectName, excludeName
 #Example for optical calculations and rad power calculations
-0:1.0, SOLID843, 5.0, LO, all, gyroSourcePlane
+0:5000, SOLID843, 5.0, LO, all, gyroSourcePlane
 #
 #Example for gyro-orbit calculations
 #0:5000, SOLID843, 5.0, LO, all, gyroSourcePlane
