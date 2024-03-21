@@ -30,13 +30,13 @@ jobs:
       run: docker pull plasmapotential/heat:v4.1
 
     - name: Run simple CI configuration test 
-      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.0 python3 /root/source/HEAT/tests/integrationTests/ciTest.py
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.1 python3 /root/source/HEAT/tests/integrationTests/ciTest.py
 
     - name: NSTX-U Optical HEAT Calculation
-      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.0 /root/source/HEAT/source/runTerminalModeTestOptical
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.1 /root/source/HEAT/source/runTerminalModeTestOptical
 
     - name: NSTX-U Optical Elmer FEM HEAT Calculation
-      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.0 /root/source/HEAT/source/runTerminalModeTestOpticalElmer
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.1 /root/source/HEAT/source/runTerminalModeTestOpticalElmer
 
       
 #    - name: NSTX-U Gyro-orbit HEAT Calculation
