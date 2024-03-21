@@ -10,8 +10,8 @@ The link below explains how to install the HEAT docker container and get HEAT up
 
    docker
 
-To download test HEAT case
-**************************
+To download test HEAT case (deprecated)
+***************************************
 For HEAT versions equal or greater to v4.0, there are test cases inside the container.
 These tests cases serve two purposes:
  * They enable integration testing for HEAT developers in CI
