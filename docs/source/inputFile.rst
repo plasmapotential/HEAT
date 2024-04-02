@@ -1,13 +1,13 @@
 Input File Reference
 ####################
-This page describes the variables used in the HEAT input file, usually called
-X_input.csv where X is the machine name.  
 
-It also describes the format of the PFC input file, which is used for 
-defining which PFCs to perform calculations on.
-
-Lastly, it describes the radiated power input file, which is used as an emission
-source for photon tracing.
+This page describes the following files:
+ * HEAT input file, usually called X_input.csv where X is the machine name
+ * PFC input file, which is used for defining which PFCs to perform calculations on
+ * radiated power input file, which is used as an emission source for photon tracing
+ * batchFile, which is used to tell HEAT which simulations to run in terminal mode
+ * filament input file, which is used to prescibe individual filaments for the filament tracer
+ * elmer input file, which is used to prescribe the inputs for Elmer
 
 
 X_input.csv File Description
@@ -21,10 +21,10 @@ where X is the machine name.
 .. autofunction:: heatfluxClass.heatFlux.allowed_class_vars   
 .. autofunction:: gyroClass.GYRO.allowed_class_vars    
 .. autofunction:: radClass.RAD.allowed_class_vars    
-.. autofunction:: openFOAMclass.OpenFOAM.allowed_class_vars  
 .. autofunction:: plasma3DClass.plasma3D.allowed_class_vars
 .. autofunction:: plasma3DClass.heatflux3D.allowed_class_vars
-
+.. autofunction:: openFOAMclass.OpenFOAM.allowed_class_vars  
+.. autofunction:: elmerClass.FEM.allowed_class_vars
 
 References:
 -----------
@@ -35,6 +35,7 @@ References:
 #. M Makowski et al, 2012  Physics of Plasmas 19, 056122
 #. M Greenwald et al, 2002, Plasma Phys. Control. Fusion, vol44 no8
 #. T Looby et al 2022 Nuclear Fusion 62 106020
+#. M. Malinen and P. Råback, Multiscale Modelling Methods for Applications in Material Science, pages 101-113. Chapter: Elmer finite element solver for multiphysics and multiscale problems, Forschungszentrum Juelich, Editors: Ivan Kondov, Godehart Sutmann, 2013.
 
 
 PFC File Description
@@ -63,3 +64,11 @@ serially with a single command.  The following comment describes the batchFile u
 HEAT.  For more information about running in batch mode, see the TUI Tutorial section.
 
 .. autofunction:: terminalUI.TUI.simulationSchedule
+
+Filament Input File
+^^^^^^^^^^^^^^^^^^^^^^
+.. autofunction:: filamentClass.filament.readFilamentFile
+
+Elmer Input File
+^^^^^^^^^^^^^^^^^^^^^^
+.. autofunction:: elmerClass.FEM.readElmerFile

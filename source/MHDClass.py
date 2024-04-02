@@ -199,6 +199,11 @@ class MHD:
         log.info("HEAT time format: " + str(useHeatTimeFmt))
         log.info("D3D time format: " + str(useD3DtimeFmt))        
         
+        print("HEAT time format: " + str(useHeatTimeFmt))
+        print("D3D time format: " + str(useD3DtimeFmt))
+        log.info("HEAT time format: " + str(useHeatTimeFmt))
+        log.info("D3D time format: " + str(useD3DtimeFmt))        
+        
         ts = []
         for i,g in enumerate(gFileList):
             #GEQDSKs are named using timesteps
