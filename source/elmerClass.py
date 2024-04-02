@@ -177,9 +177,11 @@ class FEM:
         """
         tools.makeDir(meshDir, clobberFlag=True, mode=self.chmod, UID=self.UID, GID=self.GID)
         #rhel is refinement level, autoclean reorders boundaries and removes unused elements
-        #args = ['ElmerGrid', '8', '2', meshFile, '-autoclean', '-relh', '1.0', '-out', meshDir]
+        args = ['ElmerGrid', '8', '2', meshFile, '-autoclean', '-relh', '1.0', '-out', meshDir]
         #args = ['ElmerGrid', '8', '2', meshFile, '-relh', '1.0', '-out', meshDir]
-        args = ['ElmerGrid', '8', '2', meshFile, '-autoclean', '-out', meshDir]
+        #args = ['ElmerGrid', '8', '2', meshFile, '-autoclean', '-out', meshDir]
+        #args = ['ElmerGrid', '8', '2', meshFile, '-out', meshDir]
+        #args = ['ElmerGrid', '8', '2', meshFile, '-boundorder', '-removeunused', '-out', meshDir]
 
         current_env = os.environ.copy()
         #run ElmerGrid
@@ -270,8 +272,15 @@ class FEM:
             #hfArray = np.hstack((boundaryPts, hfOnMesh[:,np.newaxis]))
             #nodes = np.array(list(boundary_nodes), dtype=int)
 
+        isNan = np.where(np.isnan(hfOnMesh))[0]
+        hfOnMesh[isNan] = 0.0
+        isInf = np.where(np.isinf(hfOnMesh))[0]
+        hfOnMesh[isInf] = 0.0
+
         #convert HF to Watts
         nodeArray = np.vstack([np.array(list(boundary_nodes), dtype=int), hfOnMesh*1e6]).T
+
+
 
         #for saving nodeId,HF
         name = prefix + '_' + self.tsFmt.format(t) + '.dat'

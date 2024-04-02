@@ -37,7 +37,7 @@ class PFC:
         self.name = timestepMapRow['PFCname']
         self.timeStr = timestepMapRow['timesteps']
         tLimits = np.asarray( self.timeStr.split(':') ).astype(float)
-        use = np.where(np.logical_and(tsAll>tLimits[0], tsAll<tLimits[1]))
+        use = np.where(np.logical_and(tsAll>=tLimits[0], tsAll<=tLimits[1]))
         self.timesteps = tsAll[use]
 
         #name of divertor this PFC is in (ie upper outer)

@@ -21,9 +21,9 @@ services:
       # HEAT data directory on this machine (need to replace with absolute path on Windows)
       - ${HOME}/HEAT:/root/HEAT
 #      # HEAT source code from github
-      - /home/tlooby/source/HEAT/github:/root/source/HEAT
+#      - /home/tlooby/source/HEAT/github:/root/source/HEAT
 #      # Batch mode directory
-#      - /home/tom/HEATruns/SPARC/sweep7_T4:/root/terminal
+#      - /home/tlooby/HEATruns/SPARC/oscillation_fixedSP:/root/terminal
     stdin_open: true # docker run -i
     tty: true        # docker run -t
     #if you want to set env vars, do it here:

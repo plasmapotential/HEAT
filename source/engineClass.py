@@ -2023,9 +2023,6 @@ class engineObj():
             if self.IO.csvMask == True:
                 self.combineTimeSteps(runList, t)
 
-        #copy HEAT logfile to shotpath
-        #shutil.copyfile(self.logFile, self.MHD.shotPath+'HEATlog.txt')			#AW: this is a strange place for this command, runHEAT is not complete yet. The same call is already in terminalUI, just after runHEAT is complete
-
         #set tree permissions
         tools.recursivePermissions(self.MHD.shotPath, self.UID, self.GID, self.chmod)
 

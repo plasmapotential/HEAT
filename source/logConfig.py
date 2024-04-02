@@ -7,7 +7,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 
-def setup_logging(logfile_path=None, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s'):
+def setup_logging(logfile_path=None, level=logging.INFO, format='%(message)s'):
     """
     sets up logger.  
     enables future calls of this function to change the log file path.
@@ -23,6 +23,10 @@ def setup_logging(logfile_path=None, level=logging.INFO, format='%(asctime)s - %
 
     if logfile_path is None:
         logfile_path = os.getenv("logFile", "HEATlog.txt")
+
+    if os.path.isfile(logfile_path):
+        print("Deleting old logfile...")
+        os.remove(logfile_path)
 
     # Clear existing handlers
     root_logger = logging.getLogger()
