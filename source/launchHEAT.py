@@ -208,6 +208,10 @@ def launchHEAT(args):
 
     #run HEAT in graphical mode
     else:
+        from logConfig import setup_logging
+        from pathlib import Path
+        Path(os.environ["logFile"]).touch()
+        setup_logging(logfile_path=os.environ["logFile"])
         print('\nRunning HEAT via Graphical User Interface (GUI)...\n')
         log.info('\nRunning HEAT via Graphical User Interface (GUI)...\n')
         import dashGUI as dashGUI

@@ -1399,12 +1399,18 @@ class engineObj():
         #structOutfile = controlfilePath + 'struct.dat'
 
         for i in range(len(xyz)):
+            tag = 'pt{:03d}'.format(i)
             self.MHD.ittStruct = data['Length[deg]'][i] / data['stepSize[deg]'][i]
             self.MHD.dpinit = data['stepSize[deg]'][i]
             self.MHD.writeControlFile(controlfile, t, data['traceDirection'][i], mode='struct')
             self.MHD.writeMAFOTpointfile(xyz[i,:],gridfile)
-            self.MHD.getFieldpath(dphi, gridfile, controlfilePath, controlfile, paraview_mask=True, tag='pt{:03d}'.format(i))
+            self.MHD.getFieldpath(dphi, gridfile, controlfilePath, controlfile, paraview_mask=True, tag=tag)
             #os.remove(structOutfile)
+            outfile = controlfilePath+'struct_'+tag+'.csv'
+            self.IO.writeTraceVTP(outfile, 'Field_trace_' + tag, controlfilePath)
+
+            print('Converted file to ParaView formatted CSV.')
+            log.info('Converted file to ParaView formatted CSV.')
         return
 
 
