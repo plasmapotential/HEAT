@@ -439,7 +439,8 @@ class tools:
         """
         import os
         current_env = os.environ.copy()
-        pvpythonCMD = current_env["pvpythonCMD"]
+        #pvpythonCMD = current_env["pvpythonCMD"]
+        pvpythonCMD = "pvpython"
 #        #running in appImage (isolate PV environment from HEAT's)
 #        try:
 #            pvpythonCMD = current_env["pvpythonCMD"]
@@ -451,6 +452,7 @@ class tools:
             print("Spawning PVpython subprocess")
             log.info("Spawning PVpython subprocess")
         args = [pvpythonCMD, self.rootDir + '/GUIscripts/csv2vtk.py', pcfile, outType, prefix]
+        log.info(args)
         from subprocess import run
         run(args, env=current_env)
         if verbose==True:
