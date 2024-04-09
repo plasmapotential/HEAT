@@ -52,7 +52,8 @@ class plasma3D:
 		self.NCPUs = 10
 		self.loadHF = False
 		self.loadBasePath = None
-		
+		self.MAFOTruns = 1
+				
 		
 	def allowed_class_vars(self):
 		"""
@@ -85,18 +86,21 @@ class plasma3D:
 		  running MAFOT, False means run MAFOT
 		:loadBasePath: string, Path for find previous results if loadHF is True
 		:NCPUs: integer, number of CPUs to use in MAFOT, default is 10
+		:amplitudeError: float, +-percentage of uncertainty in perturbation amplitude scaling
+		:phaseError: float, +-percentage of uncertainty in perturbation phase
+		:MAFOTruns: Number of MAFOT runs, varying the M3D-C1 perturbation, default is 1 with no variation 
 		"""
 		self.allowed_vars = ['plasma3Dmask','itt','response',
 				'selectField','useIcoil','sigma','charge','Ekin','Lambda','Mass','loadHF',
-				'loadBasePath','NCPUs']
+				'loadBasePath','NCPUs','amplitudeError','phaseError','MAFOTruns']
 	
 	
 	def setTypes(self):
 		"""
 		Set variable types for the stuff that isnt a string from the input file
 		"""
-		integers = ['itt','response','selectField','useIcoil','sigma','charge','Mass','NCPUs']
-		floats = ['Ekin','Lambda']
+		integers = ['itt','response','selectField','useIcoil','sigma','charge','Mass','NCPUs','MAFOTruns']
+		floats = ['Ekin','Lambda','amplitudeError','phaseError']
 		bools = ['plasma3Dmask','loadHF']
 		setAllTypes(self, integers, floats, bools)     # this is not a typo, but the correct syntax for this call
 
@@ -138,6 +142,7 @@ class plasma3D:
 		print('shot = ' + str(self.shot))
 		print('time = ' + str(self.time))
 		print('gFile = ' + str(self.gFile))
+		print('MAFOT runs = ' + str(self.MAFOTruns))
 		print('#=============================================================')
 		print('#                3D Plasma Variables')
 		print('#=============================================================')
@@ -161,6 +166,8 @@ class plasma3D:
 		print('#=============================================================')
 		print('response = ' + str(self.response))
 		print('selectField = ' + str(self.selectField))
+		print('amplitudeError = ' + str(self.amplitudeError) + '%')
+		print('phaseError = ' + str(self.phaseError) + '%')
 		for i in range(len(self.C1Files)):
 			print('File ' + str(i+1) + ' = ' + self.C1Files[i])
 			print('   Scale = ' + str(self.C1scales[i]))
@@ -172,6 +179,7 @@ class plasma3D:
 		log.info('shot = ' + str(self.shot))
 		log.info('time = ' + str(self.time))
 		log.info('gFile = ' + str(self.gFile))
+		log.info('MAFOT runs = ' + str(self.MAFOTruns))
 		log.info('#=============================================================')
 		log.info('#                3D Plasma Variables')
 		log.info('#=============================================================')
@@ -195,6 +203,8 @@ class plasma3D:
 		log.info('#=============================================================')
 		log.info('response = ' + str(self.response))
 		log.info('selectField = ' + str(self.selectField))
+		log.info('amplitudeError = ' + str(self.amplitudeError) + '%')
+		log.info('phaseError = ' + str(self.phaseError) + '%')
 		for i in range(len(self.C1Files)):
 			log.info('File ' + str(i+1) + ' = ' + self.C1Files[i])
 			log.info('   Scale = ' + str(self.C1scales[i]))
@@ -327,23 +337,34 @@ class plasma3D:
 		Write all input files and launch MAFOT
 		Read the output file when finished
 		"""
-		if tag is None: tag = ''
-		self.writeControlFile(MapDirection)
-		self.writeM3DC1supFile()
-		self.writeCoilsupFile()
-		
-		self.tag = tag
+		if tag is None: tag = ''		
 		print('Launching 3D plasma field line tracing on ' + str(self.NCPUs) + ' cores')
 		log.info('Launching 3D plasma field line tracing ' + str(self.NCPUs) + ' cores')
+		self.writeControlFile(MapDirection)
+		self.writeCoilsupFile()
 		
-		bbLimits = str(self.bbRmin) + ',' + str(self.bbRmax) + ',' + str(self.bbZmin) + ',' + str(self.bbZmax)
-		args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points3DHF.dat','-B',bbLimits,'_lamCTL.dat',tag]
-		current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-		subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
-		#print('mpirun -n ' + str(self.NCPUs) + ' heatlaminar_mpi' + ' -P points3DHF.dat' + ' _lamCTL.dat' + ' ' + tag)
-		
-		#self.wait2finish(self.NCPUs, tag)
-		self.readLaminar(tag)
+		for run in range(self.MAFOTruns):
+			tag = tag + '_' + str(run)
+			
+			if run == 0: self.writeM3DC1supFile(vary = False)
+			else: self.writeM3DC1supFile(vary = True)
+			
+			bbLimits = str(self.bbRmin) + ',' + str(self.bbRmax) + ',' + str(self.bbZmin) + ',' + str(self.bbZmax)
+			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points3DHF.dat','-B',bbLimits,'_lamCTL.dat',tag]
+			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
+			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
+
+			psimin, Lc = self.readLaminar(tag)
+			if run == 0: 
+				self.psimin, self.Lc = psimin, Lc
+			else: 
+				self.psimin += psimin
+				self.Lc += Lc
+				
+		if self.MAFOTruns > 1: 
+				self.psimin /= self.MAFOTruns
+				self.Lc /= self.MAFOTruns
+			
 		print('3D plasma field line tracing complete')
 		log.info('3D plasma field line tracing complete')
 		
@@ -364,15 +385,15 @@ class plasma3D:
 				N = int(len(Lc)/4)
 				Lc = Lc.reshape(N,4)
 				psimin = psimin.reshape(N,4)
-				self.Lc = Lc.mean(1)
-				self.psimin = psimin.mean(1)
+				Lc = Lc.mean(1)
+				psimin = psimin.mean(1)
 			else:
-				self.Lc = lamdata[:,3]
-				self.psimin = lamdata[:,4]
+				Lc = lamdata[:,3]
+				psimin = lamdata[:,4]
 		else:
 			print('MAFOT output file: ' + file + ' not found!')
 			log.info('MAFOT output file: ' + file + ' not found!')
-		return
+		return psimin, Lc
 
 
 	def copyAndRead(self, path, tag = None):
@@ -471,14 +492,22 @@ class plasma3D:
 			f.write('2*pi=\t6.283185307179586\n')
 
 
-	def writeM3DC1supFile(self):
+	def writeM3DC1supFile(self, vary = False):
 		"""
 		Write M3D-C1 supplemental input file
 		Overwrites any existing one.
 		"""
+		N = len(self.C1Files)
+		if vary:
+			randScale = 1 + self.amplitudeError*0.02*(np.random.random(N)-0.5)
+			randPhase = 1 + self.phaseError*0.02*(np.random.random(N)-0.5)
+		else:
+			randScale = np.ones(N)
+			randPhase = np.ones(N)
+			
 		with open(self.cwd + '/' + 'm3dc1sup.in', 'w') as f:
-			for i in range(len(self.C1Files)):
-				f.write(self.C1Files[i] + '\t' + str(self.C1scales[i]) + '\t' + str(self.C1phases[i]) + '\n')
+			for i in range(N):
+				f.write(self.C1Files[i] + '\t' + str(self.C1scales[i]*randScale[i]) + '\t' + str(self.C1phases[i]*randPhase[i]) + '\n')
 
 
 	def writeCoilsupFile(self, machine = None):
@@ -998,7 +1027,7 @@ class heatflux3D:
 
 	def map_R_psi(self, psi, HFS = None):
 		"""
-		Map normalized poloidal flux psi to R at midplane (Z = 0)
+		Map normalized poloidal flux psi to R at midplane (Z = Z_axis)
 		psi is flat array
 		return R(psi)
 		"""
