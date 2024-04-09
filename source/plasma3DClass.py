@@ -260,7 +260,7 @@ class plasma3D:
 			if line[0] == '#': continue
 			words = line.split()
 			c1file = words[0]
-			if ('./' in c1file): c1file = c1file.replace('./', self.inputDir + '/')
+			if ('$CWD' in c1file): c1file = c1file.replace('$CWD', self.inputDir)
 			C1Files.append(c1file)
 			scales.append(tools.makeFloat(words[1]))
 			if len(words) > 2: phases.append(tools.makeFloat(words[2]))
@@ -418,9 +418,9 @@ class plasma3D:
 		#self.writeCoilsupFile()
 
 		# normalization profile data
-		for tag in ['LI','LO','UI','UO']:
-			src = path + '/../' + 'lam_' + tag + '.dat'
-			dst = self.cwd + '/../' + 'lam_' + tag + '.dat'
+		for normtag in ['LI','LO','UI','UO']:
+			src = path + '/../' + 'lam_' + normtag + '.dat'
+			dst = self.cwd + '/../' + 'lam_' + normtag + '.dat'
 			if (not os.path.isfile(dst)) & os.path.isfile(src): 
 				shutil.copy(src, dst)
 		
