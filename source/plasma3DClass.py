@@ -560,6 +560,7 @@ class heatflux3D:
 		self.NCPUs = 100
 		self.teProfileData = None
 		self.neProfileData = None
+		self.scaleSmooth = 1.0
 		
     
 	def allowed_class_vars(self):
@@ -594,9 +595,10 @@ class heatflux3D:
 		:model: string in [layer, conductive, convective] to select heat flux model 
 		:NCPUs: integer, number of CPUs to use in MAFOT, default is 10
 		  same as in plasma3D class
+		:scaleSmooth: float, factor to scale the range of the heat flux moving average filter
 		"""
 		self.allowed_vars = ['Lcmin', 'lcfs', 'lqCN', 'S', 'P', 'radFrac', 'qBG', 
-				'teProfileData', 'neProfileData', 'kappa', 'model','NCPUs']
+				'teProfileData', 'neProfileData', 'kappa', 'model','NCPUs','scaleSmooth']
 
 
 	def setTypes(self):
@@ -604,7 +606,7 @@ class heatflux3D:
 		Set variable types for the stuff that isnt a string from the input file
 		"""
 		integers = ['NCPUs']
-		floats = ['Lcmin', 'lcfs', 'lqCN', 'S', 'P', 'radFrac', 'qBG', 'kappa']
+		floats = ['Lcmin', 'lcfs', 'lqCN', 'S', 'P', 'radFrac', 'qBG', 'kappa', 'scaleSmooth']
 		bools = []
 		setAllTypes(self, integers, floats, bools)
 		
@@ -708,6 +710,7 @@ class heatflux3D:
 		print('radFrac = ' + str(self.radFrac))
 		print('qBG = ' + str(self.qBG))
 		print('kappa = ' + str(self.kappa))
+		print('scaleSmooth = ' + str(self.scaleSmooth))
 		print('#=============================================================')
 		print('#                3D Plasma Variables')
 		print('#=============================================================')
@@ -726,6 +729,7 @@ class heatflux3D:
 		log.info('radFrac = ' + str(self.radFrac))
 		log.info('qBG = ' + str(self.qBG))
 		log.info('kappa = ' + str(self.kappa))
+		log.info('scaleSmooth = ' + str(self.scaleSmooth))
 		log.info('#=============================================================')
 		log.info('#                3D Plasma Variables')
 		log.info('#=============================================================')
@@ -1206,9 +1210,8 @@ class heatflux3D:
 		smooth heat flux with neighbouring triangles within distance delta
 		this uses all triangles in a mesh, shadowed and unshadowed, but only smoothes the unshadowed ones
 		"""
-		delta = 0.5*self.fluxExpansion * self.S *1e-3	# in meters
+		delta = 0.5*self.fluxExpansion * self.S *1e-3 * self.scaleSmooth	# in meters
 		deltasq = delta**2
-		print('Smoothing heat flux with moving average filter within radius: ' + str(np.round(delta*1e3,2)) + ' mm')
 		numberOfNeighbours = []
 		
 		N_facets = len(centers)
@@ -1217,7 +1220,14 @@ class heatflux3D:
 			q = np.zeros(N_facets)
 			use = np.where(shadowed_mask == 0)[0]
 			q[use] = self.q		# self.q lives on the 'use' subset 
-		
+			
+		if self.scaleSmooth <= 0:				# skip the smoothing and return the input unchanged
+			print('No smoothing of heat flux')
+			log.info('No smoothing of heat flux')
+			return q
+			
+		print('Smoothing heat flux with moving average filter within radius: ' + str(np.round(delta*1e3,2)) + ' mm')
+		log.info('Smoothing heat flux with moving average filter within radius: ' + str(np.round(delta*1e3,2)) + ' mm')
 		for idx in range(N_facets):
 			if shadowed_mask[idx] > 0: continue		# skip shadowed triangles 
 			stack = set([idx])
@@ -1228,6 +1238,7 @@ class heatflux3D:
 		
 		numberOfNeighbours = np.array(numberOfNeighbours)
 		print('Number of triangles used for smoothing: ' + str(int(numberOfNeighbours.mean()+0.5)) + ' ± ' + str(int(numberOfNeighbours.std()+0.5)))
+		log.info('Number of triangles used for smoothing: ' + str(int(numberOfNeighbours.mean()+0.5)) + ' ± ' + str(int(numberOfNeighbours.std()+0.5)))
 		
 		return qav
 
