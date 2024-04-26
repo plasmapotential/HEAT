@@ -554,6 +554,7 @@ class heatflux3D:
 		self.q0 = None
 		self.ep = None	# equilParams_class instance for EFIT equilibrium
 		self.HFS = None	# True: use high field side SOL, False: use low field side SOL
+		self.fluxExpansion = None
 		
 		#Default inputs
 		self.NCPUs = 100
@@ -790,10 +791,14 @@ class heatflux3D:
 		print('3D Heat flux model type: ' + self.model)
 		log.info('3D Heat flux model type: ' + self.model)
 		if self.model in ['Layer', 'layer', 'eich', 'Eich', 'heuristic']:
-			if 'O' in DivCode: HFS = False		# an Outer divertor is on low-field-side
-			elif 'I' in DivCode: HFS = True		# an Inner divertor is on High-Field-Side
+			if 'O' in DivCode: 
+				self.fluxExpansion = self.ep.fluxExpansion(target = 'out')
+				self.HFS = False		# an Outer divertor is on low-field-side
+			elif 'I' in DivCode: 
+				self.fluxExpansion = self.ep.fluxExpansion(target = 'in')
+				self.HFS = True		# an Inner divertor is on High-Field-Side
 			else: raise ValueError('PFC Divertor Code cannot be identified. Check your PFC input file')
-			self.HFS = HFS	# True: use high field side SOL, False: use low field side SOL
+
 			print('Layer width lq =', self.lqCN)
 			print('PFR spread S =', self.S)
 			print('LCFS at', self.lcfs)
@@ -1194,6 +1199,37 @@ class heatflux3D:
 		#Scale to input power
 		q0 = P/P0
 		return q0	#, q,mask,nB,qpar
+
+
+	def smoothq(self, allNeighbours, centers, shadowed_mask, q = None):
+		"""
+		smooth heat flux with neighbouring triangles within distance delta
+		this uses all triangles in a mesh, shadowed and unshadowed, but only smoothes the unshadowed ones
+		"""
+		delta = 0.5*self.fluxExpansion * self.S *1e-3	# in meters
+		deltasq = delta**2
+		print('Smoothing heat flux with moving average filter within radius: ' + str(np.round(delta*1e3,2)) + ' mm')
+		numberOfNeighbours = []
+		
+		N_facets = len(centers)
+		qav = np.zeros(N_facets)
+		if q is None:
+			q = np.zeros(N_facets)
+			use = np.where(shadowed_mask == 0)[0]
+			q[use] = self.q		# self.q lives on the 'use' subset 
+		
+		for idx in range(N_facets):
+			if shadowed_mask[idx] > 0: continue		# skip shadowed triangles 
+			stack = set([idx])
+			getNeighbourTriangleIndices(idx,idx,allNeighbours,centers,deltasq,stack)
+			stack = np.fromiter(stack, int, len(stack))
+			qav[idx] = np.mean(q[stack])
+			numberOfNeighbours.append(len(stack))
+		
+		numberOfNeighbours = np.array(numberOfNeighbours)
+		print('Number of triangles used for smoothing: ' + str(int(numberOfNeighbours.mean()+0.5)) + ' ± ' + str(int(numberOfNeighbours.std()+0.5)))
+		
+		return qav
 
 
 	def scale_layer_circle(self, lq, S, P, DivCode):
@@ -1769,6 +1805,35 @@ def checkScaling(file, plotme =True):
 		plt.ylabel('q$_{||}$ [a.u.]')
 		
 	return swall, qpar
+
+
+def getNeighbourTriangleIndices(k,idx,allNeighbours,centers,deltasq,stack):
+	"""
+	Recursive algorithm to find indices of all neighbouring triangles to source triangle idx 
+	within distance delta, with deltasq = delta**2, of respective centers.
+	k is index of current triangle
+	idx is index of source triangle
+	allNeighbours is list of 3-tupples of neighbour indices for each triangle in mesh
+	centers is list of (xyz) center coordinates for each triangle in mesh 
+	stack is a set of a list of the neighbours of idx within distance delta
+	stack gets recursively updated by this algorithm
+	initial call with k = idx; stack = set([idx]); deltasq = delta**2
 	
+	# for a given mesh
+	N_facets = mesh.CountFacets
+	norms,centers,areas = CAD.normsCentersAreas(mesh)
+	allNeighbours = [0]*N_facets
+	for i,facet in enumerate(mesh.Facets):
+		allNeighbours[i] = facet.NeighbourIndices
+	"""
+	#neighbours = mesh.Facets[k].NeighbourIndices	# DO NOT USE THIS: this is very slow!
+	neighbours = allNeighbours[k]
+	for n in neighbours: 
+		if n in stack: continue
+		distancesq = (centers[n,0] - centers[idx,0])**2 + (centers[n,1] - centers[idx,1])**2 + (centers[n,2] - centers[idx,2])**2
+		if distancesq < deltasq: 
+			stack.add(n)
+			getNeighbourTriangleIndices(n,idx,allNeighbours,centers,deltasq,stack)
+
 	
 	

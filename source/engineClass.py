@@ -2521,8 +2521,11 @@ class engineObj():
             print("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
             log.info("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
 
+            # assign and smooth the parallel heat flux
             q = np.zeros(PFC.centers[:,0].shape)
             q[use] = self.hf3D.q                                          # this is the parallel heat flux q||
+            q = self.hf3D.smoothq(PFC.allNeighbours, PFC.centers, PFC.shadowed_mask, q = q)	# give full grid variables, not 'use' subset
+            
             qDiv = np.zeros(PFC.centers[:,0].shape)
             qDiv[use] = q[use] * np.abs(PFC.bdotn[use]) * self.HF.elecFrac        # this is the incident heat flux
 

@@ -140,6 +140,11 @@ class PFC:
         PFC.phiMin = phi.min()
         PFC.phiMax = phi.max()
 
+        #get list of neighbours for all triangles in mesh
+        self.allNeighbours = [0]*self.Nfaces
+        for i,facet in enumerate(self.mesh.Facets):
+            self.allNeighbours[i] = facet.NeighbourIndices
+
         #phi vector at each mesh center
         self.phiVec = np.zeros((len(R), 3))
         self.phiVec[:,0] = -np.cos(np.pi/2.0 - phi)
