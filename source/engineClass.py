@@ -224,15 +224,29 @@ class engineObj():
             self.CAD.STLpath = self.dataPath + '/KSTAR/STLs/'
             self.CAD.STPpath = self.dataPath + '/KSTAR/STPs/'
 
-        else:
-            print("INVALID MACHINE SELECTION!  Defaulting to NSTX-U!")
-            log.info("INVALID MACHINE SELECTION!  Defaulting to NSTX-U!")
-#            self.infile = self.rootDir + '/inputs/NSTXU/NSTXU_input.csv'
-#            self.pfcFile = self.rootDir + '/inputs/NSTXU/NSTXUpfcs.csv'
+        elif self.MachFlag == 'aug':
+            print('Loading AUG Input Filestream')
+            log.info('Loading AUG Input Filestream')
+            self.CAD.machPath = self.dataPath + '/AUG'
+            self.OF.meshDir = self.dataPath + '/AUG/3Dmeshes'
+            self.CAD.STLpath = self.dataPath + '/AUG/STLs/'
+            self.CAD.STPpath = self.dataPath + '/AUG/STPs/'
+
+        elif self.MachFlag == 'nstx':
+            print('Loading AUG Input Filestream')
+            log.info('Loading AUG Input Filestream')
             self.CAD.machPath = self.dataPath + '/NSTX'
             self.OF.meshDir = self.dataPath + '/NSTX/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/NSTX/STLs/'
             self.CAD.STPpath = self.dataPath + '/NSTX/STPs/'
+
+        else:
+            print("INVALID MACHINE SELECTION!  Defaulting to OTHER!")
+            log.info("INVALID MACHINE SELECTION!  Defaulting to OTHER!")
+            self.CAD.machPath = self.dataPath + '/OTHER'
+            self.OF.meshDir = self.dataPath + '/OTHER/3Dmeshes'
+            self.CAD.STLpath = self.dataPath + '/OTHER/STLs/'
+            self.CAD.STPpath = self.dataPath + '/OTHER/STPs/'
 
         self.OF.templateCase = self.rootDir + '/openFoamTemplates/heatFoamTemplate'
         self.OF.templateDir = self.rootDir + '/openFoamTemplates/templateDicts'
@@ -312,9 +326,17 @@ class engineObj():
             self.CAD.unitConvert = 1.0
             self.CAD.assembly_mask = False
 
+        elif self.MachFlag == 'aug':
+            self.CAD.permute_mask = False
+            self.CAD.unitConvert = 1.0
+            self.CAD.assembly_mask = False
+
         else:
-            print("INVALID MACHINE SELECTION!  Defaulting to NSTX-U!")
-            log.info("INVALID MACHINE SELECTION!  Defaulting to NSTX-U!")
+            print("INVALID MACHINE SELECTION!  Defaulting to OTHER!")
+            log.info("INVALID MACHINE SELECTION!  Defaulting to OTHER!")
+            self.CAD.permute_mask = False
+            self.CAD.unitConvert = 1.0
+            self.CAD.assembly_mask = False
 
         return
 
