@@ -111,7 +111,7 @@ class RAD:
         """
         print("Reading 2D photon radiation source file: "+file)
         log.info("Reading 2D photon radiation source file: "+file)
-        self.PC2D = pd.read_csv(file, header=0, names=['R','Z','P']).values #convert to m
+        self.PC2D = pd.read_csv(file, header=0, names=['R','Z','P']).values 
         #self.PC2D /= 1000.0
         return
 

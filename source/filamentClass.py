@@ -84,7 +84,7 @@ class filament:
         :id:  a unique string tag (or name) that is assigned to the filament.  example: fil1pt
         :tMin[s]: time in seconds of filament birth. example: 1000e-6
         :tMax[s]: time in seconds of filament birth. example: 1500e-6
-        :dt[s]: timestep size in seconds
+        :dt[s]: timestep size in seconds for writing output (csv, vtp, etc.)
         :decay_t[s]: decay constant for filament birth energy.  The filament can be born over a 
           series of timesteps.  If N_src_t is > 1, this variable describes the exponential decay.
           At each of the birth timesteps, HEAT sources particles with a decaying total energy,
