@@ -2597,17 +2597,19 @@ class engineObj():
         return
 
     #--- Radiated power (photons) ---
-
     def radPower(self,PFC, rayTriMode='open3d'):
         """
         runs the radiated power calculation
         """
         #setup the radiated power calculation
-        self.RAD.preparePowerTransfer(PFC, self.CAD, mode='open3d')
+        self.RAD.preparePowerTransfer(PFC, self.CAD, mode=rayTriMode)
         #trace rays
         if rayTriMode=='open3d':
             #calculate photon load on PFC using open3d
             self.RAD.calculatePowerTransferOpen3D(mode='open3d')
+        elif rayTriMode=='mitsuba':
+            #calculate photon load on PFC using open3d
+            self.RAD.calculatePowerTransferMitsubaJIT(mode='mitsuba', mitsubaMode='cpu', fType='ply')           
         else:
             #calculate photon load on PFC using legacy methods (brute force)
             self.RAD.calculatePowerTransfer()
