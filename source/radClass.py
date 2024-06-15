@@ -10,7 +10,8 @@ import logging
 import multiprocessing
 import time
 import open3d as o3d
-from scipy.spatial import ConvexHull
+#from scipy.spatial import ConvexHull
+
 
 import toolsClass
 log = logging.getLogger(__name__)
@@ -275,7 +276,7 @@ class RAD:
         log.info("Running intersection check...")
         return
 
-    def calculatePowerTransferOpen3D(self, mode=None):
+    def calculatePowerTransferOpen3D(self, mode=None, powFracSave=False):
         """
         Maps power between sources and targets (ROI PFCs).  Uses Open3D to
         perform ray tracing.  Open3D can be optimized for CPU or GPU.
@@ -284,8 +285,9 @@ class RAD:
         Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
         library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
         """
+        import psutil
         t0 = time.time()
-        powerFrac = np.zeros((self.Ni,self.Nj))
+
         Psum = np.zeros((self.Nj))
         self.hullPower = np.zeros((self.Ni))
 
@@ -296,17 +298,38 @@ class RAD:
         mesh = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
         scene = o3d.t.geometry.RaycastingScene()
         mesh_id = scene.add_triangles(mesh)
-        print("Scene building took {:f} [s]".format(time.time() - t0))
+        print("Scene building took {:f} [s]\n".format(time.time() - t0))
 
+        #check how much memory we have
+        #memNeeded = np.dtype(np.float64).itemsize * self.Ni * self.Nj
+        #print("Required memory for this calculation: {:f} GB".format(memNeeded / (1024**3)))
+        memAvail = psutil.virtual_memory().available
+        print("Available memory: {:f} GB".format(memAvail / (1024**3)))  
+
+        #setup netcdf (this is slow)
+        if powFracSave:
+            print("Saving power fractions.\n")
+            from netCDF4 import Dataset
+            # Create a powerFrac file on disk
+            # Initialize the NetCDF file
+            with Dataset(self.powFracFile, 'w', format='NETCDF4') as ncfile:
+                # Define dimensions
+                ncfile.createDimension('Ni', self.Ni)
+                ncfile.createDimension('Nj', self.Nj)
+                # Create a variable to store the data
+                data_var = ncfile.createVariable('powerFrac', 'f4', ('Ni', 'Nj'))
 
         for i in range(self.Ni):
             if i%1000 == 0:
                 if i==0:
                     t1 = time.time()
-                print("Source point {:d}.  1k time: {:f}".format(i, time.time() - t1))
+                process = psutil.Process()
+                mem_info = process.memory_info()
+                usage = mem_info.rss / (1024 * 1024)
+                print("Source point {:d}.  1k time: {:f}. Memory Used: {:f} MB".format(i, time.time() - t1, usage))
                 t1 = time.time()
 
-            r_ij = np.zeros((self.Nj,3))
+            #r_ij = np.zeros((self.Nj,3))
             r_ij = self.targetCtrs - self.sources[i]
             #r_ij *= 1000.0
             rMag = np.linalg.norm(r_ij, axis=1)
@@ -317,32 +340,40 @@ class RAD:
             #calculate intersections
             rays = o3d.core.Tensor([np.hstack([q1,rNorm])],dtype=o3d.core.Dtype.Float32)
             hits = scene.cast_rays(rays)
+
             #convert open3d CPU tensors back to numpy
             hitMap = hits['primitive_ids'][0].numpy()
             distMap = hits['t_hit'][0].numpy()
-
-            powerFrac[i,:] = np.abs(rdotn)*self.targetAreas/(4*np.pi*rMag**2)
             condition = hitMap == np.arange(self.Nj)
-            Psum += condition * self.sourcePower[i] * powerFrac[i, :]
+            powFrac = np.abs(rdotn)*self.targetAreas/(4*np.pi*rMag**2)
 
-            #compute convex hull on unit sphere around point i and calculate
-            #power balance via ratio of hull area to sphere area
-            #calculate spherical coordinates for each target point, with i as (0,0,0)
-            #note that we perform a coordinate permutation on rNorm, to prevent
-            #angle wrap cases: (x,y,z) => (z,x,y)
-            #If you are getting abnormally convex hull power, try a different permutation
-            #first transform to 2D (phi,theta) => (x,y) using Jacobians
-            theta = np.arccos( (rNorm[:,0]) ) #z after permutation
-            phi = np.arctan2( (rNorm[:,2]), (rNorm[:,1])  ) # y,x after permutation
-            #map (phi,theta) to cartesian plane using Jacobian
-            points = np.vstack([phi, -np.cos(theta)]).T
-            #calculate the convex hull in 2D
-            hull = ConvexHull(points)
-            #hull area for 2D points is volume, scale power to full solid angle
-            self.hullPower[i] = hull.volume / (4*np.pi) * self.sourcePower[i]
+            if powFracSave == True:
+                # Open the NetCDF file in append mode and write the column
+                # this is slow!
+                with Dataset(self.powFracFile, 'a', format='NETCDF4') as ncfile:
+                    data_var = ncfile.variables['powerFrac']
+                    # Write the column to the file. This operation writes directly to disk.
+                    data_var[i, :] = powFrac
+
+            Psum += condition * self.sourcePower[i] * powFrac
+
+#            #compute convex hull on unit sphere around point i and calculate
+#            #power balance via ratio of hull area to sphere area
+#            #calculate spherical coordinates for each target point, with i as (0,0,0)
+#            #note that we perform a coordinate permutation on rNorm, to prevent
+#            #angle wrap cases: (x,y,z) => (z,x,y)
+#            #If you are getting abnormally convex hull power, try a different permutation
+#            #first transform to 2D (phi,theta) => (x,y) using Jacobians
+#            theta = np.arccos( (rNorm[:,0]) ) #z after permutation
+#            phi = np.arctan2( (rNorm[:,2]), (rNorm[:,1])  ) # y,x after permutation
+#            #map (phi,theta) to cartesian plane using Jacobian
+#            points = np.vstack([phi, -np.cos(theta)]).T
+#            #calculate the convex hull in 2D
+#            hull = ConvexHull(points)
+#            #hull area for 2D points is volume, scale power to full solid angle
+#            self.hullPower[i] = hull.volume / (4*np.pi) * self.sourcePower[i]
 
         self.pdotn = rdotn
-        self.powerFrac = powerFrac
         self.targetPower = Psum
 
         print("Photon tracing took {:f} seconds \n".format(time.time()-t0))

@@ -1861,18 +1861,17 @@ class engineObj():
                         except Exception as e:
                             print("Could not load RAD parameters.  Expected for GUI.  Check error message:")
                             print(e)
+                        #location where we will save a memmap if necessary
+                        self.RAD.memmapFile = self.MHD.shotPath + self.tsFmt.format(t) +'/photonPowerFrac.nc'
                         #calculate the radiated power on the PFC mesh
                         self.radPower(PFC)
                         #save output files
                         self.radPowerOutput(PFC)
                         PFC.powerSumRad[tIdx] = np.sum(PFC.Prad)
-                        PFC.powerHullRad[tIdx] = np.sum(PFC.hullPower)
                         print('\nSummation radiated power to this PFC = {:0.10f}'.format(PFC.powerSumRad[tIdx]))
-                        print('Convex hull radiated power to this PFC = {:0.10f}'.format(PFC.powerHullRad[tIdx]))
-                        print('Percent difference between radiation summation and hull = {:0.4f}%\n'.format(np.abs(PFC.powerSumRad[tIdx]/PFC.powerHullRad[tIdx]-1.0)*100.0))
                         log.info('\nSummation radiated power to this PFC = {:0.10f}'.format(PFC.powerSumRad[tIdx]))
-                        log.info('Convex hull radiated power to this PFC = {:0.10f}'.format(PFC.powerHullRad[tIdx]))
-                        log.info('Percent difference between radiation summation and hull = {:0.4f}%\n'.format(np.abs(PFC.powerSumRad[tIdx]/PFC.powerHullRad[tIdx]-1.0)*100.0))
+                        print('Peak qRad to this PFC: {:0.10f}'.format(np.max(PFC.qRad)))
+                        log.info('Peak qRad to this PFC: {:0.10f}'.format(np.max(PFC.qRad)))
 
                     if 'B' in runList:
                         print('Writing Bfield Glyphs')
@@ -2616,9 +2615,7 @@ class engineObj():
         #assign variables to the PFC itself
         PFC.Prad = self.RAD.targetPower
         PFC.qRad = PFC.Prad / PFC.areas
-        PFC.radPowerFracs = self.RAD.powerFrac
         PFC.qRadList.append(PFC.qRad)
-        PFC.hullPower = self.RAD.hullPower
 
         #calculate photon radiation shadowMask
         shadowMask = np.ones((self.RAD.Nj))
@@ -2627,12 +2624,12 @@ class engineObj():
         PFC.radShadowMaskList.append(shadowMask)
         return
 
-    def radPowerOutput(self,PFC, saveFracs=False):
+    def radPowerOutput(self,PFC):
         """
         saves radiated power output
         """
-        if saveFracs==True:
-            self.RAD.savePowerFrac(PFC)
+        #if saveFracs==True:
+        #    self.RAD.savePowerFrac(PFC)
 
         prefix = 'HF_rad'
         label = '$MW/m^2$'
