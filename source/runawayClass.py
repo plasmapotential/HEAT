@@ -2,22 +2,36 @@
 #Description:   Runaway Electron Module module
 #Engineer:      A Feyrer
 #Date:          April 2024
+
+"""
+Class for runaway electrons
+"""
+
+import os
+import sys
 import numpy as np
-import pandas as pd
 import plotly.graph_objects as go
-import toolsClass
-import multiprocessing
-import time
-import open3d as o3d
+import plotly.express as px
+import scipy.interpolate as interp
 from scipy.interpolate import interp1d
 import scipy.integrate as integrate
-#from tqdm.contrib.concurrent import process_map #for process bar.  very slow...
+import pandas as pd
+import open3d as o3d
+import time
+import shutil
+
+
+#HEAT classes
+import toolsClass
 tools = toolsClass.tools()
+import ioClass
+IO = ioClass.IO_HEAT()
 
 import logging
 log = logging.getLogger(__name__)
 
-class GYRO:
+
+class Runaways:
 
     def __init__(self, rootDir, dataPath, chmod=0o774, UID=-1, GID=-1):
         """
@@ -31,6 +45,7 @@ class GYRO:
         self.chmod = chmod
         self.GID = GID
         self.UID = UID
+        tools.physicsConstants(self)
         return
 
     def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
@@ -56,8 +71,8 @@ class GYRO:
           is defined by the MHD EQ variable dpinit.  Should really change this name to
           gyroTraceLength as it is not directly related to degrees.  Total toroidal distance 
           of trace is gyroTraceLength * dpinit
-        :gyroT_eV: Plasma ion temperature [eV].  This temperature corresponds to the mean
-          total velocity in the ion velocity distribution function.
+        :RE_Eav: Average energy of the runaway electron distribution function
+        :RE_I: Total current carried by runaway electrons
         :N_vSlice: Number of macroparticle samples to take from the velocity distribution
           function [integer].  Each sample defines the ion energies.
         :N_vPhase: Number of macroparticle samples to take from the velocity phase 
@@ -69,8 +84,6 @@ class GYRO:
         :vMode: determines if single temperature is defined for entire PFC or if each element
           on PFC mesh has a unique plasma temperature.  Can be single or mesh.  For now,
           only single works.
-        :ionFrac: fraction of PSOL carried by ions (as opposed to electrons) [0-1].  Power
-          carried by the ions will be P*ionFrac
         :gyroSources: name of CAD object to be used as the gyro source plane.  
 
         For more information on the gyro orbit module and corresponding physics, see [6].
@@ -81,15 +94,14 @@ class GYRO:
         self.allowed_vars = [
                     'N_gyroSteps',
                     'gyroTraceLength',
-                    'gyroT_eV',
+                    'RE_Eav',
+                    'RE_I',
                     'N_vSlice',
                     'N_vPhase',
                     'N_gyroPhase',
-                    'ionMassAMU',
                     'vMode',
-                    'ionFrac',
                     'gyroSources',
-                            ]
+                            ] #check take out ionMassAMU?
         return
 
     def setTypes(self):
@@ -104,9 +116,9 @@ class GYRO:
                     'N_gyroPhase',
                     ]
         floats = [
-                  'ionFrac',
-                  'gyroT_eV',
-                  'ionMassAMU',
+                  'RE_Eav',
+                  'RE_I',
+                  
                 ]
 
         for var in integers:
@@ -144,35 +156,879 @@ class GYRO:
         self.e = 1.602e-19 # C
         self.c = 299792458 #m/s
         self.diamag = -1 #diamagnetism = -1 for ions, 1 for electrons
+        self.me = 0.511e6 #eV
 
         self.mass_eV = ionMassAMU * self.AMU
-        self.Z=1 #assuming isotopes of hydrogen here
+        self.Z=1 #assuming isotopes of hydrogen here check
 
         return
+        
+    """
+    Helpful functions for dealing with relativstic dynamics
+    """
+    
+    def E2v_electron(self, RE_KE):
+    	"""
+    	Calculates the velocity from the energy of an electron
+    	
+    	E is in eV
+    	
+    	Assumes mass energy is not included in E
+    	
+    	   	
+    	"""
+    	return np.sqrt(self.c**2 * (1 - (self.me)**2/(RE_KE + self.me)**2))
 
-    def temp2thermalVelocity(self, T_eV):
+
+    def calc_gamma(self, v):
         """
-        Calculates thermal velocity from a temperature, where thermal velocity
-        is defined as the most probable speed
-
-        T_eV is temperature in eV
-
-        can also be found with: d/dv( v*f(v) ) = 0
-
-        note that this is for v, not vPerp or v||
+        Takes in the velocity and returns the relativistic gamma
+        necessary when calculating helical trajectories
         """
-        return np.sqrt(2.0*T_eV/(self.mass_eV/self.c**2))
+        
+        return (1/(1 - v**2/self.c**2))
+    
+    
+    def readREFile(self, path:str):
+        """
+        reads a filament csv input file
+
+        generates a data pd array
+        """
+
+        filFile = path + 'Runaways.csv'
+        self.REData = pd.read_csv(filFile, sep=',', comment='#', skipinitialspace=True)
+        print(self.REData.columns)
+        print(self.REData.to_dict().keys())
+        return
+
+    """
+    Add intialize_REdist() (not from dict)? 
+    """    
+    
+    def setupRETime(self):
+        """
+        sets up filament timesteps using data from filament file
+        """
+        try:
+            df = self.REData      
+            df['N_dt'] = (df['tMax[s]'] - df['tMin[s]']) / df['dt[s]']
+            df['N_dt'] = df['N_dt'].round(0)
+            df['N_dt'] = df['N_dt'].astype(int)
+            df['tNew'] = df.apply( lambda x:  np.linspace(x['tMin[s]'],x['tMax[s]'],x['N_dt']+1), axis=1)
+            self.tsFil = df['tNew'].values
+
+        except:
+            print("\n\nError setting up filament time.  Check your filament file\n\n")
+            log.info("\n\nError setting up filament time.  Check your filament file\n\n")
+            sys.exit()
+        return
+    
+    def initializeREdistFromDict(self, REDict:dict, id:int, ep:object):
+        """
+        initializes Runaway electron distribution from a dictionary (read from csv file in HEAT)
+
+        dictionary is originally a pandas dataframe, so each row in the filament.csv
+        HEAT file is a new id # in the dict.  each row can therefore be accessed by:
+        filDict['<parameter>'][<row#>]
+        ep is equilParams object
+        """
+        #initialize this filament
+        try:
+            self.rCtr = REDict['rCtr[m]'][id]
+            self.zCtr = REDict['zCtr[m]'][id]
+            self.phi = np.radians(REDict['phiCtr[deg]'][id])
+            self.xCtr = self.rCtr * np.cos(self.phi)
+            self.yCtr = self.rCtr * np.sin(self.phi)
+            self.sig_b = REDict['sig_b[m]'][id]
+            self.sig_r = REDict['sig_r[m]'][id]
+            self.sig_p = REDict['sig_p[m]'][id]
+            self.tMin = REDict['tMin[s]'][id]
+            self.tMax = REDict['tMax[s]'][id]
+            self.dt = REDict['dt[s]'][id]
+            self.N_sig_r = REDict['N_sig_r'][id]
+            self.N_sig_p = REDict['N_sig_p'][id]
+            self.N_sig_b = REDict['N_sig_b'][id]
+            self.N_r = REDict['N_r'][id]
+            self.N_p = REDict['N_p'][id]
+            self.N_b = REDict['N_b'][id]
+            self.N_vS = REDict['N_vS'][id]
+            self.E_av = REDict['E_av[eV]'][id]
+            self.decay_t = REDict['decay_t[s]'][id]
+            self.N_src_t = REDict['N_src_t'][id]
+            self.E_max = REDict['E_max[eV]'][id]
+            self.E_min = REDict['E_min[eV]'][id]
+            self.IRE = REDict['IRE[A]'][id]
+            self.I_dir = REDict['I_dir'][id] #Electrons will be moving in opposite direction of I_dir
+            # self.Uniform_vel todo
+            self.v_r = 0 #backdoor thing, should  probably change this
+
+            self.ep = ep
+
+        except:
+            print("\n\nCould not initialize runaways.  Check your input file!")
+            log.info("\n\nCould not initialize runaways.  Check your input file!")
+            sys.exit()
+
+        return
+    
+    def calcTotalE(self):
+        vave = self.E2v_electron(self.E_av)
+        Nre = self.IRE*2*np.pi*self.ep.g['RmAxis']/(vave* self.e)
+        self.E0 = Nre * self.E_av * self.e # check e
+
+    
+    def RECtrBtrace(self, MHD:object, t:float):
+        """
+        traces magnetic field at RE dist center
+        
+        blatantly stolen from filament class
+
+        PFC object used to get paths
+        MHD object used for traces
+        t used for name of geqdsk for MAFOT
+        """
+        #calculate field line for filament center
+        xyz = np.array([self.xCtr,self.yCtr,self.zCtr])
+        dphi = 1.0
+        MHD.ittStruct = 360.0 #360 degree trace
+        MHD.writeMAFOTpointfile(xyz,self.gridfileStruct)
+        MHD.writeControlFile(self.controlfilePath+self.controlfileStruct, t, 0, mode='struct') #0 for both directions
+        MHD.getFieldpath(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, paraview_mask=False, tag=None)
+        Btrace = tools.readStructOutput(self.structOutfile) 
+        os.remove(self.structOutfile)
+        return Btrace
+
+    def findGuidingCenterPaths(self, pts:np.ndarray, MHD:object, traceDir:float):
+        """
+        creates MAFOT point files and control files, then runs heatstructure MAFOT program
+        
+        Again stolen from filament class
+        
+        todo: ask Alex or Tom about directional defintions 
+        
+        pts are pts we want to trace from
+        MHD is a HEAT MHD object
+        traceDir is not self.traceDir, but rather a variable set by filament tracer that 
+           defines MAFOT mapDirection
+           
+        """
+        MHD.ittStruct = 1.0
+        #forward trace
+        MHD.writeMAFOTpointfile(pts,self.gridfileStruct)
+        MHD.writeControlFile(self.controlfilePath+self.controlfileStruct, self.tEQ, traceDir, mode='struct') #0 for both directions
+        MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
+                                self.controlfileStruct)
+
+        structData = tools.readStructOutput(self.structOutfile)
+        os.remove(self.structOutfile) #clean up
+        #traces are always saved in positive toroidal direction
+        if traceDir == 1.0:
+            q1 = structData[0::2,:] #even indexes are first trace point
+            q2 = structData[1::2,:] #odd indexes are second trace point
+        elif traceDir == -1.0:
+            q1 = structData[1::2,:] #odd indexes are first trace point
+            q2 = structData[0::2,:] #even indexes are second trace point
+
+        return q1, q2
+    
+    def buildIntersectionMesh(self):
+        """
+        builds intersection mesh for open3d ray tracing
+        """
+        Nt = len(self.t1)
+        targets = np.hstack([self.t1, self.t2, self.t3]).reshape(Nt*3,3)
+        #cast variables to 32bit for C
+        vertices = np.array(targets.reshape(Nt*3,3), dtype=np.float32)
+        triangles = np.array(np.arange(Nt*3).reshape(Nt,3), dtype=np.uint32)
+        #build intersection mesh and tensors for open3d
+        self.mesh = o3d.t.geometry.TriangleMesh()
+        self.scene = o3d.t.geometry.RaycastingScene()
+        self.mesh_id = self.scene.add_triangles(vertices, triangles)
+        return
+
+    def traceREParticles(self, MHD: object, ts:np.ndarray , tIdx:int):
+        """
+        Traces RE macro-particles
+        
+        
+        Based on the filament tracing code 
+        
+        todo: figure this out, think about it a bit harder
+        
+        Uses Open3D to accelerate the calculation:
+        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
+        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
+        """
+        pts = self.xyzPts.reshape(self.N_b*self.N_r*self.N_p, 3)
+        print(pts)
+        N_pts = len(pts)
+        N_ts = len(ts)
+        print(ts)
+        print(self.N_vS)
 
 
-    def setupFreqs(self, B):
+        print('Number of target faces: {:f}'.format(self.Nt))
+        log.info('Number of target faces: {:f}'.format(self.Nt))
+        print('Number of filament source points: {:f}'.format(N_pts))
+        log.info('Number of filament source points: {:f}'.format(N_pts))
+        # x = 5/0
+        #setup velocities
+        self.setupParallelVelocities()
+        #initialize trace step matrix
+        self.xyzSteps = np.zeros((self.N_vS, N_pts, N_ts, 3))
+
+        #build intersection mesh
+        self.buildIntersectionMesh()
+        intersectRecord = np.ones((self.N_vS, N_pts, N_ts))*np.nan
+        #hdotn = np.ones((N_pts))*np.nan
+        #initialize shadowMask matrix
+        shadowMask = np.zeros((N_pts))
+
+        for i in range(self.N_vS):
+            print("\n---Tracing for velocity slice: {:f} [m/s]---\n".format(self.vSlices[0,i]))
+            log.info("\n---Tracing for velocity slice: {:f} [m/s]---\n".format(self.vSlices[0,i]))
+            #update time counting variables
+            tsNext = np.ones((N_pts))*ts[tIdx]
+            t_tot = np.ones((N_pts))*ts[tIdx]
+            tIdxNext = np.zeros((N_pts), dtype=int) + tIdx
+            vec = np.zeros((N_pts, 3))
+            frac = np.zeros((N_pts))
+            use = np.arange(N_pts)
+
+            #save macroparticle coordinates at t0, increment next
+            self.xyzSteps[i,:,tIdxNext,:] = pts
+            tIdxNext += 1
+            tsNext = ts[tIdxNext]
+            launchPt = pts.copy()
+            v_b = self.vSlices[:,i]
+            sumCount = 0
+
+            #check if v_b is positive or negative and trace accordingly
+            # todo ask about this? 
+            if v_b[0] > 0:
+                traceDir = 1.0
+            else:
+                traceDir = -1.0
+
+            #walk along field line, correcting for v_r, looking for intersections,
+            #saving coordinates at ts
+            while len(use) > 0:
+                #calculate guiding center path for one step
+                q1, q2 = self.findGuidingCenterPaths(launchPt[use], MHD, traceDir)
+                #correct guiding center path using radial velocity
+                d_b = np.linalg.norm((q2-q1), axis=1) #distance along field
+                t_b = d_b / np.abs(v_b)[use] #time along field for this step
+                t_tot[use] += t_b #cumulative time along field
+                d_r = 0 # I think the radial distance will be approx 0 here? t_b * self.v_r #radial distance
+
+                #generate local radial coordinate transformation
+                R = np.sqrt(q2[:,0]**2 + q2[:,1]**2)
+                Z = q2[:,2]
+                phi = np.arctan2(q2[:,1], q2[:,0])
+                rVec = self.fluxSurfNorms(self.ep, R, Z)
+                rX, rY, rZ = tools.cyl2xyz(rVec[:,0], rVec[:,2], phi, degrees=False)
+                rVecXYZ = np.vstack((rX,rY,rZ)).T
+                rMag = np.linalg.norm(rVecXYZ, axis=1)
+                rN = rVecXYZ / rMag[:,None]
+                
+                #magnetic field line trace corrected with radial (psi) velocity component
+                q3 = q2 #+ d_r[:,np.newaxis] * rN
+                vec[use] = q3-q1
+                frac[use] = (tsNext[use] - t_tot[use] + t_b) / t_b
+
+                if len(use) > 0:
+                    launchPt[use] = q3
+
+                #construct rays
+                rMag = np.linalg.norm(vec[use], axis=1)
+                rNorm = vec[use] / rMag.reshape((-1,1))
+
+                #calculate intersections
+                mask = np.ones((len(q3)))
+                rays = o3d.core.Tensor([np.hstack([np.float32(q1),np.float32(rNorm)])],dtype=o3d.core.Dtype.Float32)
+                hits = self.scene.cast_rays(rays)
+                #convert open3d CPU tensors back to numpy
+                hitMap = hits['primitive_ids'][0].numpy()
+                distMap = hits['t_hit'][0].numpy()
+
+                #escapes occur where we have 32 bits all set: 0xFFFFFFFF = 4294967295 base10
+                escapes = np.where(hitMap == 4294967295)[0]
+                mask[escapes] = 0.0
+                #when distances to target exceed the trace step, we exclude any hits
+                tooLong = np.where(distMap > rMag)[0]
+                mask[tooLong] = 0.0
+
+                #put hit index in intersectRecord for tIdxNext if we hit
+                if np.sum(mask)>0:
+                    #we found a hit, or multiple
+                    idxHit = np.where(mask==1)[0]
+                    intersectRecord[i, use[idxHit], tIdxNext[use[idxHit]]] = hitMap[idxHit]
+                    #hdotn[i] = np.dot(self.intersectNorms[int(intersectRecord[i])],rNorm[idxHit])
+                    sumCount += np.sum(mask)
+                #else:
+                #    #return nan if we didnt hit anything
+                #    intersectRecord[i, use, tIdxNext[use]] = np.nan
+                #    #hdotn[i] = np.nan
+
+                #particles we need to keep tracing (didnt hit and less than tMax)
+                test1 = np.where(np.isnan(intersectRecord[i, use, tIdxNext[use]]) == True)[0]
+                test2 = np.where(t_tot[use] < self.tMax)[0]
+
+                #use = np.where(np.logical_or(test1,test2)==True)[0]
+                #use = np.intersect1d(test1,test2)
+                #use = np.intersect1d(np.intersect1d(test1,test2),use)
+                use = use[np.intersect1d(test1,test2)]
+
+
+                #For testing
+                
+                #print(self.tMax)
+                #print(d_b[0])
+                #print(t_b[0])
+                #print(t_tot)
+                #print(d_r[0])
+                #print(q1[0])
+                #print(q2[0])
+                #print(q3[0])
+                #print(rN[0])
+                #print(d_r.T.shape)
+                #print(rN.shape)
+                #print(tsNext)
+                #print(self.xyzSteps)
+                #input()
+
+                #record particle locations for particles that exceeded timestep
+                use2 = np.where(t_tot > tsNext)[0] #particles that crossed a timestep
+                use3 = np.intersect1d(use,use2) #crossed a timestep and still not crossed tMax, indexed to N_pts
+                use4 = np.where(t_tot[use] > tsNext[use])[0] #crossed a timestep and still not crossed tMax, indexed to use
+                if len(use3) > 0:
+                    self.xyzSteps[i,use3,tIdxNext[use3],:] = q1[use4] + vec[use3]*frac[use3,None]
+                    tIdxNext[use3]+=1
+                    tsNext[use3] = ts[tIdxNext[use3]]
+
+            #record the final timestep       
+            self.xyzSteps[i,:,-1,:] = launchPt + vec*frac[:,None]
+
+        #record the final intersectRecord
+        self.intersectRecord = intersectRecord
+        return
+    
+    def setupParallelVelocities(self, pdf = None):
+        """
+        split each source point into N macro-particles, 
+        using the Energy distribution function, then translating energy into velocity
+        
+
+        """
+        self.vSlices = np.ones((self.N_b*self.N_r*self.N_p, self.N_vS))*np.nan #velocity for each macroparticle
+        self.energySlices = np.ones((self.N_b*self.N_r*self.N_p, self.N_vS))*np.nan #Energy in eV for each macroparticle
+        self.energyFracs = np.zeros((self.N_b*self.N_r*self.N_p, self.N_vS)) # Fraction of the total energy from that starting point
+        self.vBounds = np.zeros((self.N_b*self.N_r*self.N_p, self.N_vS+1))
+
+        E = np.linspace(self.E_min, self.E_max, 10000)
+        #If a pdf is not put in, uses an exponentially decaying profile
+       
+        if pdf is None:
+            Epdf =  1/self.E_av * np.exp(- E/self.E_av)
+
+        Ecdf = np.cumsum(Epdf[1:])*np.diff(E)
+        Ecdf = np.insert(Ecdf, 0, 0)
+        #create bspline interpolators for the cdf and cdf inverse
+        inverseCDF = interp1d(Ecdf, E, kind='linear')
+        forwardCDF = interp1d(E, Ecdf, kind='linear')
+        cdfBounds = np.linspace(0,Ecdf[-1],self.N_vS+1)
+        #space bins uniformly, then makes vSlices center of these bins in CDF space
+        cdfSlices = np.diff(cdfBounds)/2.0 + cdfBounds[:-1]
+
+        
+        
+        for i in range(self.N_b*self.N_r*self.N_p):
+            # If you only want 1 velocity slice, sets that energy to the average enrgy
+            if self.N_vS == 1:
+                self.energySlices[i,:] = np.array([self.E_av]) 
+            else:
+                self.energySlices[i,:] = inverseCDF(cdfSlices)
+            self.vSlices[i,:] = self.E2v_electron(self.energySlices[i,:])
+
+            #energy fracs (for energy fluxes) (could probably do this outside of a loop)
+            energyTotal = np.sum(self.energySlices[i,:])
+            for j in range(self.N_vS):
+                self.energyFracs[i,j] = self.energySlices[i,j] / energyTotal 
+        return
+            
+    def test_vel_splitting(self, E_av, E_min, E_max, N_vs, N_b = 1, N_r = 1, N_p = 1):
+        self.E_av = E_av
+        self.E_min = E_min
+        self.E_max = E_max
+        self.N_b = N_b
+        self.N_r = N_r
+        self.N_p = N_p
+        self.N_vS = N_vs
+        self.setupParallelVelocities()
+        print(self.energySlices/1e6)
+        print(self.vSlices)
+        print(self.energyFracs)
+        
+    def createSource(self, t:float, Btrace:np.ndarray):
+        """
+        creates a filament at time t
+
+        t is timestep at which we calculate filament
+        so t in gaussian is t-tMin
+
+        Btrace is magnetic field line trace from MAFOT for filament ctr
+
+        """
+        self.gridPsiThetaDistAtCtr(self.rCtr, self.zCtr, multR=10.0, multZ = 10.0)
+        #discretize filament into macroparticle sources along field line
+        self.discretizeRunaways(self.N_r,self.N_p,self.N_b, Btrace, self.N_sig_r, self.N_sig_p, self.N_sig_b)
+        self.gaussianAtPts(self.ctrPts, self.xyzPts, t-self.tMin, self.v_r)
+        return
+               
+            
+        
+    def fluxSurfNorms(self, ep: object, R:np.ndarray, Z:np.ndarray):
+        
+        """
+        Calculates vectors normal to poloidal flux surfaces at R,Z coordinates
+        
+        stolen from filament class
+
+        returns normal vector coordinates in (R, Phi, Z)
+
+        phiNorm is returned as 0
+        """       
+        if np.isscalar(R):                   
+            R = np.array([R])
+        if np.isscalar(Z):                   
+            Z = np.array([Z])
+
+        Br = ep.BRFunc.ev(R,Z)
+        Bz = ep.BZFunc.ev(R,Z)
+        Bt = ep.BtFunc.ev(R,Z)
+        Bp = np.sqrt(Br**2+Bz**2)
+
+        Bmag = np.sqrt(Bt**2 + Bp**2)
+
+
+        bt = np.zeros((len(Bt), 3)) #R,t,Z
+        bp = np.zeros((len(Bp), 3)) #R,t,Z
+    
+        #bt[:,1] = Bt / Bmag
+        #bp[:,0] = Br / Bmag
+        #bp[:,2] = Bz / Bmag
+
+        bt[:,1] = -1.0
+        bp[:,0] = Br / Bp
+        bp[:,2] = Bz / Bp
+
+
+        norms = np.cross(bt,bp)
+
+
+        mag = np.linalg.norm(norms, axis=1)
+        r_hat = np.zeros((len(norms), 3))
+        r_hat = norms / mag[:, None]
+
+        return r_hat
+    
+    
+    def poloidalVectors(self, ep: object, R: np.ndarray ,Z: np.ndarray):
+        """
+        Calculates vectors tangent to poloidal flux surfaces in RZ plane at R,Z coordinates
+        
+        returns normal vector coordinates in (R, Phi, Z)
+
+        phiNorm is returned as 0
+        """
+
+        if np.isscalar(R):                   
+            R = np.array([R])
+        if np.isscalar(Z):                   
+            Z = np.array([Z])
+
+
+        Br = ep.BRFunc.ev(R,Z)
+        Bz = ep.BZFunc.ev(R,Z)
+        Bt = ep.BtFunc.ev(R,Z)
+        Bp = np.sqrt(Br**2+Bz**2)
+
+        Bmag = np.sqrt(Bt**2 + Bp**2)
+
+        bp = np.zeros((len(Bp), 3)) #R,phi,Z
+
+        bp[:,0] = Br / Bp
+        bp[:,2] = Bz / Bp
+
+        return bp 
+    
+
+    
+    def interpolateTrace(self, traceData:np.ndarray, N:int, addRawData=False):
+        """
+        given a trace of coordinates, interpolates to N discrete points
+        """
+        #calculate distance along wall
+        dist = self.distance(traceData)
+        
+        # Resolution we need given the inputs
+        resolution = (dist[-1] - dist[0])/float(N)
+        print("Resolution: {:f} m".format(resolution))
+        # Calculate how many total grid points we need based upon resolution and
+        # total distance around curve/wall
+        numpoints = int(np.ceil((dist[-1] - dist[0])/resolution))
+        # Spline Interpolation (linear) - Make higher resolution wall.
+        interpolator = interp.interp1d(dist, traceData, kind='slinear', axis=0)
+        alpha = np.linspace(dist[0], dist[-1], numpoints+2)[1:-1]
+        #add in raw data points so that we preserve the corners
+        if addRawData == True:
+            alpha = np.sort(np.hstack([alpha, dist]))
+        
+        interpolated_points = interpolator(alpha)
+        arr, idx = np.unique(interpolated_points, axis=0, return_index=True)
+        interpolated_points = arr[np.argsort(idx)]
+     
+        return interpolated_points, alpha
+    
+    def distance(self, traceData:np.ndarray):
+        """
+        Calculate distance along curve/wall (also called S) of ND points:
+        """
+        distance = np.cumsum(np.sqrt(np.sum(np.diff(traceData,axis=0)**2,axis=1)))
+        distance = np.insert(distance, 0, 0)
+        return distance
+
+    def gridPsiThetaDistAtCtr(self, rCtr:float, zCtr:float, multR=10.0, multZ = 10.0):
+        """
+        generates an RZ grid, and then calculates distances [m] on that grid
+        in the psi and theta directions from (self.rCtr, self.zCtr)
+
+        these distances can then be used by gaussian
+
+        multR is multiplier to create R width of grid: R width = multR*sigma_r
+        multZ is multiplier to create Z height of grid: Z height = multZ*sigma_z
+        """
+        ep = self.ep
+        sigma_r = self.sig_r
+        sigma_p = self.sig_p
+
+        #build rectilinear coordinates around the ctr
+        r = np.linspace(rCtr - multR*sigma_r, rCtr + multR*sigma_r, 100)
+        z = np.linspace(zCtr - multZ*sigma_p, zCtr + multZ*sigma_p, 100)
+        R,Z = np.meshgrid(r,z)
+
+        psiCtr, distPsi, thetaCtr, distTheta = self.fluxCoordDistance(rCtr,zCtr,R,Z)
+
+        #set class variables
+        self.distPsi = distPsi
+        self.distTheta = distTheta
+        self.rGrid = r
+        self.zGrid = z
+        self.psiCtr = psiCtr
+        self.thetaCtr = thetaCtr
+        self.gridShape = R.shape
+        return
+
+
+    def gaussian1D(self, B:float, x:np.ndarray, x0=0.0):
+        """
+        returns a 1D gaussian
+        """
+        g = np.sqrt(B/np.pi) * np.exp(-B*(x-x0)**2)
+        return g
+        
+    def gaussianAtPts(self, ctrPts: np.ndarray, xyzPts: np.ndarray, t: float, v_r:float):
+        """
+        calculates a gaussian, centered at ctrPts, evaluated at xyzPts, at time t
+        v_r is radial velocity
+
+        saves gaussian values on 3D grid, as well as distances (psi, theta) used to
+        evaluate the gaussian        
+
+        calculates fractional density, n/n0, at each point
+        """
+        gaussian = np.zeros((xyzPts.shape[:-1]))
+        dPsi = np.zeros((xyzPts.shape[:-1]))
+        dTheta = np.zeros((xyzPts.shape[:-1]))
+        dB = np.zeros((xyzPts.shape[:-1]))
+
+        for i,ctr in enumerate(ctrPts):
+            rCtr, zCtr, phiCtr = tools.xyz2cyl(ctr[0],ctr[1],ctr[2])
+            xyz = xyzPts[i]
+            R,Z,phi = tools.xyz2cyl(xyz[:,:,0],xyz[:,:,1],xyz[:,:,2])
+            psiCtr, distPsi, thetaCtr, distTheta = self.fluxCoordDistance(rCtr,zCtr,R,Z)
+
+            #2D gaussian (not used)
+            #g = self.gaussian2D(distPsi,distTheta,self.sig_r,self.sig_p,t,v_r,self.E0)
+
+            #3D gaussian
+            g = self.gaussian3D(distPsi,distTheta,self.distB[i],self.sig_r,self.sig_p,self.sig_b,t,v_r)
+            gaussian[i,:,:] = g
+            dPsi[i,:,:] = distPsi
+            dTheta[i,:,:] = distTheta
+            dB[i,:,:] = self.distB[i]
+
+        #now build weights for gaussian  
+        int_r = np.zeros((self.r_pts.shape))
+        rBounds = np.diff(self.r_pts) / 2.0 + self.r_pts[:-1]
+        rBounds = np.insert(rBounds, 0, -10*self.sig_r)
+        rBounds = np.insert(rBounds, len(rBounds), 10*self.sig_r)
+        for i in range(self.N_r):
+            lo = rBounds[i]
+            hi = rBounds[i+1]
+            int_r[i] = integrate.quad(self.f_r, lo, hi)[0]
+
+        int_p = np.zeros((self.p_pts.shape))
+        pBounds = np.diff(self.p_pts) / 2.0 + self.p_pts[:-1]
+        pBounds = np.insert(pBounds, 0, -10*self.sig_p)
+        pBounds = np.insert(pBounds, len(pBounds), 10*self.sig_p)
+        for i in range(self.N_p):
+            lo = pBounds[i]
+            hi = pBounds[i+1]
+            int_p[i] = integrate.quad(self.f_p, lo, hi)[0]
+
+        int_b = np.zeros((self.b_pts.shape))
+        bBounds = np.diff(self.b_pts) / 2.0 + self.b_pts[:-1]
+        bBounds = np.insert(bBounds, 0, -10*self.sig_b)
+        bBounds = np.insert(bBounds, len(bBounds), 10*self.sig_b)
+        for i in range(self.N_b):
+            lo = bBounds[i]
+            hi = bBounds[i+1]
+            int_b[i] = integrate.quad(self.f_b, lo, hi)[0]
+
+        #now build time weight, slices are also bin boundaries here
+        self.tSrc = self.ts[:self.N_src_t]
+        self.f_t = lambda t: (1.0 / self.decay_t) * np.exp(-(t-self.tSrc[0]) / self.decay_t)
+        int_t = np.zeros((self.N_src_t))
+        tBounds = np.zeros((self.N_src_t+1))
+        tBounds[:-1] = self.tSrc.copy()
+        tBounds[-1] = self.tSrc[-1] + self.dt
+        for i in range(self.N_src_t):
+            lo = tBounds[i]
+            hi = tBounds[i+1]
+            int_t[i] = integrate.quad(self.f_t, lo, hi)[0]
+
+        #scale weights so that sum=1 (all particles/energy gets exhausted)
+        tFracSum = np.sum(int_t)
+        tFrac = int_t / tFracSum
+
+        #build 4D energy density hypercube weight matrix
+        B,R,P,T = np.meshgrid(int_b,int_r,int_p,tFrac, indexing='ij')
+        weights = B*R*P*T
+
+        self.density = weights
+        self.distPsi = dPsi
+        self.distTheta = dTheta
+        return
+
+    def fluxCoordDistance(self, r0:float, z0:float, R:np.ndarray, Z:np.ndarray):
+        """
+        calculates euclidean distance along flux coordinate surfaces (psi and poloidal)
+        from rCtr,zCtr on an R,Z grid. 
+
+        rCtr and zCtr:  coordinate to calculate flux coordinates at / distance from
+        R,Z: meshgrid around rCtr,zCtr
+
+        returns psiCtr, distPsi, thetaCtr, distTheta
+        """
+        ep = self.ep
+
+        #flux coordinates of ctr
+        psiCtr = ep.psiFunc(r0, z0)
+        thetaCtr = self.thetaFromRZ(ep, r0, z0)
+
+        #==Find radial coordinates
+        #Find coordinate transformation at ctr
+        psiaxis = ep.g['psiAxis']
+        psiedge = ep.g['psiSep']
+        deltaPsi = np.abs(psiedge - psiaxis)
+        Bp = ep.BpFunc(r0,z0)
+        gradPsi = Bp*r0
+        xfm = gradPsi / deltaPsi
+        #convert distance in psi to euclidean coordinates
+        psiRZ = ep.psiFunc.ev(R,Z)
+        distPsi = (psiRZ - psiCtr) / xfm #on grid
+
+
+        #===Find poloidal coordinates
+        thetaRZ = self.thetaFromRZ(ep, R.flatten(), Z.flatten())
+        #surfR, surfZ = ep.flux_surface(psiCtr, Npts, thetaRZ[sortIdx])
+        surfR = ep.g['lcfs'][:,0]
+        surfZ = ep.g['lcfs'][:,1]
+        thetaSurf = self.thetaFromRZ(ep, surfR, surfZ)
+        #calculate distance along flux surface
+        surface = np.vstack((surfR, surfZ)).T
+        dSurf = self.distance(surface)
+        #interpolator that maps theta back to distance along the flux surface
+        interpolator = interp.interp1d(thetaSurf, dSurf, kind='slinear', axis=0)
+        dCtr = interpolator(thetaCtr)
+        distTheta = interpolator(thetaRZ) - dCtr
+        distTheta = distTheta.reshape(R.shape) #on grid
+
+        return psiCtr, distPsi, thetaCtr, distTheta
+        
+    def thetaFromRZ(self, ep:object, R:np.ndarray, Z:np.ndarray):
+        """
+        calculates poloidal coordinate, theta, at R,Z given an equilibrium (ep) object
+
+        returns theta
+        """
+        r_hat = self.fluxSurfNorms(ep, R, Z)
+        r_hat = np.delete(r_hat, 1, 1)  # delete second column (phi)
+        R_hat = np.array([1.0, 0.0])
+        theta = np.arccos(np.dot(r_hat, R_hat))
+        zMid = ep.g['ZmAxis']
+        idx = np.where(Z < zMid)[0]
+        theta[idx] *= -1.0
+        return theta
+    
+    
+    def discretizeRunaways(self, N_r: int, N_p: int, N_b: int, Btrace: np.ndarray, 
+                           N_sig_r: int, N_sig_p: int, N_sig_b: int):
+        """
+        takes user input parameters and builds a filament 
+        
+        N_r: number of discrete points in radial (psi) direction
+        N_p: number of discrete points in poloidal direction
+        N_b: number of discrete points along B field line
+        N_sig_r : # of self.sig_r widths for points to cover in +/- radial direction
+        N_sig_p : # of self.sig_p widths for points to cover in +/- poloidal direction
+        N_sig_0 : # of self.sig_0 widths for points to cover in +/- parallel direction
+        
+        stolen from filament class
+        """
+        d_b = self.distance(Btrace)
+        #find index of filament center
+        ctr = np.array([self.xCtr, self.yCtr, self.zCtr])
+        idx = np.argmin(np.sum(np.abs(Btrace-ctr), axis=1))      
+        d_b = d_b - d_b[idx]
+        use = np.where(np.abs(d_b) < N_sig_b*self.sig_b)[0]
+
+        #calculate center coordinates along field line
+        self.ctrPts, alpha = self.interpolateTrace(Btrace[use], N_b, addRawData=False)
+        self.distB = alpha - np.max(alpha) / 2.0
+
+        #calculate points in parallel (B) direction
+        bMax = N_sig_b * self.sig_b
+        b_pts = np.linspace(-bMax, bMax, N_b)
+
+        #calculate points in radial (psi) direction
+        rMax = N_sig_r * self.sig_r
+        r_pts = np.linspace(-rMax, rMax, N_r+2)[1:-1]
+
+        #calculate points in poloidal direction
+        pMax = N_sig_p * self.sig_p
+        p_pts = np.linspace(-pMax, pMax, N_p+2)[1:-1]
+
+        #get radial (psi) vectors for each ctrPt
+        R = np.sqrt(self.ctrPts[:,0]**2+self.ctrPts[:,1]**2)
+        Z = self.ctrPts[:,2]
+        phi = np.arctan2(self.ctrPts[:,1], self.ctrPts[:,0])
+        rVec = self.fluxSurfNorms(self.ep, R, Z)
+
+        #convert from R,phi,Z to xyz
+        rX, rY, rZ = tools.cyl2xyz(rVec[:,0], rVec[:,2], phi, degrees=False)
+        rVecXYZ = np.vstack((rX,rY,rZ)).T
+        rMag = np.linalg.norm(rVecXYZ, axis=1)
+        rN = rVecXYZ / rMag[:,None]
+
+        #get poloidal vectors for each ctrPt
+        pVec = self.poloidalVectors(self.ep, R, Z)
+        #convert from R,phi,Z to xyz
+        pX, pY, pZ = tools.cyl2xyz(pVec[:,0], pVec[:,2], phi, degrees=False)
+        pVecXYZ = np.vstack((pX,pY,pZ)).T
+        pMag = np.linalg.norm(pVecXYZ, axis=1)
+        pN = pVecXYZ / pMag[:,None]
+
+
+        #create xyz coordinates for each filament source pt
+        xyzPts = np.ones((N_b, N_r, N_p,3))*np.nan
+        for i in range(N_b):
+            for j in range(N_r):
+                for k in range(N_p):
+                    xyzPts[i,j,k,:] = self.ctrPts[i] + r_pts[j]*rN[i] - p_pts[k]*pN[i]
+
+        self.xyzPts = xyzPts
+        self.rN = rN
+        self.pN = pN
+        self.b_pts = b_pts
+        self.p_pts = p_pts
+        self.r_pts = r_pts
+
+        #project user defined toroidal rotation velocity along the field line at center point
+        
+        '''
+        Br = self.ep.BRFunc.ev(self.rCtr,self.zCtr)
+        Bz = self.ep.BZFunc.ev(self.rCtr,self.zCtr)
+        Bt = self.ep.BtFunc.ev(self.rCtr,self.zCtr)
+        Bp = np.sqrt(Br**2+Bz**2)
+        Bmag = np.sqrt(Bt**2 + Bp**2)
+        self.v_rot_b = self.v_t * Bmag / Bt
+        '''
+
+        return
+    
+    def gaussian3D(self, dx:np.ndarray, dy:np.ndarray, dz:np.ndarray, 
+                   sigX:float, sigY:float, sigZ:float, 
+                   t:float , v_r:float, A=1.0):
+        """
+        calculates gaussian function with three spatial dimensions and 1 time dimension
+
+        corresponds to density in Fundamenski advective-diffusive model
+
+        dx,dy,dz are distances from center point
+        sigX,sigY,sigZ are standard deviations in each direction
+        t is timestep
+        v_r is radial velocity (other velocity components not implemented, but could be)
+        """
+        A = 1.0
+
+        B_x = 1.0 / (2*sigX**2)
+        B_y = 1.0 / (2*sigY**2)
+        B_z = 1.0 / (2*sigZ**2)
+        #1D gaussians
+        self.f_r = lambda x: self.gaussian1D(B_x, x)
+        self.f_p = lambda y: self.gaussian1D(B_y, y)
+        self.f_b = lambda z: self.gaussian1D(B_z, z)
+        self.f_G = lambda x,y,z: self.f_r(x) * self.f_p(y) * self.f_b(z)
+
+        pdfX = self.f_r(dx - t*v_r)
+        pdfY = self.f_p(dy)
+        pdfZ = self.f_b(dz)
+
+        g = A * pdfX * pdfY * pdfZ
+
+#        print("TEST=====!!!") 
+#        intX = integrate.quad(f_x, 0, sigX*10)[0]
+#        intY = integrate.quad(f_y, 0, sigY*10)[0]
+#        intZ = integrate.quad(f_z, 0, sigZ*10)[0]
+#        print(self.E0)
+#        print(intX)
+#        print(intY)
+#        print(intZ)
+#        print(intX * intY * intZ)
+#        input()
+
+        return g
+    
+    
+    """
+    Below are calculations for helical trajectories
+    have not implimented yet, will do at some later date
+    """
+
+    def setupFreqs(self, B, v):
         """
         Calculates frequencies, periods, that are dependent upon B
         These definitions follow Freidberg Section 7.7.
 
         B is magnetic field magnitude
+        Requires that v, B have the same length
 
         """
-        self.omegaGyro = self.Z * self.e * B / (self.mass_eV / self.kg2eV)
+        gamma = self.calc_gamma(v)
+        self.omegaGyro = self.e * B / (self.me / self.kg2eV) / gamma
         if np.isscalar(self.omegaGyro):
             self.omegaGyro = np.array([self.omegaGyro])
 
@@ -182,8 +1038,9 @@ class GYRO:
 
     def setupRadius(self, vPerp):
         """
-        calculates gyro radius.
-
+        calculates gyro radius using equations from Boozer PofP 2015
+	
+	
         rGyro has a column for each MC run (N_MC columns), and a
         row for each point on the PFC (N_pts), so it is a matrix
         of shape: N_pts X N_MC
@@ -199,135 +1056,16 @@ class GYRO:
         self.rGyro = np.zeros((N_pts,N_MC))
 
         for i in range(N_MC):
-            self.rGyro[:,i] = vPerp[i] / np.abs(self.omegaGyro)
+            self.rGyro[:,i] =  vPerp[i] / np.abs(self.omegaGyro)
 
         return
 
     def setupVelocities(self, N):
-        """
-        sets up velocities based upon vMode input from GUI
-
-        N is the number of source mesh elements (ie len(PFC.centers) )
-
-        len(self.t1) is number of points in divertor we are calculating HF on
-        """
-        #get velocity space phase angles
-        self.uniformVelPhaseAngle()
-
-        if self.vMode == 'single':
-            print("Gyro orbit calculation from single plasma temperature")
-            log.info("Gyro orbit calculation from single plasma temperature")
-            self.T0 = np.ones((N))*self.gyroT_eV
-            #get average velocity for each temperature point
-            self.vThermal = self.temp2thermalVelocity(self.T0)
-            #set upper bound of v*f(v) (note that this cuts off high energy particles)
-            self.vMax = 5 * self.vThermal
-            #get 100 points to initialize functional form of f(v) (note this is a 2D matrix cause vMax is 2D)
-            self.vScan = np.linspace(0,self.vMax,10000).T
-            #get velocity slices for each T0
-            self.pullEqualProbabilityVelocities()
-
-        else:
-            #TO ADD THIS YOU WILL NEED TO PASS IN XYZ COORDINATES OF CTRS AND INTERPOLATE
-            print("3D plasma temperature interpolation from file not yet supported.  Run gyro orbits in single mode")
-            log.info("3D plasma temperature interpolation from file not yet supported.  Run gyro orbits in single mode")
-
+	#todo
         return
 
     def pullEqualProbabilityVelocities(self):
-        """
-        creates vSlices: array of velocities indexed to match T0 array (or PFC.centers)
-
-        each vSlice is positioned at a place in the PDF so it has an equal probability
-        of occuring.  ie the area under the PDF curve between each vSlice is equal.
-
-        in loop, i is mesh element index
-        """
-        self.vSlices = np.ones((len(self.T0),self.N_vSlice))*np.nan
-        self.energySlices = np.zeros((len(self.T0),self.N_vSlice))
-        self.energyIntegrals = np.zeros((len(self.T0),self.N_vSlice))
-        self.energyFracs = np.zeros((len(self.T0),self.N_vSlice))
-        self.vBounds = np.zeros((len(self.T0),self.N_vSlice+1))
-        for i in range(len(self.T0)):
-            #get speed range for this T0
-            v = self.vScan[i,:]
-            #generate the (here maxwellian) velocity vector PDF
-            #pdf = lambda x: (self.mass_eV/self.c**2) / (self.T0[i]) * np.exp(-(self.mass_eV/self.c**2 * x**2) / (2*self.T0[i]) )
-            pdf = lambda x: ( (self.mass_eV/self.c**2) / (2 * np.pi * self.T0[i]) )**(3.0/2.0) * np.exp(-(self.mass_eV/self.c**2 * x**2) / (2*self.T0[i]) )
-            #speed pdf (integrate over solid angle)
-            v_pdf = 4*np.pi * v**2 * pdf(v)
-            #generate the CDF
-            v_cdf = np.cumsum(v_pdf[1:])*np.diff(v)
-            v_cdf = np.insert(v_cdf, 0, 0)
-            #create bspline interpolators for the cdf and cdf inverse
-            inverseCDF = interp1d(v_cdf, v, kind='linear')
-            forwardCDF = interp1d(v, v_cdf, kind='linear')
-            #CDF location of vSlices and bin boundaries
-            cdfBounds = np.linspace(0,v_cdf[-1],self.N_vSlice+1)
-            #CDF location of velocity bin bounds omitting 0 and 1
-            #old method does not make vSlices truly bin centers
-            #cdfBounds = np.linspace(0,1,self.N_vSlice+1)[1:-1]
-
-            #old method 2 spaces centers uniformly
-#            #calculate N_vSlice velocities for each pdf each with equal area (probability)
-#            cdfMax = v_cdf[-1]
-#            cdfMin = v_cdf[0]
-#            sliceWidth = cdfMax / (self.N_vSlice+1)
-#            #CDF location of vSlices omitting 0 and 1
-#            cdfSlices = np.linspace(0,1,self.N_vSlice+2)[1:-1]
-#            #CDF location of velocity bin bounds omitting 0 and 1
-#            #old method does not make vSlices truly bin centers
-#            #cdfBounds = np.linspace(0,1,self.N_vSlice+1)[1:-1]
-#            #new method makes vSlices bin centers, except for the end bins
-#            cdfBounds = np.diff(cdfSlices)/2.0 + cdfSlices[:-1]
-#            #vSlices are Maxwellian distribution sample locations (@ bin centers)
-#            self.vSlices[i,:] = inverseCDF(cdfSlices)
-#            vBounds = inverseCDF(cdfBounds)
-#            vBounds = np.insert(vBounds,0,0)
-#            vBounds = np.append(vBounds,self.vMax[i])
-
-            #new method spaces bins uniformly, then makes vSlices center of these bins in CDF space
-            cdfSlices = np.diff(cdfBounds)/2.0 + cdfBounds[:-1]
-            #vSlices are Maxwellian distribution sample locations (@ bin centers)
-            self.vSlices[i,:] = inverseCDF(cdfSlices)
-            vBounds = inverseCDF(cdfBounds)
-            self.vBounds[i,:] = vBounds
-            #print(cdfBounds)
-            #print(cdfSlices)
-            #print(self.vBounds)
-            #print(self.vSlices)
-
-            #Now find energies that correspond to these vSlices
-            #we integrate: v**2 * f(v)
-            #energy pdf (missing 1/2*mass but that gets divided out later anyways )
-            #EofV = lambda x: x**2 * pdf(x)
-            #EofV = lambda x: 4*np.pi * x**4 * pdf(x)
-
-            #old HEAT method
-            #f_E = lambda x: 2 * np.sqrt(x / np.pi) * (self.T0[i])**(-3.0/2.0) * np.exp(-x / self.T0[i])
-            #reviewer#2 method
-            f_E = lambda x: x**2 * np.exp(-x / self.T0[i])
-
-            #energy slices that correspond to velocity slices
-            self.energySlices[i,:] = f_E(0.5 * (self.mass_eV/self.c**2) * self.vSlices[i,:]**2)
-            #energy integrals
-            for j in range(self.N_vSlice):
-                Elo = 0.5 * (self.mass_eV/self.c**2) * vBounds[j]**2
-                Ehi = 0.5 * (self.mass_eV/self.c**2) * vBounds[j+1]**2
-                self.energyIntegrals[i,j] = integrate.quad(f_E, Elo, Ehi)[0]
-            energyTotal = self.energyIntegrals[i,:].sum()
-            ##for testing
-            #if i==0:
-            #    print("Integral Test===")
-            #    print(energyTotal)
-            #    print(integrate.quad(f_E, 0.0, self.vMax[i])[0])
-
-            #energy fractions
-            for j in range(self.N_vSlice):
-                self.energyFracs[i,j] = self.energyIntegrals[i,j] / energyTotal
-
-        print("Found N_vPhase velocities of equal probability")
-        log.info("Found N_vPhase velocities of equal probability")
+	#todo
         return
 
     def uniformGyroPhaseAngle(self):
@@ -340,826 +1078,12 @@ class GYRO:
         return
 
     def uniformVelPhaseAngle(self):
-        """
-        Sampling of a uniform distribution between 0 and pi/2 (only forward velocities)
-        vPerp is x-axis of velocity space
-        vParallel is y-axis of velocity space
 
-        returns angles in radians
-        """
-        #original method
-        #self.vPhases = np.linspace(0.0,np.pi/2,self.N_vPhase+2)[1:-1]
-
-        #new method
-        #thankyou to NF reviewer #2 for noticing we were not using the correct
-        #sampling function:  we sample uniformly in cos(2*vP) here, which is
-        #the CDF of the velocity space pdf
-        #with bounds in vP between (0,pi/2)
-        #self.vPhases = np.arccos(np.linspace(1.0,-1.0,self.N_vPhase+2)[1:-1])/2.0
-        #self.vPhases = np.arccos(1-2*np.linspace(0,1,self.N_vPhase+2))/2.0
-
-        #beta, the vPhase angle
-        b = np.linspace(0,np.pi/2,10000).T
-        #heat flux pdf for velocity phase
-        pdf = lambda x: np.cos(x)*np.sin(x)*2
-        b_pdf = pdf(b)
-        #generate the CDF
-        b_cdf = np.cumsum(b_pdf[1:])*np.diff(b)
-        b_cdf = np.insert(b_cdf, 0, 0)
-        #create bspline interpolators for the cdf and cdf inverse
-        inverseCDF = interp1d(b_cdf, b, kind='linear')
-        forwardCDF = interp1d(b, b_cdf, kind='linear')
-        #CDF location of vSlices and bin boundaries
-        cdfBounds = np.linspace(0,b_cdf[-1],self.N_vPhase+1)
-        #spaces bins uniformly, then makes vSlices center of these bins in CDF space
-        cdfSlices = np.diff(cdfBounds)/2.0 + cdfBounds[:-1]
-        #vSlices are Maxwellian distribution sample locations (@ bin centers)
-        self.vPhases= inverseCDF(cdfSlices)
-        vBounds = inverseCDF(cdfBounds)
 
         return
 
 
-    def singleGyroTrace(self,vPerp,vParallel,gyroPhase,N_gyroSteps,
-                        BtraceXYZ,controlfilePath,TGyro,rGyro,omegaGyro,
-                        tag=None, verbose=True):
-        """
-        Calculates the gyro-Orbit path and saves to .csv and .vtk
-
-        vPerp and vParallel [m/s] are in velocities
-        gyroPhase [degrees] is initial orbit phase angle
-        N_gyroSteps is number of discrete line segments per gyro period
-        BtraceXYZ is the points of the Bfield trace that we will gyrate about
-        """
-        print("Calculating gyro trace...")
-        log.info("Calculating gyro trace...")
-        log.info(omegaGyro)
-        #Loop thru B field trace while tracing gyro orbit
-        helixTrace = None
-        for i in range(len(BtraceXYZ)-1):
-            #points in this iteration
-            p0 = BtraceXYZ[i,:]
-            p1 = BtraceXYZ[i+1,:]
-            #vector
-            delP = p1 - p0
-            #magnitude or length of line segment
-            magP = np.sqrt(delP[0]**2 + delP[1]**2 + delP[2]**2)
-            #time it takes to transit line segment
-            delta_t = magP / (vParallel)
-            #Number of steps in line segment
-            Tsample = self.TGyro / N_gyroSteps
-            Nsteps = int(delta_t / Tsample)
-            #length (in time) along guiding center
-            t = np.linspace(0,delta_t,Nsteps+1)
-            #guiding center location
-            xGC = np.linspace(p0[0],p1[0],Nsteps+1)
-            yGC = np.linspace(p0[1],p1[1],Nsteps+1)
-            zGC = np.linspace(p0[2],p1[2],Nsteps+1)
-            # construct orthogonal system for coordinate transformation
-            w = delP
-            if np.all(w==[0,0,1]):
-                u = np.cross(w,[0,1,0]) #prevent failure if bhat = [0,0,1]
-            else:
-                u = np.cross(w,[0,0,1]) #this would fail if bhat = [0,0,1] (rare)
-            v = np.cross(w,u)
-            #normalize
-            u = u / np.sqrt(u.dot(u))
-            v = v / np.sqrt(v.dot(v))
-            w = w / np.sqrt(w.dot(w))
-            xfm = np.vstack([u,v,w]).T
-            #get helix path along (proxy) z axis reference frame
-            x_helix = rGyro*np.cos(omegaGyro*t + gyroPhase)
-            y_helix = self.diamag*rGyro*np.sin(omegaGyro*t + gyroPhase)
-            z_helix = np.zeros((len(t)))
-            #perform rotation to field line reference frame
-            helix = np.vstack([x_helix,y_helix,z_helix]).T
-            helix_rot = np.zeros((len(helix),3))
-            for j,coord in enumerate(helix):
-                helix_rot[j,:] = helix[j,0]*u + helix[j,1]*v + helix[j,2]*w
-            #perform translation to field line reference frame
-            helix_rot[:,0] += xGC
-            helix_rot[:,1] += yGC
-            helix_rot[:,2] += zGC
-            #update gyroPhase variable so next iteration starts here
-            gyroPhase = omegaGyro*t[-1] + gyroPhase
-            #append to helix trace
-            if helixTrace is None:
-                helixTrace = helix_rot
-            else:
-                helixTrace = np.vstack([helixTrace,helix_rot])
-
-        helixTrace*=1000.0 #scale for ParaView
-        print("Saving data to CSV and VTK formats")
-        #save data to csv format
-        head = 'X[mm],Y[mm],Z[mm]'
-        if tag == None:
-            name = 'helixTrace'
-        else:
-            name = 'helixTrace_'+tag
-
-        np.savetxt(controlfilePath+name+'.csv', helixTrace, delimiter=',', header=head)
-        #save data to vtk format
-        tools.createVTKOutput(controlfilePath+name+'.csv', 'trace', name)
-
-        if verbose==True:
-            print("\nV_perp = {:f} [m/s]".format(vPerp))
-            print("V_parallel = {:f} [m/s]".format(vParallel))
-            print("Cyclotron Freq = {:f} [rad/s]".format(self.omegaGyro[0]))
-            print("Cyclotron Freq = {:f} [Hz]".format(self.fGyro[0]))
-            print("Gyro Radius = {:f} [m]".format(self.rGyro[0][0]))
-            print("Number of gyro points = {:f}".format(len(helixTrace)))
-            print("Longitudinal dist between gyro points = {:f} [m]".format(magP/float(Nsteps)))
-            print("Each line segment length ~ {:f} [m]".format(magP))
-            log.info("\nV_perp = {:f} [m/s]".format(vPerp))
-            log.info("V_parallel = {:f} [m/s]".format(vParallel))
-            log.info("Cyclotron Freq = {:f} [rad/s]".format(self.omegaGyro[0]))
-            log.info("Cyclotron Freq = {:f} [Hz]".format(self.fGyro[0]))
-            log.info("Gyro Radius = {:f} [m]".format(self.rGyro[0][0]))
-            log.info("Number of gyro points = {:f}".format(len(helixTrace)))
-            log.info("Longitudinal dist between gyro points = {:f} [m]".format(magP/float(Nsteps)))
-            log.info("Each line segment length ~ {:f} [m]".format(magP))
-        return
-
-    def buildHelixParallel(self, i):
-        """
-        builds the helical trajectory of a macroparticle for the entire toroidal
-        extent of the trace.  Returns this helix
-        """
-        #vector linking Bfield points
-        delP = self.p1[i,:,:] - self.p0[i,:,:]
-        for j,dP in enumerate(delP):
-            #magnitude
-            magP = np.sqrt(dP[0]**2 + dP[1]**2 + dP[2]**2)
-            #time it takes to transit line segment
-            delta_t = magP / (self.vParallelMC[i])
-            #Number of steps in line segment
-            Tsample = self.TGyro[i] / self.N_gyroSteps
-            Nsteps = int(delta_t / Tsample)
-            #length (in time) along guiding center
-            t = np.linspace(0,delta_t,Nsteps+1)
-            #guiding center location
-            xGC = np.linspace(self.p0[i,j,0],self.p1[i,j,0],Nsteps+1)
-            yGC = np.linspace(self.p0[i,j,1],self.p1[i,j,1],Nsteps+1)
-            zGC = np.linspace(self.p0[i,j,2],self.p1[i,j,2],Nsteps+1)
-            arrGC = np.vstack([xGC,yGC,zGC]).T
-            # construct orthogonal system for coordinate transformation
-            w = dP
-            if np.all(w==[0,0,1]):
-                u = np.cross(w,[0,1,0]) #prevent failure if bhat = [0,0,1]
-            else:
-                u = np.cross(w,[0,0,1]) #this would fail if bhat = [0,0,1] (rare)
-            v = np.cross(w,u)
-            #normalize
-            u = u / np.sqrt(u.dot(u))
-            v = v / np.sqrt(v.dot(v))
-            w = w / np.sqrt(w.dot(w))
-            xfm = np.vstack([u,v,w]).T
-            #get helix path along (proxy) z axis reference frame
-            rGyro = self.rGyroMC[i]
-            omega = self.omegaGyro[i]
-            theta = self.lastPhase[i]
-            x_helix = rGyro*np.cos(omega*t + theta)
-            y_helix = self.diamag*rGyro*np.sin(omega*t + theta)
-            z_helix = np.zeros((len(t)))
-            #perform rotation to field line reference frame
-            helix = np.vstack([x_helix,y_helix,z_helix]).T
-            helix_rot = np.zeros((len(helix),3))
-            for k,coord in enumerate(helix):
-                helix_rot[k,:] = helix[k,0]*u + helix[k,1]*v + helix[k,2]*w
-            #perform translation to field line reference frame
-            helix_rot[:,0] += xGC
-            helix_rot[:,1] += yGC
-            helix_rot[:,2] += zGC
-
-            #shift entire helix to ensure we capture intersections in p0 plane
-            helix_rot[:,0] += w[0]*0.0003
-            helix_rot[:,1] += w[1]*0.0003
-            helix_rot[:,2] += w[2]*0.0003
-
-            #update gyroPhase variable so next iteration starts here
-            lastPhase = omega*t[-1] + theta
-
-            if j==0:
-                helix_final = helix_rot
-            else:
-                helix_final = np.vstack([helix_final, helix_rot])
-        return helix_final
-
-    def multipleGyroTraceOpen3D(self):
-        """
-        Calculates the helical trajectory of ions, then checks if any mesh
-        elements are intersected along the path.  This loops thru each
-        mesh element in the source plane (i) and checks for ray-triangle
-        intersections between the ray and all the mesh in the PFC's
-        intersectList.
-
-        Uses Open3D to accelerate the calculation:
-        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
-        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
-
-        meant to be run once per field line step
-        """
-        N = len(self.p1)
-        intersectRecord = np.ones((N))*np.nan
-        hdotn = np.ones((N))*np.nan
-        lastPhases = np.zeros((N))
-
-        #cast variables to 32bit for C
-        vertices = np.array(self.targets, dtype=np.float32)
-        triangles = np.array(np.arange(self.PFC_Nt*3).reshape(self.PFC_Nt,3), dtype=np.uint32)
-        #triangles = np.array(np.repeat(np.arange(self.PFC_Nt),3).reshape(self.PFC_Nt,3), dtype=np.uint32)
-
-        #build intersection mesh and tensors for open3d ray-tri calcs
-        mesh = o3d.t.geometry.TriangleMesh()
-        scene = o3d.t.geometry.RaycastingScene()
-        mesh_id = scene.add_triangles(vertices, triangles)
-
-        #loop thru each gyroSource mesh face looking for intersections along helix
-        for i in range(N):
-            #magnetic field trace
-            self.helixTrace = [None] * len(self.p0)
-            #vector linking Bfield points
-            delP = self.p1[i] - self.p0[i]
-            #magnitude
-            magP = np.sqrt(delP[0]**2 + delP[1]**2 + delP[2]**2)
-            #time it takes to transit line segment
-            delta_t = magP / (self.vParallelMC[self.GYRO_HLXmap][i])
-            #Number of steps in line segment
-            Tsample = self.TGyro[self.GYRO_HLXmap][i] / self.N_gyroSteps
-            Nsteps = int(delta_t / Tsample)
-            #length (in time) along guiding center
-            t = np.linspace(0,delta_t,Nsteps+1)
-            #guiding center location
-            xGC = np.linspace(self.p0[i,0],self.p1[i,0],Nsteps+1)
-            yGC = np.linspace(self.p0[i,1],self.p1[i,1],Nsteps+1)
-            zGC = np.linspace(self.p0[i,2],self.p1[i,2],Nsteps+1)
-            arrGC = np.vstack([xGC,yGC,zGC]).T
-            # construct orthogonal system for coordinate transformation
-            w = delP
-            if np.all(w==[0,0,1]):
-                u = np.cross(w,[0,1,0]) #prevent failure if bhat = [0,0,1]
-            else:
-                u = np.cross(w,[0,0,1]) #this would fail if bhat = [0,0,1] (rare)
-            v = np.cross(w,u)
-            #normalize
-            u = u / np.sqrt(u.dot(u))
-            v = v / np.sqrt(v.dot(v))
-            w = w / np.sqrt(w.dot(w))
-            xfm = np.vstack([u,v,w]).T
-            #get helix path along (proxy) z axis reference frame
-            rGyro = self.rGyroMC[self.GYRO_HLXmap][i]
-            omega = self.omegaGyro[self.GYRO_HLXmap][i]
-            theta = self.lastPhase[self.GYRO_HLXmap][i]
-            x_helix = rGyro*np.cos(omega*t + theta)
-            y_helix = self.diamag*rGyro*np.sin(omega*t + theta)
-            z_helix = np.zeros((len(t)))
-            #perform rotation to field line reference frame
-            helix = np.vstack([x_helix,y_helix,z_helix]).T
-            helix_rot = np.zeros((len(helix),3))
-            for j,coord in enumerate(helix):
-                helix_rot[j,:] = helix[j,0]*u + helix[j,1]*v + helix[j,2]*w
-            #perform translation to field line reference frame
-            helix_rot[:,0] += xGC
-            helix_rot[:,1] += yGC
-            helix_rot[:,2] += zGC
-
-            #shift entire helix to ensure we capture intersections in p0 plane
-            helix_rot[:,0] += w[0]*0.0003
-            helix_rot[:,1] += w[1]*0.0003
-            helix_rot[:,2] += w[2]*0.0003
-
-            #update gyroPhase variable so next iteration starts here
-            lastPhase = omega*t[-1] + theta
-            lastPhases[i] = lastPhase
-
-            #=== intersection checking begins here ===
-            q1 = helix_rot[:-1,:]
-            q2 = helix_rot[1:,:]
-
-            r = q2-q1
-            rMag = np.linalg.norm(r, axis=1)
-            rNorm = r / rMag.reshape((-1,1))
-
-            #calculate intersections
-            mask = np.ones((len(q2)))
-            rays = o3d.core.Tensor([np.hstack([np.float32(q1),np.float32(rNorm)])],dtype=o3d.core.Dtype.Float32)
-            hits = scene.cast_rays(rays)
-            #convert open3d CPU tensors back to numpy
-            hitMap = hits['primitive_ids'][0].numpy()
-            distMap = hits['t_hit'][0].numpy()
-
-            #escapes occur where we have 32 bits all set: 0xFFFFFFFF = 4294967295 base10
-            escapes = np.where(hitMap == 4294967295)[0]
-            mask[escapes] = 0.0
-
-            #when distances to target exceed the trace step, we exclude any hits
-            tooLong = np.where(distMap > rMag)[0]
-            mask[tooLong] = 0.0
-
-            if np.sum(mask)>0:
-                #first hit instance
-                idxHit = np.where(mask==1)[0][0]
-                intersectRecord[i] = self.PFCintersectMap[hitMap[idxHit]]
-                hdotn[i] = np.dot(self.intersectNorms[int(intersectRecord[i])],rNorm[idxHit])
-            else:
-                #return nan if we didnt hit anything
-                intersectRecord[i] = np.nan
-                hdotn[i] = np.nan
-
-            #print the trace for a specific index
-            if self.traceIndex2 is not None:
-                if self.traceIndex2 == i:
-                    ##for testing
-                    #if np.sum(mask)>0:
-                    #    print(idxHit)
-                    #    print(intersectRecord[i])
-                    #    print(rNorm[idxHit])
-                    #    print(self.intersectNorms[int(intersectRecord[i])])
-                    #print(hitMap)
-                    #print(distMap)
-                    #print(rMag)
-                    #print(mask)
-                    #print(intersectRecord[i])
-
-                    #print("Saving Index data to CSV and VTK formats")
-                    #save data to csv format
-                    head = 'X[mm],Y[mm],Z[mm]'
-                    np.savetxt(self.controlfilePath+'helix{:d}.csv'.format(self.N_GCdeg), helix_rot*1000.0, delimiter=',', header=head)
-                    #save data to vtk format
-                    tools.createVTKOutput(self.controlfilePath+'helix{:d}.csv'.format(self.N_GCdeg),
-                                        'trace', 'traceHelix{:d}'.format(self.N_GCdeg),verbose=False)
-                    #guiding center
-                    #np.savetxt(self.controlfilePath+'GC{:d}.csv'.format(self.N_GCdeg), arrGC*1000.0, delimiter=',', header=head)
-                    #save data to vtk format
-                    #tools.createVTKOutput(self.controlfilePath+'GC{:d}.csv'.format(self.N_GCdeg),
-                    #                        'trace', 'traceGC{:d}'.format(self.N_GCdeg),verbose=False)
-                    print("Intersection Location for ROIidx: {:f}".format(intersectRecord[i]))
-
-
-
-        self.lastPhase[self.GYRO_HLXmap] = lastPhases
-
-        print('Parallel helix trace complete')
-        log.info('Parallel helix trace complete')
-        return intersectRecord, hdotn
-
-    def multipleGyroTraceOpen3D_NoLoop(self):
-        """
-        Calculates the helical trajectory of ions, then checks if any mesh
-        elements are intersected along the path.  This loops thru each
-        mesh element in the source plane (i) and checks for ray-triangle
-        intersections between the ray and all the mesh in the PFC's
-        intersectList.
-
-        Currently, this is called once every dpinit steps in MAFOT.  If this
-        is very slow, you could run all the trace steps in a single calculation
-        by removing the loop in PFCclass
-
-
-        Uses Open3D to accelerate the calculation:
-        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
-        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
-
-        meant to be run once for all field line steps
-        """
-        N = self.Nctrs
-        intersectRecord = np.ones((N))*np.nan
-        hdotn = np.ones((N))*np.nan
-
-
-        #cast variables to 32bit for C
-        vertices = np.array(self.targets, dtype=np.float32)
-        triangles = np.array(np.arange(self.PFC_Nt*3).reshape(self.PFC_Nt,3), dtype=np.uint32)
-        #triangles = np.array(np.repeat(np.arange(self.PFC_Nt),3).reshape(self.PFC_Nt,3), dtype=np.uint32)
-
-        #build intersection mesh and tensors for open3d ray-tri calcs
-        mesh = o3d.t.geometry.TriangleMesh()
-        scene = o3d.t.geometry.RaycastingScene()
-        mesh_id = scene.add_triangles(vertices, triangles)
-
-        #Prepare helical trace across multiple cores
-        Ncores = multiprocessing.cpu_count() - 2 #reserve 2 cores for overhead
-        #in case we run on single core machine
-        if Ncores <= 0:
-            Ncores = 1
-        #the overhead on this calculation can be high, so limit to 3 cores
-        elif Ncores > 3:
-            Ncores = 3
-        print('Initializing parallel helix trace across {:d} cores'.format(Ncores))
-        log.info('Initializing parallel helix trace across {:d} cores'.format(Ncores))
-        #each worker receives a single start and end point (p0 and p1),
-        #corresponding to one trace from the MAFOT structure output.
-        print('Spawning tasks to workers')
-        log.info('Spawning tasks to workers')
-        #multiprocessing with normal methods
-        #Do this try clause to kill any zombie threads that don't terminate
-        t0 = time.time()
-        try:
-            pool = multiprocessing.Pool(3)
-            output = np.array(pool.map(self.buildHelixParallel, np.arange(N)))
-        finally:
-            pool.close()
-            pool.join()
-            del pool
-
-        helix = output
-        print("Helix trace took {:f} seconds".format(time.time() - t0))
-        log.info("Helix trace took {:f} seconds".format(time.time() - t0))
-
-        print("Initializing open3D ray-triangle intersection checks")
-        log.info("Initializing open3D ray-triangle intersection checks")
-        for i in range(N):
-            #=== intersection checking begins here ===
-            q1 = helix[i][:-1,:]
-            q2 = helix[i][1:,:]
-
-            r = q2-q1
-            rMag = np.linalg.norm(r, axis=1)
-            rNorm = r / rMag.reshape((-1,1))
-
-            #calculate intersections
-            mask = np.ones((len(q2)))
-            rays = o3d.core.Tensor([np.hstack([np.float32(q1),np.float32(rNorm)])],dtype=o3d.core.Dtype.Float32)
-            hits = scene.cast_rays(rays)
-            #convert open3d CPU tensors back to numpy
-            hitMap = hits['primitive_ids'][0].numpy()
-            distMap = hits['t_hit'][0].numpy()
-
-            #escapes occur where we have 32 bits all set: 0xFFFFFFFF = 4294967295 base10
-            escapes = np.where(hitMap == 4294967295)[0]
-            mask[escapes] = 0.0
-
-            #when distances to target exceed the trace step, we exclude any hits
-            tooLong = np.where(distMap > rMag)[0]
-            mask[tooLong] = 0.0
-
-            if np.sum(mask)>0:
-                #first hit instance
-                idxHit = np.where(mask==1)[0][0]
-                intersectRecord[i] = self.PFCintersectMap[hitMap[idxHit]]
-                hdotn[i] = np.dot(self.intersectNorms[int(intersectRecord[i])],rNorm[idxHit])
-            else:
-                #return nan if we didnt hit anything
-                intersectRecord[i] = np.nan
-                hdotn[i] = np.nan
-
-            #print the trace for a specific index
-            if self.traceIndex2 is not None:
-                if self.traceIndex2 == i:
-                    ##for testing
-                    #if np.sum(mask)>0:
-                    #    print(idxHit)
-                    #    print(intersectRecord[i])
-                    #    print(rNorm[idxHit])
-                    #    print(self.intersectNorms[int(intersectRecord[i])])
-                    #print(hitMap)
-                    #print(distMap)
-                    #print(rMag)
-                    #print(mask)
-                    #print(intersectRecord[i])
-
-                    #print("Saving Index data to CSV and VTK formats")
-                    #save data to csv format
-                    head = 'X[mm],Y[mm],Z[mm]'
-                    np.savetxt(self.controlfilePath+'helix{:d}.csv'.format(i), helix[i]*1000.0, delimiter=',', header=head)
-                    #save data to vtk format
-                    tools.createVTKOutput(self.controlfilePath+'helix{:d}.csv'.format(i),
-                                        'trace', 'traceHelix{:d}'.format(i),verbose=False)
-                    #guiding center
-                    #np.savetxt(self.controlfilePath+'GC{:d}.csv'.format(self.N_GCdeg), arrGC*1000.0, delimiter=',', header=head)
-                    #save data to vtk format
-                    #tools.createVTKOutput(self.controlfilePath+'GC{:d}.csv'.format(self.N_GCdeg),
-                    #                        'trace', 'traceGC{:d}'.format(self.N_GCdeg),verbose=False)
-                    print("Intersection Location for ROIidx: {:f}".format(intersectRecord[i]))
-
-
-
-        print('Parallel helix trace complete')
-        log.info('Parallel helix trace complete')
-        return intersectRecord, hdotn
-
-    def gyroTraceParallel(self, i, mode='MT'):
-        """
-        parallelized gyro trace.  called by multiprocessing.pool.map()
-
-        i is index of parallel run from multiprocessing, corresponds to a mesh face
-        we are tracing in the ROI
-
-        writes helical trace to self.helixTrace[i] in 2D matrix format:
-            columns = X,Y,Z
-            rows = steps up helical trace
-
-        also updates self.lastPhase for use in next iteration step
-
-        mode options are:
-        -Signed Volume Loop: 'SigVolLoop'
-        -Signed Volume Matrix:  'SigVolMat'
-        -Moller-Trumbore Algorithm: 'MT'
-        """
-        #vector
-        delP = self.p1[i] - self.p0[i]
-        #magnitude
-        magP = np.sqrt(delP[0]**2 + delP[1]**2 + delP[2]**2)
-        #time it takes to transit line segment
-        delta_t = magP / (self.vParallelMC[self.GYRO_HLXmap][i])
-        #Number of steps in line segment
-        Tsample = self.TGyro[self.GYRO_HLXmap][i] / self.N_gyroSteps
-        Nsteps = int(delta_t / Tsample)
-        #length (in time) along guiding center
-        t = np.linspace(0,delta_t,Nsteps+1)
-        #guiding center location
-        xGC = np.linspace(self.p0[i,0],self.p1[i,0],Nsteps+1)
-        yGC = np.linspace(self.p0[i,1],self.p1[i,1],Nsteps+1)
-        zGC = np.linspace(self.p0[i,2],self.p1[i,2],Nsteps+1)
-        arrGC = np.vstack([xGC,yGC,zGC]).T
-        # construct orthogonal system for coordinate transformation
-        w = delP
-        if np.all(w==[0,0,1]):
-            u = np.cross(w,[0,1,0]) #prevent failure if bhat = [0,0,1]
-        else:
-            u = np.cross(w,[0,0,1]) #this would fail if bhat = [0,0,1] (rare)
-        v = np.cross(w,u)
-        #normalize
-        u = u / np.sqrt(u.dot(u))
-        v = v / np.sqrt(v.dot(v))
-        w = w / np.sqrt(w.dot(w))
-        xfm = np.vstack([u,v,w]).T
-        #get helix path along (proxy) z axis reference frame
-        rGyro = self.rGyroMC[self.GYRO_HLXmap][i]
-        omega = self.omegaGyro[self.GYRO_HLXmap][i]
-        theta = self.lastPhase[self.GYRO_HLXmap][i]
-        x_helix = rGyro*np.cos(omega*t + theta)
-        y_helix = self.diamag*rGyro*np.sin(omega*t + theta)
-        z_helix = np.zeros((len(t)))
-        #perform rotation to field line reference frame
-        helix = np.vstack([x_helix,y_helix,z_helix]).T
-        helix_rot = np.zeros((len(helix),3))
-        for j,coord in enumerate(helix):
-            helix_rot[j,:] = helix[j,0]*u + helix[j,1]*v + helix[j,2]*w
-        #perform translation to field line reference frame
-        helix_rot[:,0] += xGC
-        helix_rot[:,1] += yGC
-        helix_rot[:,2] += zGC
-
-        #shift entire helix to ensure we capture intersections in p0 plane
-        helix_rot[:,0] += w[0]*0.0003
-        helix_rot[:,1] += w[1]*0.0003
-        helix_rot[:,2] += w[2]*0.0003
-
-        #update gyroPhase variable so next iteration starts here
-        lastPhase = omega*t[-1] + theta
-
-        #=== intersection checking ===
-        q1 = helix_rot[:-1,:]
-        q2 = helix_rot[1:,:]
-
-        #Filter by psi
-        if self.psiFilterSwitch == True:
-            psiP1 = self.PFC_psiP1
-            psiP2 = self.PFC_psiP2
-            psiP3 = self.PFC_psiP3
-            psiMin = self.psiMin[i]
-            psiMax = self.psiMax[i]
-
-            #account for psi sign convention
-            if psiMin > psiMax:
-                pMin = psiMax
-                pMax = psiMin
-            else:
-                pMin = psiMin
-                pMax = psiMax
-
-            #target faces outside of this toroidal slice
-            test0 = np.logical_and(np.logical_and(psiP1 < pMin, psiP2 < pMin), psiP3 < pMin)
-            test1 = np.logical_and(np.logical_and(psiP1 > pMax, psiP2 > pMax), psiP3 > pMax)
-            test = np.logical_or(test0,test1)
-            usePsi = np.where(test == False)[0]
-
-        else:
-            usePsi = np.arange(len(self.PFC_t1))
-
-        #Filter by toroidal angle
-        if self.phiFilterSwitch == True:
-            phiP1 = self.PFC_phiP1
-            phiP2 = self.PFC_phiP2
-            phiP3 = self.PFC_phiP3
-            phiMin = self.phiMin[i]
-            phiMax = self.phiMax[i]
-
-            #angle wrap cases (assumes we never trace in MAFOT steps larger than 10degrees)
-            if np.abs(phiMin-phiMax) > np.radians(5):
-                phiP1[phiP1<0] += 2*np.pi
-                phiP2[phiP2<0] += 2*np.pi
-                phiP3[phiP3<0] += 2*np.pi
-                if phiMin < 0: phiMin+=2*np.pi
-                if phiMax < 0: phiMax+=2*np.pi
-
-            #account for toroidal sign convention
-            if phiMin > phiMax:
-                pMin = phiMax
-                pMax = phiMin
-            else:
-                pMin = phiMin
-                pMax = phiMax
-
-
-            #target faces outside of this toroidal slice
-            test0 = np.logical_and(np.logical_and(phiP1 < pMin, phiP2 < pMin), phiP3 < pMin)
-            test1 = np.logical_and(np.logical_and(phiP1 > pMax, phiP2 > pMax), phiP3 > pMax)
-            test = np.logical_or(test0,test1)
-            usePhi = np.where(test == False)[0]
-
-        else:
-            usePhi = np.arange(len(self.PFC_t1))
-
-        #combine filter algorithms
-        use = np.intersect1d(usePsi,usePhi)
-
-        Nt = len(use)
-
-        t0 = time.time()
-        #using full array (no for loop)
-        if mode == 'SigVolMat':
-            q13D = np.repeat(q1[:,np.newaxis], Nt, axis=1)
-            q23D = np.repeat(q2[:,np.newaxis], Nt, axis=1)
-
-            sign1 = np.sign(tools.signedVolume2(q13D,self.PFC_t1[use],self.PFC_t2[use],self.PFC_t3[use],ax=2))
-            sign2 = np.sign(tools.signedVolume2(q23D,self.PFC_t1[use],self.PFC_t2[use],self.PFC_t3[use],ax=2))
-            sign3 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t1[use],self.PFC_t2[use],ax=2))
-            sign4 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t2[use],self.PFC_t3[use],ax=2))
-            sign5 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t3[use],self.PFC_t1[use],ax=2))
-
-            test1 = (sign1 != sign2)
-            test2 = np.logical_and(sign3==sign4,sign3==sign5)
-            loc = np.where(np.logical_and(test1,test2))
-
-            #result=1 if we intersected, otherwise NaN
-            if np.sum(loc) > 0:
-                #only take first index (ie first intersection location)
-                loc = loc[0][0],loc[1][0]
-                index = use[loc[1]]
-                #if self.traceIndex2 == i:
-                #    print("TEST!!!")
-                #    print(np.where(np.logical_and(test1,test2))[0])
-                #    print(index)
-                vec = (q2[loc[0]] - q1[loc[0]]) / np.linalg.norm(q2[loc[0]]-q1[loc[0]])
-                hdotn = np.dot(self.intersectNorms[index],vec)
-            else:
-                index = np.NaN
-                hdotn = np.NaN
-        #using loop
-        elif mode=='SigVolLoop':
-            #loop thru each step of helical path looking for intersections
-            for j in range(len(helix_rot)-1):
-                #Perform Intersection Test
-                q13D = np.repeat(q1[j,np.newaxis], Nt, axis=0)
-                q23D = np.repeat(q2[j,np.newaxis], Nt, axis=0)
-                sign1 = np.sign(tools.signedVolume2(q13D,self.PFC_t1[use],self.PFC_t2[use],self.PFC_t3[use]))
-                sign2 = np.sign(tools.signedVolume2(q23D,self.PFC_t1[use],self.PFC_t2[use],self.PFC_t3[use]))
-                sign3 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t1[use],self.PFC_t2[use]))
-                sign4 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t2[use],self.PFC_t3[use]))
-                sign5 = np.sign(tools.signedVolume2(q13D,q23D,self.PFC_t3[use],self.PFC_t1[use]))
-                test1 = (sign1 != sign2)
-                test2 = np.logical_and(sign3==sign4,sign3==sign5)
-
-                #result=1 if we intersected, otherwise NaN
-                if np.sum(np.logical_and(test1,test2)) > 0:
-                    #only take first index (ie first intersection location)
-                    #YOU SHOULD CHECK THIS TO MAKE SURE [0][0] is the first face along field line
-                    index = use[ np.where(np.logical_and(test1,test2))[0][0] ]
-                    #if self.traceIndex2 == i:
-                    #    print("TEST!!!")
-                    #    print(np.where(np.logical_and(test1,test2))[0])
-                    #    print(index)
-                    vec = (q2[j] - q1[j]) / np.linalg.norm(q2[j]-q1[j])
-                    hdotn = np.dot(self.intersectNorms[index],vec)
-                    break
-                else:
-                    index = np.NaN
-                    hdotn = np.NaN
-
-        # Intersection check using adapted version of Moller-Trumbore Algorithm:
-        # Möller, Tomas; Trumbore, Ben (1997). "Fast, Minimum Storage Ray-Triangle Intersection".
-        #      Journal of Graphics Tools. 2: 21–28. doi:10.1080/10867651.1997.10487468.
-        else:
-            E1 = (self.PFC_t2[use] - self.PFC_t1[use])
-            E2 = (self.PFC_t3[use] - self.PFC_t1[use])
-            D = (q2-q1)
-            Dmag = np.linalg.norm(D, axis=1)
-            eps = 0.0
-            for j in range(len(helix_rot)-1):
-                D[j] = D[j] / np.linalg.norm(D, axis=1)[j]
-                h = np.cross(D[j], E2)
-                a = np.sum(E1*h, axis=1)
-                test1 = np.logical_and( a>-eps, a<eps) #ray parallel to triangle
-                with np.errstate(divide='ignore', invalid='ignore'):
-                    #test1 = a<eps #ray parallel to triangle
-                    f=1.0/a
-                    s = q1[j] - self.PFC_t1[use]
-                    u = f * np.sum(s*h, axis=1)
-                    test2 = np.logical_or(u<0.0, u>1.0) #ray inside triangle
-                    q = np.cross(s,E1)
-                    v = f*np.sum(D[j]*q, axis=1)
-                    test3 =  np.logical_or(v<0.0, (u+v)>1.0) #ray inside triangle
-                    l = f*np.sum(E2*q, axis=1)
-                    test4 = np.logical_or(l<0.0, l>Dmag[j]) #ray long enough to intersect triangle
-                if np.sum(~np.any([test1,test2,test3,test4], axis=0))>0:
-                    #we assume first intersection in this array is the intersection
-                    PFC_index = use[ np.where(np.any([test1,test2,test3,test4], axis=0)==False)[0][0] ]
-                    #map this index (of self.PFC_tX) back to global index (of self.tX)
-                    index = self.PFCintersectMap[PFC_index]
-                    #gyro trace incident angle:
-                    vec = (q2[j] - q1[j]) / np.linalg.norm(q2[j]-q1[j])
-                    hdotn = np.dot(self.intersectNorms[index],vec)
-                    break
-                else:
-                    PFC_index = np.NaN
-                    index = np.NaN
-                    hdotn = np.NaN
-
-
-        #print the trace for a specific index
-        if self.traceIndex2 is not None:
-            if self.traceIndex2 == i:
-                if np.sum(~np.any([test1,test2,test3,test4], axis=0))>0:
-                    print("TEST====")
-                    print(use[ np.where(np.any([test1,test2,test3,test4], axis=0)==False)[0] ])
-                #print("Saving Index data to CSV and VTK formats")
-                #save data to csv format
-                head = 'X[mm],Y[mm],Z[mm]'
-                np.savetxt(self.controlfilePath+'helix{:d}.csv'.format(self.N_GCdeg), helix_rot*1000.0, delimiter=',', header=head)
-                #save data to vtk format
-                tools.createVTKOutput(self.controlfilePath+'helix{:d}.csv'.format(self.N_GCdeg),
-                                        'trace', 'traceHelix{:d}'.format(self.N_GCdeg),verbose=False)
-                #guiding center
-                #np.savetxt(self.controlfilePath+'GC{:d}.csv'.format(self.N_GCdeg), arrGC*1000.0, delimiter=',', header=head)
-                #save data to vtk format
-                #tools.createVTKOutput(self.controlfilePath+'GC{:d}.csv'.format(self.N_GCdeg),
-                #                        'trace', 'traceGC{:d}'.format(self.N_GCdeg),verbose=False)
-
-                print("Intersection Index: {:f}".format(index))
-                print("PFC Index: {:f}".format(PFC_index))
-
-
-
-        t1 = time.time() - t0
-        return lastPhase, index, hdotn, t1
-
-    def multipleGyroTrace(self):
-        """
-        Calculates the helical path for multiple points,
-        each with different gyroRadii, using multiprocessing
-
-        Btrace is one step of a field line trace for each point (MAFOT structure output)
-        phase is phase angle (updated from last trace step)
-
-        updates lastPhase variable and helixTrace
-        """
-#        #include toroidal angle filtering
-#        GYRO.phiFilterSwitch = False
-        #magnetic field trace
-        self.helixTrace = [None] * len(self.p0)
-        N = len(self.p1)
-        #Prepare helical trace across multiple cores
-        Ncores = multiprocessing.cpu_count() - 2 #reserve 2 cores for overhead
-        #in case we run on single core machine
-        if Ncores <= 0:
-            Ncores = 1
-        print('Initializing parallel helix trace across {:d} cores'.format(Ncores))
-        log.info('Initializing parallel helix trace across {:d} cores'.format(Ncores))
-        #each worker receives a single start and end point (p0 and p1),
-        #corresponding to one trace from the MAFOT structure output.
-        print('Spawning tasks to workers')
-        log.info('Spawning tasks to workers')
-        #multiprocessing with normal methods
-        #Do this try clause to kill any zombie threads that don't terminate
-        try:
-            pool = multiprocessing.Pool(Ncores)
-            output = np.asarray(pool.map(self.gyroTraceParallel, np.arange(N)))
-        finally:
-            pool.close()
-            pool.join()
-            del pool
-
-        #multiprocessing with status bar (equiv to multiprocessing.Pool.map())
-#        print("Multiprocessing gyro trace:")
-#        output = process_map(self.gyroTraceParallel, range(N), max_workers=Ncores, chunksize=1)
-#        output = np.asarray(output)
-
-        intersectRecord = output[:,1]
-#        use = np.where(np.isnan(intersectRecord)==True)[0]
-#        self.lastPhase = output[:,0][use]
-        self.lastPhase[self.GYRO_HLXmap] = output[:,0]
-        #uncomment for gyro trace incident angle:
-        hdotn = output[:,2]
-
-        #uncomment for avg time / calc
-        print("Intersection Calc. Avg. time = {:f} [s]".format(np.sum(output[:,3]) / N))
-        log.info("Intersection Calc. Avg. time = {:f} [s]".format(np.sum(output[:,3]) / N))
-        print('Parallel helix trace complete')
-        log.info('Parallel helix trace complete')
-        return intersectRecord, hdotn
-
+   
     def writeIntersectRecord(self, gyroPhase, vPhase, vSlice, faces, file):
         """
         writes intersectRecord to CSV file

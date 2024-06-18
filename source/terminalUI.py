@@ -341,6 +341,10 @@ class TUI():
         if 'hfFil' in runList:
             self.ENG.FIL.readFilamentFile(path)
             self.ENG.FIL.setupFilamentTime()
+        elif 'hfRE' in runList:
+            self.ENG.RE.readREFile(path)
+            self.ENG.RE.setupRETime()
+            self.ENG.FIL.tsFil = self.ENG.RE.tsFil
         else:
             self.ENG.FIL.tsFil = None
         return

@@ -1368,7 +1368,126 @@ class heatFlux:
 
 
         return
+        
 
+    def REHeatFlux(self, RE, PFC, ts, tIdx):
+        """
+        assigns energy from runaway to targets
+        calculates heat flux and total energy deposition
+
+        FIL.intersectRecord gets overwritten for each filament source timestep
+        so this function needs to be called once per filament to add 
+        the heat fluxes from each filament source timestep to the tallies on the PFC mesh
+        
+        todo
+        """
+        RE.calcTotalE()
+        E = RE.density[:,:,:,tIdx].reshape(RE.N_b*RE.N_r*RE.N_p) * RE.E0
+        ptclSum = 0
+        Esum = 0
+
+        #this PFC indexes in target mesh
+        idx1 = np.where(np.array(RE.CADtargetNames) == PFC.name)[0]
+
+        # Create an array with shape (len(ts), RE.N_vS, RE.intersectRecord.shape[1]) and ensure it is of integer type
+        multi_ts_use = np.array([[np.where(np.isin(RE.intersectRecord[j, :, i], idx1))[0].astype(int) for j in range(RE.N_vS)] for i in range(len(ts))], dtype=object)
+
+        # Iterate over the combinations of time and velocity samples (vS)
+        for i in range(len(ts)):
+            for j in range(RE.N_vS):
+                use = multi_ts_use[i, j]
+                if len(use) > 0:
+                    #get indexes where there was a hit from intersectRecord
+                    idx3 = RE.intersectRecord[j, use, i].astype(int)
+                    #map location in target mesh to relative index on this PFC
+                    idxTGT = np.searchsorted(idx1, idx3) 
+                    #scale energy by the v_|| energy bin frac
+                    E_scaled = E[use] * RE.energyFracs[use, j]
+                    #add the sum for this mesh triangle
+                    np.add.at(PFC.Edep[:, i], idxTGT, E_scaled)
+
+           
+                #for particle balance
+                ptclSum += len(use)
+
+        #heat flux is energy deposited per unit area per unit time
+        PFC.qRE = PFC.Edep / PFC.areas[:,np.newaxis] / RE.dt
+        N_pts = RE.N_vS*len(RE.intersectRecord[0,:,0])
+
+        #printing
+        print("Theoretical total energy: {:f} [J]".format(RE.E0))
+        print("Energy Deposited on Mesh: {:f} [J]".format(np.sum(PFC.Edep)))
+        print("Energy balance: {:0.3f}%".format(np.sum(PFC.Edep) / RE.E0 * 100.0)) # why *100 ? todo
+        print('Peak flux: {:1.8e} [W/m^2]'.format(np.max(PFC.qRE)))
+        print('Total number of particles: {:d}'.format(N_pts))
+        print('Number of particles landed on this PFC: {:d}'.format(ptclSum))
+        print('Particle balance: {:0.3f}%'.format(ptclSum / N_pts*100.0))
+        log.info("Theoretical total energy: {:f} [J]".format(RE.E0))
+        log.info("Energy Deposited on Mesh: {:f} [J]".format(np.sum(PFC.Edep)))
+        log.info("Energy balance: {:0.3f}%".format(np.sum(PFC.Edep) / RE.E0 * 100.0))
+        log.info('Peak flux: {:1.8e} [W/m^2]'.format(np.max(PFC.qRE)))
+        log.info('Total number of particles: {:d}'.format(N_pts))
+        log.info('Number of particles landed on this PFC: {:d}'.format(ptclSum))
+        log.info('Particle balance: {:0.3f}%'.format(ptclSum / N_pts*100.0))
+
+
+        return
+
+
+    def REParticleFlux(self, RE, PFC, ts, tIdx):
+        """
+        assigns particles from runaway threads to targets
+
+        RE.intersectRecord gets overwritten for each runaway source timestep
+        so this function needs to be called once per runaway to add 
+        the particles from each runaway source timestep to the tallies on the PFC mesh
+        
+        todo idk if this will work because I didn't impliment velocity fracs, not sure why velocity fracs are important here
+        """
+        density = RE.density[:,:,:,tIdx].reshape(RE.N_b*RE.N_r*RE.N_p) * RE.E0
+        ptclSum = 0
+
+        #this PFC indexes in target mesh
+        idx1 = np.where(np.array(RE.CADtargetNames) == PFC.name)[0]
+
+        # Create an array with shape (len(ts), RE.N_vS, RE.intersectRecord.shape[1]) and ensure it is of integer type
+        multi_ts_use = np.array([[np.where(np.isin(RE.intersectRecord[j, :, i], idx1))[0].astype(int) for j in range(RE.N_vS)] for i in range(len(ts))], dtype=object)
+
+        # Iterate over the combinations of time and vS
+        for i in range(len(ts)):
+            for j in range(RE.N_vS):
+                use = multi_ts_use[i, j]
+                if len(use) > 0:
+                    #get indexes where there was a hit from intersectRecord
+                    idx3 = RE.intersectRecord[j, use, i].astype(int)
+                    #map location in target mesh to relative index on this PFC
+                    idxTGT = np.searchsorted(idx1, idx3) 
+                    #scale energy by the v_|| bin frac Hm why???
+                    den_scaled = density[use] * RE.velocityFracs[use, j]
+                    #add the sum for this mesh triangle
+                    np.add.at(PFC.ptclDep[:, i], idxTGT, den_scaled)
+
+
+                #for particle balance
+                ptclSum += len(use)
+
+        #particle flux is particles deposited per area per time
+        PFC.ptclFluxFil = PFC.ptclDep / PFC.areas[:,np.newaxis] / RE.dt
+        N_pts = RE.N_vS*len(RE.intersectRecord[0,:,0])
+
+        print('Particle deposition fraction: {:f}'.format(np.sum(PFC.ptclDep)))
+        print('Total number of particles: {:d}'.format(N_pts))
+        print('Number of particles landed on this PFC: {:d}'.format(ptclSum))
+        print('Particle balance: {:0.3f}%'.format(ptclSum / N_pts*100.0))
+        print('Peak flux: {:1.8e} [1/m^2/s]'.format(np.max(PFC.ptclFluxFil)))
+        log.info('Particle deposition fraction: {:f}'.format(np.sum(PFC.ptclDep)))
+        log.info('Total number of particles: {:d}'.format(N_pts))
+        log.info('Number of particles landed on this PFC: {:d}'.format(ptclSum))
+        log.info('Particle balance: {:0.3f}%'.format(ptclSum / N_pts*100.0))
+        log.info('Peak flux: {:1.8e} [1/m^2/s]'.format(np.max(PFC.ptclFluxFil)))
+
+
+        return
 
 #===============================================================================
 #                   I/O operations
