@@ -145,12 +145,11 @@ class PFC:
         for i,facet in enumerate(self.mesh.Facets):
             neighbours = list(facet.NeighbourIndices)
             for j,n in enumerate(neighbours):
-                n = np.int64(n)
                 if n >= self.Nfaces: 
                     print('Wrong neighbour index detected in PFC ' + self.name + ': facet = ' + str(i) + ' , neighbours = ' + str(neighbours))
                     log.info('Wrong neighbour index detected in PFC ' + self.name + ': facet = ' + str(i) + ' , neighbours = ' + str(neighbours))
                     n = -1
-                neighbours[j] = n
+                neighbours[j] = np.int64(n)
             self.allNeighbours[i] = neighbours
 
         #phi vector at each mesh center
