@@ -1180,6 +1180,11 @@ class heatflux3D:
 			
 		# average over the toroidal angles
 		qparm = qpar.mean(0)
+		
+		# simple moving average filter
+		delta = np.abs(0.5*self.fluxExpansion * self.S *1e-3 * self.scaleSmooth)	# in meters
+		w = 2*int(delta/ds) + 1
+		qparav = np.convolve(qparm, np.ones(w), 'same') / w
 
 		# get incident angle
 		BR = self.ep.BRFunc.ev(R,Z)
@@ -1194,7 +1199,7 @@ class heatflux3D:
 		nB = np.abs(nR*BR + nZ*BZ)/B
 		
 		# perpendicular heat flux
-		q = qparm*nB
+		q = qparav*nB
 		
 		# Integrate along line and along toroidal angle (axisymm) to get total power
 		P0 = 2*np.pi * integ.simps(R*q, swall)
@@ -1839,7 +1844,8 @@ def getNeighbourTriangleIndices(k,idx,allNeighbours,centers,deltasq,stack):
 	"""
 	#neighbours = mesh.Facets[k].NeighbourIndices	# DO NOT USE THIS: this is very slow!
 	neighbours = allNeighbours[k]
-	for n in neighbours: 
+	for n in neighbours:
+		if n < 0: continue
 		if n in stack: continue
 		distancesq = (centers[n,0] - centers[idx,0])**2 + (centers[n,1] - centers[idx,1])**2 + (centers[n,2] - centers[idx,2])**2
 		if distancesq < deltasq: 

@@ -143,7 +143,15 @@ class PFC:
         #get list of neighbours for all triangles in mesh
         self.allNeighbours = [0]*self.Nfaces
         for i,facet in enumerate(self.mesh.Facets):
-            self.allNeighbours[i] = facet.NeighbourIndices
+            neighbours = list(facet.NeighbourIndices)
+            for j,n in enumerate(neighbours):
+                n = np.int64(n)
+                if n >= self.Nfaces: 
+                    print('Wrong neighbour index detected in PFC ' + self.name + ': facet = ' + str(i) + ' , neighbours = ' + str(neighbours))
+                    log.info('Wrong neighbour index detected in PFC ' + self.name + ': facet = ' + str(i) + ' , neighbours = ' + str(neighbours))
+                    n = -1
+                neighbours[j] = n
+            self.allNeighbours[i] = neighbours
 
         #phi vector at each mesh center
         self.phiVec = np.zeros((len(R), 3))
