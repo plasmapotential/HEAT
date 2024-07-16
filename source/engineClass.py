@@ -2605,9 +2605,11 @@ class engineObj():
         self.RAD.preparePowerTransfer(PFC, self.CAD, mode=rayTriMode)
         #trace rays
         if rayTriMode=='open3d':
+            print("Using Open3D")
             #calculate photon load on PFC using open3d
             self.RAD.calculatePowerTransferOpen3D(mode='open3d')
         elif rayTriMode=='mitsuba':
+            print("Using Mitsuba")
             #calculate photon load on PFC using open3d
             #self.RAD.calculatePowerTransferMitsubaJIT(mode='mitsuba', mitsubaMode='cpu', fType='ply') #currently has memory leak
             self.RAD.calculatePowerTransferMitsubaNumpy(mode='mitsuba', mitsubaMode='cpu', fType='ply')     

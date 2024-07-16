@@ -415,6 +415,8 @@ class CAD:
         for obj in self.CADobjs:
             if type(obj) == Part.Feature:
                 self.CADparts.append(obj)
+            else:
+                print("Part "+obj.Label+" not Part.Feature.  Type is "+str(type(obj)))
 
         print("Loaded STEP file: " + self.STPfile)
         log.info("Loaded STEP file: " + self.STPfile)

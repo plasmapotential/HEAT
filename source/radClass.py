@@ -294,6 +294,8 @@ class RAD:
         Maps power between sources and targets (ROI PFCs).  Uses Mitsuba3 to
         perform ray tracing.  Mitsuba3 can be optimized for CPU or GPU.
 
+        Uses DrJIT to store arrays and for math operations
+
         Code largely developed by A. Rosenthal (CFS)
         Adapted to HEAT by T. Looby
 
@@ -610,10 +612,12 @@ class RAD:
 
         return powTmp
 
-    def calculatePowerTransferMitsubaNumpy(self, mode=None, mitsubaMode='cuda', fType='ply', batch_size=1000):
+    def calculatePowerTransferMitsubaNumpy(self, mode=None, mitsubaMode='cuda', fType='ply', batch_size=100):
         """
         Maps power between sources and targets (ROI PFCs).  Uses Mitsuba3 to
         perform ray tracing.  Mitsuba3 can be optimized for CPU or GPU.
+
+        Uses Numpy instead of DrJIT for math operations
 
         Code largely developed by A. Rosenthal (CFS)
         Adapted to HEAT by T. Looby
