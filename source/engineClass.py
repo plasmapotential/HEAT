@@ -1015,7 +1015,8 @@ class engineObj():
                     fracUI,fracUO,fracLI,fracLO,
                     lqCNmode,lqCFmode,lqPNmode,lqPFmode,SMode,
                     qBG,P,radFrac,fG,
-                    qFilePath,qFileTag,tIdx=0):
+                    qFilePath,qFileTag,
+                    rzqFile, rzqFiledata=None,tIdx=0):
         """
         get heat flux inputs from gui or input file
         """
@@ -1050,6 +1051,13 @@ class engineObj():
             qFilePath = None
         self.HF.qFilePath = qFilePath
         self.HF.qFileTag = qFileTag
+
+        if rzqFiledata != None:
+            self.HF.rzqFile = self.HF.writerzqFileData(rzqFile, rzqFiledata, self.tmpDir)
+        else:
+            self.HF.rzqFile = rzqFile
+
+        self.HF.readrzqprofile(self.HF.rzqFile)
 
         self.HF.setTypes()
 
@@ -1151,6 +1159,9 @@ class engineObj():
         elif hfMode == 'tophat':
             print("lqCN = {:f}".format(self.HF.lqCN))
             log.info("lqCN = {:f}".format(self.HF.lqCN))
+        elif hfMode=='rzqprofile': 
+            print("rzqFile = "+rzqFile)
+            log.info("rzqFile = "+rzqFile)
         return
 
     def loadHFParams(self, infile=None, tIdx=0):
@@ -1187,6 +1198,7 @@ class engineObj():
                          self.HF.fG,
                          self.HF.qFilePath,
                          self.HF.qFileTag,
+                         self.HF.rzqFile,
                          tIdx)
         return
 
