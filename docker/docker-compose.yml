@@ -19,7 +19,7 @@ services:
       #user should not edit container paths
       #
       # HEAT data directory on this machine (need to replace with absolute path on Windows)
-      - ${HOME}/HEAT_main_v4_July3124/HEAT_rzq:/root/HEAT
+      - /home/ext/HEAT_main_v4_July3124/HEAT_rzq:/root/HEAT
 #      # HEAT source code from github
 #      - /home/tlooby/source/HEAT/github:/root/source/HEAT
 #      # Batch mode directory
