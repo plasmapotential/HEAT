@@ -35,6 +35,6 @@ fi
 #export USER=$(whoami)
 
 #run docker compose
-#docker-compose up
+docker-compose up
 #run docker compose interactively (for terminal mode)
-docker compose run HEAT /bin/bash
+#docker compose run HEAT /bin/bash
