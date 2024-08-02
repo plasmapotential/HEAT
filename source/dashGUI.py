@@ -1114,7 +1114,7 @@ def loadHFSettings(mode=None, hidden=False, sessionData=None):
                 # rzqFile
                 html.Div(
                     children=[
-                        rzqprofileParameters(hideMask[4]),
+                        rzqprofileParameters(hideMask[5]),
                     ]
                 ),
                 PsolInput(hidden, sessionData),
