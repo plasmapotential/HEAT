@@ -1053,6 +1053,7 @@ class engineObj():
         self.HF.qFileTag = qFileTag
 
         if rzqFiledata != None:
+            print("saving rzq file to tmpDir.")
             self.HF.rzqFile = self.HF.writerzqFileData(rzqFile, rzqFiledata, self.tmpDir)
         else:
             self.HF.rzqFile = rzqFile
