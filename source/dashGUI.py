@@ -930,7 +930,7 @@ def buildHFbox():
                     {'label': 'Multi-Exponential', 'value': 'multiExp'},
                     {'label': 'Limiter', 'value': 'limiter'},
                     {'label': 'Top Hat', 'value': 'tophat'},
-                    {'label': 'From qFiles', 'value': 'qFile'}
+                    {'label': 'From qFiles', 'value': 'qFile'},
                     {'label': 'From rzq profile', 'value': 'rzqprofile'}
                     ],
                 value=None,
