@@ -829,6 +829,11 @@ class engineObj():
         """
         Loads CAD file for terminal users
         """
+        if os.path.basename(STPfile) in [None, 'None', 'none', '']:
+            self.CAD.STPfile = None
+            self.CAD.loadSTEP()
+            return
+        
         tools.makeDir(self.CAD.STPpath, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
         #get file name
         stpName = os.path.basename(STPfile)

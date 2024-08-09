@@ -1,4 +1,5 @@
-#CADClass.py
+# wowowow test
+# CADClass.py
 #Description:   Base HEAT CAD module
 #Engineer:      T Looby
 #Date:          20191107
@@ -43,6 +44,19 @@ log = logging.getLogger(__name__)
 
 import open3d as o3d
 
+
+class FakePart:
+    """
+    Create a fake part for the stl file that was not found in the CAD file
+    """
+    def __init__(self, Label):
+        self.Label = Label
+
+    def __getattribute__(self, name: str):
+        if name not in ['Label']:
+            raise AttributeError(f"Please use inputSTLs to skip meshing of {self.Label} \n\t\t" +
+                                    self.Label + " is a FakePart object and does not have the attribute " + name)
+        return super().__getattribute__(name)
 
 
 class CAD:
@@ -107,8 +121,6 @@ class CAD:
         sys.path.append(path)
         return
 
-
-
     def allowed_class_vars(self):
         """
         .. Writes a list of recognized class variables to HEAT object
@@ -127,7 +139,7 @@ class CAD:
         :xT: global translation of entire ROI in x direction [mm]
         :yT: global translation of entire ROI in y direction [mm]
         :zT: global translation of entire ROI in z direction [mm]
-
+        
         """
 
 
@@ -136,16 +148,17 @@ class CAD:
                             'gTy',
                             'gTz',
                             'gridRes',
-                            'overWriteMask'
+                            'overWriteMask',
+                            'inputSTLs',
                             ]
         return
+    
 
     def setTypes(self):
         """
         Nothing to do for this class
         """
         return
-
 
     def getROI(self, timestepMap):
         """
@@ -214,7 +227,6 @@ class CAD:
             self.intersectNorms = ['None' for i in range(len(self.intersectList))]
 
         return
-
 
     def readMesh(self, file):
         """
@@ -394,30 +406,49 @@ class CAD:
         """
         print("Loading STEP file...")
         log.info("Loading STEP file...")
-        
-        #check if we are loading a STEP file or a native FreeCAD file
-        _, file_extension = os.path.splitext(self.STPfile)
-        if file_extension == '.FCStd':
-            self.CAD = FreeCAD.open(self.STPfile)
-        else:
-            self.CAD = Import.open(self.STPfile)
-
-        self.CADdoc = FreeCAD.ActiveDocument
-        #Coordinate permutation if necessary
-        if self.permute_mask=='True' or self.permute_mask == True:
-            self.permuteSTEP()
-            #self.permuteSTEPAssy()
-            self.permute_mask = False
-
-        #Save all parts/objects
-        self.CADobjs = self.CADdoc.Objects
         self.CADparts = []
-        for obj in self.CADobjs:
-            if type(obj) == Part.Feature:
-                self.CADparts.append(obj)
+        Labels = []
 
-        print("Loaded STEP file: " + self.STPfile)
-        log.info("Loaded STEP file: " + self.STPfile)
+        if self.STPfile == None:
+            print("="*30)
+            print("Warning:: No CAD file loaded! \n" *3)
+            log.info("Warning:: No CAD file loaded! \n")
+        
+        else:
+            #check if we are loading a STEP file or a native FreeCAD file
+            _, file_extension = os.path.splitext(self.STPfile)
+            if file_extension == '.FCStd':
+                self.CAD = FreeCAD.open(self.STPfile)
+            else:
+                self.CAD = Import.open(self.STPfile)
+
+            self.CADdoc = FreeCAD.ActiveDocument
+            #Coordinate permutation if necessary
+            if self.permute_mask=='True' or self.permute_mask == True:
+                self.permuteSTEP()
+                #self.permuteSTEPAssy()
+                self.permute_mask = False
+
+            #Save all parts/objects
+            self.CADobjs = self.CADdoc.Objects
+
+            for obj in self.CADobjs:
+                if type(obj) == Part.Feature:
+                    self.CADparts.append(obj)
+                    Labels.append(obj.Label)
+
+        if self.inputSTLs is not None:
+            for part in self.inputSTLs.split(':'):
+                print(part)
+                if part not in Labels:
+                    Labels.append(part)
+                    print("Warning: "+part+" not found in CAD.  Adding as a dummy part.")
+                    fake_part = FakePart(str(part).strip())
+                    print(fake_part.Label, part)
+                    self.CADparts.append(fake_part)
+
+        print("Loaded STEP file: " + str(self.STPfile))
+        log.info("Loaded STEP file: " + str(self.STPfile))
         return
 
     def saveSTEP(self, file, objs):
@@ -535,9 +566,23 @@ class CAD:
         if type(part) != list:
             part = [part]
         meshes = []
+        caseDir = os.environ["caseDir"]
         for i in range(len(part)):
+            print('Exception list: ' + str(self.inputSTLs) + ' part label: ' + part[i].Label)
+            if self.inputSTLs is not None and part[i].Label in self.inputSTLs:
+                print('Flag Triggered: '+part[i].Label)
+                mesh_path = caseDir + '/STLs/' + part[i].Label + "___{:.6f}mm.stl".format(float(resolution))
+                print('Checking for mesh: '+mesh_path)
+                if os.path.exists(mesh_path):
+                    print('Mesh exists, loading...')
+                    mesh = Mesh.Mesh(mesh_path)
+                    meshes.append(mesh)
+                    continue
             shape = part[i].Shape.copy(False)
             shape.Placement = part[i].getGlobalPlacement()
+            if part[i].Label in self.inputSTLs:
+                print('Flag Triggered: '+part[i].Label)
+                mesh
             print('Meshing part ' + part[i].Label)
             log.info('Meshing part ' + part[i].Label)
             mesh = MeshPart.meshFromShape(shape, MaxLength=resolution)
@@ -566,20 +611,28 @@ class CAD:
         if type(part) != list:
             part = [part]
         meshes = []
+        caseDir = os.environ["caseDir"]
         for i in range(len(part)):
+            print('Exception list: '+str(self.inputSTLs) + ' part label: '+part[i].Label)
+            if self.inputSTLs is not None and part[i].Label in self.inputSTLs:
+                print('Flag Triggered: '+part[i].Label)
+                mesh_path = caseDir + '/STLs/' + part[i].Label + '___standard.stl'
+                print('Checking for mesh: '+mesh_path)
+                if os.path.exists(mesh_path):
+                    print('Mesh exists, loading...')
+                    mesh = Mesh.Mesh(mesh_path)
+                    meshes.append(mesh)
+                    continue
             shape = part[i].Shape.copy(False)
             shape.Placement = part[i].getGlobalPlacement()
             print('Meshing part ' + part[i].Label)
             log.info('Meshing part ' + part[i].Label)
-            mesh = MeshPart.meshFromShape(Shape=shape,
-                                          LinearDeflection=surfDev,
-                                          AngularDeflection=angDev,
+            mesh = MeshPart.meshFromShape(Shape=shape, LinearDeflection=surfDev, AngularDeflection=angDev,
                                           Relative=False)
             meshes.append(mesh)
         print("Converted parts to mesh objects using Standard algorithm.")
         log.info("Converted parts to mesh objects using Standard algorithm.")
         return meshes
-
 
     def writeMesh2file(self, mesh, label, resolution, path='./'):
         """
@@ -695,7 +748,6 @@ class CAD:
         log.info("Loaded STL files")
         return
 
-
     def load1Mesh(self, filename):
         """
         Reads a previously generated STL file and generates 1 mesh object.
@@ -782,7 +834,6 @@ class CAD:
                         self.minmaxExtent(x,y,z)
         return norms,centers,areas
 
-
     def scale_and_permute(self, x_old, y_old, z_old, permute_mask=False, unitConvert=1.0):
         """
         Scales input mesh vectors if necessary (ie for unit conversion)
@@ -809,7 +860,6 @@ class CAD:
         z *= float(unitConvert)
         return x, y, z
 
-
     def faceNormals(self, mesh):
         """
         returns normal vectors for single freecad mesh object in cartesian
@@ -833,7 +883,6 @@ class CAD:
         for i, facet in enumerate(mesh.Facets):
             areas.append(facet.Area)
         return np.asarray(areas)
-
 
     def faceCenters(self, x, y, z):
         """
@@ -911,8 +960,6 @@ class CAD:
                     deltaPhis[i,j] = deltaPhis[i,j] - 2*np.pi
 
         return deltaPhis
-
-
 
     def findPotentialIntersectParts(self,deltaPhis,sourceBts,sourceParts,targetParts):
         """
@@ -1145,7 +1192,6 @@ class CAD:
         """
         return Part.makeLine(p1,p2)
 
-
     def createWire(self, shape):
         """
         creates a wire from shape obj.  will filter out all parts except
@@ -1171,7 +1217,6 @@ class CAD:
         print("Loaded STL files")
         log.info("Loaded STL files")
         return mesh
-
 
     def getVertexesFromEdges(self, edges, discretize=True, radixFigs=3):
         """
@@ -1219,9 +1264,6 @@ class CAD:
                 z = np.hstack([z, np.round([v.Z for v in edge.Vertexes], radixFigs) ])
                 vertexList.append(np.vstack([x,y,z]).T)
         return vertexList
-
-
-
 
     def findContour(self, edgeList, seedIdx=0):
         """
@@ -1311,7 +1353,6 @@ class CAD:
             print("No global mesh translations defined.")
             log.info("No global mesh translations defined.")
         return mesh
-
 
     def repairMeshFreeCAD(self, p:str, stlOut:str, name:str, mesh:object):
         """
@@ -1404,7 +1445,6 @@ class CAD:
 
         return testList[-2]
 
-
     def open3dRemoveMeshDefects(self, m:object):
         """
         removes mesh defects using open3d
@@ -1419,7 +1459,6 @@ class CAD:
         m.compute_triangle_normals()
         m.compute_vertex_normals()
         return m
-
 
     def checkMeshProperties(self, mesh:object, visualize=False):
         """
@@ -1522,7 +1561,6 @@ class CAD:
         else:
             self.FEMmeshes = [mesh]
         return mesh
-
 
     def createFEMmeshGmsh(self, obj, minLength=0, maxLength=0, name='FEMMeshGmsh'):
         """

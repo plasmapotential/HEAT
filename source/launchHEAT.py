@@ -203,6 +203,7 @@ def launchHEAT(args):
                 print("where <batchPath> is where you want the batchFile saved")
                 sys.exit()
 
+        os.environ["caseDir"] = os.path.abspath(os.path.dirname(batchFile))
         tui.simulationSchedule(batchFile)
         tui.runSimulations()
 
