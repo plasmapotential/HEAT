@@ -580,9 +580,6 @@ class CAD:
                     continue
             shape = part[i].Shape.copy(False)
             shape.Placement = part[i].getGlobalPlacement()
-            if part[i].Label in self.inputSTLs:
-                print('Flag Triggered: '+part[i].Label)
-                mesh
             print('Meshing part ' + part[i].Label)
             log.info('Meshing part ' + part[i].Label)
             mesh = MeshPart.meshFromShape(shape, MaxLength=resolution)
