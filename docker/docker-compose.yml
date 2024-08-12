@@ -25,7 +25,7 @@ services:
         - /home/ext/HEAT_main_v4_July3124/HEAT_rzq:/root/source/HEAT
 #      # Batch mode directory
 #      - /home/tlooby/HEATruns/SPARC/oscillation_fixedSP:/root/terminal
-        - /home/ext/HEAT_main_v4_July3124/HEAT_rzq/west:/root/terminal
+        - /home/ext/HEAT_main_v4_July3124/HEAT_rzq/st40:/root/terminal
 
     stdin_open: true # docker run -i
     tty: true        # docker run -t

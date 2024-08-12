@@ -572,8 +572,8 @@ class heatFlux:
         psi_rzq = PFC.ep.psiFunc.ev(R,Z) #convert (r,z) coordinate to psi
         psi_rzq_omp = self.map_R_psi(psi_rzq, PFC) #map the psi_rzq to OMP
 
-        print("psi_rzq is:", psi_rzq)
-        print("psi_rzq_omp is", psi_rzq_omp)
+        # print("psi_rzq is:", psi_rzq)
+        # print("psi_rzq_omp is", psi_rzq_omp)
 
 
         # head = 'R(m),Z(m),q(W/m2),psi_rzq,psi_omp'
@@ -584,8 +584,8 @@ class heatFlux:
         # q1 = q_interp(PFC.psimin) #calculate to value of q based on the psi of the PFC centers
         q1 = q_interp(psi) #calculate the value of q basesd on mapped to OMP PFC centers
         q1 = q1/1e6
-        print("psimin is", PFC.psimin)
-        print("PFC q is", q1)
+        # print("psimin is", PFC.psimin)
+        # print("PFC q is", q1)
         # head_pfc = 'W,q(MW/m2)'
         # data_PFC = [PFC.psimin, q1]
         # np.savetxt("PFC_psi", np.column_stack(data_PFC), delimiter=',', fmt='%.10f', header = head_pfc)
