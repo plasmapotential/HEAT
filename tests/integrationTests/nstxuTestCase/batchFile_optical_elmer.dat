@@ -1,4 +1,3 @@
-
 #HEAT batchFile
 #For use when running HEAT in terminal / batch mode.  Each line is a new entry.
 #
@@ -42,14 +41,15 @@
 #        HF Variables will be read at each timestep.
 #
 # Output: Defines what output HEAT should calculate.  Options are:
-#         -hfOpt   optical heat flux point cloud
-#         -hfGyro  gyro orbit heat flux point cloud
-#         -hfRad   radiated power heat flux point cloud
-#         -B       magnetic field glyph cloud
-#         -psiN    normalized poloidal flux point cloud
-#         -pwrDir  powerDir point cloud
-#         -bdotn   bdotn point cloud
-#         -norm    normal vector glyph cloud
+#         -hfOpt   optical heat flux 
+#         -hfGyro  gyro orbit heat flux 
+#         -hfFil   filament heat flux 
+#         -hfRad   radiated power heat 
+#         -B       magnetic field glyphs
+#         -psiN    normalized poloidal flux 
+#         -pwrDir  powerDir point 
+#         -bdotn   bdotn point
+#         -norm    normal vector glyphs
 #         -T       temperature calculation using openFOAM
 #         -elmer   runs an Elmer FEM simulation
 #
