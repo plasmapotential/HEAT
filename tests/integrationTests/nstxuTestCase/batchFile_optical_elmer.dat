@@ -1,3 +1,4 @@
+
 #HEAT batchFile
 #For use when running HEAT in terminal / batch mode.  Each line is a new entry.
 #
@@ -49,7 +50,8 @@
 #         -pwrDir  powerDir point cloud
 #         -bdotn   bdotn point cloud
 #         -norm    normal vector glyph cloud
-#         -T       temperature
+#         -T       temperature calculation using openFOAM
+#         -elmer   runs an Elmer FEM simulation
 #
 #       for multiple outputs, separate options with : (ie hfOpt:psi:T).  Note
 #       that HEAT will use the first options list provided for each tag.
@@ -66,19 +68,21 @@
 # <path>/<MachFlag>/PFC
 # <path>/<MachFlag>/Input
 #
-#  Example line for DIII-D run for pulse 154859 at timestep 4300 ms:
+#  Example line for an NSTX-U run for pulse 204118 timestep 4ms:
 #MachFlag, Tag, Shot, TimeStep, GEQDSK, CAD, PFC, Input, Output
-#d3d, plasma3D, 154859, 4300, g154859.04300, d3d_sector.step, PFCinput.csv, D3D_input.csv, hfOpt
+#nstx,run1, 204118, 0.004, geqdsk.00004, IBDH_2tiles.step, PFCs_run1.csv, NSTXU_input.csv, B:hfOpt
 #
 # And the directory structure would look like this
 # <path>/batchFile.dat
-# <path>/d3d/g154859.04300
-# <path>/d3d/d3d_sector.step
-# <path>/d3d/PFCinput.csv
-# <path>/d3d/D3D_input.csv
+# <path>/nstx/g204118.00004
+# <path>/nstx/IBDH_2tiles.step
+# <path>/nstx/PFCs_run1.csv
+# <path>/nstx/NSTXU_input.csv
 #
 #
 #
 #
 MachFlag, Tag, Shot, TimeStep, GEQDSK, CAD, PFC, Input, Output
-d3d, plasma3D, 154859, 4300, g154859.04300, d3d_sector.step, PFCinput.csv, D3D_input.csv, hfOpt
+#example for optical approximation temperature calculation (HF + T) using Elmer FEM
+nstx,opticalExampleElmer, 204118, 0.050, g204118.00050, testCaseIBDH_v3.0.0.step, PFCs.csv, NSTXU_input.csv, hfOpt:elmer
+nstx,opticalExampleElmer, 204118, 0.200, g204118.00200, testCaseIBDH_v3.0.0.step, PFCs.csv, NSTXU_input.csv, hfOpt:elmer

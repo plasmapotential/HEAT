@@ -37,7 +37,7 @@ class PFC:
         self.name = timestepMapRow['PFCname']
         self.timeStr = timestepMapRow['timesteps']
         tLimits = np.asarray( self.timeStr.split(':') ).astype(float)
-        use = np.where(np.logical_and(tsAll>tLimits[0], tsAll<tLimits[1]))
+        use = np.where(np.logical_and(tsAll>=tLimits[0], tsAll<=tLimits[1]))
         self.timesteps = tsAll[use]
 
         #name of divertor this PFC is in (ie upper outer)
@@ -368,11 +368,11 @@ class PFC:
         Set filter to a < threshold
         """
         if threshold > -1: 
-        	print('Outside Facing filter threshold is set to: ' + str(threshold))
-        	log.info('Outside Facing filter threshold is set to: ' + str(threshold))
+            print('Outside Facing filter threshold is set to: ' + str(threshold))
+            log.info('Outside Facing filter threshold is set to: ' + str(threshold))
         else: 
-        	print('Outside Facing filter is not used')
-        	log.info('Outside Facing filter is not used')
+            print('Outside Facing filter is not used')
+            log.info('Outside Facing filter is not used')
         R0 = MHD.ep[0].g['R0']
         Z0 = MHD.ep[0].g['Zmid']
         
@@ -388,11 +388,11 @@ class PFC:
         facingOut[idx] = True 
         Nfiltered = np.sum(facingOut)
         if threshold > -1: 
-        	print(Nfiltered,'faces are oriented away from the plasma and are considered shadowed.')
-        	log.info(str(Nfiltered) + ' faces are oriented away from the plasma and are considered shadowed.')
+            print(Nfiltered,'faces are oriented away from the plasma and are considered shadowed.')
+            log.info(str(Nfiltered) + ' faces are oriented away from the plasma and are considered shadowed.')
         if (threshold <= -1) & (Nfiltered > 0): 
-        	print('WARNING: Outside Facing filter should not filter anything, but it does.', Nfiltered, 'faces are neglected')
-        	log.info('WARNING: Outside Facing filter should not filter anything, but it does. ' + str(Nfiltered) + ' faces are neglected')
+            print('WARNING: Outside Facing filter should not filter anything, but it does.', Nfiltered, 'faces are neglected')
+            log.info('WARNING: Outside Facing filter should not filter anything, but it does. ' + str(Nfiltered) + ' faces are neglected')
         return facingOut
         
 
@@ -439,6 +439,8 @@ class PFC:
             print("\n----Intersection Step 1----")
             log.info("\n----Intersection Step 1----")
             CTLfile = self.controlfilePath + self.controlfileStruct
+            #q1 = np.zeros((len(self.centers[use]),3))
+            #q2 = np.zeros((len(self.centers[use]),3))
 
             #run forward mesh elements
             print("-Forward Trace-")

@@ -199,6 +199,11 @@ class MHD:
         log.info("HEAT time format: " + str(useHeatTimeFmt))
         log.info("D3D time format: " + str(useD3DtimeFmt))        
         
+        print("HEAT time format: " + str(useHeatTimeFmt))
+        print("D3D time format: " + str(useD3DtimeFmt))
+        log.info("HEAT time format: " + str(useHeatTimeFmt))
+        log.info("D3D time format: " + str(useD3DtimeFmt))        
+        
         ts = []
         for i,g in enumerate(gFileList):
             #GEQDSKs are named using timesteps
@@ -609,10 +614,12 @@ class MHD:
                 outfile = controlfilePath+'struct_'+tag+'.csv'
                 vtkName = 'Field_trace_'+tag
             np.savetxt(outfile, xyz, delimiter=',', header=head)
+            
             #Now save a vtk file for paraviewweb
-            tools.createVTKOutput(outfile, 'trace', vtkName)
-            print('Converted file to ParaView formatted CSV.')
-            log.info('Converted file to ParaView formatted CSV.')
+            #old method (new method happens in engineClass using ioClass)
+            #delete this comment after v5.0
+            #tools.createVTKOutput(outfile, 'trace', vtkName)
+           
 
         return
 
@@ -833,8 +840,8 @@ class MHD:
         Note that this writes some data as 0 (ie rhovn, kvtor, etc.)
         """
         if ep==None:
-            print("Warning no gFile provided.  Writing from gFile in memory.")
-            log.info("Warning no gFile provided.  Writing from gFile in memory.")
+            print("Warning no gFile provided for write operation.  Writing from gFile in memory.")
+            log.info("Warning no gFile provided for write operation.  Writing from gFile in memory.")
             g = self.ep.g
         else:
             g = ep.g

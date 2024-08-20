@@ -2,26 +2,43 @@ name: CI
 
 on:
   push:
-    branches: [ plasma3D ]
+    branches: [ main ]
   pull_request:
-    branches: [ plasma3D ]
+    branches: [ main ]
 
 jobs:
-  test:
+  check-final-image:
     runs-on: ubuntu-latest
+    steps:
+    - name: Check if final Docker image exists on Docker Hub
+      id: check-final-image
+      run: |
+        if docker pull plasmapotential/heat:v4.1; then
+          echo "Image exists on Docker Hub."
+        else
+          echo "::error ::Final HEAT Docker image v4.1 does not exist."
+          exit 1 
+        fi
 
+  test:
+    needs: check-final-image
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
 
     - name: Pull Docker image
-      run: docker pull plasmapotential/heat:v4.0
+      run: docker pull plasmapotential/heat:v4.1
 
     - name: Run simple CI configuration test 
-      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.0 python3 /root/source/HEAT/tests/integrationTests/ciTest.py
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.1 python3 /root/source/HEAT/tests/integrationTests/ciTest.py
 
     - name: NSTX-U Optical HEAT Calculation
-      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.0 /root/source/HEAT/source/runTerminalModeTestOptical
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.1 /root/source/HEAT/source/runTerminalModeTestOptical
 
+    - name: NSTX-U Optical Elmer FEM HEAT Calculation
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.1 /root/source/HEAT/source/runTerminalModeTestOpticalElmer
+
+      
 #    - name: NSTX-U Gyro-orbit HEAT Calculation
 #      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.0 /root/source/HEAT/source/runTerminalModeTestGyro
 #

@@ -27,14 +27,8 @@ try:
     dataPath = os.environ["dataPath"]
     OFbashrc = os.environ["OFbashrc"]
     FreeCADPath = os.environ["FreeCADPath"]
-    PVPath = os.environ["PVPath"]
-    pvpythonCMD = os.environ["pvpythonCMD"]
 except:
     print("Could not properly set up environment.  Proceed with caution!")
-try:
-    AppDir = os.environ["APPDIR"]
-except:
-    AppDir = 'Not in appImage'
 
 try:
     chmod = int(os.environ["HEATchmod"], 8) #convert from base 8
@@ -132,12 +126,14 @@ class TUI():
           :hfOpt:   optical heat flux point cloud
           :hfGyro:  gyro orbit heat flux point cloud
           :hfRad:   radiated power heat flux point cloud
+          :hfFil:   filament heat flux point cloud
           :B:       magnetic field glyph cloud
           :psiN:    normalized poloidal flux point cloud
           :pwrDir:  powerDir point cloud
           :bdotn:   bdotn point cloud
           :norm:    normal vector glyph cloud
-          :T:       temperature
+          :T:       temperature using openFoam
+          :elmer:       FEM analysis using Elmer FEM
 
           for multiple outputs, separate options with : (ie hfOpt:psi:T).  Note
           that HEAT will use the first options list provided for each tag.
@@ -285,9 +281,6 @@ class TUI():
 
                 print("Completed all HEAT runs\n")
                 log.info("Completed all HEAT runs\n")
-                shutil.copy(logFile, self.shotPath + 'HEATlog.txt')
-
-
 
         return
 
@@ -301,7 +294,7 @@ class TUI():
         #will be used for the openFOAM settings.
         self.ENG.inputFileList = inputFiles
         self.ENG.runHEAT(runList)
-        #run openFOAM
+        #run thermal analysis
         if 'T' in runList:
             self.loadOF()
             if self.ENG.IO.csvMask == True:
@@ -312,10 +305,18 @@ class TUI():
                 print("Please turn on csv output file switch and re-run")
                 log.info("Error!  Cannot run openFOAM unless you save CSV files!")
                 log.info("Please turn on csv output file switch and re-run")
+
+        if 'elmer' in runList:
+            self.loadElmer()
+            self.ENG.runElmerFEM()
+
+        print("HEAT run completed...")
+        log.info("HEAT run completed...")
         print("Total time: {:f}".format(time.time() - t0))
+        log.info("Total time: {:f}".format(time.time() - t0))
         return
 
-    def prepareDirectories(self,mach,tag, clobber='y'):
+    def prepareDirectories(self,mach,tag):
         """
         build HEAT tree for mach + tag combo
         """
@@ -328,6 +329,14 @@ class TUI():
 
         #make tree branch for this shot
         tools.makeDir(self.shotPath, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
+
+        #make unique logfile for this tag
+        logFile = self.shotPath + 'HEATlog.txt'
+        self.ENG.logFile = logFile
+        from logConfig import setup_logging
+        log.info("Changing log file to new path for batchMode:")
+        log.info(logFile)
+        setup_logging(logfile_path=logFile)
 
         return
 
@@ -418,6 +427,14 @@ class TUI():
                     self.ENG.OF.material
                     )
         return
+    
+    def loadElmer(self):
+        """
+        Loads Elmer FEM parameters into engine object
+        """
+        print("Elmer FEM")
+        self.ENG.FEM.readElmerFile()
+        return
 
     def saveBatchFile(self, path=None):
         """
@@ -435,7 +452,7 @@ class TUI():
 #For use when running HEAT in terminal / batch mode.  Each line is a new entry.
 #
 # The fist line of every batchFile should be (uncommented):
-# MachFlag, Tag, GEQDSK, CAD, PFC, Input, Output
+# MachFlag, Tag, Shot, TimeStep, GEQDSK, CAD, PFC, Input, Output
 #
 #===Column variables are defined as follows
 # MachFlag: machine specific flag.
@@ -443,17 +460,28 @@ class TUI():
 #
 # Tag:  user specified tag to label the simulation by.  Tags represent
 #       independent HEAT runs.  For time varying discharges with multiple
-#       GEQDSK files, tag should be repeated on multiple lines with the GEQDSK
-#       for each timestep in each line.
+#       GEQDSK files, tag should be repeated on multiple lines with the 
+#       TimeStep column changing.
+#
+# Shot:  pulse number to use for saving HEAT output (MachFlag_Shot).  Default is to
+#        allow for 6 sig figs of shot numbers.  SigFigs can be changed in engineClass
+#        object initialization function call.
+#
+# TimeStep: Timestep that the equilibrium defined in "GEQDSK" column corresponds
+#           to.  GEQDSKs can be named in multiple formats, but the TimeStep in 
+#           this row is what is used by HEAT.  For time varying discharges, tag 
+#           should be repeated on multiple lines with the TimeStep column changing.
+#           Timestep units are [s].  Default is to allow for 9 SigFigs after the
+#           radix, which corresponds to nanosecond resolution (defined in engineClass
+#           initialization function call)
 #
 # GEQDSK:  magnetic equilibrium file (ie EFIT) in GEQDSK format
-#          naming convention is g<shot>.<timestep> where <shot> is the integer
-#          shot number (6 digits) and timestep is the timestep in ms (5 digits).
-#          For example, shot 204118 timestep 50ms would be g204118.00050
+#          Psi should be in units of Wb/rad (divide by 2pi) and the Bt0, Fpol, Psi
+#          and Ip values should reflect COCOS.
 #
 # CAD: CAD file for the tag.  Note that HEAT will use the first CAD file provided
 #      in for each tag.  Subsequent lines in that tag are ignored.  In other words,
-#      there can only be one CAD file per tag.
+#      there can only be one CAD file per tag.  Can be STEP, IGES, or FCStd formats.
 #
 # PFC: PFC file for the tag.  Note that HEAT will use the first PFC file provided
 #      in for each tag.  Subsequent lines in that tag are ignored.  In other words,
@@ -465,12 +493,14 @@ class TUI():
 # Output: Defines what output HEAT should calculate.  Options are:
 #         -hfOpt   optical heat flux point cloud
 #         -hfGyro  gyro orbit heat flux point cloud
+#         -hfRad   radiated power heat flux point cloud
 #         -B       magnetic field glyph cloud
 #         -psiN    normalized poloidal flux point cloud
 #         -pwrDir  powerDir point cloud
 #         -bdotn   bdotn point cloud
 #         -norm    normal vector glyph cloud
-#         -T       temperature
+#         -T       temperature calculation using openFOAM
+#         -elmer   runs an Elmer FEM simulation
 #
 #       for multiple outputs, separate options with : (ie hfOpt:psi:T).  Note
 #       that HEAT will use the first options list provided for each tag.
@@ -479,16 +509,17 @@ class TUI():
 #
 #
 # Once you have a batchFile, you need to save all input files in the following
-# directory structure, where <path> is wherever the batchFile is:
+# directory structure, where <path> is wherever the batchFile is and <MachFlag>
+# is the machine name (ie nstx):
 # <path>/batchFile.dat
-# <path>/MachFlag/GEQDSK
-# <path>/MachFlag/CAD
-# <path>/MachFlag/PFC
-# <path>/MachFlag/Input
+# <path>/<MachFlag>/GEQDSK
+# <path>/<MachFlag>/CAD
+# <path>/<MachFlag>/PFC
+# <path>/<MachFlag>/Input
 #
-#  Example line for an NSTX-U run:
-#MachFlag, Tag, GEQDSK, CAD, PFC, Input, Output
-#nstx,run1, g204118.00004, IBDH_2tiles.step, PFCs_run1.csv, NSTXU_input.csv, B:hfOpt
+#  Example line for an NSTX-U run for pulse 204118 timestep 4ms:
+#MachFlag, Tag, Shot, TimeStep, GEQDSK, CAD, PFC, Input, Output
+#nstx,run1, 204118, 0.004, geqdsk.00004, IBDH_2tiles.step, PFCs_run1.csv, NSTXU_input.csv, B:hfOpt
 #
 # And the directory structure would look like this
 # <path>/batchFile.dat
@@ -500,7 +531,7 @@ class TUI():
 #
 #
 #
-MachFlag, Tag, GEQDSK, CAD, PFC, Input, Output
+MachFlag, Tag, Shot, TimeStep, GEQDSK, CAD, PFC, Input, Output
             """
         with open(file,'w') as f:
             f.write(text)

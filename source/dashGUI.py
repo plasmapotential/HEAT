@@ -23,7 +23,7 @@ to run on address:port, use command line:
 dashGUI.py <address> <port>
 
 You will need to set a few variables below, based upon your system paths
-rootDir, PVPath
+rootDir
 """
 import os
 import sys
@@ -57,12 +57,6 @@ rootDir = os.environ["rootDir"]
 dataPath = os.environ["dataPath"]
 OFbashrc = os.environ["OFbashrc"]
 FreeCADPath = os.environ["FreeCADPath"]
-PVPath = os.environ["PVPath"]
-pvpythonCMD = os.environ["pvpythonCMD"]
-try:
-    AppDir = os.environ["APPDIR"]
-except:
-    AppDir = 'Not in appImage'
 
 try:
     chmod = int(os.environ["HEATchmod"], 8) #convert from base 8
@@ -342,7 +336,6 @@ def buildButtonRibbon():
 def buildDefaultPaths():
     """
     contains text boxes for HEAT relevent paths
-    PVPath is path for paraview binaries and pvpython
     FreeCAD is location of freecad installation
     dataDir is location where HEAT output will be saved
 
@@ -357,14 +350,12 @@ def buildDefaultPaths():
         className="column1",
         children=[
             dbc.Label("ParaVIEW Path"),
-            dbc.Input(id="PVPath", value=PVPath, readonly=True),
             dbc.Label("FreeCAD Path"),
             dbc.Input(id="FreeCADPath", value=FreeCADPath, readonly=True),
             dbc.Label("Data Directory"),
             dbc.Input(id="dataPath", value=dataPath, readonly=True),
             dbc.Label("OpenFOAM bashrc file"),
             dbc.Input(id="OFbashrc", value=OFbashrc, readonly=True),
-            dbc.Label("Image Mount Directory: "+AppDir)
         ],
     )
 

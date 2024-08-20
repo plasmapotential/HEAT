@@ -58,9 +58,60 @@ class filament:
 
     def readFilamentFile(self, path:str):
         """
-        reads a filament csv input file
+        The HEAT filament file
+        ----------------------
+        HEAT calculates filament transport using a model developed by Fundamenski, the so-called
+        Free Streaming Model (FSM) [W Fundamenski, Plasma Phys. Control. Fusion 48 109, 2006].
+        The FSM assumes that the filament plasma is transported directly along the field lines,
+        corresponding to advection.  It ignores collisionality and Coulomb effects.  
 
-        generates a data pd array
+        Filaments are born at user defined timesteps, and then are evolved according to the
+        parameters defined in the filament file.  The filaments are born as 3D field aligned 
+        Gaussians, and are discretized in space and time using macroparticles.  Macroparticles
+        are synthetic "particles" that each originate at some spatial location and with a finite 
+        value of energy.  HEAT traces each macroparticle along the magnetic field lines.  Filaments
+        can be sourced as a function of time or as delta functions in time.  
+        
+        The filament file describes filaments that will be traced in HEAT using the filament module.
+        Each row in the file corresponds to an additional filament that will be traced.  The 
+        rows describe the filament location and birth parameters, as well as the simulation
+        parameters (ie timesteps).  
+
+
+
+        Each column in the file is described below:
+
+        :id:  a unique string tag (or name) that is assigned to the filament.  example: fil1pt
+        :tMin[s]: time in seconds of filament birth. example: 1000e-6
+        :tMax[s]: time in seconds of filament birth. example: 1500e-6
+        :dt[s]: timestep size in seconds
+        :decay_t[s]: decay constant for filament birth energy.  The filament can be born over a 
+          series of timesteps.  If N_src_t is > 1, this variable describes the exponential decay.
+          At each of the birth timesteps, HEAT sources particles with a decaying total energy,
+          which is prescribed by this exponential decay constant.  See function gaussianAtPts() 
+          for more information.
+        :N_src_t: number of birth timesteps over which we source particles.  if set to 1,
+          particles are all born instantaneously.
+        :rCtr[m]: radial coordinate in meters of filament centroid at birth
+        :zCtr[m]: vertical coordinate in meters of filament centroid at birth
+        :phiCtr[deg]: toroidal coordinate in degrees of filament centroid at birth
+        :sig_r[m]: Gaussian width of filament in radial direction in meters
+        :N_sig_r: Width of filament radial Gaussian in units of sig_r
+        :N_r: Number of discrete birth locations in radial direction
+        :sig_p[m]: Gaussian width of filament in poloidal direction in meters
+        :N_sig_p: Width of filament poloidal Gaussian in units of sig_p
+        :N_p: Number of discrete birth locations in poloidal direction
+        :sig_b[m]: Gaussian width of filament in along field line in meters
+        :N_sig_b: Width of filament Gaussian along field line in units of sig_b
+        :N_b: Number of discrete birth locations along field line
+        :N_vS: Number of samples from the parallel velocity distribution function
+        :v_r[m/s]: bulk velocity of filament in radial direction [m/s]
+        :v_t[m/s]: bulk velocity of filament in toroidal direction [m/s]
+        :E0[J]: total energy of filament across all birth timesteps [J]
+        :T0[eV]: plasma temperature in filament at birth [eV].  assumed to be uniform.
+        :traceDir: direction of filament tracing.  1 (-1) for positive (negative) toroidal direction.
+          0 for both directions.
+        
         """
         print('Reading filament file')
         filFile = path + 'filaments.csv'

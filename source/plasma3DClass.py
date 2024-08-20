@@ -322,7 +322,7 @@ class plasma3D:
 				f.write(str(R[i]) + "\t" + str(phi[i]) + "\t" + str(Z[i]) + "\n")
 				
 				
-	def launchLaminar(self, NCPUs = None, tag = None, MapDirection = 0):
+	def launchLaminar(self, NCPUs = None, tag = None, MapDirection = 0, verbose=False):
 		"""
 		Write all input files and launch MAFOT
 		Read the output file when finished
@@ -339,7 +339,10 @@ class plasma3D:
 		bbLimits = str(self.bbRmin) + ',' + str(self.bbRmax) + ',' + str(self.bbZmin) + ',' + str(self.bbZmax)
 		args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points3DHF.dat','-B',bbLimits,'_lamCTL.dat',tag]
 		current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-		subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
+		if verbose == False:
+			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
+		else:
+			subprocess.run(args, env=current_env, cwd=self.cwd) #dont suppress error messages
 		#print('mpirun -n ' + str(self.NCPUs) + ' heatlaminar_mpi' + ' -P points3DHF.dat' + ' _lamCTL.dat' + ' ' + tag)
 		
 		#self.wait2finish(self.NCPUs, tag)
@@ -876,7 +879,7 @@ class heatflux3D:
 		return q0 #,q_hat,psiN
 
 
-	def scale_conduct2(self, P, kappa, L, lq, S, ratio, T0 = 0, pfr = 1.0):
+	def scale_conduct2(self, P, kappa, L, lq, S, ratio, T0 = 0, pfr = 1.0, verbose=False):
 		"""
 		"""		
 		if pfr is None: pfr = self.lcfs
@@ -911,7 +914,10 @@ class heatflux3D:
 			#nproc = 10
 			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
+			if verbose == False:
+				subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
+			else:
+				subprocess.run(args, env=current_env, cwd=self.cwd) #dont suppress error messages
 			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
 			# move one folder down
 			src = self.cwd + '/' + 'lam_' + tag + '.dat'
@@ -1015,7 +1021,7 @@ class heatflux3D:
 		return f(psi)
 
 
-	def scale_layer(self, lq, S, P, DivCode, verfyScaling = True):
+	def scale_layer(self, lq, S, P, DivCode, verfyScaling = True, verbose=False):
 		"""
 		scales HF using a part of the limiter outline in the g-file 
 		q-profile is obtained using laminar and apply the heat flux layer to psimin
@@ -1105,7 +1111,10 @@ class heatflux3D:
 			# call MAFOT
 			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','-B',bbLimits,'_lamCTL.dat',tag]
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
+			if verbose == False:
+				subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
+			else:
+				subprocess.run(args, env=current_env, cwd=self.cwd) #dont suppress error messages
 			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
 			
 			# move one folder down

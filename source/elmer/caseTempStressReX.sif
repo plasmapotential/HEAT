@@ -1,0 +1,312 @@
+Header
+  CHECK KEYWORDS Warn
+  Mesh DB "." "T032" 
+  Include Path ""
+  Results Directory ""
+End
+
+Simulation
+  Max Output Level = 5
+  Coordinate System = Cartesian
+  Coordinate Mapping(3) = 1 2 3
+  coordinate scaling = 0.001
+  Simulation Type = Transient
+  Steady State Max Iterations = 1
+  Output Intervals(1) = 1
+  Timestep intervals(1) = 3
+  Timestep Sizes(1) = 0.01
+  Timestepping Method = BDF
+  BDF Order = 1
+  Solver Input File = caseTemp.sif
+  Post File = case.vtu
+End
+
+Constants
+  Gravity(4) = 0 -1 0 9.82
+  Stefan Boltzmann = 5.670374419e-08
+  Permittivity of Vacuum = 8.85418781e-12
+  Permeability of Vacuum = 1.25663706e-6
+  Boltzmann Constant = 1.380649e-23
+  Unit Charge = 1.6021766e-19
+End
+
+Body 1
+  Target Bodies(1) = 1
+  Name = "Body Property 1"
+  Equation = 1
+  Material = 3
+  Body Force = 1
+  Initial condition = 1
+End
+
+Solver 1
+  Equation = Heat Equation
+  Variable = Temperature
+  Procedure = "HeatSolve" "HeatSolver"
+  Exec Solver = Always
+  Stabilize = True
+  Optimize Bandwidth = True
+  Steady State Convergence Tolerance = 1.0e-3
+  Nonlinear System Convergence Tolerance = 1.0e-3
+  Nonlinear System Max Iterations = 10
+  Nonlinear System Newton After Iterations = 3
+  Nonlinear System Newton After Tolerance = 1.0e-3
+  Nonlinear System Relaxation Factor = 1
+  Linear System Solver = Direct
+  Linear System Direct Method = MUMPS
+End
+
+
+Solver 2
+  Equation = "save bc params"
+  Procedure = "SaveData" "SaveBoundaryValues"
+  Parameter 1 = String Heat Flux
+End
+
+Solver 3
+  Procedure = "SaveData" "SaveMaterials"
+  Parameter 1 = String ReX
+End
+
+
+Solver 4
+  Equation = Linear elasticity
+  Calculate Stresses = True
+  Procedure = "StressSolve" "StressSolver"
+  Variable = "Displacement"
+  Variable DOFs = 3
+  Exec Solver = Always
+  Stabilize = True
+  Bubbles = False
+  Lumped Mass Matrix = False
+  Optimize Bandwidth = True
+  Steady State Convergence Tolerance = 1.0e-3
+  Nonlinear System Convergence Tolerance = 1.0e-3
+  Nonlinear System Max Iterations = 1
+  Nonlinear System Newton After Iterations = 3
+  Nonlinear System Newton After Tolerance = 1.0e-3
+  Nonlinear System Relaxation Factor = 1
+  Linear System Solver = Direct
+  Linear System Direct Method = MUMPS
+End
+
+
+Equation 1
+  Name = "Equation 1"
+  Active Solvers(4) = 1 2 3 4
+End
+
+Material 1
+  Name = "Steel (alloy - generic)"
+  Heat Capacity = 976.0
+  Density = 7850.0
+  Heat expansion Coefficient = 12.0e-6
+  Sound speed = 5100.0
+  Poisson ratio = 0.285
+  Heat Conductivity = 37.2
+  Youngs modulus = 200.0e9
+End
+
+Material 2
+  Name = "WHA"
+  Heat Capacity = Variable Temperature
+    Real
+      273	145
+      473	149
+      673	152
+      773	154
+      873	156
+      1073	158
+      1273	162.1318
+      1473	165.4518
+      1673	168.7718
+      1873	172.0918
+      2073	175.4118
+      2273	178.7318
+      2473	182.0518
+      2673	185.3718
+      2873	188.6918
+      3073	192.0118
+      3273	195.3318
+      3473	198.6518
+      3673	201.9718      
+    End
+  Density = 18500.0
+  Heat expansion Coefficient = Variable Temperature
+    Real
+      366.0 4.83e-6
+      422.0 4.79e-6
+      477.0 4.86e-6
+      519.0 4.85e-6
+      558.0 4.97e-6
+      616.0 5.02e-6
+      672.0 5.03e-6
+    End
+  Heat Conductivity = Variable Temperature
+    Real
+      273.0  145
+      473.0  149
+      673.0  152
+      773.0  154
+      873.0  156
+      1073.0 158
+      1273.0 162.1318
+      1473.0 165.4518
+      1673.0 168.7718
+      1873.0 172.0918
+      2073.0 175.4118
+      2273.0 178.7318
+      2473.0 182.0518
+      2673.0 185.3718
+      2873.0 188.6918
+      3073.0 192.0118
+      3273.0 195.3318
+      3473.0 198.6518
+      3673.0 201.9718
+    End
+  Youngs modulus = Variable Temperature
+    Real
+      296 377.50e9
+      373 389.35e9
+      423 388.51e9
+      473 373.63e9
+      523 366.72e9
+      623 361.57e9
+      673 375.96e9
+    End
+  Poisson ratio = 0.28
+End
+
+Material 3
+  Name = "W"
+  Heat Capacity = Variable Temperature
+    Real
+      293.15 130.1
+      373.15 132.7
+      573.15 138.4
+      773.15 143.2
+      973.15 147.6
+      1173.15 151.6
+      1373.15 155.7
+      1573.15 160.1
+      1773.15 165
+      1973.15 170.8
+      2173.15 177.7
+      2373.15 186.1
+      2573.15 196.1
+      2773.15 208.2
+      2973.15 222.4
+      3173.15 239.3
+      3373.15 258.9
+      3573.15 281.6  
+    End
+  Density = Variable Temperature
+    Real
+      293.0 19245
+      373.0 19223
+      573.0 19170
+      773.0 19115
+      973.0 19059
+      1173.0 19001
+      1373.0 18941
+      1573.0 18878
+      1773.0 18812
+      1973.0 18742
+      2173.0 18668
+      2373.0 18589
+      2573.0 18506
+      2773.0 18417
+      2973.0 18322
+      3173.0 18220
+      3373.0 18112
+      3573.0 17996
+    End
+  Heat expansion Coefficient = Variable Temperature
+    Real
+      293.0 0.00000442
+      373.0 0.00000452
+      573.0 0.00000472
+      773.0 0.00000487
+      973.0 0.00000502
+      1173.0 0.00000519
+      1373.0 0.0000054
+      1573.0 0.00000565
+      1773.0 0.00000594
+      1973.0 0.00000627
+      2173.0 0.00000666
+      2373.0 0.00000711
+      2573.0 0.00000763
+      2773.0 0.00000825
+      2973.0 0.000009
+      3173.0 0.00000994
+      3373.0 0.0000111
+      3573.0 0.0000127
+    End
+  Heat Conductivity = Variable Temperature
+    Real
+      293.0 182.2
+      373.0 162
+      573.0 139.2000
+      773.0 128.0000
+      973.0 120.4000
+      1173.0 114.7000
+      1373.0 110.1000
+      1573.0 106.4000
+      1773.0 103.3000
+      1973.0 100.7000
+      2173.0 98.5000
+      2373.0 96.7000
+      2573.0 95.1000
+      2773.0 93.7000
+      2973.0 92.3000
+      3173.0 91.0000
+      3373.0 89.6000
+      3573.0 88.0000
+    End
+  Youngs modulus = Variable Temperature
+    Real
+      293.0  397.8e9
+      373.0  397.4e9
+      573.0  394.8e9
+      773.0  390.0e9
+      973.0  383.0e9
+      1173.0 373.8e9
+      1373.0 362.5e9
+      1573.0 349.0e9
+      1773.0 333.3e9
+      1973.0 315.5e9
+      2173.0 295.5e9
+    End
+  Poisson ratio = 0.28
+  ReX = Variable Temperature
+    Real Procedure "HEATLibrary" "rexonnodes" End
+  avrami_n = Real 1.0
+  avrami_k0 = Real 4446601450.0
+  avrami_E = Real 3.0
+  avrami_Tref = Real 1200.0
+End
+
+Body Force 1
+  Name = "BodyForce 1"
+  Heat Source = 0.0
+End
+
+Initial Condition 1
+  Name = "InitialCondition 1"
+  Temperature = 20.0
+End
+
+Boundary Condition 1
+  Boundary Type = String "Heat Flux"
+  Target Boundaries(1) = 3
+  Name = "HFreader"
+  Heat Flux = Variable Time
+    Real Procedure "HEATLibrary" "heatfluxonnodes"
+  nodalHFprefix = String nodehf
+End
+
+Boundary Condition 2
+  Target Boundaries(2) = 1 2 
+  Name = "BoundaryCondition 1"
+End
+
