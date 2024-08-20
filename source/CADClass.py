@@ -415,6 +415,8 @@ class CAD:
         for obj in self.CADobjs:
             if type(obj) == Part.Feature:
                 self.CADparts.append(obj)
+            else:
+                print("Part "+obj.Label+" not Part.Feature.  Type is "+str(type(obj)))
 
         print("Loaded STEP file: " + self.STPfile)
         log.info("Loaded STEP file: " + self.STPfile)
@@ -581,11 +583,13 @@ class CAD:
         return meshes
 
 
-    def writeMesh2file(self, mesh, label, resolution, path='./'):
+    def writeMesh2file(self, mesh, label, resolution, path='./', fType='stl'):
         """
         Writes a mesh object to STL file named by part number.
         If mesh is a list of mesh objects, then write a separate file for
         each mesh object in the list.  Clobbers if overWriteMask is True
+
+        type defines mesh type / suffix (defaults to .stl file)
         """
         #Check if this is a single file or list and make it a list
         if type(mesh) != list:
@@ -608,10 +612,10 @@ class CAD:
             #standard meshing algorithm
             stdList = ['standard', 'Standard', 'STANDARD']
             if resolution[i] in stdList:
-                filename = path + label[i] + "___"+resolution[i]+".stl"
+                filename = path + label[i] + "___"+resolution[i]+"."+fType
             #mefisto meshing algorithm
             else:
-                filename = path + label[i] + "___{:.6f}mm.stl".format(float(resolution[i]))
+                filename = path + label[i] + "___{:.6f}mm.".format(float(resolution[i]))+fType
             if os.path.exists(filename) and self.overWriteMask == False:
                 print("Not clobbering mesh file...")
             else:
@@ -710,7 +714,7 @@ class CAD:
         mesh = Mesh.Mesh()
         return mesh
 
-    def minmaxExtent(self, x,y,z, unitConvert = 1000.0):
+    def minmaxExtent(self, x,y,z, unitConvert = 1000.0, verbose=False):
         """
         Gets the Rmin, Rmax, Zmin and Zmax of all facets xyz in a mesh to 
         determine the overall extent of the meshed surface. A global set is then updated.
@@ -721,7 +725,8 @@ class CAD:
         Rmax = R.max()/unitConvert
         Zmin = z.min()/unitConvert
         Zmax = z.max()/unitConvert
-        print('Extent of mesh:',Rmin, Rmax, Zmin, Zmax)
+        if verbose == True:
+            print('Extent of mesh:',Rmin, Rmax, Zmin, Zmax)
         if self.Rmin is None: self.Rmin = Rmin
         elif Rmin < self.Rmin: self.Rmin = Rmin
         
@@ -735,7 +740,7 @@ class CAD:
         elif Zmax > self.Zmax: self.Zmax = Zmax
         return
 
-    def normsCentersAreas(self, meshes, bndybox = False):
+    def normsCentersAreas(self, meshes, bndybox = False, verbose=False):
         """
         Gets face normals and face centers.  Both norms and centers are arrays
         of length mesh.CountFacets, consisting of three components (x,y,z) per
@@ -777,7 +782,8 @@ class CAD:
                 centers.append(self.faceCenters(x,y,z))
                 areas.append(self.faceAreas(mesh))
                 if bndybox:
-                    print('Part:',self.intersectParts[k].Label)
+                    if verbose == True:
+                        print('Part:',self.intersectParts[k].Label)
                     if len(x) > 0:
                         self.minmaxExtent(x,y,z)
         return norms,centers,areas

@@ -236,6 +236,10 @@ class FEM:
                 if "nodalHFprefix" in line:
                     prefix = line.split("String ")[-1].strip()
 
+        #TO DO:  
+        #add flag to tell us if we have already loaded a mesh for this
+        #PFC object, and if so dont do it every time.  instead save
+        #node data to self
         gmsh.initialize()
         gmsh.open(PFC.meshFile)
         node_tags, node_coords, _ = gmsh.model.mesh.getNodes()

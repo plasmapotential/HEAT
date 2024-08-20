@@ -87,7 +87,7 @@ class TUI():
         Column variables are defined as follows
 
         :MachFlag: machine specific flag.
-          can be 'd3d','nstx','st40','step','sparc','west','kstar'
+          can be 'd3d','nstx','st40','step','sparc','west','kstar','aug','other'
 
         :Tag:  user specified tag to label the simulation by.  Tags represent
           independent HEAT runs.  For time varying discharges with multiple
@@ -452,7 +452,7 @@ class TUI():
 #
 #===Column variables are defined as follows
 # MachFlag: machine specific flag.
-#           can be 'd3d','nstx','st40','step','sparc','west','kstar'
+#           can be 'd3d','nstx','st40','step','sparc','west','kstar','aug','other'
 #
 # Tag:  user specified tag to label the simulation by.  Tags represent
 #       independent HEAT runs.  For time varying discharges with multiple

@@ -224,15 +224,29 @@ class engineObj():
             self.CAD.STLpath = self.dataPath + '/KSTAR/STLs/'
             self.CAD.STPpath = self.dataPath + '/KSTAR/STPs/'
 
-        else:
-            print("INVALID MACHINE SELECTION!  Defaulting to NSTX-U!")
-            log.info("INVALID MACHINE SELECTION!  Defaulting to NSTX-U!")
-#            self.infile = self.rootDir + '/inputs/NSTXU/NSTXU_input.csv'
-#            self.pfcFile = self.rootDir + '/inputs/NSTXU/NSTXUpfcs.csv'
+        elif self.MachFlag == 'aug':
+            print('Loading AUG Input Filestream')
+            log.info('Loading AUG Input Filestream')
+            self.CAD.machPath = self.dataPath + '/AUG'
+            self.OF.meshDir = self.dataPath + '/AUG/3Dmeshes'
+            self.CAD.STLpath = self.dataPath + '/AUG/STLs/'
+            self.CAD.STPpath = self.dataPath + '/AUG/STPs/'
+
+        elif self.MachFlag == 'nstx':
+            print('Loading AUG Input Filestream')
+            log.info('Loading AUG Input Filestream')
             self.CAD.machPath = self.dataPath + '/NSTX'
             self.OF.meshDir = self.dataPath + '/NSTX/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/NSTX/STLs/'
             self.CAD.STPpath = self.dataPath + '/NSTX/STPs/'
+
+        else:
+            print("INVALID MACHINE SELECTION!  Defaulting to OTHER!")
+            log.info("INVALID MACHINE SELECTION!  Defaulting to OTHER!")
+            self.CAD.machPath = self.dataPath + '/OTHER'
+            self.OF.meshDir = self.dataPath + '/OTHER/3Dmeshes'
+            self.CAD.STLpath = self.dataPath + '/OTHER/STLs/'
+            self.CAD.STPpath = self.dataPath + '/OTHER/STPs/'
 
         self.OF.templateCase = self.rootDir + '/openFoamTemplates/heatFoamTemplate'
         self.OF.templateDir = self.rootDir + '/openFoamTemplates/templateDicts'
@@ -312,9 +326,17 @@ class engineObj():
             self.CAD.unitConvert = 1.0
             self.CAD.assembly_mask = False
 
+        elif self.MachFlag == 'aug':
+            self.CAD.permute_mask = False
+            self.CAD.unitConvert = 1.0
+            self.CAD.assembly_mask = False
+
         else:
-            print("INVALID MACHINE SELECTION!  Defaulting to NSTX-U!")
-            log.info("INVALID MACHINE SELECTION!  Defaulting to NSTX-U!")
+            print("INVALID MACHINE SELECTION!  Defaulting to OTHER!")
+            log.info("INVALID MACHINE SELECTION!  Defaulting to OTHER!")
+            self.CAD.permute_mask = False
+            self.CAD.unitConvert = 1.0
+            self.CAD.assembly_mask = False
 
         return
 
@@ -1839,18 +1861,17 @@ class engineObj():
                         except Exception as e:
                             print("Could not load RAD parameters.  Expected for GUI.  Check error message:")
                             print(e)
+                        #location where we will save a memmap if necessary
+                        self.RAD.memmapFile = self.MHD.shotPath + self.tsFmt.format(t) +'/photonPowerFrac.nc'
                         #calculate the radiated power on the PFC mesh
                         self.radPower(PFC)
                         #save output files
                         self.radPowerOutput(PFC)
                         PFC.powerSumRad[tIdx] = np.sum(PFC.Prad)
-                        PFC.powerHullRad[tIdx] = np.sum(PFC.hullPower)
                         print('\nSummation radiated power to this PFC = {:0.10f}'.format(PFC.powerSumRad[tIdx]))
-                        print('Convex hull radiated power to this PFC = {:0.10f}'.format(PFC.powerHullRad[tIdx]))
-                        print('Percent difference between radiation summation and hull = {:0.4f}%\n'.format(np.abs(PFC.powerSumRad[tIdx]/PFC.powerHullRad[tIdx]-1.0)*100.0))
                         log.info('\nSummation radiated power to this PFC = {:0.10f}'.format(PFC.powerSumRad[tIdx]))
-                        log.info('Convex hull radiated power to this PFC = {:0.10f}'.format(PFC.powerHullRad[tIdx]))
-                        log.info('Percent difference between radiation summation and hull = {:0.4f}%\n'.format(np.abs(PFC.powerSumRad[tIdx]/PFC.powerHullRad[tIdx]-1.0)*100.0))
+                        print('Peak qRad to this PFC: {:0.10f}'.format(np.max(PFC.qRad)))
+                        log.info('Peak qRad to this PFC: {:0.10f}'.format(np.max(PFC.qRad)))
 
                     if 'B' in runList:
                         print('Writing Bfield Glyphs')
@@ -2576,17 +2597,22 @@ class engineObj():
         return
 
     #--- Radiated power (photons) ---
-
     def radPower(self,PFC, rayTriMode='open3d'):
         """
         runs the radiated power calculation
         """
         #setup the radiated power calculation
-        self.RAD.preparePowerTransfer(PFC, self.CAD, mode='open3d')
+        self.RAD.preparePowerTransfer(PFC, self.CAD, mode=rayTriMode)
         #trace rays
         if rayTriMode=='open3d':
+            print("Using Open3D")
             #calculate photon load on PFC using open3d
             self.RAD.calculatePowerTransferOpen3D(mode='open3d')
+        elif rayTriMode=='mitsuba':
+            print("Using Mitsuba")
+            #calculate photon load on PFC using open3d
+            #self.RAD.calculatePowerTransferMitsubaJIT(mode='mitsuba', mitsubaMode='cpu', fType='ply') #currently has memory leak
+            self.RAD.calculatePowerTransferMitsubaNumpy(mode='mitsuba', mitsubaMode='cpu', fType='ply')     
         else:
             #calculate photon load on PFC using legacy methods (brute force)
             self.RAD.calculatePowerTransfer()
@@ -2594,9 +2620,7 @@ class engineObj():
         #assign variables to the PFC itself
         PFC.Prad = self.RAD.targetPower
         PFC.qRad = PFC.Prad / PFC.areas
-        PFC.radPowerFracs = self.RAD.powerFrac
         PFC.qRadList.append(PFC.qRad)
-        PFC.hullPower = self.RAD.hullPower
 
         #calculate photon radiation shadowMask
         shadowMask = np.ones((self.RAD.Nj))
@@ -2605,12 +2629,12 @@ class engineObj():
         PFC.radShadowMaskList.append(shadowMask)
         return
 
-    def radPowerOutput(self,PFC, saveFracs=False):
+    def radPowerOutput(self,PFC):
         """
         saves radiated power output
         """
-        if saveFracs==True:
-            self.RAD.savePowerFrac(PFC)
+        #if saveFracs==True:
+        #    self.RAD.savePowerFrac(PFC)
 
         prefix = 'HF_rad'
         label = '$MW/m^2$'

@@ -24,8 +24,9 @@ for obj in FreeCAD.ActiveDocument.Objects:
 
 ImportGui.export(allObjs, file)
 
-#append labels for a PFC intersect line that can be copied / pasted from python console
-#before running, select the intersect parts in FreeCAD GUI
+#creates intersect line or a column of PFC names for PFC file
+#run in freecad python console then copy and paste output
+#into PFC file
 sel = FreeCADGui.Selection.getSelection()
 line = ''
 for obj in sel:
