@@ -186,7 +186,7 @@ class Runaways:
         necessary when calculating helical trajectories
         """
         
-        return (1/(1 - v**2/self.c**2))
+        return (1/np.sqrt(1 - v**2/self.c**2))
     
     
     def readREFile(self, path:str):
@@ -260,6 +260,9 @@ class Runaways:
             self.E_min = REDict['E_min[eV]'][id]
             self.IRE = REDict['IRE[A]'][id]
             self.I_dir = REDict['I_dir'][id] #Electrons will be moving in opposite direction of I_dir
+            self.pitch = REDict['Pitch_angle'][id]
+            self.drift = REDict['Drift'][id]
+            
             # self.Uniform_vel todo
             self.v_r = 0 #backdoor thing, should  probably change this
 
@@ -372,7 +375,7 @@ class Runaways:
         log.info('Number of target faces: {:f}'.format(self.Nt))
         print('Number of filament source points: {:f}'.format(N_pts))
         log.info('Number of filament source points: {:f}'.format(N_pts))
-        # x = 5/0
+
         #setup velocities
         self.setupParallelVelocities()
         #initialize trace step matrix
@@ -400,8 +403,11 @@ class Runaways:
             self.xyzSteps[i,:,tIdxNext,:] = pts
             tIdxNext += 1
             tsNext = ts[tIdxNext]
+            
             launchPt = pts.copy()
             v_b = self.vSlices[:,i]
+            v_perp = self.vPerps[:,i]
+
             sumCount = 0
 
             #check if v_b is positive or negative and trace accordingly
@@ -421,10 +427,25 @@ class Runaways:
                 t_b = d_b / np.abs(v_b)[use] #time along field for this step
                 t_tot[use] += t_b #cumulative time along field
                 d_r = 0 # I think the radial distance will be approx 0 here? t_b * self.v_r #radial distance
+                    
 
                 #generate local radial coordinate transformation
                 R = np.sqrt(q2[:,0]**2 + q2[:,1]**2)
                 Z = q2[:,2]
+                
+                if self.drift:
+
+                    
+              
+                    Bts = self.ep.BtFunc.ev(R, Z)
+                    gamma = self.gammas[:,i][use]
+                    v_d = np.abs((v_b[use] **2 + v_perp[use]**2/2) * gamma * self.me/self.kg2eV / self.e / Bts / R)
+                   
+
+                    d_z = t_b * v_d
+                    
+                    q2[:,2] += d_z
+
                 phi = np.arctan2(q2[:,1], q2[:,0])
                 rVec = self.fluxSurfNorms(self.ep, R, Z)
                 rX, rY, rZ = tools.cyl2xyz(rVec[:,0], rVec[:,2], phi, degrees=False)
@@ -522,6 +543,7 @@ class Runaways:
 
         """
         self.vSlices = np.ones((self.N_b*self.N_r*self.N_p, self.N_vS))*np.nan #velocity for each macroparticle
+        self.gammas = np.ones((self.N_b*self.N_r*self.N_p, self.N_vS))*np.nan
         self.energySlices = np.ones((self.N_b*self.N_r*self.N_p, self.N_vS))*np.nan #Energy in eV for each macroparticle
         self.energyFracs = np.zeros((self.N_b*self.N_r*self.N_p, self.N_vS)) # Fraction of the total energy from that starting point
         self.vBounds = np.zeros((self.N_b*self.N_r*self.N_p, self.N_vS+1))
@@ -549,12 +571,19 @@ class Runaways:
                 self.energySlices[i,:] = np.array([self.E_av]) 
             else:
                 self.energySlices[i,:] = inverseCDF(cdfSlices)
-            self.vSlices[i,:] = self.E2v_electron(self.energySlices[i,:])
+            vtot = self.E2v_electron(self.energySlices[i,:])
+            self.vSlices[i,:] = vtot *  np.sqrt(1 - self.pitch**2)
+            self.gammas[i,:] = self.calc_gamma(vtot)
+
 
             #energy fracs (for energy fluxes) (could probably do this outside of a loop)
             energyTotal = np.sum(self.energySlices[i,:])
             for j in range(self.N_vS):
                 self.energyFracs[i,j] = self.energySlices[i,j] / energyTotal 
+        #print(self.vSlices)
+        self.vPerps = self.pitch * self.vSlices / np.sqrt(1 - self.pitch **2)
+
+
         return
             
     def test_vel_splitting(self, E_av, E_min, E_max, N_vs, N_b = 1, N_r = 1, N_p = 1):
@@ -699,7 +728,7 @@ class Runaways:
         distance = np.insert(distance, 0, 0)
         return distance
 
-    def gridPsiThetaDistAtCtr(self, rCtr:float, zCtr:float, multR=10.0, multZ = 10.0):
+    def gridPsiThetaDistAtCtr(self, rCtr:float, zCtr:float, multR= 10.0, multZ = 10.0): 
         """
         generates an RZ grid, and then calculates distances [m] on that grid
         in the psi and theta directions from (self.rCtr, self.zCtr)
@@ -856,15 +885,28 @@ class Runaways:
         #surfR, surfZ = ep.flux_surface(psiCtr, Npts, thetaRZ[sortIdx])
         surfR = ep.g['lcfs'][:,0]
         surfZ = ep.g['lcfs'][:,1]
-        thetaSurf = self.thetaFromRZ(ep, surfR, surfZ)
+        surfR = np.append(surfR, surfR[0])
+        surfZ = np.append(surfZ, surfZ[0])
+        thetaSurf = self.thetaFromRZ(ep, surfR, surfZ) #thetas at the LCFS
+        #thetaSurf[-1] += 2 * np.pi
         #calculate distance along flux surface
         surface = np.vstack((surfR, surfZ)).T
         dSurf = self.distance(surface)
+        
+        #Fixing 2pi issue
+        pi_ind = np.argmin(np.abs(thetaSurf - np.pi))
+        negpi_ind = np.argmin(np.abs(thetaSurf + np.pi))
+        thetaSurf = np.append(thetaSurf, np.array([thetaSurf[negpi_ind] + 2 * np.pi, thetaSurf[pi_ind] - 2 * np.pi]))
+        dSurf = np.append(dSurf, np.array([dSurf[negpi_ind], dSurf[pi_ind]]))
+        
         #interpolator that maps theta back to distance along the flux surface
         interpolator = interp.interp1d(thetaSurf, dSurf, kind='slinear', axis=0)
+
         dCtr = interpolator(thetaCtr)
+
         distTheta = interpolator(thetaRZ) - dCtr
         distTheta = distTheta.reshape(R.shape) #on grid
+
 
         return psiCtr, distPsi, thetaCtr, distTheta
         
