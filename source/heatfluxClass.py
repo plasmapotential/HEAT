@@ -115,6 +115,7 @@ class heatFlux:
           that should be used for the heat flux files.  For example, to read a previous
           HEAT runs photon radiation data, tag would be HF_rad and HEAT would read files
           named HF_rad.csv.  Set to None when no file should be read.
+        :rzqFile: Path for the rzqprofile that contains a csv file with columns R(m),Z(m),q(W/m2)
 
         """
 
@@ -558,17 +559,22 @@ class heatFlux:
     
     def from_rzq_profile(self, rzq_data, PFC):
         """"
-        q from any R(m), Z(m), q(W/m2) data
+        q is from a csv file with R(m), Z(m), q(W/m2) data. This can be taken from SOLPS simulation at the target grid.
+        Psol and q0 for scaling will not be necessary. This will just map the input heatflux data directly
+        to the PFCs.
         q is mapped from the R,Z grid to OMP
+        q1 output is in MW/m2
         """
 
         R = rzq_data['R(m)'].to_numpy()
         Z = rzq_data['Z(m)'].to_numpy()
         Q = rzq_data['q(W/m2)'].to_numpy()
         # make Q positive. Sometimes, the q values from SOLPS is negative to indicate direction.
-        for i in range(0, len(Q)):
-            if Q[i] <0:
-                Q[i] *= -1
+        # for i in range(0, len(Q)):
+        #     if Q[i] <0:
+        #         Q[i] *= -1
+        negs = np.where(Q<0.0)[0]
+        Q[negs] *= -1.0
         psi_rzq = PFC.ep.psiFunc.ev(R,Z) #convert (r,z) coordinate to psi
         psi_rzq_omp = self.map_R_psi(psi_rzq, PFC) #map the psi_rzq to OMP
 
@@ -578,7 +584,7 @@ class heatFlux:
         q_interp = scinter.UnivariateSpline(psi_rzq_omp, Q, s = 0, ext = 'const') #interpolate the value of q at OMP
         psi = self.map_R_psi(PFC.psimin, PFC) #map PFC centers to OMP
         q1 = q_interp(psi) #calculate the value of q basesd on mapped to OMP PFC centers
-        q1 = q1/1e6
+        q1 = q1/1e6 #input is in W/m2
         # print("psimin is", PFC.psimin)
         # print("PFC q is", q1)
         
@@ -1015,8 +1021,12 @@ class heatFlux:
             log.info("Tophat lqCN: {}".format(self.lqCN))
         
         #rzq profile
-        if self.hfMode == 'rzqprofile':
+        elif self.hfMode == 'rzqprofile':
             q[use] = self.from_rzq_profile(self.rzq_data, PFC)
+            print("Warning: using R,Z,Q profile bypasses energy balance normalization.")
+            print("P_target may not equal PSOL for RZQ profiles.")
+            log.info("Warning: using R,Z,Q profile bypasses energy balance normalization.")
+            log.info("P_target may not equal PSOL for RZQ profiles.")
 
         #Eich Profile
         else:
@@ -1456,7 +1466,6 @@ class heatFlux:
         print("Reading rzq profile data: "+file)
         log.info("Reading data: "+file)
         self.rzq_data = pd.read_csv(file, header=0, names=['R(m)','Z(m)','q(W/m2)'])
-        print(self.rzq_data)
         return 
 
     def writerzqFileData(self,rzqFile,rzqData,tmpDir):
@@ -1667,7 +1676,7 @@ class heatFlux:
             HFdict["Heat Flux Mode"] = 'Read HF from rzq profile data'
             HFdict['rzqFile'] = self.rzqFile       
 
-        if self.hfMode != 'qFile':
+        if self.hfMode != 'qFile' or self.hfMode != 'rzqprofile':
             HFdict["Source Power (P) [MW]"] = self.P
             HFdict["Fraction of P radiated by photons"] = self.radFrac
             HFdict["Power Crossing Separatrix (Psol) [MW]"] = self.Psol

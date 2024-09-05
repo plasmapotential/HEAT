@@ -503,6 +503,7 @@ def inputDragDrop(file, contents, MachFlag):
                State('fG', 'value'),
                State('qFilePath', 'value'),
                State('qFileTag', 'value'),
+               State('rzqFile', 'value'),
                State('OFstartTime', 'value'),
                State('OFstopTime', 'value'),
                State('OFminMeshLev', 'value'),
@@ -520,6 +521,7 @@ def inputDragDrop(file, contents, MachFlag):
                State('ionMassAMU','value'),
                State('vMode','value'),
                State('ionFrac','value'),
+               State('radFile', 'value'),
                State('phiMin', 'value'),
                State('phiMax','value'),
                State('Ntor','value'),
@@ -565,6 +567,7 @@ def saveGUIinputs(  n_clicks,
                     fG,
                     qFilePath,
                     qFileTag,
+                    rzqFile,
                     OFstartTime,
                     OFstopTime,
                     OFminMeshLev,
@@ -582,6 +585,7 @@ def saveGUIinputs(  n_clicks,
                     ionMassAMU,
                     vMode,
                     ionFrac,
+                    radFile,
                     phiMin,
                     phiMax,
                     Ntor,
@@ -642,6 +646,9 @@ def saveGUIinputs(  n_clicks,
     elif hfMode == 'tophat':
         data['lqCN'] = lqTopHat
         data['lqCNmode'] = 'user'
+    
+    elif hfMode == 'rzqprofile':
+        data['rzqFile'] = rzqFile
 
     data['fracUI'] = fracUI
     data['fracUO'] = fracUO
@@ -669,6 +676,7 @@ def saveGUIinputs(  n_clicks,
     data['ionMassAMU'] = ionMassAMU
     data['vMode'] = vMode
     data['ionFrac'] = ionFrac
+    data['radFile'] = radFile
     data['phiMin'] = phiMin
     data['phiMax'] = phiMax
     data['Ntor'] = Ntor
@@ -3941,6 +3949,7 @@ Session storage callbacks and functions
                Output('fG', 'value'),
                Output('qFilePath', 'value'),
                Output('qFileTag', 'value'),
+               Output('rzqFile', 'value'),
                Output('OFstartTime', 'value'),
                Output('OFstopTime', 'value'),
                Output('OFminMeshLev', 'value'),
@@ -3957,6 +3966,7 @@ Session storage callbacks and functions
                Output('ionMassAMU','value'),
                #Output('vMode','value'), #this causes undefined vars
                Output('ionFrac','value'),
+               Output('radFile','value'),
                Output('phiMin','value'),
                Output('phiMax','value'),
                Output('Ntor','value'),
@@ -4048,6 +4058,7 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('fG', ''),
             data.get('qFilePath', ''),
             data.get('qFileTag', ''),
+            data.get('radFile',''),
             data.get('OFtMin', ''),
             data.get('OFtMax', ''),
             data.get('meshMinLevel', ''),
@@ -4064,6 +4075,7 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('ionMassAMU',''),
             #data.get('vMode',''),
             data.get('ionFrac',''),
+            data.get('radFile',''),
             data.get('phiMin',''),
             data.get('phiMax',''),
             data.get('Ntor',''),
