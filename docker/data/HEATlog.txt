@@ -1,0 +1,16 @@
+
+Running HEAT via Terminal User Interface (TUI)...
+
+generated new fontManager
+Reading batch file
+Number of simulations to be scheduled from batchFile: 1
+Loading NSTX-U Input Filestream
+
+
+----------------------------------------------------------------------
+                    Machine: nstx   Tag: opticalExample
+----------------------------------------------------------------------
+Loading NSTX-U Input Filestream
+Loading NSTX-U Input Filestream
+Changing log file to new path for batchMode:
+/root/HEAT/data/nstx_204118_opticalExample/HEATlog.txt

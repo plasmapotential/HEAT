@@ -1,0 +1,29 @@
+# Parameterfile for HEAT Programs
+# Shot: 204118	Time: 0.004000000s
+# Path: /root/HEAT/data/nstx_204118_opticalExample/0.004000000/g204118_0.004000000
+Nphi=	1
+itt=	1.000000
+Rmin=	0.010000
+Rmax=	13.000000
+Zmin=	-5.000000
+Zmax=	5.000000
+Nswall=	1
+phistart(deg)=	1.000000
+MapDirection=	-1.000000
+PlasmaResponse(0=no,>1=yes)=	0
+Field(-3=VMEC,-2=SIESTA,-1=gfile,M3DC1:0=Eq,1=I-coil,2=both)=	-1
+target(0=useSwall)=	0
+createPoints(2=target)=	2
+unused=	0
+unused=	0
+unused=	0
+ParticleDirection(1=co-pass,-1=ctr-pass,0=field-lines)=	0
+PartileCharge(-1=electrons,>=1=ions)=	1
+Ekin[keV]=	100.000000
+lambda=	0.100000
+Mass=	2.000000
+unused=	0
+unused=	0
+dpinit=	0.250000
+pi=	3.141592653589793
+2*pi=	6.283185307179586

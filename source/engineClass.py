@@ -1063,8 +1063,10 @@ class engineObj():
 
         self.HF.setTypes()
 
+        print("Calculating Psol:")
         #fraction of power conducted to PFC surfaces
         self.HF.Psol = (1-self.HF.radFrac)*self.HF.P
+        print("Psol value is:", self.HF.Psol)
 
 
         print("HF Mode = "+hfMode)
