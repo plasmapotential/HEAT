@@ -3949,7 +3949,7 @@ Session storage callbacks and functions
                Output('fG', 'value'),
                Output('qFilePath', 'value'),
                Output('qFileTag', 'value'),
-               Output('rzqFile', 'value'),
+            #    Output('rzqFile', 'value'),
                Output('OFstartTime', 'value'),
                Output('OFstopTime', 'value'),
                Output('OFminMeshLev', 'value'),
@@ -3966,7 +3966,7 @@ Session storage callbacks and functions
                Output('ionMassAMU','value'),
                #Output('vMode','value'), #this causes undefined vars
                Output('ionFrac','value'),
-               Output('radFile','value'),
+            #    Output('radFile','value'),
                Output('phiMin','value'),
                Output('phiMax','value'),
                Output('Ntor','value'),
