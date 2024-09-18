@@ -503,7 +503,7 @@ def inputDragDrop(file, contents, MachFlag):
                State('fG', 'value'),
                State('qFilePath', 'value'),
                State('qFileTag', 'value'),
-               State('rzqFile', 'value'),
+            #    State('rzqFile', 'value'),
                State('OFstartTime', 'value'),
                State('OFstopTime', 'value'),
                State('OFminMeshLev', 'value'),
@@ -521,7 +521,7 @@ def inputDragDrop(file, contents, MachFlag):
                State('ionMassAMU','value'),
                State('vMode','value'),
                State('ionFrac','value'),
-               State('radFile', 'value'),
+            #    State('radFile', 'value'),
                State('phiMin', 'value'),
                State('phiMax','value'),
                State('Ntor','value'),
@@ -567,7 +567,7 @@ def saveGUIinputs(  n_clicks,
                     fG,
                     qFilePath,
                     qFileTag,
-                    rzqFile,
+                    # rzqFile,
                     OFstartTime,
                     OFstopTime,
                     OFminMeshLev,
@@ -585,7 +585,7 @@ def saveGUIinputs(  n_clicks,
                     ionMassAMU,
                     vMode,
                     ionFrac,
-                    radFile,
+                    # radFile,
                     phiMin,
                     phiMax,
                     Ntor,
@@ -647,8 +647,8 @@ def saveGUIinputs(  n_clicks,
         data['lqCN'] = lqTopHat
         data['lqCNmode'] = 'user'
     
-    elif hfMode == 'rzqprofile':
-        data['rzqFile'] = rzqFile
+    # elif hfMode == 'rzqprofile':
+    #     data['rzqFile'] = rzqFile
 
     data['fracUI'] = fracUI
     data['fracUO'] = fracUO
@@ -676,7 +676,7 @@ def saveGUIinputs(  n_clicks,
     data['ionMassAMU'] = ionMassAMU
     data['vMode'] = vMode
     data['ionFrac'] = ionFrac
-    data['radFile'] = radFile
+    # data['radFile'] = radFile
     data['phiMin'] = phiMin
     data['phiMax'] = phiMax
     data['Ntor'] = Ntor
@@ -4058,7 +4058,7 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('fG', ''),
             data.get('qFilePath', ''),
             data.get('qFileTag', ''),
-            data.get('radFile',''),
+            # data.get('radFile',''),
             data.get('OFtMin', ''),
             data.get('OFtMax', ''),
             data.get('meshMinLevel', ''),
@@ -4075,7 +4075,7 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('ionMassAMU',''),
             #data.get('vMode',''),
             data.get('ionFrac',''),
-            data.get('radFile',''),
+            # data.get('radFile',''),
             data.get('phiMin',''),
             data.get('phiMax',''),
             data.get('Ntor',''),
