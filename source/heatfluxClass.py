@@ -1468,7 +1468,7 @@ class heatFlux:
         self.rzq_data = pd.read_csv(file, header=0, names=['R(m)','Z(m)','q(W/m2)'])
         return 
 
-    def writerzqFileData(self,rzqFile,rzqData,tmpDir):
+    def writerzqFileData(self,rzqFile,rzqFiledata,tmpDir):
         """
         writes data passed in string object (from GUI) to files in
         tmpDir directory for use later on in HEAT
@@ -1479,7 +1479,7 @@ class heatFlux:
         this function is called from GUI because objects are json / base64
         """
         import base64
-        data = rzqData.encode("utf8").split(b";base64,")[1]
+        data = rzqFiledata.encode("utf8").split(b";base64,")[1]
         path = tmpDir + rzqFile
         print("Writing local rzqFile: "+path)
         log.info("Writing local rzqFile: "+path)

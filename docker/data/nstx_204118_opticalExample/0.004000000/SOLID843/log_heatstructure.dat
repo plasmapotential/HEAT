@@ -757,4 +757,4 @@ psimin = 0.9498861887743496	Lc at psimin = 0	<dpsi/dLc> = -3.490365886262685e-13
 psimin = 1.015877691158423	Lc at psimin = 0	<dpsi/dLc> = -3.490365886262685e-13	Lc = 0.002550063632209742	steps = 1
 psimin = 0.9478410475004511	Lc at psimin = 0	<dpsi/dLc> = -3.490365886262685e-13	Lc = 0.001913446441628477	steps = 1
 psimin = 0.9478410442273399	Lc at psimin = 0	<dpsi/dLc> = -3.490365886262685e-13	Lc = 0.001913446412893275	steps = 1
-Program terminates normally, Time: 0.009000062942504883 s
+Program terminates normally, Time: 0.009999990463256836 s

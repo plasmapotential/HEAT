@@ -71,11 +71,11 @@ BpMult: 1.000000
 -Forward Trace-
 Read structure output for 23846 points
 Found 3163.000000 shadowed faces
-Time elapsed: 0.009854
+Time elapsed: 0.008990
 -Reverse Trace-
 Read structure output for 21410 points
 Found 2933.000000 shadowed faces
-Time elapsed: 0.005146
+Time elapsed: 0.005095
 
 ----Intersection Step 2----
 -Forward Trace-
@@ -91,7 +91,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 1203.000000 shadowed faces
-Time elapsed: 0.009074
+Time elapsed: 0.008589
 -Reverse Trace-
 Read structure output for 15544 points
 
@@ -99,7 +99,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 1078.000000 shadowed faces
-Time elapsed: 0.008997
+Time elapsed: 0.008886
 Step 0 complete
 
 ----Intersect Trace Step 4----
@@ -110,7 +110,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 1130.000000 shadowed faces
-Time elapsed: 0.009022
+Time elapsed: 0.008919
 -Reverse Trace-
 Read structure output for 13388 points
 
@@ -118,7 +118,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 1081.000000 shadowed faces
-Time elapsed: 0.008759
+Time elapsed: 0.008781
 Step 1 complete
 
 ----Intersect Trace Step 5----
@@ -129,7 +129,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 724.000000 shadowed faces
-Time elapsed: 0.008849
+Time elapsed: 0.008918
 -Reverse Trace-
 Read structure output for 11226 points
 
@@ -137,7 +137,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 722.000000 shadowed faces
-Time elapsed: 0.008655
+Time elapsed: 0.008764
 Step 2 complete
 
 ----Intersect Trace Step 6----
@@ -148,7 +148,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 620.000000 shadowed faces
-Time elapsed: 0.008821
+Time elapsed: 0.008584
 -Reverse Trace-
 Read structure output for 9782 points
 
@@ -156,7 +156,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 667.000000 shadowed faces
-Time elapsed: 0.008963
+Time elapsed: 0.008407
 Step 3 complete
 
 ----Intersect Trace Step 7----
@@ -167,7 +167,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 365.000000 shadowed faces
-Time elapsed: 0.008741
+Time elapsed: 0.008485
 -Reverse Trace-
 Read structure output for 8448 points
 
@@ -175,7 +175,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 347.000000 shadowed faces
-Time elapsed: 0.008647
+Time elapsed: 0.008471
 Step 4 complete
 
 ----Intersect Trace Step 8----
@@ -186,7 +186,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 273.000000 shadowed faces
-Time elapsed: 0.008545
+Time elapsed: 0.008505
 -Reverse Trace-
 Read structure output for 7754 points
 
@@ -194,7 +194,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 283.000000 shadowed faces
-Time elapsed: 0.008629
+Time elapsed: 0.008741
 Step 5 complete
 
 ----Intersect Trace Step 9----
@@ -205,7 +205,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 152.000000 shadowed faces
-Time elapsed: 0.008709
+Time elapsed: 0.008341
 -Reverse Trace-
 Read structure output for 7188 points
 
@@ -213,7 +213,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 153.000000 shadowed faces
-Time elapsed: 0.008480
+Time elapsed: 0.008578
 Step 6 complete
 
 ----Intersect Trace Step 10----
@@ -224,7 +224,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 114.000000 shadowed faces
-Time elapsed: 0.008389
+Time elapsed: 0.008508
 -Reverse Trace-
 Read structure output for 6882 points
 
@@ -232,7 +232,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 118.000000 shadowed faces
-Time elapsed: 0.008516
+Time elapsed: 0.008332
 Step 7 complete
 
 ----Intersect Trace Step 11----
@@ -243,7 +243,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 110.000000 shadowed faces
-Time elapsed: 0.008586
+Time elapsed: 0.008315
 -Reverse Trace-
 Read structure output for 6646 points
 
@@ -251,7 +251,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 109.000000 shadowed faces
-Time elapsed: 0.008682
+Time elapsed: 0.008412
 Step 8 complete
 
 ----Intersect Trace Step 12----
@@ -262,7 +262,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 85.000000 shadowed faces
-Time elapsed: 0.008749
+Time elapsed: 0.008948
 -Reverse Trace-
 Read structure output for 6428 points
 
@@ -270,7 +270,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 457 Field lines left the bounding box
 
 Found 61.000000 shadowed faces
-Time elapsed: 0.008485
+Time elapsed: 0.008274
 Step 9 complete
 
 ----Intersect Trace Step 13----
@@ -281,7 +281,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 46.000000 shadowed faces
-Time elapsed: 0.008575
+Time elapsed: 0.008565
 -Reverse Trace-
 Read structure output for 5392 points
 
@@ -289,7 +289,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 889 Field lines left the bounding box
 
 Found 41.000000 shadowed faces
-Time elapsed: 0.008390
+Time elapsed: 0.008761
 Step 10 complete
 
 ----Intersect Trace Step 14----
@@ -300,7 +300,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 25.000000 shadowed faces
-Time elapsed: 0.008695
+Time elapsed: 0.008731
 -Reverse Trace-
 Read structure output for 3532 points
 
@@ -308,7 +308,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 242 Field lines left the bounding box
 
 Found 47.000000 shadowed faces
-Time elapsed: 0.008173
+Time elapsed: 0.008640
 Step 11 complete
 
 ----Intersect Trace Step 15----
@@ -319,7 +319,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 47.000000 shadowed faces
-Time elapsed: 0.008519
+Time elapsed: 0.008586
 -Reverse Trace-
 Read structure output for 2954 points
 
@@ -327,7 +327,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 34 Field lines left the bounding box
 
 Found 54.000000 shadowed faces
-Time elapsed: 0.008339
+Time elapsed: 0.008346
 Step 12 complete
 
 ----Intersect Trace Step 16----
@@ -338,7 +338,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 31.000000 shadowed faces
-Time elapsed: 0.008550
+Time elapsed: 0.008556
 -Reverse Trace-
 Read structure output for 2778 points
 
@@ -346,7 +346,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 11 Field lines left the bounding box
 
 Found 37.000000 shadowed faces
-Time elapsed: 0.008292
+Time elapsed: 0.008241
 Step 13 complete
 
 ----Intersect Trace Step 17----
@@ -357,7 +357,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 32.000000 shadowed faces
-Time elapsed: 0.008789
+Time elapsed: 0.008592
 -Reverse Trace-
 Read structure output for 2682 points
 
@@ -365,7 +365,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 14 Field lines left the bounding box
 
 Found 44.000000 shadowed faces
-Time elapsed: 0.008924
+Time elapsed: 0.008171
 Step 14 complete
 
 ----Intersect Trace Step 18----
@@ -376,7 +376,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 41.000000 shadowed faces
-Time elapsed: 0.008692
+Time elapsed: 0.008656
 -Reverse Trace-
 Read structure output for 2566 points
 
@@ -384,7 +384,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 18 Field lines left the bounding box
 
 Found 46.000000 shadowed faces
-Time elapsed: 0.008299
+Time elapsed: 0.008371
 Step 15 complete
 
 ----Intersect Trace Step 19----
@@ -395,7 +395,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 39.000000 shadowed faces
-Time elapsed: 0.008654
+Time elapsed: 0.008601
 -Reverse Trace-
 Read structure output for 2438 points
 
@@ -403,7 +403,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 8 Field lines left the bounding box
 
 Found 40.000000 shadowed faces
-Time elapsed: 0.008268
+Time elapsed: 0.008440
 Step 16 complete
 
 ----Intersect Trace Step 20----
@@ -414,7 +414,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 22.000000 shadowed faces
-Time elapsed: 0.008657
+Time elapsed: 0.008793
 -Reverse Trace-
 Read structure output for 2342 points
 
@@ -422,7 +422,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 4 Field lines left the bounding box
 
 Found 48.000000 shadowed faces
-Time elapsed: 0.008182
+Time elapsed: 0.008472
 Step 17 complete
 
 ----Intersect Trace Step 21----
@@ -433,7 +433,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 38.000000 shadowed faces
-Time elapsed: 0.008539
+Time elapsed: 0.008351
 -Reverse Trace-
 Read structure output for 2238 points
 
@@ -441,7 +441,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 6 Field lines left the bounding box
 
 Found 37.000000 shadowed faces
-Time elapsed: 0.008089
+Time elapsed: 0.008178
 Step 18 complete
 
 ----Intersect Trace Step 22----
@@ -452,7 +452,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 19.000000 shadowed faces
-Time elapsed: 0.008476
+Time elapsed: 0.008379
 -Reverse Trace-
 Read structure output for 2152 points
 
@@ -460,7 +460,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 3 Field lines left the bounding box
 
 Found 27.000000 shadowed faces
-Time elapsed: 0.008184
+Time elapsed: 0.008063
 Step 19 complete
 
 ----Intersect Trace Step 23----
@@ -471,7 +471,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 17.000000 shadowed faces
-Time elapsed: 0.008461
+Time elapsed: 0.008354
 -Reverse Trace-
 Read structure output for 2092 points
 
@@ -479,7 +479,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 4 Field lines left the bounding box
 
 Found 31.000000 shadowed faces
-Time elapsed: 0.008134
+Time elapsed: 0.008070
 Step 20 complete
 
 ----Intersect Trace Step 24----
@@ -490,7 +490,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 16.000000 shadowed faces
-Time elapsed: 0.008439
+Time elapsed: 0.008507
 -Reverse Trace-
 Read structure output for 2022 points
 
@@ -498,7 +498,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 33.000000 shadowed faces
-Time elapsed: 0.008160
+Time elapsed: 0.008033
 Step 21 complete
 
 ----Intersect Trace Step 25----
@@ -509,7 +509,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 16.000000 shadowed faces
-Time elapsed: 0.008729
+Time elapsed: 0.008356
 -Reverse Trace-
 Read structure output for 1956 points
 
@@ -517,7 +517,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 3 Field lines left the bounding box
 
 Found 36.000000 shadowed faces
-Time elapsed: 0.008198
+Time elapsed: 0.007994
 Step 22 complete
 
 ----Intersect Trace Step 26----
@@ -528,7 +528,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 13.000000 shadowed faces
-Time elapsed: 0.008451
+Time elapsed: 0.008401
 -Reverse Trace-
 Read structure output for 1878 points
 
@@ -536,7 +536,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 6 Field lines left the bounding box
 
 Found 16.000000 shadowed faces
-Time elapsed: 0.008250
+Time elapsed: 0.008072
 Step 23 complete
 
 ----Intersect Trace Step 27----
@@ -547,7 +547,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 13.000000 shadowed faces
-Time elapsed: 0.008328
+Time elapsed: 0.008352
 -Reverse Trace-
 Read structure output for 1834 points
 
@@ -555,7 +555,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 21.000000 shadowed faces
-Time elapsed: 0.008169
+Time elapsed: 0.008101
 Step 24 complete
 
 ----Intersect Trace Step 28----
@@ -566,7 +566,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 14.000000 shadowed faces
-Time elapsed: 0.008486
+Time elapsed: 0.008232
 -Reverse Trace-
 Read structure output for 1792 points
 
@@ -574,7 +574,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 11.000000 shadowed faces
-Time elapsed: 0.008145
+Time elapsed: 0.008055
 Step 25 complete
 
 ----Intersect Trace Step 29----
@@ -585,7 +585,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 12.000000 shadowed faces
-Time elapsed: 0.008534
+Time elapsed: 0.008299
 -Reverse Trace-
 Read structure output for 1770 points
 
@@ -593,7 +593,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 19.000000 shadowed faces
-Time elapsed: 0.008100
+Time elapsed: 0.008038
 Step 26 complete
 
 ----Intersect Trace Step 30----
@@ -604,7 +604,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 10.000000 shadowed faces
-Time elapsed: 0.008484
+Time elapsed: 0.008352
 -Reverse Trace-
 Read structure output for 1732 points
 
@@ -612,7 +612,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 26.000000 shadowed faces
-Time elapsed: 0.008231
+Time elapsed: 0.007995
 Step 27 complete
 
 ----Intersect Trace Step 31----
@@ -623,7 +623,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 14.000000 shadowed faces
-Time elapsed: 0.008450
+Time elapsed: 0.008236
 -Reverse Trace-
 Read structure output for 1680 points
 
@@ -631,7 +631,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 15.000000 shadowed faces
-Time elapsed: 0.008244
+Time elapsed: 0.007969
 Step 28 complete
 
 ----Intersect Trace Step 32----
@@ -642,7 +642,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 7.000000 shadowed faces
-Time elapsed: 0.008655
+Time elapsed: 0.008353
 -Reverse Trace-
 Read structure output for 1650 points
 
@@ -650,7 +650,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 15.000000 shadowed faces
-Time elapsed: 0.008234
+Time elapsed: 0.007987
 Step 29 complete
 
 ----Intersect Trace Step 33----
@@ -661,7 +661,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 4.000000 shadowed faces
-Time elapsed: 0.008612
+Time elapsed: 0.008246
 -Reverse Trace-
 Read structure output for 1620 points
 
@@ -669,7 +669,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 1 Field lines left the bounding box
 
 Found 11.000000 shadowed faces
-Time elapsed: 0.008166
+Time elapsed: 0.007969
 Step 30 complete
 
 ----Intersect Trace Step 34----
@@ -680,7 +680,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 2.000000 shadowed faces
-Time elapsed: 0.008961
+Time elapsed: 0.008157
 -Reverse Trace-
 Read structure output for 1596 points
 
@@ -688,7 +688,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 12.000000 shadowed faces
-Time elapsed: 0.008379
+Time elapsed: 0.007900
 Step 31 complete
 
 ----Intersect Trace Step 35----
@@ -699,7 +699,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 3.000000 shadowed faces
-Time elapsed: 0.008339
+Time elapsed: 0.008682
 -Reverse Trace-
 Read structure output for 1572 points
 
@@ -707,7 +707,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 8.000000 shadowed faces
-Time elapsed: 0.008104
+Time elapsed: 0.007878
 Step 32 complete
 
 ----Intersect Trace Step 36----
@@ -718,7 +718,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 1.000000 shadowed faces
-Time elapsed: 0.008468
+Time elapsed: 0.008212
 -Reverse Trace-
 Read structure output for 1556 points
 
@@ -726,7 +726,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 9.000000 shadowed faces
-Time elapsed: 0.008101
+Time elapsed: 0.007882
 Step 33 complete
 
 ----Intersect Trace Step 37----
@@ -737,7 +737,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 0.000000 shadowed faces
-Time elapsed: 0.008501
+Time elapsed: 0.008173
 -Reverse Trace-
 Read structure output for 1538 points
 
@@ -745,7 +745,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 5.000000 shadowed faces
-Time elapsed: 0.008209
+Time elapsed: 0.007981
 Step 34 complete
 
 ----Intersect Trace Step 38----
@@ -756,7 +756,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 1.000000 shadowed faces
-Time elapsed: 0.008396
+Time elapsed: 0.008147
 -Reverse Trace-
 Read structure output for 1528 points
 
@@ -764,7 +764,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 18 Field lines left the bounding box
 
 Found 0.000000 shadowed faces
-Time elapsed: 0.008039
+Time elapsed: 0.007904
 Step 35 complete
 
 ----Intersect Trace Step 39----
@@ -775,7 +775,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 0.000000 shadowed faces
-Time elapsed: 0.008400
+Time elapsed: 0.008273
 -Reverse Trace-
 Read structure output for 1492 points
 
@@ -783,7 +783,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 0.000000 shadowed faces
-Time elapsed: 0.008419
+Time elapsed: 0.007967
 Step 36 complete
 
 ----Intersect Trace Step 40----
@@ -794,7 +794,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 0.000000 shadowed faces
-Time elapsed: 0.008436
+Time elapsed: 0.008200
 -Reverse Trace-
 Read structure output for 1492 points
 
@@ -802,7 +802,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 0.000000 shadowed faces
-Time elapsed: 0.008208
+Time elapsed: 0.008014
 Step 37 complete
 
 ----Intersect Trace Step 41----
@@ -813,7 +813,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 0.000000 shadowed faces
-Time elapsed: 0.008376
+Time elapsed: 0.008095
 -Reverse Trace-
 Read structure output for 1492 points
 
@@ -821,7 +821,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 0.000000 shadowed faces
-Time elapsed: 0.008253
+Time elapsed: 0.007865
 Step 38 complete
 
 ----Intersect Trace Step 42----
@@ -832,7 +832,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 0.000000 shadowed faces
-Time elapsed: 0.008349
+Time elapsed: 0.008216
 -Reverse Trace-
 Read structure output for 1492 points
 
@@ -840,7 +840,7 @@ Bounding box Filter limits set to: Rmin = 0.0 Rmax = 1.567000031 Zmin = -1.6585 
 0 Field lines left the bounding box
 
 Found 0.000000 shadowed faces
-Time elapsed: 0.008137
+Time elapsed: 0.007945
 Step 39 complete
 
 ----Solving for 2D plasmas with EFIT----
