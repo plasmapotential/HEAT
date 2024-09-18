@@ -647,8 +647,8 @@ def saveGUIinputs(  n_clicks,
         data['lqCN'] = lqTopHat
         data['lqCNmode'] = 'user'
     
-    # elif hfMode == 'rzqprofile':
-        # data['rzqFile'] = rzqFile
+    elif hfMode == 'rzqprofile':
+        data['rzqFile'] = rzqFile
 
     data['fracUI'] = fracUI
     data['fracUO'] = fracUO
@@ -676,7 +676,7 @@ def saveGUIinputs(  n_clicks,
     data['ionMassAMU'] = ionMassAMU
     data['vMode'] = vMode
     data['ionFrac'] = ionFrac
-    # data['radFile'] = radFile
+    data['radFile'] = radFile
     data['phiMin'] = phiMin
     data['phiMax'] = phiMax
     data['Ntor'] = Ntor
