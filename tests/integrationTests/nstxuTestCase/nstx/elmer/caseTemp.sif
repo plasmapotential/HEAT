@@ -96,6 +96,7 @@ Boundary Condition 1
   Name = "HFreader"
   Heat Flux = Variable Time
     Real Procedure "HEATLibrary" "heatfluxonnodes"
+  q_flow = Real 0.0
   nodalHFprefix = String nodehf
 End
 
