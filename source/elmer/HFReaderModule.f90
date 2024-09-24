@@ -1,8 +1,8 @@
 !-------------------------------------------------------------------------------
 !> File: HFReaderModule.f90
-!> Engineer: TL
-!> Date: 20240201
-!> Reads a comma delimited csv file with columns (nodeId, heatFlux[W]) and 
+!> Engineer: TL/AR
+!> Date: 20240924
+!> Reads a comma delimited csv file with columns (nodeId, heatFlux[W/m2]) and 
 !> assigns the heat flux to the appropriate node in the Elmer mesh
 !> Takes the node number, n, and the timestep, t, and
 !> then reads the variable nodalHFprefix from the Boundary Condition
@@ -26,8 +26,8 @@
 !> if your timestep is larger than 99999s, you will need to increase the 15
 !> in the format specification.
 !> 
-!> The nodehf.dat file should contain two columns, (nodeId, heat flux [W]),
-!> and should be comma delimited.  A few example lines:
+!> The nodehf.dat file should contain two columns, (nodeId, heat flux [W/m2]),
+!> and should be comma delimited.  A few exaple lines:
 !>    7.597000000E+03, 2.001488694E+07
 !>    7.598000000E+03, 2.086694988E+07
 !>    7.599000000E+03, 1.944927053E+07
@@ -95,7 +95,7 @@ FUNCTION heatFluxOnNodes(Model, n, t) RESULT(hf)
     IMPLICIT NONE
     TYPE(Model_t) :: Model
     INTEGER :: n
-    REAL(KIND=dp) :: t, hf
+    REAL(KIND=dp) :: t, hf, q_flow
     Logical :: GotIt
     TYPE(ValueList_t), POINTER :: BC
     Character(LEN=255) :: f
@@ -107,6 +107,7 @@ FUNCTION heatFluxOnNodes(Model, n, t) RESULT(hf)
 
     !Load the boundary condition with variable for filename
     BC => GetBC()
+       
     nodalPrefix = getString(BC, 'nodalHFprefix', GotIt)
     write(timeString, '(F15.9)') t
     f = TRIM(nodalPrefix) // '_' // TRIM(ADJUSTL(timeString)) // '.dat'
@@ -129,7 +130,16 @@ FUNCTION heatFluxOnNodes(Model, n, t) RESULT(hf)
         print *, "Found negative HF value..."
         hf = 0.0
     ENDIF
-
+    
+    ! Read the heat flux value (q_flow) from the boundary condition
+    q_flow = getConstReal(BC, 'q_flow', GotIt)
+    IF (.NOT. GotIt) THEN
+        CALL Fatal('heatFluxOnNodes', 'q_flow not found in boundary condition')
+    END IF    
+    
+    ! Add constant heat flux to boundary
+    hf = hf + q_flow
+    
 END FUNCTION heatFluxOnNodes
 
 SUBROUTINE ReadCSV(filename, data, numLines)
@@ -185,4 +195,3 @@ SUBROUTINE SplitString(str, splitStr)
     splitStr(2) = str(endPos+1:)
 
 END SUBROUTINE SplitString
-
