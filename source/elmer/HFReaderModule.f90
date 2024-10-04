@@ -134,7 +134,8 @@ FUNCTION heatFluxOnNodes(Model, n, t) RESULT(hf)
     ! Read the heat flux value (q_flow) from the boundary condition
     q_flow = getConstReal(BC, 'q_flow', GotIt)
     IF (.NOT. GotIt) THEN
-        CALL Fatal('heatFluxOnNodes', 'q_flow not found in boundary condition')
+         print *, "q_flow not found in boundary condition"
+         q_flow = 0.0
     END IF    
     
     ! Add constant heat flux to boundary
