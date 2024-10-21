@@ -397,6 +397,7 @@ class engineObj():
         self.MHD.gFileList = gFileList
         if gFileList is not None:
             self.MHD.writeGfileData(gFileList, gFileData)
+            self.MHD.gFileList = gFileList
 
         if plasma3Dmask is not None:
             self.plasma3D.plasma3Dmask = plasma3Dmask

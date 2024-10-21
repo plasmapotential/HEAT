@@ -3743,12 +3743,13 @@ def slideEQplot(value, dummy1, tom, themeData):
     ep = gui.MHD.ep[idx]
     shot = gui.MHD.shot
     t = gui.MHD.timesteps[idx]
+    gName = gui.MHD.gFileList[idx]
     #Update Equilibrium plot
     #this import needs to be here (not at top of file) to prevent FreeCAD qt5
     #shared object conflict
     import GUIscripts.plotly2DEQ as plotly2DEQ
     load_figure_template(template_from_url(themeData['theme']))
-    plot = plotly2DEQ.makePlotlyEQDiv(shot, t, MachFlag, ep)
+    plot = plotly2DEQ.makePlotlyEQDiv(shot, t, MachFlag, ep, gName=gName)
     data = getGfileData(t)
 
     #update plot on gfile cleaner tab with Fpol, psi. etc

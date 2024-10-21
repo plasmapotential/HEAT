@@ -50,7 +50,7 @@ def extract_contours(R, Z, psi, levels):
 
 def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
                     logFile=False, bg = None, xRange=None, yRange=None,
-                    tsFmt="{:.6f}", shotFmt="{:06d}"):
+                    tsFmt="{:.6f}", shotFmt="{:06d}", gName=None):
     """
     returns a DASH object for use directly in dash app
     """
@@ -172,9 +172,9 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
 #    if bg is None:
 #        bg = 'rgba(0,0,0,0)'
 
-
+    title = shotFmt.format(shot)+"@"+tsFmt.format(time)+"s <br>"+'<span style="font-size: 12px;">'+gName+'</span>'
     fig.update_layout(
-        title=shotFmt.format(shot)+"@"+tsFmt.format(time)+"s",
+        title=title,
         xaxis_title="R [m]",
         yaxis_title="Z [m]",
         autosize=True,
