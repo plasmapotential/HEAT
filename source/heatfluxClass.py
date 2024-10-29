@@ -578,13 +578,13 @@ class heatFlux:
         psi_rzq = PFC.ep.psiFunc.ev(R,Z) #convert (r,z) coordinate to psi
         psi_rzq_omp = self.map_R_psi(psi_rzq, PFC) #map the psi_rzq to OMP
 
-        print("Q is:", Q)
-        print("psi_rzq is:", psi_rzq)
-        print("psi_rzq_omp is", psi_rzq_omp)
-        q_data = np.stack((Q, psi_rzq, psi_rzq_omp), axis=0)
-        np.savetxt("q_data", q_data, delimiter=",",header="q,psi_rzq,psi_omp")
-        q_interp = scinter.UnivariateSpline(psi_rzq_omp, Q, s = None, ext = 'const') #interpolate the value of q at OMP
+        # print("Q is:", Q)
+        # print("psi_rzq is:", psi_rzq)
+        # print("psi_rzq_omp is", psi_rzq_omp)
+        q_interp = scinter.interp1d(psi_rzq_omp, Q)
+        # q_interp = scinter.UnivariateSpline(psi_rzq_omp, Q, s = None, ext = 'const') #interpolate the value of q at OMP
         psi = self.map_R_psi(PFC.psimin, PFC) #map PFC centers to OMP
+        print("psi:", psi)
         q1 = q_interp(psi) #calculate the value of q basesd on mapped to OMP PFC centers
         q1 = q1/1e6 #input is in W/m2
         # print("psimin is", PFC.psimin)
