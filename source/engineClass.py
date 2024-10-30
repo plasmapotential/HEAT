@@ -1165,7 +1165,7 @@ class engineObj():
             log.info("lqCN = {:f}".format(self.HF.lqCN))
         elif hfMode=='rzqprofile': 
             print("rzqFile = "+rzqFile[0])
-            log.info("rzqFile = "+rzqFile)
+            log.info("rzqFile = "+rzqFile[0])
         return
 
     def loadHFParams(self, infile=None, tIdx=0):
