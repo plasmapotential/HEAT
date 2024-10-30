@@ -11,7 +11,7 @@
 #for root user mode
 #check for docker group and load into ${dockerGID}
 if [ $(getent group docker) ]; then
-  echo "docker group exists. setting dockerGID env var..."
+  #echo "docker group exists. setting dockerGID env var..."
   export dockerGID="$(getent group docker | cut -d: -f3)"
 else
   echo "'docker' group does not exist."
@@ -22,7 +22,7 @@ else
 fi
 #get user id
 if [ $(getent group docker) ]; then
-  echo "copying UID for user into docker container"
+  #echo "copying UID for user into docker container"
   export dockerUID="$(echo $UID)"
 else
   echo "could not copy user ID into docker."
