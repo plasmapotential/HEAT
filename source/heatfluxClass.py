@@ -1465,9 +1465,10 @@ class heatFlux:
         return val
 
     def readrzqprofile(self, file):
-        print("Reading rzq profile data: "+file)
-        log.info("Reading data: "+file)
-        self.rzq_data = pd.read_csv(file, header=0, names=['R(m)','Z(m)','q(W/m2)'])
+        if file != None:
+            print("Reading rzq profile data: "+file)
+            log.info("Reading data: "+file)
+            self.rzq_data = pd.read_csv(file, header=0, names=['R(m)','Z(m)','q(W/m2)'])
         return 
 
     def writerzqFileData(self,rzqFile,rzqFiledata,tmpDir):
