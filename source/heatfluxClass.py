@@ -1482,7 +1482,7 @@ class heatFlux:
         this function is called from GUI because objects are json / base64
         """
         import base64
-        data = rzqFiledata.encode("utf8").split(b";base64,")[1]
+        data = rzqFiledata[0].encode("utf8").split(b";base64,")[1]
         path = tmpDir + rzqFile
         print("Writing local rzqFile: "+path)
         log.info("Writing local rzqFile: "+path)
