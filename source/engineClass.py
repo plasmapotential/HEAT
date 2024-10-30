@@ -1164,7 +1164,7 @@ class engineObj():
             print("lqCN = {:f}".format(self.HF.lqCN))
             log.info("lqCN = {:f}".format(self.HF.lqCN))
         elif hfMode=='rzqprofile': 
-            print("rzqFile = "+rzqFile)
+            print("rzqFile = "+rzqFile[0])
             log.info("rzqFile = "+rzqFile)
         return
 
