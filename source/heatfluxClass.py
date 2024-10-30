@@ -1483,6 +1483,7 @@ class heatFlux:
         """
         import base64
         data = rzqFiledata[0].encode("utf8").split(b";base64,")[1]
+        print(rzqFile)
         path = tmpDir + rzqFile
         print("Writing local rzqFile: "+path)
         log.info("Writing local rzqFile: "+path)
