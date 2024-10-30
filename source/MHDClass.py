@@ -15,6 +15,7 @@ import shutil
 from scipy.interpolate import RegularGridInterpolator
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
+import netCDF4
 
 import logging
 log = logging.getLogger(__name__)
@@ -167,6 +168,18 @@ class MHD:
         return
 
 
+    def testIfNetCDF(self,file):
+        '''
+        tests to see if a file is a netcdf (.nc)
+        '''
+        try:
+            netCDF4.Dataset(file)
+            var = True
+        except OSError:
+            var = False
+        return var
+
+
     def getGEQDSKtimesteps(self, gFileList):
         """
         gets timesteps for gfiles in tmpDir
@@ -217,30 +230,42 @@ class MHD:
                 ts.append(float(i))
         return np.array(ts)
 
-    def getGEQDSK(self, ts, gFileList):
+    def getGEQDSK(self, ts, eqFileList):
         """
-        copies geqdsks into the HEAT output tree
+        copies EQ into the HEAT output tree
+
+        if netcdf EQ was provided, converts to GEQDSK (required for MAFOT)
 
         ts is list of timesteps
-        gFileList is list of names of geqdsks
+        eqFileList is list of names of eq files
 
-        ts and gFileList are indexed to match each other
+        ts and eqFileList are indexed to match each other
 
         geqdsk text file naming format for HEAT is:
         g = 'g'+self.shotFmt.format(self.shot) +'_'+ self.tsFmt.format(t)
+
+        if netcdf, then should follow the IMAS standards
         """
         self.timesteps = ts
         self.gFiles = []
         for i,t in enumerate(ts):
-            g = gFileList[i]
+            eq = eqFileList[i]
+            #in GUI tmpdir is upload dir.  in TUI, its the machDir
+            oldeqfile = self.tmpDir + eq 
             timeDir = self.shotPath + self.tsFmt.format(t) +'/'
-            oldgfile = self.tmpDir + g
-            #copy gfile for this timestep
             if self.shotPath[-1] != '/': self.shotPath += '/'
             self.gFiles.append('g'+self.shotFmt.format(self.shot) + '_'+ self.tsFmt.format(t))
             newgfile = timeDir + self.gFiles[-1]
-            shutil.copyfile(oldgfile, newgfile)
-            #shutil.copyfile(oldgfile, timeDir + g)
+            
+            #check if this is a netcdf and convert to MAFOT compatible file type (GEQDSK)
+            if self.testIfNetCDF(oldeqfile)==True:
+                #convert to GEQDSK (for MAFOT)
+                ep = EP.equilParams(oldeqfile, EQmode='netcdf', nc_time=t)
+                self.writeGfile(newgfile, shot=self.shot, time=t, ep=ep)
+            else:
+                #file is already in MAFOT compatible format
+                shutil.copyfile(oldeqfile, newgfile)
+
         return
 
 

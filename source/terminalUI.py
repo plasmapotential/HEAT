@@ -107,7 +107,7 @@ class TUI():
           radix, which corresponds to nanosecond resolution (defined in engineClass
           initialization function call)
         
-        :GEQDSK:  magnetic equilibrium file (ie EFIT) in GEQDSK format.  
+        :GEQDSK or EQ:  magnetic equilibrium file (ie EFIT) in GEQDSK format.  
           Psi should be in units of Wb/rad (divided by 2pi) and the Bt0, Fpol, Psi
           and Ip values should reflect COCOS.
 
@@ -228,8 +228,14 @@ class TUI():
                 try:
                     shots = tagData['Shot'].values #only 1 shot per tag allowed
                     timesteps = tagData['TimeStep'].values
-                    gFileNames = tagData['GEQDSK'].values
-                    gFilePaths = machInDir + gFileNames
+                   
+                    #this conditional allows for various EQ formats
+                    if 'GEQDSK' in tagData.keys():
+                        eqFileNames = tagData['GEQDSK'].values
+                    else:
+                        eqFileNames = tagData['EQ'].values
+                    
+                    eqFilePaths = machInDir + eqFileNames
                     CADfiles = machInDir + tagData['CAD'].values
                     PFCfiles = machInDir + tagData['PFC'].values
                     inputFiles = machInDir + tagData['Input'].values
@@ -256,7 +262,7 @@ class TUI():
                 self.loadTimeSteps(timesteps, shots[0], tag, self.ENG.FIL.tsFil)
 
                 #read GEQDSK and load into MHD object
-                self.loadMHD(machInDir, gFileNames, timesteps)
+                self.loadMHD(machInDir, eqFileNames, timesteps)
 
                 #read CAD and initialize CAD objects
                 #note: current version of HEAT only supports single CAD file
@@ -371,14 +377,14 @@ class TUI():
         return
 
 
-    def loadMHD(self, tmpDir, gFiles, ts):
+    def loadMHD(self, tmpDir, eqFiles, ts):
         """
-        loads GEQDSK file into HEAT tree and MHD object
+        loads EQ files into HEAT tree and MHD object
         """
         #initialize MHD
         self.ENG.MHD.tmpDir = tmpDir
         self.ENG.MHD.tree = 'EFIT02'
-        self.ENG.MHD.getGEQDSK(ts, gFiles)
+        self.ENG.MHD.getGEQDSK(ts, eqFiles)
         self.ENG.MHD.makeEFITobjects()
         self.ENG.MHD.psiSepLimiter = None
         self.ENG.MHD.setTypes()
