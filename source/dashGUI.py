@@ -1743,7 +1743,8 @@ def loadHF(n_clicks,hfMode,MachFlag,
                         lqCNmode,lqCFmode,lqPNmode,lqPFmode,SMode,
                         qBG,P,radFrac,fG,
                         qFilePath,qFileTag,
-                        rzqFile[0], rzqFiledata[0])
+                        rzqFile, rzqFiledata)
+                        # rzqFile[0], rzqFiledata[0])
 
 
         #Update output tab table
