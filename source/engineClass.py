@@ -1055,6 +1055,7 @@ class engineObj():
 
         if rzqFiledata != None:
             print("saving rzq file to tmpDir.")
+            print(rzqFiledata)
             self.HF.rzqFile = self.HF.writerzqFileData(rzqFile, rzqFiledata, self.tmpDir)
         else:
             self.HF.rzqFile = rzqFile
