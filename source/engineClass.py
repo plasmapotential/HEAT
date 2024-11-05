@@ -1017,7 +1017,7 @@ class engineObj():
                     lqCNmode,lqCFmode,lqPNmode,lqPFmode,SMode,
                     qBG,P,radFrac,fG,
                     qFilePath,qFileTag,
-                    rzqFile, rzqFiledata=None,tIdx=0):
+                    rzqFile, rzqFiledata=None, tIdx=0):
         """
         get heat flux inputs from gui or input file
         """
@@ -1054,7 +1054,7 @@ class engineObj():
         self.HF.qFileTag = qFileTag
 
         if rzqFiledata != None:
-            print("saving rzq file to tmpDir.")
+            print("Saving rzq file to tmpDir.")
             self.HF.rzqFile = self.HF.writerzqFileData(rzqFile, rzqFiledata, self.tmpDir)
         else:
             self.HF.rzqFile = rzqFile
@@ -1164,11 +1164,11 @@ class engineObj():
             print("lqCN = {:f}".format(self.HF.lqCN))
             log.info("lqCN = {:f}".format(self.HF.lqCN))
         elif hfMode=='rzqprofile': 
-            print("rzqFile = "+rzqFile[0])
-            log.info("rzqFile = "+rzqFile[0])
+            print("rzqFile = ", rzqFile)
+            log.info("rzqFile = %s",rzqFile)
         return
 
-    def loadHFParams(self, infile=None, tIdx=0):
+    def loadHFParams(self, infile=None, rzqFiledata=None, tIdx=0):
         """
         function for loading HF parameters on the fly (ie in the time loop)
         """
@@ -1203,7 +1203,7 @@ class engineObj():
                          self.HF.qFilePath,
                          self.HF.qFileTag,
                          self.HF.rzqFile,
-                         self.HF.rzqFiledata,
+                         rzqFiledata,
                          tIdx)
         return
 

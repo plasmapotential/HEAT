@@ -503,7 +503,6 @@ def inputDragDrop(file, contents, MachFlag):
                State('fG', 'value'),
                State('qFilePath', 'value'),
                State('qFileTag', 'value'),
-            #    State('rzqFile', 'value'),
                State('OFstartTime', 'value'),
                State('OFstopTime', 'value'),
                State('OFminMeshLev', 'value'),
@@ -521,7 +520,6 @@ def inputDragDrop(file, contents, MachFlag):
                State('ionMassAMU','value'),
                State('vMode','value'),
                State('ionFrac','value'),
-            #    State('radFile', 'value'),
                State('phiMin', 'value'),
                State('phiMax','value'),
                State('Ntor','value'),
@@ -567,7 +565,6 @@ def saveGUIinputs(  n_clicks,
                     fG,
                     qFilePath,
                     qFileTag,
-                    # rzqFile,
                     OFstartTime,
                     OFstopTime,
                     OFminMeshLev,
@@ -585,7 +582,6 @@ def saveGUIinputs(  n_clicks,
                     ionMassAMU,
                     vMode,
                     ionFrac,
-                    # radFile,
                     phiMin,
                     phiMax,
                     Ntor,
@@ -1041,7 +1037,7 @@ def loadHFSettings(mode=None, hidden=False, sessionData=None):
         hideMask = ['hiddenBox','hiddenBox','hiddenBox','hfInput','hiddenBox','hiddenBox'] #common + private flux region
     elif mode=='tophat':
         hideMask = ['hiddenBox','hiddenBox','hiddenBox', 'hiddenBox','hfInput','hiddenBox'] #common + private flux region
-    elif mode=='rzqprofile': #Erin 1/3/24
+    elif mode=='rzqprofile': 
         hideMask = ['hiddenBox','hiddenBox','hiddenBox','hiddenBox','hiddenBox', 'hfInput'] #common + private flux region
     if hidden==True or mode==None:
         hideMask=['hiddenBox','hiddenBox','hiddenBox','hiddenBox','hiddenBox','hiddenBox']
@@ -1743,8 +1739,7 @@ def loadHF(n_clicks,hfMode,MachFlag,
                         lqCNmode,lqCFmode,lqPNmode,lqPFmode,SMode,
                         qBG,P,radFrac,fG,
                         qFilePath,qFileTag,
-                        rzqFile, rzqFiledata)
-                        # rzqFile[0], rzqFiledata[0])
+                        rzqFile[0], rzqFiledata[0])
 
 
         #Update output tab table
@@ -3950,7 +3945,6 @@ Session storage callbacks and functions
                Output('fG', 'value'),
                Output('qFilePath', 'value'),
                Output('qFileTag', 'value'),
-            #    Output('rzqFile', 'value'),
                Output('OFstartTime', 'value'),
                Output('OFstopTime', 'value'),
                Output('OFminMeshLev', 'value'),
@@ -3967,7 +3961,6 @@ Session storage callbacks and functions
                Output('ionMassAMU','value'),
                #Output('vMode','value'), #this causes undefined vars
                Output('ionFrac','value'),
-            #    Output('radFile','value'),
                Output('phiMin','value'),
                Output('phiMax','value'),
                Output('Ntor','value'),

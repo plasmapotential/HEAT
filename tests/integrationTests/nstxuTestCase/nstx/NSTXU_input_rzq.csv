@@ -26,7 +26,7 @@ dpinit, 0.25
 #==============================================================
 #                Optical HF Variables
 #==============================================================
-hfMode, eich
+hfMode, rzqprofile
 lqCN, 1.0
 lqCF, 5.0
 lqPN, 1.0
@@ -51,6 +51,7 @@ qBG, 0.0
 fG, 0.6
 qFilePath, None
 qFileTag, None
+rzqFile, /root/source/HEAT/tests/integrationTests/nstxuTestCase/nstx/rzq_hf_data.csv
 #==============================================================
 #                Ion Gyro Orbit HF Variables
 #==============================================================

@@ -115,7 +115,7 @@ class heatFlux:
           that should be used for the heat flux files.  For example, to read a previous
           HEAT runs photon radiation data, tag would be HF_rad and HEAT would read files
           named HF_rad.csv.  Set to None when no file should be read.
-        :rzqFile: Path for the rzqprofile that contains a csv file with columns R(m),Z(m),q(W/m2)
+        :rzqFile: Path for the rzqprofile that contains a csv file with columns R(m),Z(m),q||(W/m2)
 
         """
 
@@ -570,25 +570,17 @@ class heatFlux:
         Z = rzq_data['Z(m)'].to_numpy()
         Q = rzq_data['q(W/m2)'].to_numpy()
         # make Q positive. Sometimes, the q values from SOLPS is negative to indicate direction.
-        # for i in range(0, len(Q)):
-        #     if Q[i] <0:
-        #         Q[i] *= -1
         negs = np.where(Q<0.0)[0]
         Q[negs] *= -1.0
         psi_rzq = PFC.ep.psiFunc.ev(R,Z) #convert (r,z) coordinate to psi
         psi_rzq_omp = self.map_R_psi(psi_rzq, PFC) #map the psi_rzq to OMP
 
-        # print("Q is:", Q)
-        # print("psi_rzq is:", psi_rzq)
-        # print("psi_rzq_omp is", psi_rzq_omp)
-        # q_interp = scinter.interp1d(psi_rzq_omp, Q)
         q_interp = scinter.UnivariateSpline(psi_rzq_omp, Q, s = 0, ext = 'const') #interpolate the value of q at OMP
         psi = self.map_R_psi(PFC.psimin, PFC) #map PFC centers to OMP
         print("psi:", psi)
         q1 = q_interp(psi) #calculate the value of q basesd on mapped to OMP PFC centers
+        print('q1:', q1)
         q1 = q1/1e6 #input is in W/m2
-        # print("psimin is", PFC.psimin)
-        # print("PFC q is", q1)
         
         return q1
 
@@ -1482,8 +1474,8 @@ class heatFlux:
         this function is called from GUI because objects are json / base64
         """
         import base64
-        data = rzqFiledata[0].encode("utf8").split(b";base64,")[1]
-        path = tmpDir + rzqFile[0]
+        data = rzqFiledata.encode("utf8").split(b";base64,")[1]
+        path = tmpDir + rzqFile
         print("Writing local rzqFile: "+path)
         
         log.info("Writing local rzqFile: "+path)
