@@ -302,7 +302,7 @@ class Runaways:
         os.remove(self.structOutfile)
         return Btrace
 
-    def findGuidingCenterPaths(self, pts:np.ndarray, MHD:object, traceDir:float):
+    def findGuidingCenterPaths(self, pts:np.ndarray, MHD:object, traceDir:float, verbose = False):
         """
         creates MAFOT point files and control files, then runs heatstructure MAFOT program
         
@@ -316,6 +316,7 @@ class Runaways:
            defines MAFOT mapDirection
            
         """
+        
         MHD.ittStruct = 1.0
         #forward trace
         MHD.writeMAFOTpointfile(pts,self.gridfileStruct)
@@ -357,7 +358,6 @@ class Runaways:
         
         Based on the filament tracing code 
         
-        todo: figure this out, think about it a bit harder
         
         Uses Open3D to accelerate the calculation:
         Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
@@ -387,6 +387,13 @@ class Runaways:
         #hdotn = np.ones((N_pts))*np.nan
         #initialize shadowMask matrix
         shadowMask = np.zeros((N_pts))
+        
+        # setting up MHD times
+        MHDtimes = MHD.timesteps
+        MHDtimes = np.append(MHDtimes, self.tMax)
+        print(MHDtimes)
+        
+      
 
         for i in range(self.N_vS):
             print("\n---Tracing for velocity slice: {:f} [m/s]---\n".format(self.vSlices[0,i]))
@@ -398,6 +405,9 @@ class Runaways:
             vec = np.zeros((N_pts, 3))
             frac = np.zeros((N_pts))
             use = np.arange(N_pts)
+            
+            i_MHDtNext = 1
+
 
             #save macroparticle coordinates at t0, increment next
             self.xyzSteps[i,:,tIdxNext,:] = pts
@@ -411,7 +421,6 @@ class Runaways:
             sumCount = 0
 
             #check if v_b is positive or negative and trace accordingly
-            # todo ask about this? 
             if v_b[0] > 0:
                 traceDir = 1.0
             else:
@@ -425,6 +434,7 @@ class Runaways:
                 #correct guiding center path using radial velocity
                 d_b = np.linalg.norm((q2-q1), axis=1) #distance along field
                 t_b = d_b / np.abs(v_b)[use] #time along field for this step
+                # Updating time
                 t_tot[use] += t_b #cumulative time along field
                 d_r = 0 # I think the radial distance will be approx 0 here? t_b * self.v_r #radial distance
                     
@@ -433,19 +443,21 @@ class Runaways:
                 R = np.sqrt(q2[:,0]**2 + q2[:,1]**2)
                 Z = q2[:,2]
                 
-                if self.drift:
-
-                    
-              
+                # applying drift correction
+                if self.drift:              
                     Bts = self.ep.BtFunc.ev(R, Z)
                     gamma = self.gammas[:,i][use]
-                    v_d = np.abs((v_b[use] **2 + v_perp[use]**2/2) * gamma * self.me/self.kg2eV / self.e / Bts / R)
-                   
+                    v_d = -(v_b[use] **2 + v_perp[use]**2/2) * gamma * self.me/self.kg2eV / self.e / Bts / R 
 
                     d_z = t_b * v_d
-                    
+                    #print(d_z)
+                    #print(q2)
                     q2[:,2] += d_z
-
+                    #print(q2)
+                    #x = 5/0
+                    
+                
+                # I think all of this is here so that you can put R in the correct direction
                 phi = np.arctan2(q2[:,1], q2[:,0])
                 rVec = self.fluxSurfNorms(self.ep, R, Z)
                 rX, rY, rZ = tools.cyl2xyz(rVec[:,0], rVec[:,2], phi, degrees=False)
@@ -455,9 +467,11 @@ class Runaways:
                 
                 #magnetic field line trace corrected with radial (psi) velocity component
                 q3 = q2 #+ d_r[:,np.newaxis] * rN
+                # vec is the vector between two points
                 vec[use] = q3-q1
                 frac[use] = (tsNext[use] - t_tot[use] + t_b) / t_b
 
+                # Updating the points 
                 if len(use) > 0:
                     launchPt[use] = q3
 
@@ -494,12 +508,36 @@ class Runaways:
 
                 #particles we need to keep tracing (didnt hit and less than tMax)
                 test1 = np.where(np.isnan(intersectRecord[i, use, tIdxNext[use]]) == True)[0]
-                test2 = np.where(t_tot[use] < self.tMax)[0]
+                test2 = np.where(t_tot[use] < MHDtimes[i_MHDtNext])[0] 
 
                 #use = np.where(np.logical_or(test1,test2)==True)[0]
                 #use = np.intersect1d(test1,test2)
                 #use = np.intersect1d(np.intersect1d(test1,test2),use)
-                use = use[np.intersect1d(test1,test2)]
+                usecheck = use[np.intersect1d(test1,test2)]
+                
+                
+                # checking if all particles have passed the next MHDtime 
+                if len(usecheck) == 0 and not MHDtimes[i_MHDtNext] == self.tMax:
+                    print("Updating the equilibrium to the next times step")
+                    self.tEQ = MHDtimes[i_MHDtNext]
+                    self.ep = MHD.ep[i_MHDtNext]
+                    print(f'New equilbrium time is {self.tEQ}')
+                    
+                    i_MHDtNext += 1
+                    use = np.arange(N_pts)
+                    test1 = np.where(np.isnan(intersectRecord[i, use, tIdxNext[use]]) == True)[0]
+                    test2 = np.where(t_tot[use] < MHDtimes[i_MHDtNext])[0]
+                    
+                    print(f'Next equilbrium time we are looking for is {MHDtimes[i_MHDtNext]}')
+                    
+                    '''
+                    print(use)
+                    print(test1)
+                    print(test2)
+                    input()
+                    '''
+                
+                use = use[np.intersect1d(test1,test2)] 
 
 
                 #For testing
@@ -517,16 +555,34 @@ class Runaways:
                 #print(rN.shape)
                 #print(tsNext)
                 #print(self.xyzSteps)
-                #input()
+                
 
                 #record particle locations for particles that exceeded timestep
                 use2 = np.where(t_tot > tsNext)[0] #particles that crossed a timestep
                 use3 = np.intersect1d(use,use2) #crossed a timestep and still not crossed tMax, indexed to N_pts
                 use4 = np.where(t_tot[use] > tsNext[use])[0] #crossed a timestep and still not crossed tMax, indexed to use
+                
                 if len(use3) > 0:
-                    self.xyzSteps[i,use3,tIdxNext[use3],:] = q1[use4] + vec[use3]*frac[use3,None]
+                    '''
+                    print(use)
+                    print(use2)
+                    print(use3)
+                    print(use4)
+                    print(self.xyzSteps)
+                    print(tIdxNext)
+                    print(q1)
+                    print(vec)
+                    print(frac)
+                    print(launchPt[use4] - vec[use4] * (1 -frac[use4, None]))
+
+                    input()
+                    '''
+                    # self.xyzSteps[i,use3,tIdxNext[use3],:] = q1[use4] + vec[use3]*frac[use3,None] # this  is the old version
+                    self.xyzSteps[i,use3,tIdxNext[use3],:] = launchPt[use3] - vec[use3] * (1 -frac[use3, None])
+                    
                     tIdxNext[use3]+=1
                     tsNext[use3] = ts[tIdxNext[use3]]
+                    
 
             #record the final timestep       
             self.xyzSteps[i,:,-1,:] = launchPt + vec*frac[:,None]
