@@ -2215,8 +2215,7 @@ class engineObj():
             if self.IO.csvMask == True:
                 self.combineTimeSteps(runList, t)
 
-        #set tree permissions
-        tools.recursivePermissions(self.MHD.shotPath, self.UID, self.GID, self.chmod)
+
 
 
         #=========================
@@ -2407,6 +2406,8 @@ class engineObj():
                 print('ts', ts)
                 print('MHD times', self.MHD.timesteps)
                 epIdx = np.where( np.min(both)==self.MHD.timesteps )[0][0]
+
+
                 print(REDict)
                 self.RE.initializeREdistFromDict(REDict, idx, self.MHD.ep[epIdx])
                 self.RE.ts = ts
@@ -2436,6 +2437,7 @@ class engineObj():
                     #    break
 
                     #trace macroparticles from source at this timestep
+                    #If N_src_t = 1 this only runs the one time, this is where all of your particles are created and followed
                     if tIdx < self.RE.N_src_t:
                         self.RE.tEQ = ts[0]
                         self.RE.traceREParticles(self.MHD, ts, tIdx)
@@ -2514,6 +2516,8 @@ class engineObj():
                         self.combineFilTimesteps(name, oldPath, newPath)
                     tCount +=1
 
+        #set tree permissions
+        tools.recursivePermissions(self.MHD.shotPath, self.UID, self.GID, self.chmod)
             
         print("Total Time Elapsed: {:f}".format(time.time() - t0))
         log.info("Total Time Elapsed: {:f}".format(time.time() - t0))

@@ -61,85 +61,75 @@ class Runaways:
         .. Writes a list of recognized class variables to HEAT object
         .. Used for error checking input files and for initialization
 
-        Gyro Orbit Heat Flux Variables:
+        Runaway Electrons Heat Flux Variables:
         -------------------------------------
 
-        :N_gyroSteps: number of discrete line segments per helical gyro period [integer].  
-          Higher values mean better approximation of the helical trajectory but come at 
-          the cost of longer computation times.
-        :gyroTraceLength: number of steps to trace for gyro orbit calculation [integer].  Step width
-          is defined by the MHD EQ variable dpinit.  Should really change this name to
-          gyroTraceLength as it is not directly related to degrees.  Total toroidal distance 
-          of trace is gyroTraceLength * dpinit
-        :RE_Eav: Average energy of the runaway electron distribution function
-        :RE_I: Total current carried by runaway electrons
-        :N_vSlice: Number of macroparticle samples to take from the velocity distribution
-          function [integer].  Each sample defines the ion energies.
-        :N_vPhase: Number of macroparticle samples to take from the velocity phase 
-          distribution function [integer].  Each sample the ion vPerp and v|| components. 
-        :N_gyroPhase: Number of macroparticle gyroPhase samples to take from a uniform
-          2pi distribution [integer].  Each sample corresponds to birth phase angle of particles about
-          guiding center.
-        :ionMassAMU: Ion mass in atomic mass units [AMU].
-        :vMode: determines if single temperature is defined for entire PFC or if each element
-          on PFC mesh has a unique plasma temperature.  Can be single or mesh.  For now,
-          only single works.
-        :gyroSources: name of CAD object to be used as the gyro source plane.  
+        :id:  a unique string tag (or name) that is assigned to the filament.  example: fil1pt
+        :tMin[s]: time in seconds of runaway birth. example: 1000e-6
+        :tMax[s]: time in seconds to stop tracking runaways. example: 1500e-6
+        :dt[s]: timestep size in seconds
+        :decay_t[s]: decay constant for runaway birth energy.  The filament can be born over a 
+          series of timesteps.  If N_src_t is > 1, this variable describes the exponential decay.
+          At each of the birth timesteps, HEAT sources particles with a decaying total energy,
+          which is prescribed by this exponential decay constant.  See function gaussianAtPts() 
+          for more information.
+        :N_src_t: number of birth timesteps over which we source particles.  if set to 1,
+          particles are all born instantaneously.
+        :rCtr[m]: radial coordinate in meters of runaway beam centroid at birth
+        :zCtr[m]: vertical coordinate in meters of runaway beam centroid at birth
+        :phiCtr[deg]: toroidal coordinate in degrees of runaway beam centroid at birth
+        :sig_r[m]: Gaussian width of runaway beam in radial direction in meters
+        :N_sig_r: Width of runaway beam radial Gaussian in units of sig_r
+        :N_r: Number of discrete birth locations in radial direction
+        :sig_p[m]: Gaussian width of runaway beam in poloidal direction in meters
+        :N_sig_p: Width of runaway beam poloidal Gaussian in units of sig_p
+        :N_p: Number of discrete birth locations in poloidal direction
+        :sig_b[m]: Gaussian width of runaway beam in along field line in meters
+        :N_sig_b: Width of runaway beam Gaussian along field line in units of sig_b
+        :N_b: Number of discrete birth locations along field line
+        :N_vS: Number of samples from the parallel velocity distribution function. If set to 1 all particles will have energy E_av
+        :E_av[eV]: Average energy of runaway electrons. Tends to be in MeV range
+        :E_max[eV]: Maximum energy used for distribution function
+        :E_min[eV]: minimum energy used for distribution function
+        :IRE[A]: Current of runaway beam. Used to determine the total energy of particles
+        :I_dir: direction of current. Runaways will flow in opposite direction.
+        :Pitch_angle: Pitch angle of particles
+        :Drift: True or false, whether or not drifts are included in tracking of runaway electron trajectories
 
-        For more information on the gyro orbit module and corresponding physics, see [6].
+        
 
         """
 
 
         self.allowed_vars = [
-                    'N_gyroSteps',
-                    'gyroTraceLength',
-                    'RE_Eav',
-                    'RE_I',
-                    'N_vSlice',
-                    'N_vPhase',
-                    'N_gyroPhase',
-                    'vMode',
-                    'gyroSources',
-                            ] #check take out ionMassAMU?
+                    'id',
+                    'tMin[s]',
+                    'tMax[s]', 
+                    'dt[s]', 
+                    'decay_t[s]', 
+                    'N_src_t',
+                    'rCtr[m]',
+                    'zCtr[m]',
+                    'phiCtr[deg]',
+                    'sig_r[m]',
+                    'N_r',
+                    'sig_p[m]',
+                    'N_p',
+                    'sig_v[m]',
+                    'N_b',
+                    'N_vs',
+                    
+                    'E_av[eV]',
+                    'E_min[eV]',
+                    'E_max[eV]',
+                    'IRE[A]',
+                    'I_dir',
+                    'Pitch_angle',
+                    'Drift',
+                            ]
         return
 
-    def setTypes(self):
-        """
-        Set variable types for the stuff that isnt a string from the input file
-        """
-        integers = [
-                    'N_gyroSteps',
-                    'gyroTraceLength',
-                    'N_vSlice',
-                    'N_vPhase',
-                    'N_gyroPhase',
-                    ]
-        floats = [
-                  'RE_Eav',
-                  'RE_I',
-                  
-                ]
 
-        for var in integers:
-            if (getattr(self, var) is not None) and (~np.isnan(float(getattr(self, var)))):
-                try:
-                    setattr(self, var, tools.makeInt(getattr(self, var)))
-                except:
-                    print("Error with input file var "+var+".  Perhaps you have invalid input values?")
-                    log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
-        for var in floats:
-            if var is not None:
-                if (getattr(self, var) is not None) and (~np.isnan(float(getattr(self, var)))):
-                    try:
-                        setattr(self, var, tools.makeFloat(getattr(self, var)))
-                    except:
-                        print("Error with input file var "+var+".  Perhaps you have invalid input values?")
-                        log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
-
-
-
-        return
 
     def setupConstants(self, ionMassAMU=2.014):
         """
