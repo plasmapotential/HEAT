@@ -226,9 +226,10 @@ class TUI():
 
                 #get file paths associated with this tag from batchFile
                 try:
+
                     shots = tagData['Shot'].values #only 1 shot per tag allowed
                     timesteps = tagData['TimeStep'].values
-                   
+
                     #this conditional allows for various EQ formats
                     if 'GEQDSK' in tagData.keys():
                         eqFileNames = tagData['GEQDSK'].values
@@ -236,14 +237,25 @@ class TUI():
                         eqFileNames = tagData['EQ'].values
                     
                     eqFilePaths = machInDir + eqFileNames
-                    CADfiles = machInDir + tagData['CAD'].values
+
+                    #if user is bringing their own meshes then the CAD file can be set to None
+                    #NEED TO FIX THIS SO THAT THERE CAN BE NONE AND strings in same batchFile
+                    if True in pd.isna(tagData['CAD'].values):
+                        print("No CAD file provided, assuming you are providing STLs")
+                        log.info("No CAD file provided, assuming you are providing STLs")
+                        CADfiles = tagData['CAD'].values
+                    #normal cases, user supplies CAD file of some kind
+                    else:
+                        CADfiles = machInDir + tagData['CAD'].values
+                    
+                    #CADfiles = machInDir + tagData['CAD'].values
                     PFCfiles = machInDir + tagData['PFC'].values
                     inputFiles = machInDir + tagData['Input'].values
                     runList = [x.split(":") for x in tagData['Output'].values]
                     runList = np.unique([x for y in runList for x in y])
                 except Exception as e:
                     print("\n\nSomething is wrong with your batchFile!  Error Trace:\n")
-                    print(e.message)
+                    print(e)
                     sys.exit()
 
                 #refresh all subclasses

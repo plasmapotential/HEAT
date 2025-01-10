@@ -753,7 +753,7 @@ def buildMHDbox():
               State('dataPath', 'value'),
               State('MachFlag', 'value')]
               )
-def loadMHD(n_clicks,shot,traceLength,dpinit,gFileList,gFileData,plasma3Dmask,dataPath,MachFlag):
+def loadMHD(n_clicks,shot,traceLength,dpinit,eqList,eqData,plasma3Dmask,dataPath,MachFlag):
     """
     Load MHD
     """
@@ -767,7 +767,7 @@ def loadMHD(n_clicks,shot,traceLength,dpinit,gFileList,gFileData,plasma3Dmask,da
     if plasma3Dmask == 'plasma3D': plasma3Dmask = True
     else:  plasma3Dmask = False
 
-    if (shot is None) and (gFileList is None):
+    if (shot is None) and (eqList is None):
         raise PreventUpdate
 
     if shot is not None: shot = int(shot)
@@ -777,34 +777,34 @@ def loadMHD(n_clicks,shot,traceLength,dpinit,gFileList,gFileData,plasma3Dmask,da
         dpinit = float(dpinit)
     else:
         dpinit = 1.0
-    if gFileList is not None:
-        if type(gFileList) is not list:
-            gFileList = [gFileList]
-    if gFileData is not None:
-        if type(gFileData) is not list:
-            gFileData = [gFileData]
+    if eqList is not None:
+        if type(eqList) is not list:
+            eqList = [eqList]
+    if eqData is not None:
+        if type(eqData) is not list:
+            eqData = [eqData]
 
     gui.getMHDInputs(shot=shot,
                      traceLength=traceLength,
                      dpinit=dpinit,
-                     gFileList=gFileList,
-                     gFileData=gFileData,
+                     eqList=eqList,
+                     eqData=eqData,
                      plasma3Dmask=plasma3Dmask,
                     )
 
     ts = gui.MHD.timesteps
     tminMHD = ts.min()
     tmaxMHD = ts.max()
-    if gFileList is None:
+    if eqList is None:
         tAll = np.linspace(int(tminMHD), int(tmaxMHD), (int(tmaxMHD)-int(tminMHD)+1))
         data = [dict([{'filename':'', 'timestep':''}][0])]
     else:
         tAll = ts
         keys=["filename"]
-        interpData = pd.DataFrame(gFileList, columns=keys)
+        interpData = pd.DataFrame(eqList, columns=keys)
         interpData["timestep[ms]"] = ""
         data = interpData.to_dict('records')
-        #interpData = [dict([{'filename':g, 'timestep':''} for g in gFileList])]
+        #interpData = [dict([{'filename':g, 'timestep':''} for g in eqList])]
     marks = {}
     for t in ts:
         if t in tAll:
@@ -2993,7 +2993,7 @@ def getGfileColumns():
     return [{'id': p, 'name': p} for p in params]
 
 #load data
-def getGfileData(t=None):
+def geteqData(t=None):
     if t is None:
         return [{}]
     idx = np.where(t==gui.MHD.timesteps)[0][0]
@@ -3709,10 +3709,12 @@ def MHDplot():
             dcc.Slider(
                 id='timeSlider',
                 min=0,
-                max=100,
-                step=None,
+                max=1000,
+                #step=None,
                 value=10,
-                marks={50: 'Load MHD to see timesteps'},
+                #marks={50: 'Load MHD to see timesteps'},
+                marks=None,
+                tooltip={"placement": "bottom", "always_visible": True},
             ),
         ],
     )
@@ -3743,14 +3745,17 @@ def slideEQplot(value, dummy1, tom, themeData):
     ep = gui.MHD.ep[idx]
     shot = gui.MHD.shot
     t = gui.MHD.timesteps[idx]
-    gName = gui.MHD.gFileList[idx]
+    try:
+        gName = gui.MHD.eqList[idx]
+    except:
+        gName = gui.MHD.eqList[0] #this is for when all EQ are in a single file (ie a JSON)
     #Update Equilibrium plot
     #this import needs to be here (not at top of file) to prevent FreeCAD qt5
     #shared object conflict
     import GUIscripts.plotly2DEQ as plotly2DEQ
     load_figure_template(template_from_url(themeData['theme']))
     plot = plotly2DEQ.makePlotlyEQDiv(shot, t, MachFlag, ep, gName=gName)
-    data = getGfileData(t)
+    data = geteqData(t)
 
     #update plot on gfile cleaner tab with Fpol, psi. etc
     plot2 = plotly2DEQ.makePlotlyGfilePlot(ep)
@@ -3768,10 +3773,6 @@ def slideEQplot(value, dummy1, tom, themeData):
 
 
 
-
-
-
-
 """
 ==============================================================================
 Main Layout
@@ -3785,7 +3786,7 @@ def generateLayout():
             dcc.Store(id='session', storage_type='memory'),
             dcc.Store(id='userInputFileData', storage_type='memory'),
             dcc.Store(id='PFCdataStorage', storage_type='memory'),
-            dcc.Store(id='gFileListStorage', storage_type='memory'),
+            dcc.Store(id='eqListStorage', storage_type='memory'),
             dcc.Store(id='BtraceDataStorage', storage_type='memory'),
             dcc.Store(id='gyroTraceDataStorage', storage_type='memory'),
             dcc.Store(id='MHDDataStorage', storage_type='memory'),

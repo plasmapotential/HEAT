@@ -376,7 +376,7 @@ class engineObj():
 
 
     def getMHDInputs(self,shot=None,traceLength=None,dpinit=None,
-                     gFileList=None,gFileData=None,plasma3Dmask=None,
+                     eqList=None,eqData=None,plasma3Dmask=None,
                      ):
         """
         Get the mhd inputs from the gui or input file
@@ -386,6 +386,7 @@ class engineObj():
         self.MHD.MachFlag=self.MachFlag #override input file with machine user selected
         self.MHD.setTypes()
 
+
         if shot is not None:
             self.MHD.shot = shot
 
@@ -394,23 +395,32 @@ class engineObj():
             self.MHD.nTrace = int(traceLength / dpinit)
         if dpinit is not None:
             self.MHD.dpinit = dpinit
-        self.MHD.gFileList = gFileList
-        if gFileList is not None:
-            self.MHD.writeGfileData(gFileList, gFileData)
-            self.MHD.gFileList = gFileList
+        self.MHD.eqList = eqList
+        if eqList is not None:
+            self.MHD.writeEQdata(eqList, eqData)
+            self.MHD.eqList = eqList
 
         if plasma3Dmask is not None:
             self.plasma3D.plasma3Dmask = plasma3Dmask
 
         self.MHD.tree = 'EFIT02'
 
-        self.timesteps = self.MHD.getGEQDSKtimesteps(gFileList)
+        #determine if the EQ are GEQDSKs or IMAS formatted JSON / NetCDF
+        #and get the timesteps accordingly
+        self.MHD.EQmode = self.MHD.determineEQFiletype(eqList[0]) #assume we are not mixing and matching EQ types
+        if self.MHD.EQmode == 'geqdsk':
+            self.timesteps = self.MHD.getGEQDSKtimesteps(eqList)
+        elif self.MHD.EQmode == 'json':
+            self.timesteps = np.array([])
+            for eq in eqList:
+                data = self.IO.readJSON(self.tmpDir + eq)
+                self.timesteps = np.append( self.timesteps, np.round(np.array(data['equilibrium']['time']), 8) )
 
         #make tree branch for this shot
         self.setupTime(self.timesteps, shot, clobberFlag=False)
         self.MHD.shotPath = self.shotPath
 
-        self.MHD.getGEQDSK(self.timesteps,gFileList)
+        self.MHD.getGEQDSK(self.timesteps,eqList)
         self.MHD.makeEFITobjects()
         self.NCPUs = multiprocessing.cpu_count() - 2 #reserve 2 cores for overhead
         self.MHD.psiSepLimiter = None
@@ -850,50 +860,60 @@ class engineObj():
 
     def getCADfromTUI(self,STPfile):
         """
-        Loads CAD file for terminal users
+        Loads CAD file for terminal users.  Here we call this file an STPfile,
+        but it could be other formats (ie BREP, FCStd, IGES, etc.)
         """
         tools.makeDir(self.CAD.STPpath, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
-        #get file name
-        stpName = os.path.basename(STPfile)
-        #time last modified
-        mtime_orig = os.stat(STPfile).st_mtime
-        #time last read
-        atime_orig = os.stat(STPfile).st_atime
-        #we will copy to this cache directory for future use
-        newSTPpath = self.CAD.STPpath + stpName
-        #check to see if this STP file exists and write data to the file
-        if os.path.isfile(newSTPpath) == False:
-            print("New STP file.  Writing")
-            shutil.copyfile(STPfile, newSTPpath)
-            #set modified timestamps to match original
-            os.utime(newSTPpath, (atime_orig, mtime_orig))
-            self.CAD.overWriteMask = True #we need to also overwrite meshes
+        #if CAD file is set to None, do not load
+        #(this is true when user brings their own meshes and no STEP file)
+        if type(STPfile) != str:
+            print("CADfile column in batchFile set to None.  Skipping CAD load.")
+            print("This is ok if you are bringing your own mesh (BYOM)")
+            log.info("CADfile column in batchFile set to None.  Skipping CAD load.")
+            log.info("This is ok if you are bringing your own mesh (BYOM)")
+
         else:
+            #get file name
+            stpName = os.path.basename(STPfile)
             #time last modified
-            mtime_new = os.stat(newSTPpath).st_mtime
+            mtime_orig = os.stat(STPfile).st_mtime
             #time last read
-            atime_new = os.stat(newSTPpath).st_atime
-            #if file was modified, overwrite
-            if mtime_orig != mtime_new:
-                print("File was modified since last HEAT upload.  Overwriting...")
+            atime_orig = os.stat(STPfile).st_atime
+            #we will copy to this cache directory for future use
+            newSTPpath = self.CAD.STPpath + stpName
+            #check to see if this STP file exists and write data to the file
+            if os.path.isfile(newSTPpath) == False:
+                print("New STP file.  Writing")
                 shutil.copyfile(STPfile, newSTPpath)
-                print(atime_orig)
-                print(mtime_orig)
+                #set modified timestamps to match original
                 os.utime(newSTPpath, (atime_orig, mtime_orig))
                 self.CAD.overWriteMask = True #we need to also overwrite meshes
-                os.chmod(newSTPpath, self.chmod)
-                os.chown(newSTPpath, self.UID, self.GID)
             else:
-                falseList = [False, 'F', 'f', 'false', 'False', 'FALSE']
-                if self.CAD.overWriteMask in falseList:
-                    self.CAD.overWriteMask = False
-                    print("STP file is already in the HEAT database.  Not overwriting...")
+                #time last modified
+                mtime_new = os.stat(newSTPpath).st_mtime
+                #time last read
+                atime_new = os.stat(newSTPpath).st_atime
+                #if file was modified, overwrite
+                if mtime_orig != mtime_new:
+                    print("File was modified since last HEAT upload.  Overwriting...")
+                    shutil.copyfile(STPfile, newSTPpath)
+                    print(atime_orig)
+                    print(mtime_orig)
+                    os.utime(newSTPpath, (atime_orig, mtime_orig))
+                    self.CAD.overWriteMask = True #we need to also overwrite meshes
+                    os.chmod(newSTPpath, self.chmod)
+                    os.chown(newSTPpath, self.UID, self.GID)
                 else:
-                    self.CAD.overWriteMask = True
-                    print("Overwriting CAD data per user input file overWriteMask variable.")
-        self.CAD.STPfile = newSTPpath
-        #load STP file using FreeCAD
-        self.CAD.loadSTEP()
+                    falseList = [False, 'F', 'f', 'false', 'False', 'FALSE']
+                    if self.CAD.overWriteMask in falseList:
+                        self.CAD.overWriteMask = False
+                        print("STP file is already in the HEAT database.  Not overwriting...")
+                    else:
+                        self.CAD.overWriteMask = True
+                        print("Overwriting CAD data per user input file overWriteMask variable.")
+            self.CAD.STPfile = newSTPpath
+            #load STP file using FreeCAD
+            self.CAD.loadSTEP()
         return
 
     def getPFCdataFromGUI(self, data):

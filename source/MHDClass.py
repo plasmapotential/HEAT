@@ -20,7 +20,7 @@ import netCDF4
 import logging
 log = logging.getLogger(__name__)
 
-def setupForTerminalUse(gFile=None, shot=None, time=None):
+def setupForTerminalUse(gFile=None, shot=None, time=0.0):
     """
     Sets up an MHD object so that it can be used from python console
     without running HEAT.  This is convenient when a user wants to load
@@ -64,7 +64,8 @@ def setupForTerminalUse(gFile=None, shot=None, time=None):
         print("Making MHD() object with ep included")
         #single geqdsk
         if type(gFile)==str:
-            MHD.ep = EP.equilParams(gFile)
+            EQmode = MHD.determineEQFiletype(gFile)
+            MHD.ep = EP.equilParams(gFile, EQmode=EQmode, time=time)
         #multiple geqdsks, filenames in a list
         elif type(gFile)==list:
             MHD.ep = []
@@ -168,19 +169,23 @@ class MHD:
         return
 
 
-    def testIfNetCDF(self,file):
+    def determineEQFiletype(self,file):
         '''
-        tests to see if a file is a netcdf (.nc)
+        tests to see if an EQ file is a netcdf (.nc) or JSON (.json)
+
+        if neither, we assume it is a GEQDSK
         '''
-        try:
-            netCDF4.Dataset(file)
-            var = True
-        except OSError:
-            var = False
-        return var
+        extension = os.path.splitext(file)[1]
+        if extension == '.nc':
+            EQmode = 'netcdf'
+        elif extension == '.json':
+            EQmode = 'json'
+        else:
+            EQmode = 'geqdsk'
+        return EQmode
 
 
-    def getGEQDSKtimesteps(self, gFileList):
+    def getGEQDSKtimesteps(self, eqList):
         """
         gets timesteps for gfiles in tmpDir
 
@@ -190,17 +195,16 @@ class MHD:
         """
         #check if these GEQDSKs are named according to the HEAT convention g<shot>_<timestep>
         #where shot is an int and timestep can be any float (ie with or without radix)
-        #test1 = np.all(np.array([len(x.split("_")) for x in gFileList]) > 1)
-        #test2 = np.all(np.array([type(g.split('_')[-1])==float for g in gFileList]) > 1)
+        #test1 = np.all(np.array([len(x.split("_")) for x in eqList]) > 1)
+        #test2 = np.all(np.array([type(g.split('_')[-1])==float for g in eqList]) > 1)
         useD3DtimeFmt = True
         useHeatTimeFmt = True
-        for g in gFileList:
+        for g in eqList:
             if ('.' in g) & ('_' not in g):
                 time = g.split('.')[-1]
                 try: time = float(time)
                 except: useD3DtimeFmt = False
             else: useD3DtimeFmt = False
-
             if ('_' in g): 
                 time = g.split('_')[-1]
                 try: time = float(time)
@@ -210,15 +214,12 @@ class MHD:
         print("HEAT time format: " + str(useHeatTimeFmt))
         print("D3D time format: " + str(useD3DtimeFmt))
         log.info("HEAT time format: " + str(useHeatTimeFmt))
-        log.info("D3D time format: " + str(useD3DtimeFmt))        
-        
-        print("HEAT time format: " + str(useHeatTimeFmt))
-        print("D3D time format: " + str(useD3DtimeFmt))
-        log.info("HEAT time format: " + str(useHeatTimeFmt))
-        log.info("D3D time format: " + str(useD3DtimeFmt))        
-        
+        log.info("D3D time format: " + str(useD3DtimeFmt))
+ 
+
         ts = []
-        for i,g in enumerate(gFileList):
+
+        for i,g in enumerate(eqList):
             #GEQDSKs are named using timesteps
             if useHeatTimeFmt:
                 ts.append(float(g.split('_')[-1]))
@@ -230,16 +231,17 @@ class MHD:
                 ts.append(float(i))
         return np.array(ts)
 
-    def getGEQDSK(self, ts, eqFileList):
+    def getGEQDSK(self, ts, eqList):
         """
         copies EQ into the HEAT output tree
 
         if netcdf EQ was provided, converts to GEQDSK (required for MAFOT)
 
         ts is list of timesteps
-        eqFileList is list of names of eq files
+        eqList is list of names of eq files
 
-        ts and eqFileList are indexed to match each other
+        ts and eqList are indexed to match each other if GEQDSK
+           if not GEQDSK, then eqList is single file with all eq inside
 
         geqdsk text file naming format for HEAT is:
         g = 'g'+self.shotFmt.format(self.shot) +'_'+ self.tsFmt.format(t)
@@ -249,7 +251,12 @@ class MHD:
         self.timesteps = ts
         self.gFiles = []
         for i,t in enumerate(ts):
-            eq = eqFileList[i]
+            #if all the EQ are in a single file, account for it here (GUI mode)
+            #otherwise, use the EQ assigned to each timestep (TUI mode)
+            if len(ts) > len(eqList):
+                eq = eqList[0]
+            else:
+                eq = eqList[i]
             #in GUI tmpdir is upload dir.  in TUI, its the machDir
             oldeqfile = self.tmpDir + eq 
             timeDir = self.shotPath + self.tsFmt.format(t) +'/'
@@ -258,9 +265,11 @@ class MHD:
             newgfile = timeDir + self.gFiles[-1]
             
             #check if this is a netcdf and convert to MAFOT compatible file type (GEQDSK)
-            if self.testIfNetCDF(oldeqfile)==True:
+            EQmode = self.determineEQFiletype(oldeqfile)
+            print("Equilibrium file for timestep "+str(t)+" in "+EQmode+" format")
+            if EQmode != 'geqdsk':
                 #convert to GEQDSK (for MAFOT)
-                ep = EP.equilParams(oldeqfile, EQmode='netcdf', nc_time=t)
+                ep = EP.equilParams(oldeqfile, EQmode=EQmode, time=t)
                 self.writeGfile(newgfile, shot=self.shot, time=t, ep=ep)
             else:
                 #file is already in MAFOT compatible format
@@ -798,7 +807,7 @@ class MHD:
 
 
 
-    def writeGfileData(self,gFileList, gFileData):
+    def writeEQdata(self,eqList, eqData):
         """
         writes data passed in string object (from GUI) to files in
         self.tmpDir directory for use later on in HEAT
@@ -809,8 +818,8 @@ class MHD:
         this function is called from GUI because objects are json / base64
         """
         import base64
-        for i,gfile in enumerate(gFileList):
-            data = gFileData[i].encode("utf8").split(b";base64,")[1]
+        for i,gfile in enumerate(eqList):
+            data = eqData[i].encode("utf8").split(b";base64,")[1]
             print("Writing gfile: "+gfile)
             log.info("Writing gfile: "+gfile)
             path = self.tmpDir + gfile

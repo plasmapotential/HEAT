@@ -270,3 +270,13 @@ class IO_HEAT:
         data[:,5] = vecs[:,2]
         np.savetxt(pcfile, data, delimiter=',',fmt='%.10f', header=head)
         return
+
+    def readJSON(self, filename):
+        """
+        reads a JSON file into data object
+        """
+        import json
+        with open(filename, 'r') as file:
+            data = json.load(file) 
+        return data
+    
