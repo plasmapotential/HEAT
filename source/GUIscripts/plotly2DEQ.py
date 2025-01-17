@@ -69,10 +69,6 @@ def makePlotlyEQDiv(shot, time, MachFlag, ep, height=None, gfile=None,
     r = ep.g['R']
     z = ep.g['Z']
     psi = ep.g['psiRZn']
-    print(len(r))
-    print(len(z))
-    print(psi.shape)
-
     R,Z = np.meshgrid(r, z)
 
 

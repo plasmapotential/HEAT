@@ -236,6 +236,7 @@ class MHD:
         copies EQ into the HEAT output tree
 
         if netcdf EQ was provided, converts to GEQDSK (required for MAFOT)
+        
 
         ts is list of timesteps
         eqList is list of names of eq files
@@ -250,6 +251,7 @@ class MHD:
         """
         self.timesteps = ts
         self.gFiles = []
+        self.eqFiles = []
         for i,t in enumerate(ts):
             #if all the EQ are in a single file, account for it here (GUI mode)
             #otherwise, use the EQ assigned to each timestep (TUI mode)
@@ -275,6 +277,19 @@ class MHD:
                 #file is already in MAFOT compatible format
                 shutil.copyfile(oldeqfile, newgfile)
 
+            #if not a geqdsk, still save the eq files into the HEAT tree
+            if EQmode != 'geqdsk':
+                #if there is one eq for all ts, save that to the shotDir
+                if len(eqList) == 1:
+                    #save the JSON/netcdf into the HEAT tree
+                    self.singleEQfile = self.shotPath + eq
+                    shutil.copyfile(oldeqfile, self.singleEQfile)
+                #if there is an eq for each ts, save each to the corresponding timeDir
+                else:
+                    self.singleEQfile = None
+                    neweqfile = timeDir + eq
+                    self.eqFiles.append(neweqfile)
+                    shutil.copyfile(oldeqfile, neweqfile)
         return
 
 
@@ -294,7 +309,7 @@ class MHD:
         self.ep = EP.equilParams(gfile)#, shot, t)#, gtype='heat')
         return
 
-    def makeEFITobjects(self):
+    def makeEFITobjects_orig(self):
         """
         Creates an equilParams_class object for MULTIPLE timesteps. equilParams
         is a class from the ORNL_Fusion github repo, and was developed by
@@ -308,6 +323,33 @@ class MHD:
             gfile = timeDir+self.gFiles[idx]
             self.ep[idx] = EP.equilParams(gfile)#, gType='heat')
         return
+
+    def makeEFITobjects(self):
+        """
+        Creates an equilParams_class object for MULTIPLE timesteps. equilParams
+        is a class from the ORNL_Fusion github repo, and was developed by
+        A. Wingen
+
+        gfiles should be placed in the dataPath before running this function
+        """
+        self.ep= ['None' for i in range(len(self.timesteps))]
+
+        for idx,t in enumerate(self.timesteps):
+            timeDir = self.shotPath + self.tsFmt.format(t) +'/'
+            #netcdf or json
+            if self.EQmode != 'geqdsk':
+                if self.singleEQfile == None:
+                    eqfile = timeDir+self.eqFiles[idx]
+                else:
+                    eqfile = self.singleEQfile
+                self.ep[idx] = EP.equilParams(eqfile, EQmode=self.EQmode, time=t)
+            #geqdsk
+            else:
+                gfile = timeDir+self.gFiles[idx]
+                self.ep[idx] = EP.equilParams(gfile)#, gType='heat')
+        return
+
+
 
 
     def Bfield_pointcloud(self, ep, R, Z, phi, powerDir=None, normal=False,

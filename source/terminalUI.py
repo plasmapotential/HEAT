@@ -395,7 +395,7 @@ class TUI():
         """
         #initialize MHD
         self.ENG.MHD.tmpDir = tmpDir
-        self.ENG.MHD.tree = 'EFIT02'
+        self.ENG.MHD.EQmode = self.ENG.MHD.determineEQFiletype(eqFiles[0])
         self.ENG.MHD.getGEQDSK(ts, eqFiles)
         self.ENG.MHD.makeEFITobjects()
         self.ENG.MHD.psiSepLimiter = None

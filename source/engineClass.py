@@ -375,11 +375,11 @@ class engineObj():
         return
 
 
-    def getMHDInputs(self,shot=None,traceLength=None,dpinit=None,
+    def getMHDInputsForGUI(self,shot=None,traceLength=None,dpinit=None,
                      eqList=None,eqData=None,plasma3Dmask=None,
                      ):
         """
-        Get the mhd inputs from the gui or input file
+        Get the mhd inputs.  only used in GUI mode
         """
         tools.vars2None(self.MHD)
         tools.read_input_file(self.MHD, infile=self.infile)
@@ -403,8 +403,6 @@ class engineObj():
         if plasma3Dmask is not None:
             self.plasma3D.plasma3Dmask = plasma3Dmask
 
-        self.MHD.tree = 'EFIT02'
-
         #determine if the EQ are GEQDSKs or IMAS formatted JSON / NetCDF
         #and get the timesteps accordingly
         self.MHD.EQmode = self.MHD.determineEQFiletype(eqList[0]) #assume we are not mixing and matching EQ types
@@ -421,7 +419,10 @@ class engineObj():
         self.MHD.shotPath = self.shotPath
 
         self.MHD.getGEQDSK(self.timesteps,eqList)
-        self.MHD.makeEFITobjects()
+        if self.MHD.EQmode != 'geqdsk':
+            self.MHD.makeEFITobjects()
+        else:
+            self.MHD.makeEFITobjects()
         self.NCPUs = multiprocessing.cpu_count() - 2 #reserve 2 cores for overhead
         self.MHD.psiSepLimiter = None
 
