@@ -784,7 +784,7 @@ def loadMHD(n_clicks,shot,traceLength,dpinit,eqList,eqData,plasma3Dmask,dataPath
         if type(eqData) is not list:
             eqData = [eqData]
 
-    gui.getMHDInputs(shot=shot,
+    gui.getMHDInputsForGUI(shot=shot,
                      traceLength=traceLength,
                      dpinit=dpinit,
                      eqList=eqList,
@@ -806,11 +806,19 @@ def loadMHD(n_clicks,shot,traceLength,dpinit,eqList,eqData,plasma3Dmask,dataPath
         data = interpData.to_dict('records')
         #interpData = [dict([{'filename':g, 'timestep':''} for g in eqList])]
     marks = {}
-    for t in ts:
+    tick_interval = int(len(ts)/10) #max 10 tick marks
+    for tIdx,t in enumerate(ts):
         if t in tAll:
-            marks.update({t:'{}'.format(t)})
+            #display all tick marks
+            #marks.update({t:'{}'.format(t)})
+            #hide all tick marks
+            #marks.update({t:'{}'.format("")})
+            #only display some tick marks
+            if len(ts) > 10:
+                marks.update({t: str(t) if tIdx % tick_interval == 0 else ""})
+            else:
+                marks.update({t:'{}'.format(t)})
     value = ts[0]
-
 
     MHDdata = {
         'Shot Number':shot,
@@ -3706,15 +3714,17 @@ def MHDplot():
         children=[
             dcc.Graph(id="2DEQ", className="EQplot"),
             html.Br(),
+            #the dcc.Slider values below are overwritten in the loadMHD function
+            #these are for initialization only (min, max, value, marks)
             dcc.Slider(
                 id='timeSlider',
-                min=0,
-                max=1000,
-                #step=None,
-                value=10,
-                #marks={50: 'Load MHD to see timesteps'},
-                marks=None,
+                min=0, 
+                max=100,
+                step=None,
+                value=None,
+                marks={20: 'Load MHD to see timesteps'},
                 tooltip={"placement": "bottom", "always_visible": True},
+                updatemode='drag',
             ),
         ],
     )
@@ -3740,6 +3750,8 @@ def slideEQplot(value, dummy1, tom, themeData):
         raise PreventUpdate
     try: idx = np.where(value==gui.MHD.timesteps)[0][0]
     except:
+        print(value)
+        print(gui.MHD.timesteps)
         print("Trouble loading MHD EQ")
         raise PreventUpdate
     ep = gui.MHD.ep[idx]
