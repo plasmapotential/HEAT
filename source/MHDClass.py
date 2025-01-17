@@ -130,6 +130,9 @@ class MHD:
                             'tmax',
                             'traceLength',
                             'dpinit',
+                            'psiMult',
+                            'BtMult',
+                            'IpMult',
                             ]
 
         return
@@ -147,6 +150,9 @@ class MHD:
                     'tmin',
                     'tmax',
                     'dpinit',
+                    'psiMult',
+                    'BtMult',
+                    'IpMult',
                 ]
 
         for var in integers:
@@ -248,6 +254,10 @@ class MHD:
         g = 'g'+self.shotFmt.format(self.shot) +'_'+ self.tsFmt.format(t)
 
         if netcdf, then should follow the IMAS standards
+
+        psiMult is multiplier for psi quantities (ie psiRZ, psiSep, psiAxis)
+        BtMult is multiplier for Bt quantities (Bt, Fpol)
+        IpMult is multipler for Ip 
         """
         self.timesteps = ts
         self.gFiles = []
@@ -271,7 +281,8 @@ class MHD:
             print("Equilibrium file for timestep "+str(t)+" in "+EQmode+" format")
             if EQmode != 'geqdsk':
                 #convert to GEQDSK (for MAFOT)
-                ep = EP.equilParams(oldeqfile, EQmode=EQmode, time=t)
+                ep = EP.equilParams(oldeqfile, EQmode=EQmode, time=t, 
+                                    psiMult=self.psiMult, BtMult=self.BtMult, IpMult=self.IpMult)
                 self.writeGfile(newgfile, shot=self.shot, time=t, ep=ep)
             else:
                 #file is already in MAFOT compatible format
@@ -342,11 +353,12 @@ class MHD:
                     eqfile = timeDir+self.eqFiles[idx]
                 else:
                     eqfile = self.singleEQfile
-                self.ep[idx] = EP.equilParams(eqfile, EQmode=self.EQmode, time=t)
+                self.ep[idx] = EP.equilParams(eqfile, EQmode=self.EQmode, time=t, 
+                                              psiMult=self.psiMult, BtMult=self.BtMult, IpMult=self.IpMult)
             #geqdsk
             else:
                 gfile = timeDir+self.gFiles[idx]
-                self.ep[idx] = EP.equilParams(gfile)#, gType='heat')
+                self.ep[idx] = EP.equilParams(gfile, psiMult=self.psiMult, BtMult=self.BtMult, IpMult=self.IpMult)
         return
 
 

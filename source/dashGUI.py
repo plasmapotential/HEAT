@@ -470,6 +470,9 @@ def inputDragDrop(file, contents, MachFlag):
               [State('shot', 'value'),
                State('traceLength', 'value'),
                State('dpinit', 'value'),
+               State('psiMult1', 'value'),
+               State('BtMult1', 'value'),
+               State('IpMult1', 'value'),
                State('gridRes', 'value'),
                State('hfMode', 'value'),
                State('eichlqCNmode', 'value'),
@@ -532,6 +535,9 @@ def saveGUIinputs(  n_clicks,
                     shot,
                     traceLength,
                     dpinit,
+                    psiMult,
+                    BtMult,
+                    IpMult,
                     gridRes,
                     hfMode,
                     eichlqCNmode,
@@ -606,6 +612,9 @@ def saveGUIinputs(  n_clicks,
     data['traceLength'] = traceLength
     data['dpinit'] = dpinit
     data['dataPath'] = dataLoc
+    data['psiMult'] = psiMult
+    data['BtMult'] = BtMult
+    data['IpMult'] = IpMult
 
     #hf variables
     data['hfMode'] = hfMode
@@ -699,6 +708,12 @@ def buildMHDbox():
                 dbc.Input(id="traceLength"),
                 dbc.Label("Toroidal Step Size [degrees]"),
                 dbc.Input(id="dpinit"),
+                dbc.Label("Multiplier for Psi (RZ, sep, axis) Values"),
+                dbc.Input(id="psiMult1"),
+                dbc.Label("Multiplier for Bt (Bt0, Fpol) Values"),
+                dbc.Input(id="BtMult1"),
+                dbc.Label("Multiplier for Ip Values"),
+                dbc.Input(id="IpMult1"),
                 html.Br(),
                 dbc.Label("Load MHD Equilibria:"),
                 dcc.Upload(
@@ -751,9 +766,13 @@ def buildMHDbox():
               State('gfiletable-upload', 'contents'),
               State('plasma3Dmask', 'value'),
               State('dataPath', 'value'),
-              State('MachFlag', 'value')]
+              State('MachFlag', 'value'),
+              State('psiMult1', 'value'),
+              State('BtMult1', 'value'),
+              State('IpMult1', 'value')]
               )
-def loadMHD(n_clicks,shot,traceLength,dpinit,eqList,eqData,plasma3Dmask,dataPath,MachFlag):
+def loadMHD(n_clicks,shot,traceLength,dpinit,eqList,eqData,plasma3Dmask,dataPath,MachFlag,
+            psiMult, BtMult, IpMult):
     """
     Load MHD
     """
@@ -790,6 +809,9 @@ def loadMHD(n_clicks,shot,traceLength,dpinit,eqList,eqData,plasma3Dmask,dataPath
                      eqList=eqList,
                      eqData=eqData,
                      plasma3Dmask=plasma3Dmask,
+                     psiMult=psiMult,
+                     BtMult=BtMult,
+                     IpMult=IpMult,
                     )
 
     ts = gui.MHD.timesteps
@@ -825,6 +847,9 @@ def loadMHD(n_clicks,shot,traceLength,dpinit,eqList,eqData,plasma3Dmask,dataPath
         'Trace Distance [degrees]':traceLength,
         'Toroidal Step Size [degrees]':dpinit,
         '3D Plasma? [0=False]':plasma3Dmask,
+        'Psi Multiplier':psiMult,
+        'Bt Multiplier':BtMult,
+        'Ip Multiplier':IpMult,
         }
 
     return tminMHD, tmaxMHD, marks, value, data, MHDdata
@@ -3851,6 +3876,9 @@ Session storage callbacks and functions
 @app.callback([Output('shot', 'value'),
                Output('traceLength', 'value'),
                Output('dpinit', 'value'),
+               Output('psiMult1', 'value'),
+               Output('BtMult1', 'value'),
+               Output('IpMult1', 'value'),
                Output('gridRes', 'value'),
                Output('hfMode', 'value'), #this causes undefined vars
                Output('eichlqCNmode', 'value'), #this causes undefined vars
@@ -3958,6 +3986,9 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
     return [data.get('shot', ''),
             data.get('traceLength', ''),
             data.get('dpinit', ''),
+            data.get('psiMult', ''),
+            data.get('BtMult', ''),
+            data.get('IpMult', ''),
             data.get('gridRes', ''),
             data.get('hfMode', ''), #these dropdowns cause undefined text boxes
             data.get('lqCNmode', ''),

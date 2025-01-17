@@ -377,6 +377,7 @@ class engineObj():
 
     def getMHDInputsForGUI(self,shot=None,traceLength=None,dpinit=None,
                      eqList=None,eqData=None,plasma3Dmask=None,
+                     psiMult=1.0, BtMult=1.0, IpMult=1.0,
                      ):
         """
         Get the mhd inputs.  only used in GUI mode
@@ -402,6 +403,11 @@ class engineObj():
 
         if plasma3Dmask is not None:
             self.plasma3D.plasma3Dmask = plasma3Dmask
+
+        #multipliers for EQ variables
+        self.MHD.psiMult = psiMult
+        self.MHD.BtMult = BtMult
+        self.MHD.IpMult = IpMult
 
         #determine if the EQ are GEQDSKs or IMAS formatted JSON / NetCDF
         #and get the timesteps accordingly
@@ -3384,6 +3390,9 @@ class engineObj():
                     'tmax':None,
                     'traceLength': None,
                     'dpinit': None,
+                    'psiMult': None,
+                    'BtMult': None,
+                    'IpMult':None,
                     'dataPath': None,
                     'hfMode': None,
                     'lqCN': None,
@@ -3489,6 +3498,9 @@ class engineObj():
                     'tmax': self.MHD.tmax,
                     'traceLength': self.MHD.traceLength,
                     'dpinit': self.MHD.dpinit,
+                    'psiMult':self.MHD.psiMult,
+                    'BtMult':self.MHD.BtMult,
+                    'IpMult':self.MHD.IpMult,                    
                     'gridRes': self.CAD.gridRes,
                     'hfMode': self.HF.hfMode,
                     'lqEich': self.HF.lqCN,
@@ -3573,6 +3585,9 @@ class engineObj():
                     'tmax': self.MHD.tmax,
                     'traceLength': self.MHD.traceLength,
                     'dpinit': self.MHD.dpinit,
+                    'psiMult':self.MHD.psiMult,
+                    'BtMult':self.MHD.BtMult,
+                    'IpMult':self.MHD.IpMult,
                     'gridRes': self.CAD.gridRes,
                     'hfMode': self.HF.hfMode,
                     'lqEich': self.HF.lqCN,

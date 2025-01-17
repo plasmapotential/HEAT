@@ -25,6 +25,9 @@ dataPath, /home/tom/data/HEAT/
 plasma3Dmask, 0 #1=true, 0=false
 torFilt, True
 psiFilt, True
+psiMult, 1.0
+BtMult, 1.0
+IpMult, 1.0
 #==============================================================
 #                Optical HF Variables
 #==============================================================
