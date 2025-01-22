@@ -172,7 +172,7 @@ class Runaways:
 
     def calc_gamma(self, v):
         """
-        Takes in the velocity and returns the relativistic gamma
+        Takes in the velocity and returns the relativistic gamma (Lorentz factor)
         necessary when calculating helical trajectories
         """
         
