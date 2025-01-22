@@ -644,6 +644,9 @@ def saveGUIinputs(  n_clicks,
     elif hfMode == 'tophat':
         data['lqCN'] = lqTopHat
         data['lqCNmode'] = 'user'
+    
+    # elif hfMode == 'rzqprofile':
+    #     data['rzqFile'] = rzqFile
 
     data['fracUI'] = fracUI
     data['fracUO'] = fracUO
@@ -671,6 +674,7 @@ def saveGUIinputs(  n_clicks,
     data['ionMassAMU'] = ionMassAMU
     data['vMode'] = vMode
     data['ionFrac'] = ionFrac
+    # data['radFile'] = radFile
     data['phiMin'] = phiMin
     data['phiMax'] = phiMax
     data['Ntor'] = Ntor
@@ -932,7 +936,8 @@ def buildHFbox():
                     {'label': 'Multi-Exponential', 'value': 'multiExp'},
                     {'label': 'Limiter', 'value': 'limiter'},
                     {'label': 'Top Hat', 'value': 'tophat'},
-                    {'label': 'From qFiles', 'value': 'qFile'}
+                    {'label': 'From qFiles', 'value': 'qFile'},
+                    {'label': 'From rzq profile', 'value': 'rzqprofile'}
                     ],
                 value=None,
                 ),
@@ -1023,20 +1028,21 @@ def loadHFSettings(mode=None, hidden=False, sessionData=None):
     #do this hidden business so that we can always load defaults into these id's
     #hideMask corresponds to the following parameters:
     #[eichProfile, commonRegion, privateRegion]
-    hideMask = ['hiddenBox','hiddenBox','hiddenBox','hiddenBox', 'hiddenBox']
+    hideMask = ['hiddenBox','hiddenBox','hiddenBox','hiddenBox', 'hiddenBox', 'hiddenBox']
     if mode=='eich':
-        hideMask = ['hfInput','hiddenBox','hiddenBox','hiddenBox','hiddenBox']
+        hideMask = ['hfInput','hiddenBox','hiddenBox','hiddenBox','hiddenBox', 'hiddenBox']
     elif mode=='limiter':
-        hideMask = ['hiddenBox','hiddenBox','hfInput','hiddenBox','hiddenBox'] #common flux region
+        hideMask = ['hiddenBox','hiddenBox','hfInput','hiddenBox','hiddenBox', 'hiddenBox'] #common flux region
     elif mode=='multiExp':
-        hideMask = ['hiddenBox','hfInput','hiddenBox','hiddenBox','hiddenBox'] #common + private flux region
+        hideMask = ['hiddenBox','hfInput','hiddenBox','hiddenBox','hiddenBox','hiddenBox'] #common + private flux region
     elif mode=='qFile':
-        hideMask = ['hiddenBox','hiddenBox','hiddenBox','hfInput','hiddenBox'] #common + private flux region
+        hideMask = ['hiddenBox','hiddenBox','hiddenBox','hfInput','hiddenBox','hiddenBox'] #common + private flux region
     elif mode=='tophat':
-        hideMask = ['hiddenBox','hiddenBox','hiddenBox', 'hiddenBox','hfInput'] #common + private flux region
-
+        hideMask = ['hiddenBox','hiddenBox','hiddenBox', 'hiddenBox','hfInput','hiddenBox'] #common + private flux region
+    elif mode=='rzqprofile': 
+        hideMask = ['hiddenBox','hiddenBox','hiddenBox','hiddenBox','hiddenBox', 'hfInput'] #common + private flux region
     if hidden==True or mode==None:
-        hideMask=['hiddenBox','hiddenBox','hiddenBox','hiddenBox','hiddenBox']
+        hideMask=['hiddenBox','hiddenBox','hiddenBox','hiddenBox','hiddenBox','hiddenBox']
 
 
     #if we are using qFile, hide Psol inputs
@@ -1071,6 +1077,7 @@ def loadHFSettings(mode=None, hidden=False, sessionData=None):
         sessionData['fG'] = None
         sessionData['qFilePath'] = None
         sessionData['qFileTag'] = None
+        sessionData['rzqFile'] = None
 
 
     return html.Div(
@@ -1109,6 +1116,12 @@ def loadHFSettings(mode=None, hidden=False, sessionData=None):
                     children=[
                         tophatParameters(hideMask[4], sessionData),
                         ]
+                ),
+                # rzqFile
+                html.Div(
+                    children=[
+                        rzqprofileParameters(hideMask[5]),
+                    ]
                 ),
                 PsolInput(hidden, sessionData),
                     ],
@@ -1499,6 +1512,52 @@ def  tophatParameters(className, data):
         )
     return div
 
+def rzqprofileParameters(className):
+    row1 = html.Div(
+            className="colBox",
+                id="rzqprofilebox",
+                children=[
+                    dcc.Upload(
+                        className="rowBox",
+                        id='rzqprofile-upload',
+                        children=html.Div([
+                            'Drag and Drop or ',
+                            html.A('Select rzq profile Files')
+                        ]),
+                        style={
+                            'width': '100%', 'height': '60px', 'lineHeight': '60px',
+                            'borderWidth': '1px', 'borderStyle': 'dashed',
+                            'borderRadius': '5px', 'textAlign': 'center', 'margin': '10px',
+                            'align-items':'left'
+                            },
+                        multiple=True,
+                        ),
+                html.Br(),
+                html.Div(id="hiddenDivrzqprofileUpload"),
+                html.Br(),
+
+        ],
+        )
+    div = html.Div(
+        className=className,
+        children=[
+            row1,
+            ]
+        )
+    return div
+
+@app.callback([Output('hiddenDivrzqprofileUpload', 'children')],
+              [Input('rzqprofile-upload', 'filename')],
+              [State('MachFlag', 'value')])
+
+def rzqprofileUpload(rzqFile, MachFlag):
+    if MachFlag is None:
+        raise PreventUpdate
+    if rzqFile is None:
+        raise PreventUpdate
+    else:
+        return[html.Label("Loaded rzq profile: "+ rzqFile[0], className="text-success")]
+
 
 #def commonRegionParameters():
 #    """
@@ -1580,6 +1639,8 @@ def  tophatParameters(className, data):
                State('fG', 'value'),
                State('qFilePath', 'value'),
                State('qFileTag', 'value'),
+               State('rzqprofile-upload', 'filename'),
+               State('rzqprofile-upload', 'contents')
                ])
 def loadHF(n_clicks,hfMode,MachFlag,
             lqEich,S,lqCN,lqCF,lqPN,lqPF,lqTopHat,
@@ -1589,7 +1650,8 @@ def loadHF(n_clicks,hfMode,MachFlag,
             multiExplqCNmode,multiExplqCFmode,multiExplqPNmode,multiExplqPFmode,
             limiterlqCNmode,limiterlqCFmode,limlqCN,limlqCF,limfracCN,limfracCF,
             qBG,P,radFrac,fG,
-            qFilePath, qFileTag):
+            qFilePath, qFileTag,
+            rzqFile, rzqFiledata):
     if MachFlag is None:
         raise PreventUpdate
     else:
@@ -1644,6 +1706,18 @@ def loadHF(n_clicks,hfMode,MachFlag,
             lqPF = 0.0          
             Smode = None 
             qFileTag = None
+            qFilePath = None
+        elif hfMode == 'rzqprofile': 
+            lqCNmode = None
+            lqCFmode = None
+            lqPNmode = None
+            lqPFmode = None
+            lqCN = 0.0
+            lqCF = 0.0
+            lqPN = 0.0
+            lqPF = 0.0
+            SMode = None
+            qFileTag = None
             qFilePath = None            
         else: #eich mode is default
             lqCNmode = eichlqCNmode
@@ -1666,7 +1740,8 @@ def loadHF(n_clicks,hfMode,MachFlag,
                         fracUI,fracUO,fracLI,fracLO,
                         lqCNmode,lqCFmode,lqPNmode,lqPFmode,SMode,
                         qBG,P,radFrac,fG,
-                        qFilePath,qFileTag)
+                        qFilePath,qFileTag,
+                        rzqFile[0], rzqFiledata[0])
 
 
         #Update output tab table
@@ -3979,6 +4054,7 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('fG', ''),
             data.get('qFilePath', ''),
             data.get('qFileTag', ''),
+            # data.get('radFile',''),
             data.get('OFtMin', ''),
             data.get('OFtMax', ''),
             data.get('meshMinLevel', ''),
@@ -3995,6 +4071,7 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
             data.get('ionMassAMU',''),
             #data.get('vMode',''),
             data.get('ionFrac',''),
+            # data.get('radFile',''),
             data.get('phiMin',''),
             data.get('phiMax',''),
             data.get('Ntor',''),

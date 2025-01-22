@@ -115,6 +115,7 @@ class heatFlux:
           that should be used for the heat flux files.  For example, to read a previous
           HEAT runs photon radiation data, tag would be HF_rad and HEAT would read files
           named HF_rad.csv.  Set to None when no file should be read.
+        :rzqFile: Path for the rzqprofile that contains a csv file with columns R(m),Z(m),q||(W/m2)
 
         """
 
@@ -145,6 +146,7 @@ class heatFlux:
                             'fG',
                             'qFilePath',
                             'qFileTag',
+                            'rzqFile',
                             ]
         return
 
@@ -554,6 +556,33 @@ class heatFlux:
         q[nan_locations] = 0.0
         q[inf_locations] = 0.0
         return q
+    
+    def from_rzq_profile(self, rzq_data, PFC):
+        """"
+        q is from a csv file with R(m), Z(m), q(W/m2) data. This can be taken from SOLPS simulation at the target grid.
+        Psol and q0 for scaling will not be necessary. This will just map the input heatflux data directly
+        to the PFCs.
+        q is mapped from the R,Z grid to OMP
+        q1 output is in MW/m2
+        """
+
+        R = rzq_data['R(m)'].to_numpy()
+        Z = rzq_data['Z(m)'].to_numpy()
+        Q = rzq_data['q(W/m2)'].to_numpy()
+        # make Q positive. Sometimes, the q values from SOLPS is negative to indicate direction.
+        negs = np.where(Q<0.0)[0]
+        Q[negs] *= -1.0
+        psi_rzq = PFC.ep.psiFunc.ev(R,Z) #convert (r,z) coordinate to psi
+        psi_rzq_omp = self.map_R_psi(psi_rzq, PFC) #map the psi_rzq to OMP
+
+        q_interp = scinter.UnivariateSpline(psi_rzq_omp, Q, s = 0, ext = 'const') #interpolate the value of q at OMP
+        psi = self.map_R_psi(PFC.psimin, PFC) #map PFC centers to OMP
+        print("psi:", psi)
+        q1 = q_interp(psi) #calculate the value of q basesd on mapped to OMP PFC centers
+        print('q1:', q1)
+        q1 = q1/1e6 #input is in W/m2
+        
+        return q1
 
     def findScalingCoeffEich(self, PFC, lqEich, S, P):
         """
@@ -984,7 +1013,14 @@ class heatFlux:
             q *= q0
             print("Tophat lqCN: {}".format(self.lqCN))
             log.info("Tophat lqCN: {}".format(self.lqCN))
-
+        
+        #rzq profile
+        elif self.hfMode == 'rzqprofile':
+            q[use] = self.from_rzq_profile(self.rzq_data, PFC)
+            print("Warning: using R,Z,Q profile bypasses energy balance normalization.")
+            print("P_target may not equal PSOL for RZQ profiles.")
+            log.info("Warning: using R,Z,Q profile bypasses energy balance normalization.")
+            log.info("P_target may not equal PSOL for RZQ profiles.")
 
         #Eich Profile
         else:
@@ -1420,6 +1456,33 @@ class heatFlux:
 
         return val
 
+    def readrzqprofile(self, file):
+        if file != None:
+            print("Reading rzq profile data: ",file)
+            log.info("Reading data: "+file)
+            self.rzq_data = pd.read_csv(file, header=0, names=['R(m)','Z(m)','q(W/m2)'])
+        return 
+
+    def writerzqFileData(self,rzqFile,rzqFiledata,tmpDir):
+        """
+        writes data passed in string object (from GUI) to files in
+        tmpDir directory for use later on in HEAT
+
+        the self.tmpDir directory is accessible to the GUI users for uploading
+        and downloading
+
+        this function is called from GUI because objects are json / base64
+        """
+        import base64
+        data = rzqFiledata.encode("utf8").split(b";base64,")[1]
+        path = tmpDir + rzqFile
+        print("Writing local rzqFile: "+path)
+        
+        log.info("Writing local rzqFile: "+path)
+        with open(path, 'wb') as f:
+            f.write(base64.decodebytes(data))
+
+        return path
 
     def readMAFOTLaminarOutput(self,PFC,file):
         """
@@ -1602,9 +1665,14 @@ class heatFlux:
 
         elif self.hfMode == 'tophat':
             HFdict["\u03BB Mode"] = 'TopHat'
-            HFdict["Heat Flux Width (\u03BBq) [mm]"] = self.lqCN           
+            HFdict["Heat Flux Width (\u03BBq) [mm]"] = self.lqCN    
 
-        if self.hfMode != 'qFile':
+        
+        elif self.hfMode == 'rzqprofile':
+            HFdict["Heat Flux Mode"] = 'Read HF from rzq profile data'
+            HFdict['rzqFile'] = self.rzqFile       
+
+        if self.hfMode != 'qFile' or self.hfMode != 'rzqprofile':
             HFdict["Source Power (P) [MW]"] = self.P
             HFdict["Fraction of P radiated by photons"] = self.radFrac
             HFdict["Power Crossing Separatrix (Psol) [MW]"] = self.Psol
