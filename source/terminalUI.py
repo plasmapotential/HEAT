@@ -279,7 +279,7 @@ class TUI():
                 #read CAD and initialize CAD objects
                 #note: current version of HEAT only supports single CAD file
                 #per tag
-                self.loadCAD(CADfiles[0])
+                self.loadCAD(CADfiles[0], machInDir)
 
                 #read PFC file and initialize PFC objects
                 #note: current version of HEAT only supports single CAD file
@@ -403,12 +403,13 @@ class TUI():
         self.ENG.MHD.nTrace = int(self.ENG.MHD.traceLength / self.ENG.MHD.dpinit)
         return
 
-    def loadCAD(self, STPfile):
+    def loadCAD(self, CADfile, machInDir):
         """
         loads CAD files into CAD object
         """
         self.ENG.CAD.rootDir = rootDir #set HEAT rootDir
-        self.ENG.getCADfromTUI(STPfile)
+        self.ENG.CAD.machInDir = machInDir #HEATrun directory
+        self.ENG.getCADfromTUI(CADfile)
         return
 
     def loadPFCs(self, PFCfile):

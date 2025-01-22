@@ -865,7 +865,7 @@ class engineObj():
 
         return
 
-    def getCADfromTUI(self,STPfile):
+    def getCADfromTUI(self,CADfile):
         """
         Loads CAD file for terminal users.  Here we call this file an STPfile,
         but it could be other formats (ie BREP, FCStd, IGES, etc.)
@@ -873,7 +873,7 @@ class engineObj():
         tools.makeDir(self.CAD.STPpath, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
         #if CAD file is set to None, do not load
         #(this is true when user brings their own meshes and no STEP file)
-        if type(STPfile) != str:
+        if type(CADfile) != str:
             print("CADfile column in batchFile set to None.  Skipping CAD load.")
             print("This is ok if you are bringing your own mesh (BYOM)")
             log.info("CADfile column in batchFile set to None.  Skipping CAD load.")
@@ -881,17 +881,17 @@ class engineObj():
 
         else:
             #get file name
-            stpName = os.path.basename(STPfile)
+            stpName = os.path.basename(CADfile)
             #time last modified
-            mtime_orig = os.stat(STPfile).st_mtime
+            mtime_orig = os.stat(CADfile).st_mtime
             #time last read
-            atime_orig = os.stat(STPfile).st_atime
+            atime_orig = os.stat(CADfile).st_atime
             #we will copy to this cache directory for future use
             newSTPpath = self.CAD.STPpath + stpName
             #check to see if this STP file exists and write data to the file
             if os.path.isfile(newSTPpath) == False:
                 print("New STP file.  Writing")
-                shutil.copyfile(STPfile, newSTPpath)
+                shutil.copyfile(CADfile, newSTPpath)
                 #set modified timestamps to match original
                 os.utime(newSTPpath, (atime_orig, mtime_orig))
                 self.CAD.overWriteMask = True #we need to also overwrite meshes
@@ -903,7 +903,7 @@ class engineObj():
                 #if file was modified, overwrite
                 if mtime_orig != mtime_new:
                     print("File was modified since last HEAT upload.  Overwriting...")
-                    shutil.copyfile(STPfile, newSTPpath)
+                    shutil.copyfile(CADfile, newSTPpath)
                     print(atime_orig)
                     print(mtime_orig)
                     os.utime(newSTPpath, (atime_orig, mtime_orig))
@@ -998,7 +998,8 @@ class engineObj():
         log.info(self.CAD.ROIList)
 
         #Find potential intersections by file as they correspond to ROI PFCs,
-        # then mesh 'em using FreeCAD Standard mesh algorithm
+        # then mesh them using FreeCAD Standard mesh algorithm
+        # or use user supplied meshes (BYOM=True)
         self.CAD.getIntersectsFromFile(self.timestepMap)
         self.CAD.getIntersectMeshes(resolution=self.CAD.gridRes)
         self.CAD.writeMesh2file(self.CAD.intersectMeshes,

@@ -259,6 +259,14 @@ class MHD:
         BtMult is multiplier for Bt quantities (Bt, Fpol)
         IpMult is multipler for Ip 
         """
+        #setup multipliers if necessary
+        if self.psiMult == None:
+            self.psiMult = 1.0
+        if self.BtMult == None:
+            self.BtMult = 1.0
+        if self.IpMult == None:
+            self.IpMult = 1.0
+
         self.timesteps = ts
         self.gFiles = []
         self.eqFiles = []
@@ -320,21 +328,6 @@ class MHD:
         self.ep = EP.equilParams(gfile)#, shot, t)#, gtype='heat')
         return
 
-    def makeEFITobjects_orig(self):
-        """
-        Creates an equilParams_class object for MULTIPLE timesteps. equilParams
-        is a class from the ORNL_Fusion github repo, and was developed by
-        A. Wingen
-
-        gfiles should be placed in the dataPath before running this function
-        """
-        self.ep= ['None' for i in range(len(self.timesteps))]
-        for idx,t in enumerate(self.timesteps):
-            timeDir = self.shotPath + self.tsFmt.format(t) +'/'
-            gfile = timeDir+self.gFiles[idx]
-            self.ep[idx] = EP.equilParams(gfile)#, gType='heat')
-        return
-
     def makeEFITobjects(self):
         """
         Creates an equilParams_class object for MULTIPLE timesteps. equilParams
@@ -344,6 +337,7 @@ class MHD:
         gfiles should be placed in the dataPath before running this function
         """
         self.ep= ['None' for i in range(len(self.timesteps))]
+
 
         for idx,t in enumerate(self.timesteps):
             timeDir = self.shotPath + self.tsFmt.format(t) +'/'

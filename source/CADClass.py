@@ -227,27 +227,61 @@ class CAD:
         """
         Checks to see if STLs at desired resolution exist.  If they do, load em.
         If they don't, create them.
+
+        BYOM = Bring Your Own Mesh.  This will be set to True when using
+        terminal user interface if PFC csv file has an STL instead of
+        a part name in the PFCname column
         """
+        self.BYOM = False
         for idx,partnum in enumerate(self.ROI):
-            if resolution == None:
-                if type(self.ROIresolutions[idx]) == str:
-                    resolution = self.ROIresolutions[idx]
+
+            #user supplied STL file ( Bring Your Own Mesh (BYOM) )
+            _, extension = os.path.splitext(partnum)
+            if extension == '.stl':
+                print("Using user supplied mesh")
+                log.info("Using user supplied mesh")
+                #load mesh from file
+                self.BYOM=True
+                self.loadROIMesh(self.machInDir + partnum, idx)
+            #use HEAT generated mesh 
+            else:
+                #if BYOM was previously set to True, user is trying to mix user supplied
+                #meshes with the HEAT meshing algorithm -> not supported
+                if self.BYOM == True:
+                    print("\n===Meshing Error:===")
+                    print("You cannot mix user supplied meshes with the HEAT meshing algs.")
+                    print("Either change your PFC file so that all PFCnames correspond")
+                    print("to user supplied mesh objects (ie suffix .stl), or change")
+                    print("your PFC file so that all PFCnames correspond to STEP file") 
+                    print("object names (not .stls) for HEAT meshing.")
+                    print("Exiting...\n")
+                    log.info("\n===Meshing Error:===")
+                    log.info("You cannot mix user supplied meshes with the HEAT meshing algs.")
+                    log.info("Either change your PFC file so that all PFCnames correspond")
+                    log.info("to user supplied mesh objects (ie suffix .stl), or change")
+                    log.info("your PFC file so that all PFCnames correspond to STEP file") 
+                    log.info("object names (not .stls)  for HEAT meshing.")
+                    log.info("Exiting...\n")
+                    sys.exit()
+                if resolution == None:
+                    if type(self.ROIresolutions[idx]) == str:
+                        resolution = self.ROIresolutions[idx]
+                    else:
+                        resolution = float(self.ROIresolutions[idx])
+
+                #standard meshing algorithm
+                if type(resolution) == str:
+                    name = self.STLpath + partnum + "___"+resolution+".stl".format(resolution)
+                #mefisto meshing algorithm
                 else:
-                    resolution = float(self.ROIresolutions[idx])
+                    name = self.STLpath + partnum + "___{:.6f}mm.stl".format(resolution)
 
-            #standard meshing algorithm
-            if type(resolution) == str:
-                name = self.STLpath + partnum + "___"+resolution+".stl".format(resolution)
-            #mefisto meshing algorithm
-            else:
-                name = self.STLpath + partnum + "___{:.6f}mm.stl".format(resolution)
-
-            if os.path.exists(name) and self.overWriteMask == False:
-                print("Mesh exists, loading...")
-                self.loadROIMesh(name,idx)
-            else:
-                print("New mesh.  Creating...")
-                self.ROIobjFromPartnum(partnum,idx)
+                if os.path.exists(name) and self.overWriteMask == False:
+                    print("Mesh exists, loading...")
+                    self.loadROIMesh(name,idx)
+                else:
+                    print("New mesh.  Creating...")
+                    self.ROIobjFromPartnum(partnum,idx)
 
 
         #global mesh translations if requested
@@ -265,19 +299,49 @@ class CAD:
         """
         if resolution == None:  resolution=self.gridRes
         for partnum in self.intersectList:
-            #standard meshing algorithm
-            if type(resolution) == str:
-                name = self.STLpath + partnum + "___"+resolution+".stl".format(resolution)
-            #mefisto meshing algorithm
-            else:
-                name = self.STLpath + partnum + "___{:.6f}mm.stl".format(resolution)
+            #user supplied STL file ( Bring Your Own Mesh (BYOM) )
+            _, extension = os.path.splitext(partnum)
+            if extension == '.stl':
+                print("Using user supplied mesh")
+                log.info("Using user supplied mesh")
+                #load mesh from file
+                self.loadIntersectMesh(self.machInDir + partnum)                   
 
-            if os.path.exists(name) and self.overWriteMask == False:
-                print("Mesh exists, loading...")
-                self.loadIntersectMesh(name)
+            #use HEAT generated mesh 
             else:
-                print("New mesh.  Creating "+partnum)
-                self.intersectObjFromPartnum(partnum, resolution)
+                #if BYOM was previously set to True, user is trying to mix user supplied
+                #meshes with the HEAT meshing algorithm -> not supported
+                if self.BYOM == True:
+                    print("\n===Meshing Error:===")
+                    print("You cannot mix user supplied meshes with the HEAT meshing algs.")
+                    print("Either change your PFC file so that all PFCnames correspond")
+                    print("to user supplied mesh objects (ie suffix .stl), or change")
+                    print("your PFC file so that all PFCnames correspond to STEP file") 
+                    print("object names (not .stls) for HEAT meshing.")
+                    print("Exiting...\n")
+                    log.info("\n===Meshing Error:===")
+                    log.info("You cannot mix user supplied meshes with the HEAT meshing algs.")
+                    log.info("Either change your PFC file so that all PFCnames correspond")
+                    log.info("to user supplied mesh objects (ie suffix .stl), or change")
+                    log.info("your PFC file so that all PFCnames correspond to STEP file") 
+                    log.info("object names (not .stls)  for HEAT meshing.")
+                    log.info("Exiting...\n")
+                    sys.exit()
+                #standard meshing algorithm
+                if type(resolution) == str:
+                    name = self.STLpath + partnum + "___"+resolution+".stl".format(resolution)
+                #mefisto meshing algorithm
+                else:
+                    name = self.STLpath + partnum + "___{:.6f}mm.stl".format(resolution)
+
+                if os.path.exists(name) and self.overWriteMask == False:
+                    print("Intersect mesh exists, loading...")
+                    log.info("Intersect mesh exists, loading...")
+                    self.loadIntersectMesh(name)
+                else:
+                    print("New intersect mesh.  Creating "+partnum)
+                    log.info("New intersect mesh.  Creating "+partnum)
+                    self.intersectObjFromPartnum(partnum, resolution)
 
         #global mesh translations if requested
         for i,mesh in enumerate(self.intersectMeshes):
@@ -611,11 +675,14 @@ class CAD:
 
             #standard meshing algorithm
             stdList = ['standard', 'Standard', 'STANDARD']
-            if resolution[i] in stdList:
-                filename = path + label[i] + "___"+resolution[i]+"."+fType
-            #mefisto meshing algorithm
+            if self.BYOM==True:
+                filename = path + label[i]
             else:
-                filename = path + label[i] + "___{:.6f}mm.".format(float(resolution[i]))+fType
+                if resolution[i] in stdList:
+                    filename = path + label[i] + "___"+resolution[i]+"."+fType
+                #mefisto meshing algorithm
+                else:
+                    filename = path + label[i] + "___{:.6f}mm.".format(float(resolution[i]))+fType
             if os.path.exists(filename) and self.overWriteMask == False:
                 print("Not clobbering mesh file...")
             else:
@@ -635,19 +702,27 @@ class CAD:
         filename is a list of filenames, then read each into a separate index
         of mesh variable in class.  filename should match a part number from the
         ROI
+
+        BYOM = Bring Your Own Mesh.  This will be set to True when using
+        terminal user interface if PFC csv file has an STL instead of
+        a part name in the PFCname column
+
         """
         #Check if this is a single file or list and make it a list
         if type(filenames) == str:
             filenames = [filenames]
         for file in filenames:
             mesh = Mesh.Mesh(file)
-            partnum = file.split('/')[-1].split('___')[0]
-#            idx = np.where(np.asarray(self.ROI) == partnum)[0][0]
-            #Find CAD object that matches this part number
-            for i in range(len(self.CADobjs)):
-                if partnum == self.CADobjs[i].Label:
-                    self.ROIparts[idx] = self.CADobjs[i]
+            #HEAT generated mesh
+            if self.BYOM==False:
+                partnum = file.split('/')[-1].split('___')[0]
+    #            idx = np.where(np.asarray(self.ROI) == partnum)[0][0]
+                #Find CAD object that matches this part number
+                for i in range(len(self.CADobjs)):
+                    if partnum == self.CADobjs[i].Label:
+                        self.ROIparts[idx] = self.CADobjs[i]
             self.ROImeshes[idx] = mesh
+
         print("Loaded STL files")
         log.info("Loaded STL files")
         return
@@ -665,15 +740,21 @@ class CAD:
             print('Loading ' + file)
             log.info('Loading ' + file)
             mesh = Mesh.Mesh(file)
-            partnum = file.split('/')[-1].split('___')[0]
-            idx = np.where(np.asarray(self.intersectList) == partnum)[0][0]
-            #Find CAD object that matches this part number
-            for i in range(len(self.CADobjs)):
-                if partnum == self.CADobjs[i].Label:
-                    self.intersectParts[idx] = self.CADobjs[i]
+            #HEAT generated mesh
+            if self.BYOM==False:
+                partnum = file.split('/')[-1].split('___')[0]
+                idx = np.where(np.asarray(self.intersectList) == partnum)[0][0]
+                #Find CAD object that matches this part number
+                for i in range(len(self.CADobjs)):
+                    if partnum == self.CADobjs[i].Label:
+                        self.intersectParts[idx] = self.CADobjs[i]
+            #BYOM
+            else:
+                partnum = file.split('/')[-1]
+                idx = np.where(np.asarray(self.intersectList) == partnum)[0][0]
             self.intersectMeshes[idx] = mesh
-        print("Loaded STL files")
-        log.info("Loaded STL files")
+        print("Loaded Intersection STL files")
+        log.info("Loaded Intersection STL files")
         return
 
     def loadGyroMesh(self, filenames, idx):
