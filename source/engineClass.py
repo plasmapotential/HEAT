@@ -2096,9 +2096,6 @@ class engineObj():
             if self.IO.csvMask == True:
                 self.combineTimeSteps(runList, t)
 
-        #set tree permissions
-        tools.recursivePermissions(self.MHD.shotPath, self.UID, self.GID, self.chmod)
-
 
         #=========================
         # ===== Transients =======
@@ -2247,6 +2244,8 @@ class engineObj():
                         self.combineFilTimesteps(name, oldPath, newPath)
                     tCount +=1
 
+        #set tree permissions
+        tools.recursivePermissions(self.MHD.shotPath, self.UID, self.GID, self.chmod)
             
         print("Total Time Elapsed: {:f}".format(time.time() - t0))
         log.info("Total Time Elapsed: {:f}".format(time.time() - t0))
