@@ -82,7 +82,7 @@ class TUI():
         via a batchFile
 
         The fist line of every batchFile should be:
-        MachFlag, Tag, GEQDSK, CAD, PFC, Input, Output
+        MachFlag, Tag, EQ, CAD, PFC, Input, Output
 
         Column variables are defined as follows
 
@@ -91,7 +91,6 @@ class TUI():
 
         :Tag:  user specified tag to label the simulation by.  Tags represent
           independent HEAT runs.  For time varying discharges with multiple
-
           GEQDSK files, tag should be repeated on multiple lines with the 
           TimeStep column changing.
 
@@ -107,10 +106,12 @@ class TUI():
           radix, which corresponds to nanosecond resolution (defined in engineClass
           initialization function call)
         
-        :GEQDSK or EQ:  magnetic equilibrium file (ie EFIT) in GEQDSK format.  
-          Psi should be in units of Wb/rad (divided by 2pi) and the Bt0, Fpol, Psi
-          and Ip values should reflect COCOS.
-
+        :EQ:  magnetic equilibrium file 
+          can be in GEQDSK format or in a JSON following the IMAS schema
+          Psi should be in units of Wb/rad (divide by 2pi) and the Bt0, Fpol, Psi
+          and Ip values should reflect COCOS and match machine helicity.  This column
+          can also be labeled GEQDSK for backwards compatability
+          
         :CAD: CAD file for the tag.  Note that HEAT will use the first CAD file provided
           in for each tag.  Subsequent lines in that tag are ignored.  In other words,
           there can only be one CAD file per tag.  Can be STEP, IGES, or FCStd formats.
@@ -153,7 +154,7 @@ class TUI():
 
         Example line for an NSTX-U run for pulse 204118 timestep 4ms:
 
-        MachFlag, Tag, Shot, TimeStep, GEQDSK, CAD, PFC, Input, Output
+        MachFlag, Tag, Shot, TimeStep, EQ, CAD, PFC, Input, Output
 
         nstx,run1, 204118, 0.004, geqdsk.00004, IBDH_2tiles.step, PFCs_run1.csv, NSTXU_input.csv, B:hfOpt
         
@@ -471,7 +472,7 @@ class TUI():
 #
 #===Column variables are defined as follows
 # MachFlag: machine specific flag.
-#           can be 'd3d','nstx','st40','step','sparc','west','kstar','aug','other'
+#           can be 'd3d','nstx','st40','step','sparc','west','kstar', 'aug', 'other'
 #
 # Tag:  user specified tag to label the simulation by.  Tags represent
 #       independent HEAT runs.  For time varying discharges with multiple
@@ -490,13 +491,17 @@ class TUI():
 #           radix, which corresponds to nanosecond resolution (defined in engineClass
 #           initialization function call)
 #
-# GEQDSK:  magnetic equilibrium file (ie EFIT) in GEQDSK format
+# EQ:  magnetic equilibrium file 
+#          can be in GEQDSK format or in a JSON following the IMAS schema
 #          Psi should be in units of Wb/rad (divide by 2pi) and the Bt0, Fpol, Psi
-#          and Ip values should reflect COCOS.
+#          and Ip values should reflect COCOS and match machine helicity
 #
 # CAD: CAD file for the tag.  Note that HEAT will use the first CAD file provided
 #      in for each tag.  Subsequent lines in that tag are ignored.  In other words,
 #      there can only be one CAD file per tag.  Can be STEP, IGES, or FCStd formats.
+#      User can also supply a mesh (.STL) file and set this value to None.  In that
+#      case, the mesh file should be listed in the PFC CSV file for each ROI or
+#      intersection part
 #
 # PFC: PFC file for the tag.  Note that HEAT will use the first PFC file provided
 #      in for each tag.  Subsequent lines in that tag are ignored.  In other words,
@@ -506,14 +511,16 @@ class TUI():
 #        HF Variables will be read at each timestep.
 #
 # Output: Defines what output HEAT should calculate.  Options are:
-#         -hfOpt   optical heat flux point cloud
-#         -hfGyro  gyro orbit heat flux point cloud
-#         -hfRad   radiated power heat flux point cloud
-#         -B       magnetic field glyph cloud
-#         -psiN    normalized poloidal flux point cloud
-#         -pwrDir  powerDir point cloud
-#         -bdotn   bdotn point cloud
-#         -norm    normal vector glyph cloud
+#         -hfOpt   optical heat flux 
+#         -hfGyro  gyro orbit heat flux 
+#         -hfFil   filament heat flux 
+#         -hfRE    runaway electron heat flux
+#         -hfRad   radiated power heat 
+#         -B       magnetic field glyphs
+#         -psiN    normalized poloidal flux 
+#         -pwrDir  powerDir point 
+#         -bdotn   bdotn point
+#         -norm    normal vector glyphs
 #         -T       temperature calculation using openFOAM
 #         -elmer   runs an Elmer FEM simulation
 #
@@ -533,8 +540,10 @@ class TUI():
 # <path>/<MachFlag>/Input
 #
 #  Example line for an NSTX-U run for pulse 204118 timestep 4ms:
-#MachFlag, Tag, Shot, TimeStep, GEQDSK, CAD, PFC, Input, Output
+#MachFlag, Tag, Shot, TimeStep, EQ, CAD, PFC, Input, Output
 #nstx,run1, 204118, 0.004, geqdsk.00004, IBDH_2tiles.step, PFCs_run1.csv, NSTXU_input.csv, B:hfOpt
+#  Example line for an NSTX-U run for pulse 204118 using JSON and user supplied mesh
+#nstx,run2, 204118, 0.004, nstx_eq_204118.json, None, PFCs_run2.csv, NSTXU_input.csv, B:hfOpt
 #
 # And the directory structure would look like this
 # <path>/batchFile.dat
@@ -546,7 +555,7 @@ class TUI():
 #
 #
 #
-MachFlag, Tag, Shot, TimeStep, GEQDSK, CAD, PFC, Input, Output
+MachFlag, Tag, Shot, TimeStep, EQ, CAD, PFC, Input, Output
             """
         with open(file,'w') as f:
             f.write(text)
