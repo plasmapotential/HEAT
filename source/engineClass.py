@@ -870,6 +870,7 @@ class engineObj():
         Loads CAD file for terminal users.  Here we call this file an STPfile,
         but it could be other formats (ie BREP, FCStd, IGES, etc.)
         """
+
         tools.makeDir(self.CAD.STPpath, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
         #if CAD file is set to None, do not load
         #(this is true when user brings their own meshes and no STEP file)
@@ -1066,7 +1067,8 @@ class engineObj():
                     fracUI,fracUO,fracLI,fracLO,
                     lqCNmode,lqCFmode,lqPNmode,lqPFmode,SMode,
                     qBG,P,radFrac,fG,
-                    qFilePath,qFileTag,tIdx=0):
+                    qFilePath,qFileTag,
+                    rzqFile, rzqFiledata=None, tIdx=0):
         """
         get heat flux inputs from gui or input file
         """
@@ -1102,15 +1104,25 @@ class engineObj():
         self.HF.qFilePath = qFilePath
         self.HF.qFileTag = qFileTag
 
+        if rzqFiledata != None:
+            print("Saving rzq file to tmpDir.")
+            self.HF.rzqFile = self.HF.writerzqFileData(rzqFile, rzqFiledata, self.tmpDir)
+        else:
+            self.HF.rzqFile = rzqFile
+
+        self.HF.readrzqprofile(self.HF.rzqFile)
+
         self.HF.setTypes()
 
+        print("Calculating Psol:")
         #fraction of power conducted to PFC surfaces
         self.HF.Psol = (1-self.HF.radFrac)*self.HF.P
+        print("Psol value is:", self.HF.Psol)
 
 
         print("HF Mode = "+hfMode)
         log.info("Hf Mode = "+hfMode)
-        if hfMode != 'qFile':
+        if hfMode != 'qFile' or hfMode != 'rzqprofile':
             print("P = {:f}".format(self.HF.P))
             log.info("P = {:f}".format(self.HF.P))
             print("Fraction of P Radiated from Core = {:f}".format(self.HF.radFrac))
@@ -1202,9 +1214,12 @@ class engineObj():
         elif hfMode == 'tophat':
             print("lqCN = {:f}".format(self.HF.lqCN))
             log.info("lqCN = {:f}".format(self.HF.lqCN))
+        elif hfMode=='rzqprofile': 
+            print("rzqFile = ", rzqFile)
+            log.info("rzqFile = %s",rzqFile)
         return
 
-    def loadHFParams(self, infile=None, tIdx=0):
+    def loadHFParams(self, infile=None, rzqFiledata=None, tIdx=0):
         """
         function for loading HF parameters on the fly (ie in the time loop)
         """
@@ -1238,6 +1253,8 @@ class engineObj():
                          self.HF.fG,
                          self.HF.qFilePath,
                          self.HF.qFileTag,
+                         self.HF.rzqFile,
+                         rzqFiledata,
                          tIdx)
         return
 
@@ -3419,6 +3436,7 @@ class engineObj():
                     'fG' : None,
                     'qFilePath' : None,
                     'qFileTag' : None,
+                    'rzqFile' : None,
                     'N_gyroSteps': None,
                     'gyroTraceLength': None,
                     'gyroT_eV': None,
@@ -3447,6 +3465,7 @@ class engineObj():
                     'vMode': None,
                     'ionFrac': None,
                     'gyroSources': None,
+                    'radFile':None,
                     'phiMin':None,
                     'phiMax':None,
                     'Ntor':None,
@@ -3530,6 +3549,7 @@ class engineObj():
                     'fG' : self.HF.fG,
                     'qFilePath': self.HF.qFilePath,
                     'qFileTag': self.HF.qFileTag,
+                    'rzqFile' : self.HF.rzqFile,
                     'OFtMin': self.OF.OFtMin,
                     'OFtMax': self.OF.OFtMax,
                     'deltaT': self.OF.deltaT,
@@ -3548,6 +3568,7 @@ class engineObj():
                     'vMode': self.GYRO.vMode,
                     'ionFrac': self.GYRO.ionFrac,
                     'gyroSources': self.GYRO.gyroSources,
+                    'radFile': self.RAD.radFile,
                     'phiMin':self.RAD.phiMin,
                     'phiMax':self.RAD.phiMax,
                     'Ntor':self.RAD.Ntor,
@@ -3617,6 +3638,7 @@ class engineObj():
                     'fG' : self.HF.fG,
                     'qFilePath': self.HF.qFilePath,
                     'qFileTag': self.HF.qFileTag,
+                    'rzqFile': self.HF.rzqFile,
                     'OFtMin': self.OF.OFtMin,
                     'OFtMax': self.OF.OFtMax,
                     'deltaT': self.OF.deltaT,
@@ -3635,6 +3657,7 @@ class engineObj():
                     'vMode': self.GYRO.vMode,
                     'ionFrac': self.GYRO.ionFrac,
                     'gyroSources': self.GYRO.gyroSources,
+                    'radFile': self.RAD.radFile,
                     'phiMin':self.RAD.phiMin,
                     'phiMax':self.RAD.phiMax,
                     'Ntor':self.RAD.Ntor,
