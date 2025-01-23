@@ -1347,10 +1347,14 @@ class engineObj():
                           self.RAD.Nref,
                           self.RAD.phiMin,
                           self.RAD.phiMax,
+                          self.RAD.rayTracer,
+                          self.RAD.Prad_mult,
+                          self.RAD.saveRadFrac,
                          )
         return
 
-    def getRADInputs(self, radFile, Ntor, Nref, phiMin, phiMax, radData=None):
+    def getRADInputs(self, radFile, Ntor, Nref, phiMin, phiMax, 
+                     rayTracer, Prad_mult, saveRadFrac, radData=None):
         """
         Sets up the RAD module
 
@@ -1361,10 +1365,14 @@ class engineObj():
         else:
             self.RAD.radFile = radFile
 
+        #in TUI mode we already set these types, but in GUI mode we do it here
         self.RAD.Ntor = int(Ntor)
         self.RAD.Nref = int(Nref)
         self.RAD.phiMin = float(phiMin)
         self.RAD.phiMax = float(phiMax)
+        self.RAD.rayTracer = str(rayTracer)
+        self.RAD.Prad_mult = float(Prad_mult)
+        self.RAD.saveRadFrac = bool(saveRadFrac)
 
         #read (R,Z,P) photon radiation source file (csv format)
         self.RAD.read2DSourceFile(self.RAD.radFile)
@@ -1908,7 +1916,7 @@ class engineObj():
                             print("Could not load RAD parameters.  Expected for GUI.  Check error message:")
                             print(e)
                         #location where we will save a memmap if necessary
-                        self.RAD.memmapFile = self.MHD.shotPath + self.tsFmt.format(t) +'/photonPowerFrac.nc'
+                        self.RAD.powFracFile = self.MHD.shotPath + self.tsFmt.format(t) +'/photonPowerFrac.nc'
                         #calculate the radiated power on the PFC mesh
                         self.radPower(PFC)
                         #save output files
@@ -2642,26 +2650,25 @@ class engineObj():
         return
 
     #--- Radiated power (photons) ---
-    def radPower(self,PFC, rayTriMode='open3d'):
+    def radPower(self,PFC):
         """
         runs the radiated power calculation
         """
         #setup the radiated power calculation
-        self.RAD.preparePowerTransfer(PFC, self.CAD, mode=rayTriMode)
+        self.RAD.preparePowerTransfer(PFC, self.CAD)
         #trace rays
-        if rayTriMode=='open3d':
-            print("Using Open3D")
-            #calculate photon load on PFC using open3d
-            self.RAD.calculatePowerTransferOpen3D(mode='open3d')
-        elif rayTriMode=='mitsuba':
+        if self.RAD.rayTracer=='mitsuba':
             print("Using Mitsuba")
             #calculate photon load on PFC using mitsuba JIT or numpy
-            self.RAD.calculatePowerTransferMitsubaJIT(mode='mitsuba', mitsubaMode='cpu', fType='ply') #currently has memory leak
+            self.RAD.calculatePowerTransferMitsubaJIT(mitsubaMode='cpu', fType='ply') 
             #self.RAD.calculatePowerTransferMitsubaNumpy(mode='mitsuba', mitsubaMode='cpu', fType='ply')     
-        else:
+        elif self.RAD.rayTracer=="heat":
             #calculate photon load on PFC using legacy methods (brute force)
             self.RAD.calculatePowerTransfer()
-
+        else:
+            print("Using Open3D")
+            #calculate photon load on PFC using open3d
+            self.RAD.calculatePowerTransferOpen3D()
         #assign variables to the PFC itself
         PFC.Prad = self.RAD.targetPower
         PFC.qRad = PFC.Prad / PFC.areas

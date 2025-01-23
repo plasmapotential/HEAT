@@ -2347,7 +2347,12 @@ def loadRAD(n_clicks,phiMin,phiMax,Ntor,Nref,radFile,radData):
         Nref = int(Nref)
         phiMin = float(phiMin)
         phiMax = float(phiMax)
-        gui.getRADInputs(radFile[0], Ntor, Nref, phiMin, phiMax, radData[0])
+        #these values are hard coded for GUI:
+        Prad_mult=1.0
+        rayTracer='open3d'
+        saveRadFrac=False
+
+        gui.getRADInputs(radFile[0], Ntor, Nref, phiMin, phiMax, rayTracer, Prad_mult, saveRadFrac, radData[0])
 
 
         RADdata = {
@@ -2355,6 +2360,9 @@ def loadRAD(n_clicks,phiMin,phiMax,Ntor,Nref,radFile,radData):
             'Maximum phi of radiation source [deg]':phiMax,
             'Number of toroidal repetitions of radiation source':Ntor,
             'Number of photon reflections to trace':Nref,
+            'Raytracer to use for photon calc':rayTracer,
+            'Multiplier for Prad in R,Z,P file':Prad_mult,
+            'Should we save map between emission source and targets?':saveRadFrac,
             }
     return [outDiv, RADdata]
 

@@ -62,7 +62,14 @@ class RAD:
           read from a file will be duplicated Ntor times between phiMin and phiMax.
         :phiMax: Maximum toroidal angle of emission extent [degrees].  The emission profile
           read from a file will be duplicated Ntor times between phiMin and phiMax.
-
+        :rayTracer: defines which ray tracer to use.  can be open3d (default), mitsuba, 
+          or heat (legacy and slow)
+        :Prad_mult: multiplier to apply to the R,Z,Prad emission source points
+        :saveRadFrac: boolean that determines if we should save a matrix with the mapping 
+          between emission source points and each mesh triangle.  Will save a Ni x Nj matrix
+          where Ni is number of emission source points and Nj is target mesh triangles.  The
+          elements of the matrix are the fractions of the emission source, i, assigned to 
+          mesh triangle j.  For now this only works with Open3D ray tracing.
         
         """
 
@@ -73,6 +80,9 @@ class RAD:
                              'Nref',
                              'phiMin',
                              'phiMax',
+                             'rayTracer',
+                             'Prad_mult',
+                             'saveRadFrac',
                             ]
         return
 
@@ -85,6 +95,9 @@ class RAD:
             self.Nref = int(self.Nref)
             self.phiMin = float(self.phiMin)
             self.phiMax = float(self.phiMax)
+            self.Prad_mult = float(self.Prad_mult)
+            self.saveRadFrac = bool(self.saveRadFrac)
+
         except:
             print("Could not initialize RadPower variables.  Bailing...")
             log.info("Could not initialize RadPower variables.  Bailing...")
@@ -112,7 +125,9 @@ class RAD:
         """
         print("Reading 2D photon radiation source file: "+file)
         log.info("Reading 2D photon radiation source file: "+file)
-        self.PC2D = pd.read_csv(file, header=0, names=['R','Z','P']).values 
+        df = pd.read_csv(file, header=0, names=['R','Z','P'])
+        df["P"]*=self.Prad_mult
+        self.PC2D = df.values 
         #self.PC2D /= 1000.0
         return
 
@@ -172,7 +187,7 @@ class RAD:
 
 
 
-    def preparePowerTransfer(self, PFC, CAD, mode=None):
+    def preparePowerTransfer(self, PFC, CAD):
         """
         builds the meshes and point clouds necessary for calculation.
 
@@ -244,25 +259,8 @@ class RAD:
         self.Ni = len(self.sources)
         self.Nj = len(self.targetCtrs)
 
-        #build single mesh for KDtree
-        if mode=='kdtree':
-            self.combinedMesh = CAD.createEmptyMesh()
-            for m in targetMeshes:
-                self.combinedMesh.addFacets(m.Facets)
-
-        #build objects for open3D ray tracing
-        elif mode=='open3d':
-            combinedMesh = CAD.createEmptyMesh()
-            for m in targetMeshes:
-                combinedMesh.addFacets(m.Facets)
-            oldMask = CAD.overWriteMask
-            CAD.overWriteMask = True
-            CAD.writeMesh2file(combinedMesh, 'combinedMesh', path=CAD.STLpath, resolution='standard')
-            CAD.overWriteMask = oldMask
-            self.meshFile = CAD.STLpath + 'combinedMesh' + "___standard.stl"
-            #self.meshFile = '/home/tom/source/dummyOutput/SOLID843___5.00mm.stl' #for testing
-
-        elif mode=='mitsuba':
+        #build mesh for mitsuba3
+        if self.rayTracer=='mitsuba':
             combinedMesh = CAD.createEmptyMesh()
             for m in targetMeshes:
                 combinedMesh.addFacets(m.Facets)
@@ -272,6 +270,24 @@ class RAD:
             CAD.writeMesh2file(combinedMesh, 'combinedMesh', path=CAD.STLpath, resolution='standard', fType='ply')
             CAD.overWriteMask = oldMask
             self.meshFile = CAD.STLpath + 'combinedMesh' + "___standard.ply"    
+
+        #build mesh for HEAT algs (old and slow)
+        elif self.rayTracer=='heat':
+            self.combinedMesh = CAD.createEmptyMesh()
+            for m in targetMeshes:
+                self.combinedMesh.addFacets(m.Facets)
+
+        #build objects for open3D ray tracing
+        else:
+            combinedMesh = CAD.createEmptyMesh()
+            for m in targetMeshes:
+                combinedMesh.addFacets(m.Facets)
+            oldMask = CAD.overWriteMask
+            CAD.overWriteMask = True
+            CAD.writeMesh2file(combinedMesh, 'combinedMesh', path=CAD.STLpath, resolution='standard')
+            CAD.overWriteMask = oldMask
+            self.meshFile = CAD.STLpath + 'combinedMesh' + "___standard.stl"
+            #self.meshFile = '/home/tom/source/dummyOutput/SOLID843___5.00mm.stl' #for testing
 
 
         print("\nTotal Rad Intersection Faces: {:d}".format(totalMeshCounter))
@@ -289,7 +305,7 @@ class RAD:
         return
 
 
-    def calculatePowerTransferMitsubaJIT(self, mode=None, mitsubaMode='llvm', fType='ply', batch_size=1000):
+    def calculatePowerTransferMitsubaJIT(self, mitsubaMode='llvm', fType='ply', batch_size=1000):
         """
         Maps power between sources and targets (ROI PFCs).  Uses Mitsuba3 to
         perform ray tracing.  Mitsuba3 can be optimized for CPU or GPU.
@@ -367,10 +383,10 @@ class RAD:
         t = time.time()
         # Convert the numpy arrays to Dr.Jit dynamic arrays
         #tx,tx,tz,tp are source values for x,y,z,power
-        tx = dr.cuda.Float(self.sources[:,0]) if mode == 'cuda' else dr.llvm.Float(self.sources[:,0])
-        ty = dr.cuda.Float(self.sources[:,1]) if mode == 'cuda' else dr.llvm.Float(self.sources[:,1])
-        tz = dr.cuda.Float(self.sources[:,2]) if mode == 'cuda' else dr.llvm.Float(self.sources[:,2])
-        tp = dr.cuda.Float(self.sourcePower) if mode == 'cuda' else dr.llvm.Float(self.sourcePower)
+        tx = dr.cuda.Float(self.sources[:,0]) if mitsubaMode == 'cuda' else dr.llvm.Float(self.sources[:,0])
+        ty = dr.cuda.Float(self.sources[:,1]) if mitsubaMode == 'cuda' else dr.llvm.Float(self.sources[:,1])
+        tz = dr.cuda.Float(self.sources[:,2]) if mitsubaMode == 'cuda' else dr.llvm.Float(self.sources[:,2])
+        tp = dr.cuda.Float(self.sourcePower) if mitsubaMode == 'cuda' else dr.llvm.Float(self.sourcePower)
 
         # Grab all the shape ids to correctly identify the sensor
         idL = [x.id() for x in scene.shapes()]
@@ -829,7 +845,7 @@ class RAD:
         return
 
 
-    def calculatePowerTransferOpen3D(self, mode=None, powFracSave=False):
+    def calculatePowerTransferOpen3D(self):
         """
         Maps power between sources and targets (ROI PFCs).  Uses Open3D to
         perform ray tracing.  Open3D can be optimized for CPU or GPU.
@@ -860,7 +876,7 @@ class RAD:
         print("Available memory: {:f} GB".format(memAvail / (1024**3)))  
 
         #setup netcdf (this is slow)
-        if powFracSave:
+        if self.saveRadFrac == True:
             print("Saving power fractions.\n")
             from netCDF4 import Dataset
             # Create a powerFrac file on disk
@@ -900,7 +916,7 @@ class RAD:
             condition = hitMap == np.arange(self.Nj)
             powFrac = np.abs(rdotn)*self.targetAreas/(4*np.pi*rMag**2)
 
-            if powFracSave == True:
+            if self.saveRadFrac == True:
                 # Open the NetCDF file in append mode and write the column
                 # this is slow!
                 with Dataset(self.powFracFile, 'a', format='NETCDF4') as ncfile:
@@ -934,7 +950,7 @@ class RAD:
         return
 
 
-    def calculatePowerTransfer(self, mode=None):
+    def calculatePowerTransfer(self, accMode=None):
         """
         Maps power between sources and targets (ROI PFCs).  Uses CPU
         multiprocessing without acceleration structures
@@ -954,7 +970,7 @@ class RAD:
             #manager can be used for locking, but shouldnt be necessary so long
             #as we dont overlap write locations between workers
             pool = multiprocessing.Pool(Ncores)
-            if mode=='kdtree':
+            if accMode=='kdtree':
                 tools.combinedMesh = self.combinedMesh
                 output = np.asarray(pool.map(self.powerFracMapParallelKDtree, np.arange(self.Nj)))
             else:
