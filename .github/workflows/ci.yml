@@ -36,13 +36,12 @@ jobs:
       run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.1 /root/source/HEAT/source/runTerminalModeTestOptical
 
     - name: NSTX-U Optical Elmer FEM HEAT Calculation
-      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.1 /root/source/HEAT/source/runTerminalModeTestOpticalElmer
-
-      
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.1 /root/source/HEAT/source/runTerminalModeTestOpticalElmer     
 #    - name: NSTX-U Gyro-orbit HEAT Calculation
 #      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.0 /root/source/HEAT/source/runTerminalModeTestGyro
 #
 #    - name: NSTX-U Photon Radiation HEAT Calculation
 #      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.0 /root/source/HEAT/source/runTerminalModeTestRad
-
-
+    - name: NSTX-U RZQ File HEAT Calculation
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.1 /root/source/HEAT/source/runTerminalModeTestrzq
+ 
