@@ -1751,7 +1751,10 @@ def loadHF(n_clicks,hfMode,MachFlag,
             lqPF = 0.0
             SMode = None
             qFileTag = None
-            qFilePath = None            
+            qFilePath = None
+            #only support one rzqFile
+            rzqFile = rzqFile[0]
+            rzqFiledata = rzqFiledata[0]
         else: #eich mode is default
             lqCNmode = eichlqCNmode
             lqCFmode = None
@@ -1774,7 +1777,7 @@ def loadHF(n_clicks,hfMode,MachFlag,
                         lqCNmode,lqCFmode,lqPNmode,lqPFmode,SMode,
                         qBG,P,radFrac,fG,
                         qFilePath,qFileTag,
-                        rzqFile[0], rzqFiledata[0])
+                        rzqFile, rzqFiledata)
 
 
         #Update output tab table

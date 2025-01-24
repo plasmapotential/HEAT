@@ -5,13 +5,13 @@
 #                IO Variables
 #=============================================================
 vtpMeshOut, True
-vtpPCOut, False
+vtpPCOut, True
 csvOut, True
 #=============================================================
 #                CAD Variables
 #=============================================================
 gridRes, standard
-overWriteMask, False
+overWriteMask, True
 xT, None
 yT, None
 zT, None
@@ -73,7 +73,7 @@ Ntor, 5
 Nref, 1
 phiMin, 20
 phiMax, 35
-rayTracer, open3d
+rayTracer, mitsuba
 Prad_mult, 1.0
 saveRadFrac, False
 #==============================================================

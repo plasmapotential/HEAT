@@ -2661,7 +2661,7 @@ class engineObj():
             print("Using Mitsuba")
             #calculate photon load on PFC using mitsuba JIT or numpy
             self.RAD.calculatePowerTransferMitsubaJIT(mitsubaMode='cpu', fType='ply') 
-            #self.RAD.calculatePowerTransferMitsubaNumpy(mode='mitsuba', mitsubaMode='cpu', fType='ply')     
+            #self.RAD.calculatePowerTransferMitsubaNumpy(mitsubaMode='cpu', fType='ply')     
         elif self.RAD.rayTracer=="heat":
             #calculate photon load on PFC using legacy methods (brute force)
             self.RAD.calculatePowerTransfer()

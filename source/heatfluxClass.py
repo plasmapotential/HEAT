@@ -100,9 +100,9 @@ class heatFlux:
           and gyro orbit simulations, P represents PSOL or Psep, the power crossing
           the separatrix and being conducted to the target.  For photon radiation
           calculation, P represents the total emitted power over the entire torus.
-        :lossFrac: fraction of P to be removed.  Useful for prescribing a reduction
+        :radFrac: fraction of P to be removed.  Useful for prescribing a reduction
           to P that arises from various effects. Power that will be used in the 
-          calculation is P*(1-lossFrac).
+          calculation is P*(1-radFrac).
         :qBG: Background heat flux applied to all surfaces when using an Eich profile [MW/m^2].
           Note that this also applies flux on the backs of tiles.
         :fG: Greenwald density fraction [5] to be used when using Makowski S scaling.
