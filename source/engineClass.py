@@ -929,7 +929,6 @@ class engineObj():
 
         self.timestepMap = pd.read_csv(infile, comment='#')
         self.timestepMap = self.timestepMap.rename(columns=lambda x: x.strip())
-        print(self.timestepMap)
         self.timestepMap['PFCname'] = self.timestepMap['PFCname'].str.strip()
         self.timestepMap['intersectName'] = self.timestepMap['intersectName'].str.strip()
         self.timestepMap['excludeName'] = self.timestepMap['excludeName'].str.strip()
@@ -1295,7 +1294,7 @@ class engineObj():
     def getREInputs(self,N_gyroSteps, gyroTraceLength, RE_Eav, RE_I,
                       N_vPhase, N_vSlice, ionMassAMU, vMode, gyroSources):
         """
-        Sets up the gyro module
+        Sets up the RE module
         """
         self.RE.N_gyroSteps = int(N_gyroSteps)
         self.RE.gyroTraceLength = int(gyroTraceLength)
@@ -1320,9 +1319,7 @@ class engineObj():
                 self.RE.gyroSources = gyroSources
             else: #terminal mode
                 self.RE.gyroSources = [x.split(":") for x in [self.RE.gyroSources]][0]
-            #self.CAD.getGyroSources(gyroSources)
-            #self.CAD.getGyroSourceMeshes()
-            #self.CAD.writeMesh2file(self.CAD.gyroMeshes, self.CAD.gyroSources, path=self.CAD.STLpath)
+
             print("Runaway Traces Launched from these tiles:")
             log.info("Runaway Traces Launched from these tiles:")
             print(self.RE.gyroSources)
@@ -1331,14 +1328,10 @@ class engineObj():
         #toroidal step size taken from MHD object
         self.RE.dpinit = self.MHD.dpinit
 
-        #set up GYRO object
+        #set up RE object
         self.RE.setupConstants(self.RE.ionMassAMU)
-        print('Loaded Gyro Orbit Settings')
-        print('# Steps per helix period = {:f}'.format(float(N_gyroSteps)))
-        print('Gyro tracing distance [degrees] = {:f}'.format(float(gyroTraceLength)))
-        print('Plasma Temperature Mode = ' + vMode)
-        print('Number of Monte Carlo runs per point = {:f}'.format(float(self.RE.N_MC)))
-        print("Source of gyro orbit power = "+self.RE.gyroSourceTag)
+        print('Loaded RE Settings')
+
         return
 
     def loadRADParams(self, infile=None):
