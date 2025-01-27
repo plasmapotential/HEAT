@@ -64,11 +64,11 @@ class Runaways:
         Runaway Electrons Heat Flux Variables:
         -------------------------------------
 
-        :id:  a unique string tag (or name) that is assigned to the filament.  example: fil1pt
+        :id:  a unique string tag (or name) that is assigned to the RE.  example: fil1pt
         :tMin[s]: time in seconds of runaway birth. example: 1000e-6
         :tMax[s]: time in seconds to stop tracking runaways. example: 1500e-6
         :dt[s]: timestep size in seconds
-        :decay_t[s]: decay constant for runaway birth energy.  The filament can be born over a 
+        :decay_t[s]: decay constant for runaway birth energy.  The RE beam can be born over a 
           series of timesteps.  If N_src_t is > 1, this variable describes the exponential decay.
           At each of the birth timesteps, HEAT sources particles with a decaying total energy,
           which is prescribed by this exponential decay constant.  See function gaussianAtPts() 
@@ -145,7 +145,6 @@ class Runaways:
         self.kB = 8.617e-5 #ev/K
         self.e = 1.602e-19 # C
         self.c = 299792458 #m/s
-        self.diamag = -1 #diamagnetism = -1 for ions, 1 for electrons
         self.me = 0.511e6 #eV
 
         self.mass_eV = ionMassAMU * self.AMU
@@ -161,9 +160,7 @@ class Runaways:
     	"""
     	Calculates the velocity from the energy of an electron
     	
-    	E is in eV
-    	
-    	Assumes mass energy is not included in E
+    	KE is in eV
     	
     	   	
     	"""
@@ -181,7 +178,7 @@ class Runaways:
     
     def readREFile(self, path:str):
         """
-        reads a filament csv input file
+        reads a runaway csv input file
 
         generates a data pd array
         """
@@ -193,12 +190,12 @@ class Runaways:
         return
 
     """
-    Add intialize_REdist() (not from dict)? 
+    TO DO: Add intialize_REdist() (not from dict)? 
     """    
     
     def setupRETime(self):
         """
-        sets up filament timesteps using data from filament file
+        sets up RE timesteps using data from RE file
         """
         try:
             df = self.REData      
@@ -209,8 +206,8 @@ class Runaways:
             self.tsFil = df['tNew'].values
 
         except:
-            print("\n\nError setting up filament time.  Check your filament file\n\n")
-            log.info("\n\nError setting up filament time.  Check your filament file\n\n")
+            print("\n\nError setting up RE time.  Check your RE file\n\n")
+            log.info("\n\nError setting up RE time.  Check your RE file\n\n")
             sys.exit()
         return
     
@@ -218,12 +215,12 @@ class Runaways:
         """
         initializes Runaway electron distribution from a dictionary (read from csv file in HEAT)
 
-        dictionary is originally a pandas dataframe, so each row in the filament.csv
+        dictionary is originally a pandas dataframe, so each row in the runaway.csv
         HEAT file is a new id # in the dict.  each row can therefore be accessed by:
         filDict['<parameter>'][<row#>]
         ep is equilParams object
         """
-        #initialize this filament
+        #initialize this RE
         try:
             self.rCtr = REDict['rCtr[m]'][id]
             self.zCtr = REDict['zCtr[m]'][id]
@@ -266,6 +263,9 @@ class Runaways:
         return
     
     def calcTotalE(self):
+        """
+        Calculates the total energy of the RE beam including magnetic and kinetic energy
+        """
         vave = self.E2v_electron(self.E_av)
         Nre = self.IRE*2*np.pi*self.ep.g['RmAxis']/(vave* self.e)
         self.E0 = Nre * self.E_av * self.e # check e
@@ -363,8 +363,8 @@ class Runaways:
 
         print('Number of target faces: {:f}'.format(self.Nt))
         log.info('Number of target faces: {:f}'.format(self.Nt))
-        print('Number of filament source points: {:f}'.format(N_pts))
-        log.info('Number of filament source points: {:f}'.format(N_pts))
+        print('Number of runaway source points: {:f}'.format(N_pts))
+        log.info('Number of runaway source points: {:f}'.format(N_pts))
 
         #setup velocities
         self.setupParallelVelocities()
@@ -647,16 +647,17 @@ class Runaways:
         
     def createSource(self, t:float, Btrace:np.ndarray):
         """
-        creates a filament at time t
+        creates a RE beam at time t
 
-        t is timestep at which we calculate filament
+        t is timestep at which we calculate RE beam
         so t in gaussian is t-tMin
 
-        Btrace is magnetic field line trace from MAFOT for filament ctr
+        Btrace is magnetic field line trace from MAFOT for RE ctr
 
         """
         self.gridPsiThetaDistAtCtr(self.rCtr, self.zCtr, multR=10.0, multZ = 10.0)
         #discretize filament into macroparticle sources along field line
+        # Using gaussian function for macroparticle energy TODO: update with more accurate density function
         self.discretizeRunaways(self.N_r,self.N_p,self.N_b, Btrace, self.N_sig_r, self.N_sig_p, self.N_sig_b)
         self.gaussianAtPts(self.ctrPts, self.xyzPts, t-self.tMin, self.v_r)
         return
@@ -975,7 +976,7 @@ class Runaways:
     def discretizeRunaways(self, N_r: int, N_p: int, N_b: int, Btrace: np.ndarray, 
                            N_sig_r: int, N_sig_p: int, N_sig_b: int):
         """
-        takes user input parameters and builds a filament 
+        takes user input parameters and builds a RE beam 
         
         N_r: number of discrete points in radial (psi) direction
         N_p: number of discrete points in poloidal direction
@@ -987,7 +988,7 @@ class Runaways:
         stolen from filament class
         """
         d_b = self.distance(Btrace)
-        #find index of filament center
+        #find index of RE center
         ctr = np.array([self.xCtr, self.yCtr, self.zCtr])
         idx = np.argmin(np.sum(np.abs(Btrace-ctr), axis=1))      
         d_b = d_b - d_b[idx]
@@ -1030,7 +1031,7 @@ class Runaways:
         pN = pVecXYZ / pMag[:,None]
 
 
-        #create xyz coordinates for each filament source pt
+        #create xyz coordinates for each RE source pt
         xyzPts = np.ones((N_b, N_r, N_p,3))*np.nan
         for i in range(N_b):
             for j in range(N_r):

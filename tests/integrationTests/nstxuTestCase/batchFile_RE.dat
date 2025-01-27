@@ -52,6 +52,7 @@
 #         -norm    normal vector glyph cloud
 #         -T       temperature calculation using openFOAM
 #         -elmer   runs an Elmer FEM simulation
+#         -hfRE    runs a runaway electron simulation
 #
 #       for multiple outputs, separate options with : (ie hfOpt:psi:T).  Note
 #       that HEAT will use the first options list provided for each tag.

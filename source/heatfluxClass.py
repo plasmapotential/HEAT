@@ -1380,11 +1380,11 @@ class heatFlux:
         assigns energy from runaway to targets
         calculates heat flux and total energy deposition
 
-        FIL.intersectRecord gets overwritten for each filament source timestep
-        so this function needs to be called once per filament to add 
-        the heat fluxes from each filament source timestep to the tallies on the PFC mesh
+        RE.intersectRecord gets overwritten for each runaway source timestep
+        so this function needs to be called once per RE to add 
+        the heat fluxes from each RE source timestep to the tallies on the PFC mesh
         
-        todo
+        
         """
         RE.calcTotalE()
         E = RE.density[:,:,:,tIdx].reshape(RE.N_b*RE.N_r*RE.N_p) * RE.E0
