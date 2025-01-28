@@ -15,6 +15,7 @@ import heatfluxClass
 import openFOAMclass
 import pfcClass
 import gyroClass
+import runawayClass
 import filamentClass
 import radClass
 import ioClass
@@ -42,6 +43,7 @@ class engineObj():
         #number of significant figures after radix for timesteps
         self.tsSigFigs=tsSigFigs
         self.tsFmt = "{:."+"{:d}".format(tsSigFigs)+"f}"
+        
         #number of significant figures for shot numbers
         self.shotSigFigs = shotSigFigs
         self.shotFmt = "{:0"+"{:d}".format(shotSigFigs)+"d}"
@@ -101,6 +103,7 @@ class engineObj():
         self.HF = heatfluxClass.heatFlux(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
         self.OF = openFOAMclass.OpenFOAM(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
         self.GYRO = gyroClass.GYRO(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
+        self.RE = runawayClass.Runaways(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
         self.RAD = radClass.RAD(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
         self.FIL = filamentClass.filament(self.rootDir, self.dataPath, self.chmod, self.UID, self.GID)
         self.IO = ioClass.IO_HEAT(self.chmod, self.UID, self.GID)
@@ -114,6 +117,7 @@ class engineObj():
         self.HF.allowed_class_vars()
         self.OF.allowed_class_vars()
         self.GYRO.allowed_class_vars()
+        self.RE.allowed_class_vars()
         self.RAD.allowed_class_vars()
         self.IO.allowed_class_vars()
         self.FIL.allowed_class_vars()
@@ -125,6 +129,7 @@ class engineObj():
         self.HF.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
         self.OF.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
         self.GYRO.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
+        self.RE.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
         self.RAD.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
         self.IO.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
         self.FIL.setupNumberFormats(self.tsSigFigs, self.shotSigFigs)
@@ -1301,6 +1306,72 @@ class engineObj():
         print('Number of Monte Carlo runs per point = {:f}'.format(float(self.GYRO.N_MC)))
         print("Source of gyro orbit power = "+self.GYRO.gyroSourceTag)
         return
+        
+    def loadREParams(self, infile=None):
+        """
+        function for loading RE parameters on the fly (ie in the time loop)
+        """
+        if infile==None:
+            self.initializeRE()
+        else:
+            self.initializeRE(infile)
+
+        #initialize optical HF data from input file
+        self.getREInputs(
+                         self.RE.N_gyroSteps,
+                         self.RE.gyroTraceLength,
+                         self.RE.RE_Eav,
+                       	 self.RE.RE_I,
+                         self.RE.N_vSlice,
+                         self.RE.N_vPhase,
+                         self.RE.ionMassAMU,
+                         self.RE.vMode,
+                         self.RE.gyroSources,
+                         )
+        return
+
+    def getREInputs(self,N_gyroSteps, gyroTraceLength, RE_Eav, RE_I,
+                      N_vPhase, N_vSlice, ionMassAMU, vMode, gyroSources):
+        """
+        Sets up the RE module
+        """
+        self.RE.N_gyroSteps = int(N_gyroSteps)
+        self.RE.gyroTraceLength = int(gyroTraceLength)
+        self.RE.RE_Eav = float(RE_Eav)
+        self.RE.RE_I = float(Re_I)
+        self.RE.N_vSlice = int(N_vSlice)
+        self.RE.N_vPhase = int(N_vPhase)
+        self.RE.N_gyroPhase = int(N_gyroPhase)
+        self.RE.N_MC = self.GYRO.N_gyroPhase*self.GYRO.N_vSlice*self.GYRO.N_vPhase
+        self.RE.ionMassAMU = float(ionMassAMU)
+        self.RE.vMode = vMode
+
+        #set up power source
+        self.RE.gyroSourceTag = str(gyroSources)
+        if 'allROI' in self.RE.gyroSourceTag:
+            try:
+                self.RE.gyroSources = self.CAD.ROIList
+            except:
+                print("NO CAD Loaded.  Cannot initialize ROIList.")
+        else:
+            if type(gyroSources) == list: #GUI mode
+                self.RE.gyroSources = gyroSources
+            else: #terminal mode
+                self.RE.gyroSources = [x.split(":") for x in [self.RE.gyroSources]][0]
+
+            print("Runaway Traces Launched from these tiles:")
+            log.info("Runaway Traces Launched from these tiles:")
+            print(self.RE.gyroSources)
+            log.info(self.RE.gyroSources)
+
+        #toroidal step size taken from MHD object
+        self.RE.dpinit = self.MHD.dpinit
+
+        #set up RE object
+        self.RE.setupConstants(self.RE.ionMassAMU)
+        print('Loaded RE Settings')
+
+        return
 
     def loadRADParams(self, infile=None):
         """
@@ -1571,6 +1642,99 @@ class engineObj():
                            tag='pt{:03d}'.format(i))
             os.remove(structOutfile)
         return
+        
+    def REgyroTrace(self,x,y,z,t,gPhase,vPhase,gyroTraceLength,dpinit,N_helix,traceDirection,RE_KE,tag=None):
+        """
+        todo
+        performs a single gyro orbit trace for a runaway electron macro particle
+
+        (x,y,z) are locations where we launch trace from
+        gyroPhase is initial phase angle of orbit in degrees
+        gyroTraceLength is the number of degrees we will trace for
+        N_gyroSteps is the number of discrete lines we approximate helical path by
+        """
+        print("\n========RE Gyro Trace Initialized========")
+        #get bField trace from this point
+        self.Btrace(x,y,z,t,traceDirection,gyroTraceLength,dpinit,tag)
+        #read bField trace csv output
+
+        structOutfile = self.MHD.shotPath + self.tsFmt.format(t) + '/struct.dat'
+        controlfilePath = self.MHD.shotPath + self.tsFmt.format(t) + '/'
+
+        BtraceXYZ = tools.readStructOutput(structOutfile) #[m]
+        #Setup gyro orbit trace constants and velocities
+        self.RE.setupConstants()
+        v = self.RE.E2v_electron(float(RE_KE))
+        vPerp = v*np.cos(np.radians(vPhase))
+        vParallel = v*np.sin(np.radians(vPhase))
+        # Evaluate B
+        R,Z,phi = tools.xyz2cyl(float(x),float(y),float(z))#mm => m
+        tIdx = np.where(float(t)==self.MHD.timesteps)[0][0]
+        ep = self.MHD.ep[tIdx]
+        Bt = ep.BtFunc.ev(R,Z)
+        BR = ep.BRFunc.ev(R,Z)
+        BZ = ep.BZFunc.ev(R,Z)
+        B = np.sqrt(BR**2 + Bt**2 + BZ**2)
+        Bsign = np.sign(ep.g['Bt0'])
+        #Calculate frequencies and gyro radius
+        self.RE.setupFreqs(B*Bsign, v)
+        self.RE.setupRadius(vPerp)
+        #trace helix and save to CSV and VTK formats
+        self.RE.singleGyroTrace(vPerp,vParallel,float(gPhase),float(N_helix),BtraceXYZ,controlfilePath,
+                                  self.GYRO.TGyro[0],self.GYRO.rGyro[0],self.GYRO.omegaGyro[0],tag=tag)
+        print("Perpendicular velocity of {:f} m/s".format(float(vPerp)))
+        print("Parallel velocity of {:f} m/s".format(float(vParallel)))
+        print("B magnitude = {:f}".format(B))
+        return
+
+    def REgyroTraceMultiple(self,data,t):
+        """
+        Run a MAFOT structure trace from multiple points defined in the gui,
+        then calculate helical trajectory around trace
+        """
+        data = pd.DataFrame.from_dict(data)[list (data[0].keys())]
+        data = data.rename(columns=lambda x: x.strip())
+        data = data.astype({"x[mm]": float, "y[mm]": float, "z[mm]": float,
+                            "T[eV]":float,"gPhase[deg]":int,"vPhase[deg]":int,
+                            "N_helix":int, "traceDirection": int,
+                            "Length[deg]":float, "stepSize[deg]":float})
+
+        t = int(t)
+        tIdx = np.where(float(t)==self.MHD.timesteps)[0][0]
+
+        traceDirection=data['traceDirection']
+        dpinit = data['stepSize[deg]']
+        x = data['x[mm]'] / 1000.0
+        y = data['y[mm]'] / 1000.0
+        z = data['z[mm]'] / 1000.0
+        gPhase = data['gPhase[deg]']
+        vPhase = data['vPhase[deg]']
+        gyroT_eV = data['T[eV]']
+        N_helix = data['N_helix']
+        gyroTraceLength = data['Length[deg]']
+
+        xyz = np.array([x,y,z]).T
+        controlfile = '_structCTL.dat'
+        dphi = 1.0
+
+        if len(xyz.shape) > 1:
+            R,Z,phi = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
+            Ntraces = len(xyz)
+        else:
+            R,Z,phi = tools.xyz2cyl(xyz[0],xyz[1],xyz[2])
+            Ntraces = 1
+
+        controlfilePath = self.MHD.shotPath + self.tsFmt.format(t) + '/'
+        structOutfile = controlfilePath + 'struct.dat'
+
+        for i in range(Ntraces):
+            self.gyroTrace(x[i],y[i],z[i],t,gPhase[i],vPhase[i],gyroTraceLength[i],
+                           dpinit[i],N_helix[i],traceDirection[i],gyroT_eV[i],
+                           tag='pt{:03d}'.format(i))
+            os.remove(structOutfile)
+        return
+
+    
 
     def NormPC(self, PFC):
         """
@@ -1667,6 +1831,20 @@ class engineObj():
         else:
             tools.initializeInput(self.GYRO, infile=infile)
         return
+        
+    def initializeRE(self, infile=None):
+        """
+        Initialize runaway electron heat flux variables
+        """
+        print("-"*70)
+        print("Runaway Electron parameters read from file")
+        log.info("Runaway Electron parameters read from file")
+        #Initialize RE Object
+        if infile == None:
+            tools.initializeInput(self.RE, infile=self.infile)
+        else:
+            tools.initializeInput(self.RE, infile=infile)
+        return
 
     def initializeRAD(self, infile=None):
         """
@@ -1722,8 +1900,9 @@ class engineObj():
         log.info("HEAT RUN INITIALIZED")
         t0 = time.time()
 
+
         #make sure that something in runList can be run in this function, else return
-        allowedOptions = ['hfOpt', 'pwrDir', 'bdotn', 'B', 'psiN', 'norm', 'hfGyro', 'hfRad', 'hfFil']
+        allowedOptions = ['hfOpt', 'pwrDir', 'bdotn', 'B', 'psiN', 'norm', 'hfGyro', 'hfRad', 'hfFil', 'hfRE']
         if len([i for i in runList if i in allowedOptions]) < 1:
             self.runList = runList
             print("No HEAT runList option to run.  Breaking out of engineClass runHEAT loop.")
@@ -2067,8 +2246,7 @@ class engineObj():
             if self.IO.csvMask == True:
                 self.combineTimeSteps(runList, t)
 
-        #set tree permissions
-        tools.recursivePermissions(self.MHD.shotPath, self.UID, self.GID, self.chmod)
+
 
 
         #=========================
@@ -2218,6 +2396,159 @@ class engineObj():
                         self.combineFilTimesteps(name, oldPath, newPath)
                     tCount +=1
 
+        if 'hfRE' in runList:
+            REDict = self.RE.REData.to_dict()
+
+            #build filament meshes
+            self.getFilMeshes(filtype = 'RE')
+
+            #loop thru ROI PFCs initializing filament HF matrix
+            for PFC in self.PFCs:
+                #initialize all self.timesteps, even if not in PFC.timesteps
+                PFC.qFil = np.zeros((len(PFC.centers), len(self.timesteps)))
+                PFC.Edep = np.zeros((len(PFC.centers), len(self.timesteps)))
+                PFC.ptclDep = np.zeros((len(PFC.centers), len(self.timesteps)))
+                PFC.FilTimesteps = self.timesteps
+
+
+
+            #loop through each filament
+            for idx,ts in enumerate(self.RE.tsFil):
+                print('\n')
+                print("-"*80)
+                log.info("-"*80)
+
+                id = REDict['id'][idx]
+                N_src_t = REDict['N_src_t'][idx]
+
+                print("Runaway ID: "+id)
+                log.info("Runaway ID: "+id)
+                print("-"*80)
+                log.info("-"*80)
+
+                EtotROI = 0.0
+                pTotROI = 0.0
+                EtotAll = 0.0
+                pTotAll = 0.0
+
+                #get the steady state timestep that precedes this transient timestep
+                both = np.intersect1d(ts, self.MHD.timesteps)
+                print('intersection', both)
+                print('ts', ts)
+                print('MHD times', self.MHD.timesteps)
+                epIdx = np.where( np.min(both)==self.MHD.timesteps )[0][0]
+
+
+                print(REDict)
+                self.RE.initializeREdistFromDict(REDict, idx, self.MHD.ep[epIdx])
+                self.RE.ts = ts
+
+
+                #loop through source timesteps for this filament
+                tCount = 0
+                for tIdx,t in enumerate(ts):
+                    print('\n')
+                    print("-"*30)
+                    print("Filament Timestep: "+self.tsFmt.format(t))
+                    log.info("\nFilament Timestep: "+self.tsFmt.format(t))
+
+                    #set up file directory structure
+                    timeDir = self.MHD.shotPath + self.tsFmt.format(t) + '/'  
+                    self.RE = self.MHD.setupMAFOTdirectory(timeDir, self.RE)
+
+                    if tIdx == 0:                       
+                        #trace magnetic field at filament center at t0
+                        Btrace = self.RE.RECtrBtrace(self.MHD, t)
+
+                    #build source for this timestep
+                    if tCount < N_src_t:
+                        self.RE.createSource(t, Btrace)
+                        self.filamentSourceOutput(id, t, tIdx, filtype = 'RE') #akf
+                    #else:
+                    #    break
+
+                    #trace macroparticles from source at this timestep
+                    #If N_src_t = 1 this only runs the one time, this is where all of your particles are created and followed
+                    if tIdx < self.RE.N_src_t:
+                        self.RE.tEQ = ts[0]
+                        self.RE.traceREParticles(self.MHD, ts, tIdx)
+                        #loop thru ROI PFCs, mapping power to targets
+                        for PFC in self.PFCs:
+                            if t not in PFC.timesteps:
+                                pass
+                            else:
+                                print("*"*20)
+                                print('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+                                log.info("*"*20)
+                                log.info('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+
+                                pfcDir = self.MHD.shotPath + self.tsFmt.format(t) +'/'+PFC.name+'/'
+                                tools.makeDir(pfcDir, clobberFlag=False)
+                                self.HF.REHeatFlux(self.RE, PFC, ts, tIdx)
+                                #self.HF.REParticleFlux(self.RE, PFC, ts, tIdx)
+                                pTotROI += np.sum(PFC.ptclDep)
+                                EtotROI += np.sum(PFC.Edep)
+
+                        #energy balance calculation
+                        energy, particles = self.filDepositedEnergyParticles(tIdx, filtype = 'RE') #akf
+                        EtotAll += energy
+                        pTotAll += particles
+
+                        print("Generating trace output")
+                        log.info("Generating trace output")
+                        self.filamentTraceOutput(id,t,tIdx, filtype = 'RE')
+
+                    else:
+                        print("No more source timesteps to trace.  Breaking loop.")
+                        log.info("No more source timesteps to trace.  Breaking loop.")
+                        break
+
+                    tCount += 1
+
+
+                #print energy balance stats
+                print("\n\nTotal Energy Deposited on ROI PFCs: {:f}".format(EtotROI))
+                print("Total Energy Deposited on All PFCs: {:f}".format(EtotAll))
+                print("Theoretical total energy: {:f}".format(self.RE.E0))
+                print("Energy balance: {:0.3f}%".format(EtotAll / self.RE.E0 * 100.0))
+                log.info("\n\nTotal Energy Deposited on ROI PFCs: {:f}".format(EtotROI))
+                log.info("Total Energy Deposited on All PFCs: {:f}".format(EtotAll))
+                log.info("Theoretical total energy: {:f}".format(self.RE.E0))
+                log.info("Energy balance: {:0.3f}%".format(EtotAll / self.RE.E0 * 100.0))
+
+                #print particle balance stats
+                Nptcls = self.RE.N_b*self.RE.N_r*self.RE.N_p*self.RE.N_vS
+                print("N Particles Deposited on All PFCs: {:f}".format(np.sum(pTotAll)))
+                print("Theoretical N particles: {:f}".format(Nptcls))
+                print("Particle balance: {:0.3f}%\n".format(pTotAll / Nptcls * 100.0))
+                log.info("N Particles Deposited on All PFCs: {:f}".format(np.sum(pTotAll)))
+                log.info("Theoretical N particles: {:f}".format(Nptcls))
+                log.info("Particle balance: {:0.3f}%\n".format(pTotAll / Nptcls * 100.0))
+
+
+                #copy heat fluxes to the paraview movie directory
+                print("Copying HF to PV movieDir")
+                log.info("Copying HF to PV movieDir")
+                self.saveFilamentHFOutput(ts, id)
+                self.saveFilamentParticleOutput(ts, id)
+
+
+            #copy filament sources at this timestep to the paraview movie directory
+            print("\nBuilding paraview movie directory...can take some time")
+            for i,ts in enumerate(self.RE.tsFil):
+                id = REDict['id'][i]
+                N_src_t = REDict['N_src_t'][i]
+                tCount = 0
+                for t in ts:
+                    if tCount < N_src_t: 
+                        oldPath = self.MHD.shotPath + self.tsFmt.format(t) + '/paraview/'
+                        newPath = self.MHD.shotPath + '/paraview/'
+                        name = 'filamentSource_'+id+'_' + self.tsFmt.format(t)
+                        self.combineFilTimesteps(name, oldPath, newPath)
+                    tCount +=1
+
+        #set tree permissions
+        tools.recursivePermissions(self.MHD.shotPath, self.UID, self.GID, self.chmod)
             
         print("Total Time Elapsed: {:f}".format(time.time() - t0))
         log.info("Total Time Elapsed: {:f}".format(time.time() - t0))
@@ -2237,24 +2568,29 @@ class engineObj():
 
     #--- Filaments ---
 
-    def filDepositedEnergyParticles(self, tIdx:int):
+    def filDepositedEnergyParticles(self, tIdx:int, filtype = 'fil'):
         """
         loops through intersectRecord and calculates the sum of all deposited energy
         and particles on any PFC, including PFCs outside of the ROI
         """
-        density = self.FIL.density[:,:,:,tIdx].reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p)
+        
+        if filtype == 'RE':
+            obj = self.RE
+        else:
+            obj = self.FIL
+        density = obj.density[:,:,:,tIdx].reshape(obj.N_b*obj.N_r*obj.N_p)
 
         energy = np.zeros(density.shape)
         ptcls = 0.0
-        for i in range(self.FIL.N_vS):
-            hits = np.any(~np.isnan(self.FIL.intersectRecord[i,:,:]), axis=1)
+        for i in range(obj.N_vS):
+            hits = np.any(~np.isnan(obj.intersectRecord[i,:,:]), axis=1)
             #ptcls +=  density * self.FIL.velocityFracs[:,i] * hits
             #energy += density * self.FIL.energyFracs[:,i] * hits
             #energy += E * self.FIL.velocityFracs[:,i] * hits
             #ptcls += np.sum(hits)
 
             ptcls += np.sum(hits)
-            energy += self.FIL.E0 * density * self.FIL.energyFracs[:,i] * hits
+            energy += obj.E0 * density * obj.energyFracs[:,i] * hits
             
         return np.sum(energy), ptcls
 
@@ -2271,18 +2607,23 @@ class engineObj():
         return
 
 
-    def filamentSourceOutput(self,id: str, t: float, tIdx: int):
+    def filamentSourceOutput(self,id: str, t: float, tIdx: int, filtype = 'fil'):
         """
         saves filament source profile
         """
+        
+        if filtype == 'RE':
+            obj = self.RE
+        else:
+            obj = self.FIL
 
         #save filament data to file
         tag = self.tsFmt.format(t)
         prefix = 'filamentSource_'+id
         label = 'Filament Source'
-        xyzData = self.FIL.xyzPts.reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p, 3)
-        scalarData = self.FIL.density[:,:,:,tIdx].reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p)
-        path = self.FIL.controlfilePath
+        xyzData = obj.xyzPts.reshape(obj.N_b*obj.N_r*obj.N_p, 3)
+        scalarData = obj.density[:,:,:,tIdx].reshape(obj.N_b*obj.N_r*obj.N_p)
+        path = obj.controlfilePath
         if self.IO.csvMask == True:
             self.IO.writePointCloudCSV(xyzData,scalarData,path,label,tag,prefix)
         if self.IO.vtpPCMask == True:
@@ -2290,25 +2631,30 @@ class engineObj():
 
         return
 
-    def filamentTraceOutput(self, id: str, t_source: float, tIdx: int, colorbar=True):
+    def filamentTraceOutput(self, id: str, t_source: float, tIdx: int, colorbar=True, filtype = 'fil'):
         """
         saves filament traces in CSV or VTP format
 
         """ 
-        N_ts = int((self.FIL.tMax - self.FIL.tMin) / self.FIL.dt)+1
-        ts = np.linspace(self.FIL.tMin, self.FIL.tMax, N_ts)
+        if filtype == 'RE':
+            obj = self.RE
+        else:
+            obj = self.FIL
+        
+        N_ts = int((obj.tMax - obj.tMin) / obj.dt)+1
+        ts = np.linspace(obj.tMin, obj.tMax, N_ts)
         path = self.MHD.shotPath 
-        for i in range(self.FIL.N_vS):
+        for i in range(obj.N_vS):
             for j,t in enumerate(ts):
                 #save filament trajectory data to file
                 tag = self.tsFmt.format(t)
                 prefix = 'filamentTrace_'+id+'_vS{:03d}_tsSrc'.format(i)+self.tsFmt.format(t_source)
                 label = 'Filament Trace'
-                xyzData = self.FIL.xyzSteps[i,:,j,:].reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p, 3)
+                xyzData = obj.xyzSteps[i,:,j,:].reshape(obj.N_b*obj.N_r*obj.N_p, 3)
                 if colorbar == True:
-                    scalarData = self.FIL.density[:,:,:,tIdx].reshape(self.FIL.N_b*self.FIL.N_r*self.FIL.N_p) * self.FIL.energyFracs[:,i]
+                    scalarData = obj.density[:,:,:,tIdx].reshape(obj.N_b*obj.N_r*obj.N_p) * obj.energyFracs[:,i]
                 else:
-                    scalarData = np.ones((self.FIL.N_b*self.FIL.N_r*self.FIL.N_p))
+                    scalarData = np.ones((obj.N_b*obj.N_r*obj.N_p))
                 if self.IO.csvMask == True:
                     self.IO.writePointCloudCSV(xyzData,scalarData,path,label,tag,prefix)
                 if self.IO.vtpPCMask == True:
@@ -2427,13 +2773,20 @@ class engineObj():
         return
 
 
-    def getFilMeshes(self):
+    def getFilMeshes(self, filtype = 'fil'):
         """
         sets up filament meshes, independent of timestep
         
         very similar to getGYROMeshes, so could probably be consolidated into single function
         one day...
         """
+        
+        if filtype == 'RE':
+            print("Using Runaway electrons")
+            obj = self.RE
+        else:
+            obj = self.FIL
+        
         print("\nBuilding filament meshes and mappings")
         log.info("\nBuilding filament meshes and mappings")
         totalMeshCounter = 0
@@ -2441,9 +2794,9 @@ class engineObj():
         numROIFaces = 0
         targetPoints = []
         targetNorms = []
-        self.FIL.CADtargetNames = []
-        self.FIL.CADROIindexes = []
-        self.FIL.CADROINames = []
+        obj.CADtargetNames = []
+        obj.CADROIindexes = []
+        obj.CADROINames = []
 
       
         #build arrays for intersections
@@ -2457,9 +2810,9 @@ class engineObj():
             numROIFaces += target.CountFacets
             #append target data
             for face in target.Facets:
-                self.FIL.CADtargetNames.append(self.CAD.ROIList[i]) #do this for future HF reassignment
-                self.FIL.CADROIindexes.append(i)
-                self.FIL.CADROINames.append(self.CAD.ROIList[i])
+                obj.CADtargetNames.append(self.CAD.ROIList[i]) #do this for future HF reassignment
+                obj.CADROIindexes.append(i)
+                obj.CADROINames.append(self.CAD.ROIList[i])
                 targetPoints.append(face.Points)
                 targetNorms.append(face.Normal)
 
@@ -2474,29 +2827,29 @@ class engineObj():
                 numTargetFaces += target.CountFacets
                 #append target data
                 for face in target.Facets:
-                    self.FIL.CADtargetNames.append(self.CAD.intersectList[i]) #do this for future HF reassignment
+                    obj.CADtargetNames.append(self.CAD.intersectList[i]) #do this for future HF reassignment
                     targetPoints.append(face.Points)
                     targetNorms.append(face.Normal)
 
         #targets
         targetPoints = np.asarray(targetPoints)/1000.0 #scale to m
         targetNorms = np.asarray(targetNorms)
-        self.FIL.targetPoints = targetPoints
-        self.FIL.targetNorms = targetNorms
-        self.FIL.t1 = targetPoints[:,0,:] #target point 1 of mesh triangle
-        self.FIL.t2 = targetPoints[:,1,:] #target point 2 of mesh triangle
-        self.FIL.t3 = targetPoints[:,2,:] #target point 3 of mesh triangle
-        self.FIL.Nt = len(self.FIL.t1)
-        self.FIL.intersectCenters = tools.getTargetCenters(targetPoints)
-        self.FIL.intersectNorms = np.zeros(targetNorms.shape)
+        obj.targetPoints = targetPoints
+        obj.targetNorms = targetNorms
+        obj.t1 = targetPoints[:,0,:] #target point 1 of mesh triangle
+        obj.t2 = targetPoints[:,1,:] #target point 2 of mesh triangle
+        obj.t3 = targetPoints[:,2,:] #target point 3 of mesh triangle
+        obj.Nt = len(obj.t1)
+        obj.intersectCenters = tools.getTargetCenters(targetPoints)
+        obj.intersectNorms = np.zeros(targetNorms.shape)
         mag = np.linalg.norm(targetNorms,axis=1)
         for i in range(len(targetNorms)):
-            self.FIL.intersectNorms[i,:] = targetNorms[i,:] / mag[i]
-        print("Total FIL Intersect Faces: {:d}".format(self.FIL.Nt))
+            obj.intersectNorms[i,:] = targetNorms[i,:] / mag[i]
+        print("Total FIL Intersect Faces: {:d}".format(obj.Nt))
 
-        self.FIL.N_CADROI = len(self.FIL.CADROINames)
+        obj.N_CADROI = len(obj.CADROINames)
         #maps from Targets to ROI
-        self.FIL.CADTGT_CADROImap = np.arange(self.FIL.N_CADROI)
+        obj.CADTGT_CADROImap = np.arange(obj.N_CADROI)
 
         return
 
