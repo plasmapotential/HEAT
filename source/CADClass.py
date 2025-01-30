@@ -882,7 +882,9 @@ class CAD:
         if hasattr(self,'unitConvert'):
             unitConvert = self.unitConvert
         if hasattr(self, 'BYOM'):
-            permute_mask = not(self.BYOM)
+            if self.BYOM == True:
+                permute_mask = False
+
 
         #First handle coordinate permutations (preserve right hand rule)
         if permute_mask==True:

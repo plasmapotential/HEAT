@@ -53,6 +53,3 @@ timesteps, PFCname, resolution, DivCode, intersectName, excludeName
 #Example for gyro-orbit calculations
 #0:5000, SOLID843, 5.0, LO, all, gyroSourcePlane
 #0:5000, gyroSourcePlane, 5.0, LO, all, none
-#
-#Example for BYOM
-#0:5000, SOLID843___5.000000mm.stl, 5.0, LO, all, gyroSourcePlane
