@@ -230,7 +230,8 @@ class CAD:
 
         BYOM = Bring Your Own Mesh.  This will be set to True when using
         terminal user interface if PFC csv file has an STL instead of
-        a part name in the PFCname column
+        a part name in the PFCname column.  To BYOM, place the stl file
+        in the HEATrun directory and modify the PFC csv file.
         """
         self.BYOM = False
         for idx,partnum in enumerate(self.ROI):
@@ -880,6 +881,8 @@ class CAD:
             permute_mask = self.permute_mask
         if hasattr(self,'unitConvert'):
             unitConvert = self.unitConvert
+        if hasattr(self, 'BYOM'):
+            permute_mask = not(self.BYOM)
 
         #First handle coordinate permutations (preserve right hand rule)
         if permute_mask==True:

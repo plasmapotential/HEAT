@@ -943,14 +943,22 @@ class engineObj():
 
         The PFC file defines which CAD objects comprise the region of interest (ROI),
         as well as various parameters for each ROI object.  The PFC file is a CSV
-        file in which each row corresponds to a separate ROI object.  The columns 
-        in the PFC file are as follows:
+        file in which each row corresponds to a separate ROI object.
+
+        A user can either use the HEAT algorithms to read a parametric CAD file (ie .step)
+        and generate meshes or Bring Your Own Mesh (BYOM).  When using the HEAT algorithms 
+        for meshing, the PFC file contains information about the part objects in the CAD file.  
+        When using BYOM, the PFC file contains the name of the user's mesh file, and the 
+        resolution is ignored.  The columns in the PFC file are as follows:
 
         :timesteps: the timesteps during which we should calculate quantities on this
           ROI object
-        :PFCname: the name of the CAD object as it appears in the CAD file
+        :PFCname: the name of the CAD object as it appears in the CAD file.  If the 
+          user Brings Your Own Mesh (BYOM), then the PFC name should be the location
+          name of the mesh (.stl) file.
         :resolution: the maximum length [mm] of any triangular mesh element for this
-          ROI object.  This is a proxy for the resolution.
+          ROI object.  This is a proxy for the resolution.  If the user Brings Your
+          Own Mesh (BYOM), then this parameter is ignored.
         :DivCode: divertor code.  This can be: LO, LI, UO, UI, which correspond to:
           Lower Outer, Lower Inner, Upper Outer, Upper Inner.  These codes
           are how each PFC in the ROI get flagged as belonging to a specific
