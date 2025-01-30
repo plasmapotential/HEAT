@@ -44,4 +44,7 @@ jobs:
 #      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.0 /root/source/HEAT/source/runTerminalModeTestRad
     - name: NSTX-U RZQ File HEAT Calculation
       run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.1 /root/source/HEAT/source/runTerminalModeTestrzq
- 
+
+    - name: NSTX-U BYOM HEAT calculation
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.1 /root/source/HEAT/source/runTerminalModeTestBYOM
+  
