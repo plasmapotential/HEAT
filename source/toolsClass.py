@@ -1200,5 +1200,6 @@ class tools:
 
         obj.mass_eV = ionMassAMU * obj.AMU
         obj.Z=1 #assuming isotopes of hydrogen here
+        obj.me = 0.511e6 # electron mass in ev
 
         return obj

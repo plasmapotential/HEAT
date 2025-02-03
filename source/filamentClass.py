@@ -113,7 +113,7 @@ class filament:
           0 for both directions.
         
         """
-
+        print('Reading filament file')
         filFile = path + 'filaments.csv'
         self.filData = pd.read_csv(filFile, sep=',', comment='#', skipinitialspace=True)
         print(self.filData.columns)
