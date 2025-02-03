@@ -621,6 +621,9 @@ class RAD:
 
     def calculatePowerTransferMitsubaNumpy(self, mitsubaMode='cuda', fType='ply', batch_size=100):
         """
+        THIS IS A LEGACY FUNCTION.  To use, need to update to be similar to JIT equivalent function,
+        calculatePowerTransferMitsubaJIT.  Left for reference.
+
         Maps power between sources and targets (ROI PFCs).  Uses Mitsuba3 to
         perform ray tracing.  Mitsuba3 can be optimized for CPU or GPU.
 
