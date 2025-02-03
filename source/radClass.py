@@ -305,7 +305,7 @@ class RAD:
         return
 
 
-    def calculatePowerTransferMitsubaJIT(self, mitsubaMode='llvm', fType='ply', batch_size=1000):
+    def calculatePowerTransferMitsubaJIT(self, mitsubaMode='llvm', fType='ply', batch_size='auto'):
         """
         Maps power between sources and targets (ROI PFCs).  Uses Mitsuba3 to
         perform ray tracing.  Mitsuba3 can be optimized for CPU or GPU.
@@ -455,7 +455,8 @@ class RAD:
                 #dimension.  so we take the existing powCount and export it
                 #to the targetPower array before changing the size for the 
                 #last loop iteration where size_i changes
-                targetPower += np.sum(np.array(powCount.copy()).reshape(size_i, totFace), axis=0)
+                if i!=0:
+                    targetPower += np.sum(np.array(powCount.copy()).reshape(size_i, totFace), axis=0)
                 #now change the size of powCount for the last iteration
                 if mitsubaMode == 'cuda':
                     powCount = dr.zeros(dr.cuda.ad.Float, totFace*size_i)
