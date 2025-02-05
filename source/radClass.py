@@ -415,17 +415,19 @@ class RAD:
         normals = normals / np.linalg.norm(normals, axis=1, keepdims=True)
 
         # Centers (mean of vertices)
-        center = (v0 + v1 + v2) / 3.0
+        center = (v0 + v1 + v2) / 3.0       
+        N_sources = len(tx)
+        N_targets = len(center) #all intersections, including those not in ROI
+        targetPower = np.zeros((N_targets))
 
         #dynamically allocate batch size based upon available memory
         if batch_size == "auto":
             batch_size = int(2**32 / totFace  * 0.5)
+            if batch_size > N_sources:
+                batch_size = N_sources
 
         print("Using batch size of: {:d}".format(batch_size))
-        
-        N_sources = len(tx)
-        N_targets = len(center) #all intersections, including those not in ROI
-        targetPower = np.zeros((N_targets))
+
         print('Time to prepare mesh: ' + str(time.time() - t))
 
         t0 = time.time()
@@ -437,10 +439,6 @@ class RAD:
         #tracemalloc.start()
         process = psutil.Process()
 
-
-        #currently this loop grows indefinitely.  This is because drjit does not
-        #release and overwrite the _batch arrays on each iteration.  There is an 
-        #open issue for this here:  https://github.com/mitsuba-renderer/drjit/issues/137
         for i in range(0, N_sources, batch_size):
         #while loop(loopFlag == 0):
             tLoop = time.time()
@@ -455,8 +453,7 @@ class RAD:
                 #dimension.  so we take the existing powCount and export it
                 #to the targetPower array before changing the size for the 
                 #last loop iteration where size_i changes
-                if i!=0:
-                    targetPower += np.sum(np.array(powCount.copy()).reshape(size_i, totFace), axis=0)
+                targetPower += np.sum(np.array(powCount.copy()).reshape(size_i, totFace), axis=0)
                 #now change the size of powCount for the last iteration
                 if mitsubaMode == 'cuda':
                     powCount = dr.zeros(dr.cuda.ad.Float, totFace*size_i)
