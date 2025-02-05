@@ -947,11 +947,13 @@ class Runaways:
         dSurf = np.append(dSurf, np.array([dSurf[negpi_ind], dSurf[pi_ind]]))
         
         #interpolator that maps theta back to distance along the flux surface
-        interpolator = interp.interp1d(thetaSurf, dSurf, kind='slinear', axis=0)
-
-        dCtr = interpolator(thetaCtr)
-
-        distTheta = interpolator(thetaRZ) - dCtr
+        #interpolator = interp.interp1d(thetaSurf, dSurf, kind='slinear', axis=0)
+        #dCtr = interpolator(thetaCtr)
+        #distTheta = interpolator(thetaRZ) - dCtr
+        
+        dCtr = np.interp(thetaCtr, thetaSurf, dSurf)
+        distTheta = np.interp(thetaRZ, thetaSurf, dSurf) - dCtr
+        
         distTheta = distTheta.reshape(R.shape) #on grid
 
 
@@ -968,8 +970,13 @@ class Runaways:
         R_hat = np.array([1.0, 0.0])
         theta = np.arccos(np.dot(r_hat, R_hat))
         zMid = ep.g['ZmAxis']
-        idx = np.where(Z < zMid)[0]
-        theta[idx] *= -1.0
+        if type(Z) != np.ndarray:
+            if Z < zMid:
+                theta*=-1.0 
+        else:
+            if (Z < zMid).any():
+                idx = np.where(Z < zMid)[0]
+                theta[idx] *= -1.0
         return theta
     
     
