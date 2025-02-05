@@ -14,7 +14,7 @@ tools = toolsClass.tools()
 import EFIT.equilParams_class as EP
 import scipy.interpolate as scinter
 from scipy.optimize import bisect
-from scipy.integrate import simps
+from scipy.integrate import simpson
 
 import multiprocessing
 
@@ -632,9 +632,9 @@ class heatFlux:
         q_hat = self.eich_profile_fluxspace(PFC, lqEich, S, R_omp, Bp_omp, psiN)
 
         #Menard's method (also see qDiv function)
-        #P0 = 2*np.pi * simps(q_hat, psi)
+        #P0 = 2*np.pi * simpson(q_hat, psi)
         #Reinke's Method (also see qDiv function)
-        P0 = 2*np.pi * simps(q_hat / B_omp, psi)
+        P0 = 2*np.pi * simpson(q_hat / B_omp, psi)
 
         #account for nonphysical power
         if P0 < 0: P0 = -P0
@@ -710,11 +710,11 @@ class heatFlux:
             qPN_hat = np.exp( s_hat[useP] / lqPN_hat[useP])
             qPF_hat = np.exp( s_hat[useP] / lqPF_hat[useP])
             #reinke method
-            intPN = simps(qPN_hat / B_omp[useP], psi[useP])
-            intPF = simps(qPF_hat / B_omp[useP], psi[useP])
+            intPN = simpson(qPN_hat / B_omp[useP], psi[useP])
+            intPF = simpson(qPF_hat / B_omp[useP], psi[useP])
             #menard method
-            #intPN = simps(qPN_hat, psi[useP])
-            #intPF = simps(qPF_hat, psi[useP])
+            #intPN = simpson(qPN_hat, psi[useP])
+            #intPF = simpson(qPF_hat, psi[useP])
         else:
             qPN_hat = 0.0
             qPF_hat = 0.0
@@ -725,11 +725,11 @@ class heatFlux:
             qCN_hat = np.exp(-s_hat[useC] / lqCN_hat[useC])
             qCF_hat = np.exp(-s_hat[useC] / lqCF_hat[useC])
             #reinke method
-            intCN = simps(qCN_hat / B_omp[useC], psi[useC])
-            intCF = simps(qCF_hat / B_omp[useC], psi[useC])
+            intCN = simpson(qCN_hat / B_omp[useC], psi[useC])
+            intCF = simpson(qCF_hat / B_omp[useC], psi[useC])
             #menard method
-            #intCN = simps(qCN_hat, psi[useC])
-            #intCF = simps(qCF_hat, psi[useC])
+            #intCN = simpson(qCN_hat, psi[useC])
+            #intCF = simpson(qCF_hat, psi[useC])
         else:
             qCN_hat = 0.0
             qCF_hat = 0.0
@@ -812,11 +812,11 @@ class heatFlux:
 
         #note: simps integration will fail if x variable (psi) is not monotonic
         #reinke method
-        intCN = simps(qCN_hat / B_omp, psi)
-        intCF = simps(qCF_hat / B_omp, psi)
+        intCN = simpson(qCN_hat / B_omp, psi)
+        intCF = simpson(qCF_hat / B_omp, psi)
         #menard method
-        #intCN = simps(qCN_hat, psi)
-        #intCF = simps(qCF_hat, psi)
+        #intCN = simpson(qCN_hat, psi)
+        #intCF = simpson(qCF_hat, psi)
 
         P0 = 2*np.pi * (intCN*self.fracCN + intCF*self.fracCF)
         #account for nonphysical power
@@ -877,9 +877,9 @@ class heatFlux:
 
         q_hat = self.tophat_profile_fluxspace(PFC,lq_mm,R_omp,Bp_omp,psiN)
         #Menard's method (also see qDiv function)
-        #P0 = 2*np.pi * simps(q_hat, psi)
+        #P0 = 2*np.pi * simpson(q_hat, psi)
         #Reinke's method (also see qDiv function)
-        P0 = 2*np.pi * simps(q_hat/B_omp, psi)
+        P0 = 2*np.pi * simpson(q_hat/B_omp, psi)
         q0 = np.abs(P / P0)
 
         return q0
