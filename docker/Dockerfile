@@ -37,7 +37,7 @@
 #1st build stage.  build all necessary packages from source
 #======================================================================
 # start from base
-FROM ubuntu:22.04 AS HEATbuilder
+FROM ubuntu:22.04 AS heatbuilder
 SHELL ["/bin/bash", "-c"] 
 
 LABEL maintainer="tlooby@cfs.energy"
@@ -72,7 +72,7 @@ RUN ln -s /usr/lib/x86_64-linux-gnu/libunwind.so /usr/lib/x86_64-linux-gnu/libun
 #RUN git clone https://github.com/ORNL-Fusion/EFIT.git /root/source/EFIT
 
 #clone HEAT
-RUN git clone https://github.com/plasmapotential/HEAT.git /root/source/HEAT
+RUN git clone -b v4.1.2 --single-branch https://github.com/plasmapotential/HEAT.git /root/source/HEAT
 
 #change to root (home) dir
 WORKDIR /root
@@ -85,8 +85,8 @@ RUN mkdir -p /root/source/M3DC1/build && /root/source/M3DC1/fusion-io/buildM3DC1
 
 #clone and build MAFOT
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/hdf5/openmpi
-#note branch here can be changed if PR goes thru
-RUN git clone -b HEATv4.1 --single-branch https://github.com/ORNL-Fusion/MAFOT.git /root/source/MAFOT
+#note branch here can be changed 
+RUN git clone -b master --single-branch https://github.com/ORNL-Fusion/MAFOT.git /root/source/MAFOT
 COPY buildMAFOT /root/source/MAFOT/buildMAFOT
 RUN mkdir -p /root/source/MAFOT/build/bin && \
     mkdir -p /root/source/MAFOT/build/lib && \
@@ -177,7 +177,7 @@ RUN apt-get -yqq install libopenmpi-dev libhdf5-openmpi-dev libnetcdf-dev libnet
 RUN ln -s /usr/lib/x86_64-linux-gnu/libunwind.so /usr/lib/x86_64-linux-gnu/libunwind.so.1
 
 #clone EFIT (note branch can be changed)
-RUN git clone -b tomDev https://github.com/ORNL-Fusion/EFIT.git /root/source/EFIT
+RUN git clone -b master --single-branch https://github.com/ORNL-Fusion/EFIT.git /root/source/EFIT
 
 #clone HEAT (note branch can be changed)
 RUN git clone -b v4.1.2 --single-branch https://github.com/plasmapotential/HEAT.git /root/source/HEAT
@@ -185,7 +185,9 @@ RUN git clone -b v4.1.2 --single-branch https://github.com/plasmapotential/HEAT.
 # fetch HEAT specific python dependencies
 RUN python3 -m pip install --upgrade pip && \
     python3 -m pip install --ignore-installed blinker && \
-    python3 -m pip install -r /root/source/HEAT/docker/requirements.txt
+    python3 -m pip install -r /root/source/HEAT/docker/requirements.txt && \
+    python3 -m pip install -U matplotlib 
+
 
 #make build dirs
 RUN mkdir -p /root/builds/M3DC1 && \
@@ -194,25 +196,25 @@ RUN mkdir -p /root/builds/M3DC1 && \
     mkdir -p /root/builds/swak4foam
 
 #copy M3DC1 fusion-io bins / libs
-COPY --from=HEATbuilder /root/source/M3DC1/build/bin /root/builds/M3DC1/bin
-COPY --from=HEATbuilder /root/source/M3DC1/build/lib /root/builds/M3DC1/lib
-COPY --from=HEATbuilder /root/source/M3DC1/build/include /root/builds/M3DC1/include
-COPY --from=HEATbuilder /root/source/M3DC1/build/modules /root/builds/M3DC1/modules
+COPY --from=heatbuilder /root/source/M3DC1/build/bin /root/builds/M3DC1/bin
+COPY --from=heatbuilder /root/source/M3DC1/build/lib /root/builds/M3DC1/lib
+COPY --from=heatbuilder /root/source/M3DC1/build/include /root/builds/M3DC1/include
+COPY --from=heatbuilder /root/source/M3DC1/build/modules /root/builds/M3DC1/modules
 
 #copy MAFOT bins / libs
-COPY --from=HEATbuilder /root/source/MAFOT/build/bin /root/builds/MAFOT/bin
-COPY --from=HEATbuilder /root/source/MAFOT/build/lib /root/builds/MAFOT/lib
+COPY --from=heatbuilder /root/source/MAFOT/build/bin /root/builds/MAFOT/bin
+COPY --from=heatbuilder /root/source/MAFOT/build/lib /root/builds/MAFOT/lib
 
 #copy openFOAM bin / libs
 ENV OFversion 2306 
-COPY --from=HEATbuilder /root/source/openfoam/OpenFOAM-v${OFversion}/platforms /root/builds/openfoam/platforms
-COPY --from=HEATbuilder /root/source/openfoam/OpenFOAM-v${OFversion}/build /root/builds/openfoam/build
-COPY --from=HEATbuilder /root/source/openfoam/OpenFOAM-v${OFversion}/bin /root/builds/openfoam/bin
-COPY --from=HEATbuilder /root/source/openfoam/OpenFOAM-v${OFversion}/etc /root/builds/openfoam/etc
+COPY --from=heatbuilder /root/source/openfoam/OpenFOAM-v${OFversion}/platforms /root/builds/openfoam/platforms
+COPY --from=heatbuilder /root/source/openfoam/OpenFOAM-v${OFversion}/build /root/builds/openfoam/build
+COPY --from=heatbuilder /root/source/openfoam/OpenFOAM-v${OFversion}/bin /root/builds/openfoam/bin
+COPY --from=heatbuilder /root/source/openfoam/OpenFOAM-v${OFversion}/etc /root/builds/openfoam/etc
 
 #copy swak4foam bins / libs
-COPY --from=HEATbuilder /root/OpenFOAM/user-v2306/platforms/linux64GccDPInt32Opt/bin /root/builds/swak4Foam/bin
-COPY --from=HEATbuilder /root/OpenFOAM/user-v2306/platforms/linux64GccDPInt32Opt/lib /root/builds/swak4Foam/lib
+COPY --from=heatbuilder /root/OpenFOAM/user-v2306/platforms/linux64GccDPInt32Opt/bin /root/builds/swak4Foam/bin
+COPY --from=heatbuilder /root/OpenFOAM/user-v2306/platforms/linux64GccDPInt32Opt/lib /root/builds/swak4Foam/lib
 
 #paths for libs
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/qt5
