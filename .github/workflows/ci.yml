@@ -13,36 +13,36 @@ jobs:
     - name: Check if final Docker image exists on Docker Hub
       id: check-final-image
       run: |
-        if docker pull plasmapotential/heat:v4.1; then
+        if docker pull plasmapotential/heat:v4.2; then
           echo "Image exists on Docker Hub."
         else
-          echo "::error ::Final HEAT Docker image v4.1 does not exist."
+          echo "::error ::Final HEAT Docker image v4.2 does not exist."
           exit 1 
         fi
 
-  test:
+  tests:
     needs: check-final-image
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
 
     - name: Pull Docker image
-      run: docker pull plasmapotential/heat:v4.1
+      run: docker pull plasmapotential/heat:v4.2
 
     - name: Run simple CI configuration test 
-      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.1 python3 /root/source/HEAT/tests/integrationTests/ciTest.py
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.2 python3 /root/source/HEAT/tests/integrationTests/ciTest.py
 
     - name: NSTX-U Optical HEAT Calculation
-      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.1 /root/source/HEAT/source/runTerminalModeTestOptical
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.2 /root/source/HEAT/source/runTerminalModeTestOptical
 
     - name: NSTX-U Optical Elmer FEM HEAT Calculation
-      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.1 /root/source/HEAT/source/runTerminalModeTestOpticalElmer     
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.2 /root/source/HEAT/source/runTerminalModeTestOpticalElmer     
 #    - name: NSTX-U Gyro-orbit HEAT Calculation
-#      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.0 /root/source/HEAT/source/runTerminalModeTestGyro
-#    - name: NSTX-U Photon Radiation HEAT Calculation
-#      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.0 /root/source/HEAT/source/runTerminalModeTestRad
+#      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.2 /root/source/HEAT/source/runTerminalModeTestGyro
+    - name: NSTX-U Photon Radiation HEAT Calculation
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.2 /root/source/HEAT/source/runTerminalModeTestRad
     - name: NSTX-U RZQ File HEAT Calculation
-      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.1 /root/source/HEAT/source/runTerminalModeTestrzq
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.2 /root/source/HEAT/source/runTerminalModeTestrzq
     - name: NSTX-U BYOM HEAT calculation
-      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.1 /root/source/HEAT/source/runTerminalModeTestBYOM
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.2 /root/source/HEAT/source/runTerminalModeTestBYOM
   
