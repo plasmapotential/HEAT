@@ -9,20 +9,18 @@ configurations and geometric configurations.  HEAT has been used to design the S
 Some examples of what HEAT can predict:
  - 3D heat loads from 2D and 3D plasmas for limited and diverted discharges
  - Heat fluxes from the optical approximation, ion gyro orbit approximation, and photon flux
- - Heat and particle fluxes from filaments
+ - Heat and particle fluxes from filaments and runaway electrons
  - 3D heat flux profiles from RMPs and Error Fields
  - Time varying heat loads and temperature profiles
  - Magnetic field line traces
  - Many other quantities
 ---
-The latest release of HEAT is v4.0, which includes the following notable additions / patches:
- - A filament tracer, based upon the Fundamenski Free Streaming Model (W Fundamenski et al 2006 Plasma Phys. Control. Fusion 48 109)
- - Compatibility with M3DC1 equilibria for 3D field tracing and footprints
- - Patch for photon tracing which results in 10X speedup in some cases
- - Numerous other bug fixes and user requests
+The latest release of HEAT is v4.2, which includes the following notable additions / patches:
+ - Mitsuba3 for photon tracing
+ - Ability to read STLs directly instead of STEPs (Bring Your Own Mesh)
+ - A Runaway Electron module developed by A Feyrer (MIT)
+ - Ability to read arbitrary R,Z,qPar profiles from a CSV developed by E Tinacba (ORNL)
 
-The following physics modules are scheduled to be added to HEAT soon:
-1) GPU support
 ---
 To cite HEAT, you can use a paper published by the journal Fusion Science and Technology under open access.  The paper can be found here: https://doi.org/10.1080/15361055.2021.1951532
 
@@ -33,7 +31,7 @@ Other recent HEAT related publications:
  - Measurements of multiple heat flux components at the divertor target by using surface eroding thermocouples (invited), Ren et al, https://aip.scitation.org/doi/full/10.1063/5.0101719
 
  ---
-For users who want to run HEAT, you will need to download the HEAT docker container from dockerhub.  There is no longer support for the Linux appImage, as the docker container is OS agnostic and achieves equal speeds as the appImage.  Users must download the docker container to get the HEAT environment.  The HEAT docker container has been tested on Linux, MacOS, and Windows.  See the tutorials link below for more information on installation.
+For users who want to run HEAT, you will need to download the HEAT docker container from dockerhub.  The HEAT docker container has been tested on Linux, MacOS, and Windows.  See the tutorials link below for more information on installation.
 
 Dockerhub repo:  https://hub.docker.com/r/plasmapotential/heat
 

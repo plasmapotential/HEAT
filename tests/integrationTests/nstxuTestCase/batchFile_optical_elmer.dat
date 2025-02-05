@@ -6,7 +6,7 @@
 #
 #===Column variables are defined as follows
 # MachFlag: machine specific flag.
-#           can be 'd3d','nstx','st40','step','sparc','west','kstar'
+#           can be 'd3d','nstx','st40','step','sparc','west','kstar', 'aug', 'other'
 #
 # Tag:  user specified tag to label the simulation by.  Tags represent
 #       independent HEAT runs.  For time varying discharges with multiple
@@ -25,13 +25,17 @@
 #           radix, which corresponds to nanosecond resolution (defined in engineClass
 #           initialization function call)
 #
-# GEQDSK:  magnetic equilibrium file (ie EFIT) in GEQDSK format
+# EQ:  magnetic equilibrium file 
+#          can be in GEQDSK format or in a JSON following the IMAS schema
 #          Psi should be in units of Wb/rad (divide by 2pi) and the Bt0, Fpol, Psi
-#          and Ip values should reflect COCOS.
+#          and Ip values should reflect COCOS and match machine helicity
 #
 # CAD: CAD file for the tag.  Note that HEAT will use the first CAD file provided
 #      in for each tag.  Subsequent lines in that tag are ignored.  In other words,
 #      there can only be one CAD file per tag.  Can be STEP, IGES, or FCStd formats.
+#      User can also supply a mesh (.STL) file and set this value to None.  In that
+#      case, the mesh file should be listed in the PFC CSV file for each ROI or
+#      intersection part
 #
 # PFC: PFC file for the tag.  Note that HEAT will use the first PFC file provided
 #      in for each tag.  Subsequent lines in that tag are ignored.  In other words,
@@ -44,6 +48,7 @@
 #         -hfOpt   optical heat flux 
 #         -hfGyro  gyro orbit heat flux 
 #         -hfFil   filament heat flux 
+#         -hfRE    runaway electron heat flux
 #         -hfRad   radiated power heat 
 #         -B       magnetic field glyphs
 #         -psiN    normalized poloidal flux 
@@ -69,8 +74,10 @@
 # <path>/<MachFlag>/Input
 #
 #  Example line for an NSTX-U run for pulse 204118 timestep 4ms:
-#MachFlag, Tag, Shot, TimeStep, GEQDSK, CAD, PFC, Input, Output
+#MachFlag, Tag, Shot, TimeStep, EQ, CAD, PFC, Input, Output
 #nstx,run1, 204118, 0.004, geqdsk.00004, IBDH_2tiles.step, PFCs_run1.csv, NSTXU_input.csv, B:hfOpt
+#  Example line for an NSTX-U run for pulse 204118 using JSON and user supplied mesh
+#nstx,run2, 204118, 0.004, nstx_eq_204118.json, None, PFCs_run2.csv, NSTXU_input.csv, B:hfOpt
 #
 # And the directory structure would look like this
 # <path>/batchFile.dat
@@ -82,7 +89,7 @@
 #
 #
 #
-MachFlag, Tag, Shot, TimeStep, GEQDSK, CAD, PFC, Input, Output
+MachFlag, Tag, Shot, TimeStep, EQ, CAD, PFC, Input, Output
 #example for optical approximation temperature calculation (HF + T) using Elmer FEM
 nstx,opticalExampleElmer, 204118, 0.050, g204118.00050, testCaseIBDH_v3.0.0.step, PFCs.csv, NSTXU_input.csv, hfOpt:elmer
 nstx,opticalExampleElmer, 204118, 0.200, g204118.00200, testCaseIBDH_v3.0.0.step, PFCs.csv, NSTXU_input.csv, hfOpt:elmer

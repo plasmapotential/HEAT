@@ -62,7 +62,14 @@ class RAD:
           read from a file will be duplicated Ntor times between phiMin and phiMax.
         :phiMax: Maximum toroidal angle of emission extent [degrees].  The emission profile
           read from a file will be duplicated Ntor times between phiMin and phiMax.
-
+        :rayTracer: defines which ray tracer to use.  can be open3d (default), mitsuba, 
+          or heat (legacy and slow)
+        :Prad_mult: multiplier to apply to the R,Z,Prad emission source points
+        :saveRadFrac: boolean that determines if we should save a matrix with the mapping 
+          between emission source points and each mesh triangle.  Will save a Ni x Nj matrix
+          where Ni is number of emission source points and Nj is target mesh triangles.  The
+          elements of the matrix are the fractions of the emission source, i, assigned to 
+          mesh triangle j.  For now this only works with Open3D ray tracing.
         
         """
 
@@ -73,6 +80,9 @@ class RAD:
                              'Nref',
                              'phiMin',
                              'phiMax',
+                             'rayTracer',
+                             'Prad_mult',
+                             'saveRadFrac',
                             ]
         return
 
@@ -85,6 +95,9 @@ class RAD:
             self.Nref = int(self.Nref)
             self.phiMin = float(self.phiMin)
             self.phiMax = float(self.phiMax)
+            self.Prad_mult = float(self.Prad_mult)
+            self.saveRadFrac = tools.makeBool(self.saveRadFrac)
+
         except:
             print("Could not initialize RadPower variables.  Bailing...")
             log.info("Could not initialize RadPower variables.  Bailing...")
@@ -112,7 +125,9 @@ class RAD:
         """
         print("Reading 2D photon radiation source file: "+file)
         log.info("Reading 2D photon radiation source file: "+file)
-        self.PC2D = pd.read_csv(file, header=0, names=['R','Z','P']).values 
+        df = pd.read_csv(file, header=0, names=['R','Z','P'])
+        df["P"]*=self.Prad_mult
+        self.PC2D = df.values 
         #self.PC2D /= 1000.0
         return
 
@@ -172,7 +187,7 @@ class RAD:
 
 
 
-    def preparePowerTransfer(self, PFC, CAD, mode=None):
+    def preparePowerTransfer(self, PFC, CAD):
         """
         builds the meshes and point clouds necessary for calculation.
 
@@ -244,25 +259,8 @@ class RAD:
         self.Ni = len(self.sources)
         self.Nj = len(self.targetCtrs)
 
-        #build single mesh for KDtree
-        if mode=='kdtree':
-            self.combinedMesh = CAD.createEmptyMesh()
-            for m in targetMeshes:
-                self.combinedMesh.addFacets(m.Facets)
-
-        #build objects for open3D ray tracing
-        elif mode=='open3d':
-            combinedMesh = CAD.createEmptyMesh()
-            for m in targetMeshes:
-                combinedMesh.addFacets(m.Facets)
-            oldMask = CAD.overWriteMask
-            CAD.overWriteMask = True
-            CAD.writeMesh2file(combinedMesh, 'combinedMesh', path=CAD.STLpath, resolution='standard')
-            CAD.overWriteMask = oldMask
-            self.meshFile = CAD.STLpath + 'combinedMesh' + "___standard.stl"
-            #self.meshFile = '/home/tom/source/dummyOutput/SOLID843___5.00mm.stl' #for testing
-
-        elif mode=='mitsuba':
+        #build mesh for mitsuba3
+        if self.rayTracer=='mitsuba':
             combinedMesh = CAD.createEmptyMesh()
             for m in targetMeshes:
                 combinedMesh.addFacets(m.Facets)
@@ -272,6 +270,24 @@ class RAD:
             CAD.writeMesh2file(combinedMesh, 'combinedMesh', path=CAD.STLpath, resolution='standard', fType='ply')
             CAD.overWriteMask = oldMask
             self.meshFile = CAD.STLpath + 'combinedMesh' + "___standard.ply"    
+
+        #build mesh for HEAT algs (old and slow)
+        elif self.rayTracer=='heat':
+            self.combinedMesh = CAD.createEmptyMesh()
+            for m in targetMeshes:
+                self.combinedMesh.addFacets(m.Facets)
+
+        #build objects for open3D ray tracing
+        else:
+            combinedMesh = CAD.createEmptyMesh()
+            for m in targetMeshes:
+                combinedMesh.addFacets(m.Facets)
+            oldMask = CAD.overWriteMask
+            CAD.overWriteMask = True
+            CAD.writeMesh2file(combinedMesh, 'combinedMesh', path=CAD.STLpath, resolution='standard')
+            CAD.overWriteMask = oldMask
+            self.meshFile = CAD.STLpath + 'combinedMesh' + "___standard.stl"
+            #self.meshFile = '/home/tom/source/dummyOutput/SOLID843___5.00mm.stl' #for testing
 
 
         print("\nTotal Rad Intersection Faces: {:d}".format(totalMeshCounter))
@@ -289,7 +305,7 @@ class RAD:
         return
 
 
-    def calculatePowerTransferMitsubaJIT(self, mode=None, mitsubaMode='llvm', fType='ply', batch_size=1000):
+    def calculatePowerTransferMitsubaJIT(self, mitsubaMode='llvm', fType='ply', batch_size='auto'):
         """
         Maps power between sources and targets (ROI PFCs).  Uses Mitsuba3 to
         perform ray tracing.  Mitsuba3 can be optimized for CPU or GPU.
@@ -344,19 +360,9 @@ class RAD:
         scene[name] = {
             'type': fType,
             'filename': self.meshFile,
-            'to_world': mi.ScalarTransform4f.scale(0.001),  # Convert from mm to m
+            'to_world': mi.ScalarTransform4f().scale([0.001, 0.001, 0.001]),  # Convert from mm to m
             'face_normals': True,  # This prevents smoothing of sharp-corners by discarding surface-normals. Useful for engineering CAD.
-            'sensor': {
-                'type': 'irradiancemeter',
-                'film': {
-                    'type': 'hdrfilm',
-                    'pixel_format': 'luminance',
-                    'filter': {'type': 'box'},
-                    'width': 1,
-                    'height': 1,
-                }
             }
-        }
 
         t = time.time()
         print('Loading Scene....')
@@ -367,67 +373,61 @@ class RAD:
         t = time.time()
         # Convert the numpy arrays to Dr.Jit dynamic arrays
         #tx,tx,tz,tp are source values for x,y,z,power
-        tx = dr.cuda.Float(self.sources[:,0]) if mode == 'cuda' else dr.llvm.Float(self.sources[:,0])
-        ty = dr.cuda.Float(self.sources[:,1]) if mode == 'cuda' else dr.llvm.Float(self.sources[:,1])
-        tz = dr.cuda.Float(self.sources[:,2]) if mode == 'cuda' else dr.llvm.Float(self.sources[:,2])
-        tp = dr.cuda.Float(self.sourcePower) if mode == 'cuda' else dr.llvm.Float(self.sourcePower)
+        tx = dr.cuda.ad.Float(self.sources[:,0]) if mitsubaMode == 'cuda' else dr.llvm.ad.Float(self.sources[:,0])
+        ty = dr.cuda.ad.Float(self.sources[:,1]) if mitsubaMode == 'cuda' else dr.llvm.ad.Float(self.sources[:,1])
+        tz = dr.cuda.ad.Float(self.sources[:,2]) if mitsubaMode == 'cuda' else dr.llvm.ad.Float(self.sources[:,2])
+        tp = dr.cuda.ad.Float(self.sourcePower) if mitsubaMode == 'cuda' else dr.llvm.ad.Float(self.sourcePower)
 
-        # Grab all the shape ids to correctly identify the sensor
-        idL = [x.id() for x in scene.shapes()]
 
-        print('Time to build sources: ' + str(time.time() - t))
+        # Access the mesh object
+        mesh = None
+        for shape in scene.shapes():
+            if shape.id() == name:  # Use the ID or name of your mesh
+                mesh = shape
+                break
+            
+        if not mesh:
+            raise ValueError("Mesh not found in the scene!")
 
-        t = time.time()
-        # Find the sensor
-        sensInd = idL.index(name)
-        sensS = scene.shapes()[sensInd]
+        # Get vertex positions and face indices
+        params = mi.traverse(scene)
+        vertices = np.array(dr.unravel(mi.Point3f, params[name+'.vertex_positions'])).reshape(3,-1).T
+        # Retrieve the face indices (triangle indices)
+        faces = np.array(params[name + '.faces'], dtype=np.int32).reshape(-1,3)
+        totFace = len(faces)
 
-        params = mi.traverse(sensS)
-        verts = params['vertex_positions']
-        norms = params['vertex_normals']
+        # Compute normals, centers, and areas
+        v0 = vertices[faces[:, 0]]
+        v1 = vertices[faces[:, 1]]
+        v2 = vertices[faces[:, 2]]
 
-        # Find all the face and areas
-        totFace = sensS.face_count()
-        if mitsubaMode == 'cuda':
-            indF = sensS.face_indices(dr.arange(dr.cuda.ad.UInt, totFace))
-        else:
-            indF = sensS.face_indices(dr.arange(dr.llvm.ad.UInt, totFace))
+        # Edge vectors
+        edge1 = v1 - v0
+        edge2 = v2 - v0
 
-        # Label each vertex with its index
-        vertNum = int(len(verts) / 3)
-        vertA = np.array(verts)
+        # Normals (unnormalized)
+        normals = np.cross(edge1, edge2)
 
-        vertAR = vertA.reshape((vertNum, 3))
-        indFA = np.array(indF)
+        # Areas (half the magnitude of the cross-product)
+        area = np.linalg.norm(normals, axis=1) * 0.5
 
-        # Find the vertices of each face
-        faceV = np.take(vertAR, indFA.flatten(), axis=0)
+        # Normalize normals
+        normals = normals / np.linalg.norm(normals, axis=1, keepdims=True)
 
-        # Find the area of each face and the mean point of each face
-        faceV1 = faceV[::3, :]
-        faceV2 = faceV[1::3, :]
-        faceV3 = faceV[2::3, :]
-
-        # Find the area of each face
-        cross1 = faceV2 - faceV1
-        cross2 = faceV3 - faceV1
-
-        cross = np.cross(cross1, cross2)
-        area = np.linalg.norm(cross, axis=1) / 2
-
-        #find the mean point of each face
-        #again can probably be sped up
-        center = np.asarray([x.mean(0) for x in np.split(faceV,totFace,axis = 0)])
+        # Centers (mean of vertices)
+        center = (v0 + v1 + v2) / 3.0       
+        N_sources = len(tx)
+        N_targets = len(center) #all intersections, including those not in ROI
+        targetPower = np.zeros((N_targets))
 
         #dynamically allocate batch size based upon available memory
         if batch_size == "auto":
             batch_size = int(2**32 / totFace  * 0.5)
+            if batch_size > N_sources:
+                batch_size = N_sources
 
         print("Using batch size of: {:d}".format(batch_size))
-        
-        N_sources = len(tx)
-        N_targets = len(center) #all intersections, including those not in ROI
-        targetPower = np.zeros((N_targets))
+
         print('Time to prepare mesh: ' + str(time.time() - t))
 
         t0 = time.time()
@@ -439,9 +439,6 @@ class RAD:
         #tracemalloc.start()
         process = psutil.Process()
 
-        #currently this loop grows indefinitely.  This is because drjit does not
-        #release and overwrite the _batch arrays on each iteration.  There is an 
-        #open issue for this here:  https://github.com/mitsuba-renderer/drjit/issues/137
         for i in range(0, N_sources, batch_size):
         #while loop(loopFlag == 0):
             tLoop = time.time()
@@ -488,10 +485,10 @@ class RAD:
                 _,tp_batch = dr.meshgrid(dr.cuda.ad.Float(center[:,0]),dr.cuda.ad.Float(tp[i:i+size_i]),indexing = 'xy') #make the power meshed in the same way
                 sA,_ = dr.meshgrid(dr.cuda.ad.Float(area),dr.cuda.ad.Float(dummy),indexing = 'xy')
             else:
-                sx_batch,tx_batch = dr.meshgrid(dr.llvm.ad.Float(center[:,0]),dr.llvm.ad.Float(tx[i:i+size_i]),indexing = 'xy') #indexing ij makes it so that the first numpower points of sx are all the same (tx[0])
-                sy_batch,ty_batch = dr.meshgrid(dr.llvm.ad.Float(center[:,1]),dr.llvm.ad.Float(ty[i:i+size_i]),indexing = 'xy')
-                sz_batch,tz_batch = dr.meshgrid(dr.llvm.ad.Float(center[:,2]),dr.llvm.ad.Float(tz[i:i+size_i]),indexing = 'xy')
-                _,tp_batch = dr.meshgrid(dr.llvm.ad.Float(center[:,0]),dr.llvm.ad.Float(tp[i:i+size_i]),indexing = 'xy') #make the power meshed in the same way
+                sx_batch,tx_batch = dr.meshgrid(dr.llvm.ad.Float(center[:,0]),dr.llvm.ad.Float(self.sources[i:i+size_i,0]),indexing = 'xy') #indexing ij makes it so that the first numpower points of sx are all the same (tx[0])
+                sy_batch,ty_batch = dr.meshgrid(dr.llvm.ad.Float(center[:,1]),dr.llvm.ad.Float(self.sources[i:i+size_i,1]),indexing = 'xy')
+                sz_batch,tz_batch = dr.meshgrid(dr.llvm.ad.Float(center[:,2]),dr.llvm.ad.Float(self.sources[i:i+size_i,2]),indexing = 'xy')
+                _,tp_batch = dr.meshgrid(dr.llvm.ad.Float(center[:,0]),dr.llvm.ad.Float(self.sourcePower[i:i+size_i]),indexing = 'xy') #make the power meshed in the same way
                 sA,_ = dr.meshgrid(dr.llvm.ad.Float(area),dr.llvm.ad.Float(dummy),indexing = 'xy')
 
             #print('Time to meshgrid: ' + str(time.time() - t))
@@ -500,7 +497,7 @@ class RAD:
             #usage = mem_info.rss / (1024 * 1024)
             #print("Memory Used 2: {:f} MB".format(usage))
 
-            #define the ray origins which start at the HEAT grid points
+            #define the ray origins which start at the HEAT emission grid points
             origin = mi.Point3f(tx_batch,ty_batch,tz_batch)
             #and the target points which are the sensor faces
             target = mi.Vector3f(sx_batch,sy_batch,sz_batch)
@@ -515,7 +512,6 @@ class RAD:
             
             #gives the index of the primitive triangle that was hit
             primI = si.prim_index
-
             pow = dr.abs(dr.dot(dr.normalize(si.n),direction)) * sA * tp_batch/(4*dr.pi*dr.power(si.t,2))
 
             #finitePow = dr.isfinite(pow)
@@ -526,7 +522,8 @@ class RAD:
                 piA = dr.arange(dr.llvm.ad.UInt,totFace)
                 powTmp = dr.zeros(dr.llvm.ad.Float, totFace*size_i)
             piA = dr.tile(piA,size_i)
-            mask = dr.eq(primI,piA)
+            #mask = dr.eq(primI,piA)
+            mask = primI == piA
             #mask2 = dr.eq(mask, active)
             #mask3 = dr.eq(mask2, finitePow)
             correctHit = dr.compress(mask)
@@ -535,14 +532,20 @@ class RAD:
             tmp = dr.gather(type(pow),source = pow, index = correctHit) 
             dr.scatter(powTmp, value=tmp, index=correctHit)
 
-            ##for troubleshooting.  print data for a source -> target trace
-            #srcIdx = 18289
-            #roiIdx = 1700
+            ###for troubleshooting.  print data for a source -> target trace
+            #srcIdx = 1047
+            #roiIdx = 16614
             #if np.logical_and(srcIdx > i, srcIdx < i+size_i):
             #    idxBatch = srcIdx - i
+            #    print(self.sourcePower[srcIdx])
+            #    print(center[roiIdx])
+            #    print(area[roiIdx])
             #    print(np.array(tp_batch).reshape(size_i, totFace)[idxBatch, roiIdx])
             #    print(np.array(pow).reshape(size_i, totFace)[idxBatch,roiIdx])
             #    print(np.array(powTmp).reshape(size_i, totFace)[idxBatch, roiIdx])
+            #    print(np.array(sA).reshape(size_i, totFace)[idxBatch, roiIdx])
+            #    print(np.array(dr.abs(dr.dot(dr.normalize(si.n),direction))).reshape(size_i, totFace)[idxBatch, roiIdx])
+            #    print(np.array(si.t).reshape(size_i, totFace)[idxBatch, roiIdx])
             #    input()
             #powCount += self.traceMitsuba(sx_batch,sy_batch,sz_batch,
             #                              tx_batch,ty_batch,tz_batch,tp_batch,sA,
@@ -601,7 +604,8 @@ class RAD:
             piA = dr.arange(dr.llvm.ad.UInt,totFace)
             powTmp = dr.zeros(dr.llvm.ad.Float, totFace*size_i)
         piA = dr.tile(piA,size_i)
-        mask = dr.eq(primI,piA)
+        #mask = dr.eq(primI,piA)
+        mask = primI==piA
         #mask2 = dr.eq(mask, active)
         #mask3 = dr.eq(mask2, finitePow)
         correctHit = dr.compress(mask)
@@ -612,8 +616,11 @@ class RAD:
 
         return powTmp
 
-    def calculatePowerTransferMitsubaNumpy(self, mode=None, mitsubaMode='cuda', fType='ply', batch_size=100):
+    def calculatePowerTransferMitsubaNumpy(self, mitsubaMode='cuda', fType='ply', batch_size=100):
         """
+        THIS IS A LEGACY FUNCTION.  To use, need to update to be similar to JIT equivalent function,
+        calculatePowerTransferMitsubaJIT.  Left for reference.
+
         Maps power between sources and targets (ROI PFCs).  Uses Mitsuba3 to
         perform ray tracing.  Mitsuba3 can be optimized for CPU or GPU.
 
@@ -660,7 +667,7 @@ class RAD:
         scene[name] = {
             'type': fType,
             'filename': self.meshFile,
-            'to_world': mi.ScalarTransform4f.scale(0.001),  # Convert from mm to m
+            'to_world': mi.ScalarTransform4f().scale([0.001, 0.001, 0.001]),  # Convert from mm to m
             'face_normals': True,  # This prevents smoothing of sharp-corners by discarding surface-normals. Useful for engineering CAD.
             'sensor': {
                 'type': 'irradiancemeter',
@@ -682,10 +689,11 @@ class RAD:
 
         t = time.time()
         # Convert the numpy arrays to Dr.Jit dynamic arrays
-        tx = dr.cuda.Float(self.sources[:,0]) if mode == 'cuda' else dr.llvm.Float(self.sources[:,0])
-        ty = dr.cuda.Float(self.sources[:,1]) if mode == 'cuda' else dr.llvm.Float(self.sources[:,1])
-        tz = dr.cuda.Float(self.sources[:,2]) if mode == 'cuda' else dr.llvm.Float(self.sources[:,2])
-        tp = dr.cuda.Float(self.sourcePower) if mode == 'cuda' else dr.llvm.Float(self.sourcePower)
+        tx = dr.cuda.Float(self.sources[:,0]) if mitsubaMode == 'cuda' else dr.llvm.Float(self.sources[:,0])
+        ty = dr.cuda.Float(self.sources[:,1]) if mitsubaMode == 'cuda' else dr.llvm.Float(self.sources[:,1])
+        tz = dr.cuda.Float(self.sources[:,2]) if mitsubaMode == 'cuda' else dr.llvm.Float(self.sources[:,2])
+        tp = dr.cuda.Float(self.sourcePower) if mitsubaMode == 'cuda' else dr.llvm.Float(self.sourcePower)
+
 
         # Grab all the shape ids to correctly identify the sensor
         idL = [x.id() for x in scene.shapes()]
@@ -829,7 +837,7 @@ class RAD:
         return
 
 
-    def calculatePowerTransferOpen3D(self, mode=None, powFracSave=False):
+    def calculatePowerTransferOpen3D(self):
         """
         Maps power between sources and targets (ROI PFCs).  Uses Open3D to
         perform ray tracing.  Open3D can be optimized for CPU or GPU.
@@ -860,7 +868,7 @@ class RAD:
         print("Available memory: {:f} GB".format(memAvail / (1024**3)))  
 
         #setup netcdf (this is slow)
-        if powFracSave:
+        if self.saveRadFrac == True:
             print("Saving power fractions.\n")
             from netCDF4 import Dataset
             # Create a powerFrac file on disk
@@ -900,7 +908,7 @@ class RAD:
             condition = hitMap == np.arange(self.Nj)
             powFrac = np.abs(rdotn)*self.targetAreas/(4*np.pi*rMag**2)
 
-            if powFracSave == True:
+            if self.saveRadFrac == True:
                 # Open the NetCDF file in append mode and write the column
                 # this is slow!
                 with Dataset(self.powFracFile, 'a', format='NETCDF4') as ncfile:
@@ -934,7 +942,7 @@ class RAD:
         return
 
 
-    def calculatePowerTransfer(self, mode=None):
+    def calculatePowerTransfer(self, accMode=None):
         """
         Maps power between sources and targets (ROI PFCs).  Uses CPU
         multiprocessing without acceleration structures
@@ -954,7 +962,7 @@ class RAD:
             #manager can be used for locking, but shouldnt be necessary so long
             #as we dont overlap write locations between workers
             pool = multiprocessing.Pool(Ncores)
-            if mode=='kdtree':
+            if accMode=='kdtree':
                 tools.combinedMesh = self.combinedMesh
                 output = np.asarray(pool.map(self.powerFracMapParallelKDtree, np.arange(self.Nj)))
             else:

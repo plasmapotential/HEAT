@@ -380,16 +380,18 @@ class engineObj():
         return
 
 
-    def getMHDInputs(self,shot=None,traceLength=None,dpinit=None,
-                     gFileList=None,gFileData=None,plasma3Dmask=None,
+    def getMHDInputsForGUI(self,shot=None,traceLength=None,dpinit=None,
+                     eqList=None,eqData=None,plasma3Dmask=None,
+                     psiMult=1.0, BtMult=1.0, IpMult=1.0,
                      ):
         """
-        Get the mhd inputs from the gui or input file
+        Get the mhd inputs.  only used in GUI mode
         """
         tools.vars2None(self.MHD)
         tools.read_input_file(self.MHD, infile=self.infile)
         self.MHD.MachFlag=self.MachFlag #override input file with machine user selected
         self.MHD.setTypes()
+
 
         if shot is not None:
             self.MHD.shot = shot
@@ -399,23 +401,39 @@ class engineObj():
             self.MHD.nTrace = int(traceLength / dpinit)
         if dpinit is not None:
             self.MHD.dpinit = dpinit
-        self.MHD.gFileList = gFileList
-        if gFileList is not None:
-            self.MHD.writeGfileData(gFileList, gFileData)
+        self.MHD.eqList = eqList
+        if eqList is not None:
+            self.MHD.writeEQdata(eqList, eqData)
+            self.MHD.eqList = eqList
 
         if plasma3Dmask is not None:
             self.plasma3D.plasma3Dmask = plasma3Dmask
 
-        self.MHD.tree = 'EFIT02'
+        #multipliers for EQ variables
+        self.MHD.psiMult = psiMult
+        self.MHD.BtMult = BtMult
+        self.MHD.IpMult = IpMult
 
-        self.timesteps = self.MHD.getGEQDSKtimesteps(gFileList)
+        #determine if the EQ are GEQDSKs or IMAS formatted JSON / NetCDF
+        #and get the timesteps accordingly
+        self.MHD.EQmode = self.MHD.determineEQFiletype(eqList[0]) #assume we are not mixing and matching EQ types
+        if self.MHD.EQmode == 'geqdsk':
+            self.timesteps = self.MHD.getGEQDSKtimesteps(eqList)
+        elif self.MHD.EQmode == 'json':
+            self.timesteps = np.array([])
+            for eq in eqList:
+                data = self.IO.readJSON(self.tmpDir + eq)
+                self.timesteps = np.append( self.timesteps, np.round(np.array(data['equilibrium']['time']), 8) )
 
         #make tree branch for this shot
         self.setupTime(self.timesteps, shot, clobberFlag=False)
         self.MHD.shotPath = self.shotPath
 
-        self.MHD.getGEQDSK(self.timesteps,gFileList)
-        self.MHD.makeEFITobjects()
+        self.MHD.getGEQDSK(self.timesteps,eqList)
+        if self.MHD.EQmode != 'geqdsk':
+            self.MHD.makeEFITobjects()
+        else:
+            self.MHD.makeEFITobjects()
         self.NCPUs = multiprocessing.cpu_count() - 2 #reserve 2 cores for overhead
         self.MHD.psiSepLimiter = None
 
@@ -852,53 +870,63 @@ class engineObj():
 
         return
 
-    def getCADfromTUI(self,STPfile):
+    def getCADfromTUI(self,CADfile):
         """
-        Loads CAD file for terminal users
+        Loads CAD file for terminal users.  Here we call this file an STPfile,
+        but it could be other formats (ie BREP, FCStd, IGES, etc.)
         """
 
         tools.makeDir(self.CAD.STPpath, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
-        #get file name
-        stpName = os.path.basename(STPfile)
-        #time last modified
-        mtime_orig = os.stat(STPfile).st_mtime
-        #time last read
-        atime_orig = os.stat(STPfile).st_atime
-        #we will copy to this cache directory for future use
-        newSTPpath = self.CAD.STPpath + stpName
-        #check to see if this STP file exists and write data to the file
-        if os.path.isfile(newSTPpath) == False:
-            print("New STP file.  Writing")
-            shutil.copyfile(STPfile, newSTPpath)
-            #set modified timestamps to match original
-            os.utime(newSTPpath, (atime_orig, mtime_orig))
-            self.CAD.overWriteMask = True #we need to also overwrite meshes
+        #if CAD file is set to None, do not load
+        #(this is true when user brings their own meshes and no STEP file)
+        if type(CADfile) != str:
+            print("CADfile column in batchFile set to None.  Skipping CAD load.")
+            print("This is ok if you are bringing your own mesh (BYOM)")
+            log.info("CADfile column in batchFile set to None.  Skipping CAD load.")
+            log.info("This is ok if you are bringing your own mesh (BYOM)")
+
         else:
+            #get file name
+            stpName = os.path.basename(CADfile)
             #time last modified
-            mtime_new = os.stat(newSTPpath).st_mtime
+            mtime_orig = os.stat(CADfile).st_mtime
             #time last read
-            atime_new = os.stat(newSTPpath).st_atime
-            #if file was modified, overwrite
-            if mtime_orig != mtime_new:
-                print("File was modified since last HEAT upload.  Overwriting...")
-                shutil.copyfile(STPfile, newSTPpath)
-                print(atime_orig)
-                print(mtime_orig)
+            atime_orig = os.stat(CADfile).st_atime
+            #we will copy to this cache directory for future use
+            newSTPpath = self.CAD.STPpath + stpName
+            #check to see if this STP file exists and write data to the file
+            if os.path.isfile(newSTPpath) == False:
+                print("New STP file.  Writing")
+                shutil.copyfile(CADfile, newSTPpath)
+                #set modified timestamps to match original
                 os.utime(newSTPpath, (atime_orig, mtime_orig))
                 self.CAD.overWriteMask = True #we need to also overwrite meshes
-                os.chmod(newSTPpath, self.chmod)
-                os.chown(newSTPpath, self.UID, self.GID)
             else:
-                falseList = [False, 'F', 'f', 'false', 'False', 'FALSE']
-                if self.CAD.overWriteMask in falseList:
-                    self.CAD.overWriteMask = False
-                    print("STP file is already in the HEAT database.  Not overwriting...")
+                #time last modified
+                mtime_new = os.stat(newSTPpath).st_mtime
+                #time last read
+                atime_new = os.stat(newSTPpath).st_atime
+                #if file was modified, overwrite
+                if mtime_orig != mtime_new:
+                    print("File was modified since last HEAT upload.  Overwriting...")
+                    shutil.copyfile(CADfile, newSTPpath)
+                    print(atime_orig)
+                    print(mtime_orig)
+                    os.utime(newSTPpath, (atime_orig, mtime_orig))
+                    self.CAD.overWriteMask = True #we need to also overwrite meshes
+                    os.chmod(newSTPpath, self.chmod)
+                    os.chown(newSTPpath, self.UID, self.GID)
                 else:
-                    self.CAD.overWriteMask = True
-                    print("Overwriting CAD data per user input file overWriteMask variable.")
-        self.CAD.STPfile = newSTPpath
-        #load STP file using FreeCAD
-        self.CAD.loadSTEP()
+                    falseList = [False, 'F', 'f', 'false', 'False', 'FALSE']
+                    if self.CAD.overWriteMask in falseList:
+                        self.CAD.overWriteMask = False
+                        print("STP file is already in the HEAT database.  Not overwriting...")
+                    else:
+                        self.CAD.overWriteMask = True
+                        print("Overwriting CAD data per user input file overWriteMask variable.")
+            self.CAD.STPfile = newSTPpath
+            #load STP file using FreeCAD
+            self.CAD.loadSTEP()
         return
 
     def getPFCdataFromGUI(self, data):
@@ -920,14 +948,22 @@ class engineObj():
 
         The PFC file defines which CAD objects comprise the region of interest (ROI),
         as well as various parameters for each ROI object.  The PFC file is a CSV
-        file in which each row corresponds to a separate ROI object.  The columns 
-        in the PFC file are as follows:
+        file in which each row corresponds to a separate ROI object.
+
+        A user can either use the HEAT algorithms to read a parametric CAD file (ie .step)
+        and generate meshes or Bring Your Own Mesh (BYOM).  When using the HEAT algorithms 
+        for meshing, the PFC file contains information about the part objects in the CAD file.  
+        When using BYOM, the PFC file contains the name of the user's mesh file, and the 
+        resolution is ignored.  The columns in the PFC file are as follows:
 
         :timesteps: the timesteps during which we should calculate quantities on this
           ROI object
-        :PFCname: the name of the CAD object as it appears in the CAD file
+        :PFCname: the name of the CAD object as it appears in the CAD file.  If the 
+          user Brings Your Own Mesh (BYOM), then the PFC name should be the location
+          name of the mesh (.stl) file.
         :resolution: the maximum length [mm] of any triangular mesh element for this
-          ROI object.  This is a proxy for the resolution.
+          ROI object.  This is a proxy for the resolution.  If the user Brings Your
+          Own Mesh (BYOM), then this parameter is ignored.
         :DivCode: divertor code.  This can be: LO, LI, UO, UI, which correspond to:
           Lower Outer, Lower Inner, Upper Outer, Upper Inner.  These codes
           are how each PFC in the ROI get flagged as belonging to a specific
@@ -976,7 +1012,8 @@ class engineObj():
         log.info(self.CAD.ROIList)
 
         #Find potential intersections by file as they correspond to ROI PFCs,
-        # then mesh 'em using FreeCAD Standard mesh algorithm
+        # then mesh them using FreeCAD Standard mesh algorithm
+        # or use user supplied meshes (BYOM=True)
         self.CAD.getIntersectsFromFile(self.timestepMap)
         self.CAD.getIntersectMeshes(resolution=self.CAD.gridRes)
         self.CAD.writeMesh2file(self.CAD.intersectMeshes,
@@ -1389,10 +1426,14 @@ class engineObj():
                           self.RAD.Nref,
                           self.RAD.phiMin,
                           self.RAD.phiMax,
+                          self.RAD.rayTracer,
+                          self.RAD.Prad_mult,
+                          self.RAD.saveRadFrac,
                          )
         return
 
-    def getRADInputs(self, radFile, Ntor, Nref, phiMin, phiMax, radData=None):
+    def getRADInputs(self, radFile, Ntor, Nref, phiMin, phiMax, 
+                     rayTracer, Prad_mult, saveRadFrac, radData=None):
         """
         Sets up the RAD module
 
@@ -1403,10 +1444,14 @@ class engineObj():
         else:
             self.RAD.radFile = radFile
 
+        #in TUI mode we already set these types, but in GUI mode we do it here
         self.RAD.Ntor = int(Ntor)
         self.RAD.Nref = int(Nref)
         self.RAD.phiMin = float(phiMin)
         self.RAD.phiMax = float(phiMax)
+        self.RAD.rayTracer = str(rayTracer)
+        self.RAD.Prad_mult = float(Prad_mult)
+        self.RAD.saveRadFrac = bool(saveRadFrac)
 
         #read (R,Z,P) photon radiation source file (csv format)
         self.RAD.read2DSourceFile(self.RAD.radFile)
@@ -2058,7 +2103,7 @@ class engineObj():
                             print("Could not load RAD parameters.  Expected for GUI.  Check error message:")
                             print(e)
                         #location where we will save a memmap if necessary
-                        self.RAD.memmapFile = self.MHD.shotPath + self.tsFmt.format(t) +'/photonPowerFrac.nc'
+                        self.RAD.powFracFile = self.MHD.shotPath + self.tsFmt.format(t) +'/photonPowerFrac.nc'
                         #calculate the radiated power on the PFC mesh
                         self.radPower(PFC)
                         #save output files
@@ -2967,26 +3012,25 @@ class engineObj():
         return
 
     #--- Radiated power (photons) ---
-    def radPower(self,PFC, rayTriMode='open3d'):
+    def radPower(self,PFC):
         """
         runs the radiated power calculation
         """
         #setup the radiated power calculation
-        self.RAD.preparePowerTransfer(PFC, self.CAD, mode=rayTriMode)
+        self.RAD.preparePowerTransfer(PFC, self.CAD)
         #trace rays
-        if rayTriMode=='open3d':
-            print("Using Open3D")
-            #calculate photon load on PFC using open3d
-            self.RAD.calculatePowerTransferOpen3D(mode='open3d')
-        elif rayTriMode=='mitsuba':
+        if self.RAD.rayTracer=='mitsuba':
             print("Using Mitsuba")
-            #calculate photon load on PFC using open3d
-            #self.RAD.calculatePowerTransferMitsubaJIT(mode='mitsuba', mitsubaMode='cpu', fType='ply') #currently has memory leak
-            self.RAD.calculatePowerTransferMitsubaNumpy(mode='mitsuba', mitsubaMode='cpu', fType='ply')     
-        else:
+            #calculate photon load on PFC using mitsuba JIT or numpy
+            self.RAD.calculatePowerTransferMitsubaJIT(mitsubaMode='cpu', fType='ply') 
+            #self.RAD.calculatePowerTransferMitsubaNumpy(mitsubaMode='cpu', fType='ply')     
+        elif self.RAD.rayTracer=="heat":
             #calculate photon load on PFC using legacy methods (brute force)
             self.RAD.calculatePowerTransfer()
-
+        else:
+            print("Using Open3D")
+            #calculate photon load on PFC using open3d
+            self.RAD.calculatePowerTransferOpen3D()
         #assign variables to the PFC itself
         PFC.Prad = self.RAD.targetPower
         PFC.qRad = PFC.Prad / PFC.areas
@@ -3732,6 +3776,9 @@ class engineObj():
                     'tmax':None,
                     'traceLength': None,
                     'dpinit': None,
+                    'psiMult': None,
+                    'BtMult': None,
+                    'IpMult':None,
                     'dataPath': None,
                     'hfMode': None,
                     'lqCN': None,
@@ -3839,6 +3886,9 @@ class engineObj():
                     'tmax': self.MHD.tmax,
                     'traceLength': self.MHD.traceLength,
                     'dpinit': self.MHD.dpinit,
+                    'psiMult':self.MHD.psiMult,
+                    'BtMult':self.MHD.BtMult,
+                    'IpMult':self.MHD.IpMult,                    
                     'gridRes': self.CAD.gridRes,
                     'hfMode': self.HF.hfMode,
                     'lqEich': self.HF.lqCN,
@@ -3925,6 +3975,9 @@ class engineObj():
                     'tmax': self.MHD.tmax,
                     'traceLength': self.MHD.traceLength,
                     'dpinit': self.MHD.dpinit,
+                    'psiMult':self.MHD.psiMult,
+                    'BtMult':self.MHD.BtMult,
+                    'IpMult':self.MHD.IpMult,
                     'gridRes': self.CAD.gridRes,
                     'hfMode': self.HF.hfMode,
                     'lqEich': self.HF.lqCN,

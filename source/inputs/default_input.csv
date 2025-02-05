@@ -9,10 +9,11 @@ csvOut, True
 #=============================================================
 #                CAD Variables
 #=============================================================
-gTx, 0.0
-gTy, 0.0
-gTz, 0.0
 gridRes, standard
+overWriteMask, True
+xT, None
+yT, None
+zT, None
 #==============================================================
 #                MHD Variables
 #==============================================================
@@ -21,10 +22,9 @@ tmin, 0
 tmax, 11000
 traceLength, 10
 dpinit, 0.25
-dataPath, /home/tom/data/HEAT/
-plasma3Dmask, 0 #1=true, 0=false
-torFilt, True
-psiFilt, True
+psiMult, 1.0
+BtMult, 1.0
+IpMult, 1.0
 #==============================================================
 #                Optical HF Variables
 #==============================================================
@@ -47,12 +47,13 @@ fracUI,0.0
 fracUO,0.0
 fracLI,0.3
 fracLO,0.7
-Pinj, 10
-coreRadFrac, 0.3
+P, 10
+radFrac, 0.3
 qBG, 0.0
 fG, 0.6
 qFilePath, None
 qFileTag, None
+rzqFile, None
 #==============================================================
 #                Ion Gyro Orbit HF Variables
 #==============================================================
@@ -74,6 +75,9 @@ Ntor, 5
 Nref, 1
 phiMin, 20
 phiMax, 35
+rayTracer, open3d
+Prad_mult, 1.0
+saveRadFrac, False
 #==============================================================
 #                OpenFOAM Variables
 #==============================================================
@@ -85,3 +89,33 @@ STLscale, 1.0
 meshMinLevel, 1
 meshMaxLevel, 2
 material, SGL
+#==============================================================
+#                Elmer FEM Variables
+#==============================================================
+meshFEMminRes, 0.0
+meshFEMmaxRes, 1.0
+elmerDir, /root/terminal/sparc/elmer/
+elmerFile, elmerFile.csv
+elmerHEATlib, HEATLibrary.so
+#=============================================================
+#                3D Plasma Variables
+#=============================================================
+plasma3Dmask, False
+itt, 335
+response, 1
+selectField, 2
+useIcoil, 0
+sigma, 0
+charge, -1
+Ekin, 10
+Lambda, 0.1
+Mass, 2
+kappa, 200
+Lcmin, 0.075
+lcfs, 0.986
+model, layer
+teProfileData, None
+neProfileData, None
+loadHF, False
+loadBasePath, None
+NCPUs, 10

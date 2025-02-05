@@ -37,15 +37,22 @@ for obj in sel:
 print(line)
 
 
-#hide objects by color.  Before running, select all objects to be included
+#hide objects by color.  
+#send an object to python console then get its color:
+color = obj.ViewObject.ShapeAppearance[0].DiffuseColor
+#Before running, select all objects to be included
 #in GUI.  define the color first
-color = (0.800000011920929, 1.0, 0.6000000238418579, 0.0)
+color = (1.0, 0, 0, 0)
 sel = FreeCADGui.Selection.getSelection()
 for obj in sel:
-   if obj.ViewObject.ShapeColor == color:
-      obj.ViewObject.Visibility = False
-      #to delete, uncomment this line:
-      #FreeCAD.ActiveDocument.removeObject(obj.Name)
+    try:
+       if obj.ViewObject.ShapeAppearance[0].DiffuseColor == color:
+            #to hide, uncomment this line
+            #obj.ViewObject.Visibility = False
+            #to delete, uncomment this line:
+            FreeCAD.ActiveDocument.removeObject(obj.Name)
+    except:
+       print("Could not get color of shape: " + obj.Label)
 
 
 
@@ -53,7 +60,74 @@ for obj in sel:
 #to move (translate) in direction normal to face.
 #1st, select face for normal and send part to python console via right click in tree view
 #then run (where delta = distance to move)
-N = elt.normalAt(0,0)
-delta = 10.0
+#first get normal
+N = sub.normalAt(0,0) #sometimes obj is a sub, not elt
+delta = -0.1
 move = delta*N #use negative for direction opposite normal
-obj.Placement.move(move)
+#now select all objects you want to move and move them
+objs = FreeCADGui.Selection.getSelection()
+for obj in objs:
+    obj.Placement.move(move)
+
+
+#to translate along an arbitrary vector
+N = FreeCAD.Vector(0,-1,0)
+delta = -0.2
+move = delta*N #use negative for direction opposite normal
+#now select all objects you want to move and move them
+objs = FreeCADGui.Selection.getSelection()
+for obj in objs:
+    obj.Placement.move(move)
+
+
+
+#perform multiple translations on multiple parts simultaneously
+#first, select the surfaces and assign them to vectors
+vecList = []
+#do this for each surface (note that deltas below must be index aligned)
+#first, select the face then right click -> send to python console
+N = sub.normalAt(0,0)
+vecList.append(N)
+#list of translations that is indexed to match the vecList above
+#negative if opposite to normal vector
+deltas = [0.8250, 0.9125, 0.4675]
+
+#before running this select all the components you want to translate
+objs = FreeCADGui.Selection.getSelection()
+totalMove = FreeCAD.Vector(0,0,0)
+for i,v in enumerate(vecList):
+    print(deltas[i])
+    move = deltas[i]*v
+    totalMove +=move
+    for obj in objs:
+        obj.Placement.move(move)
+
+#print the total translation for use later
+print(totalMove)
+
+
+
+
+#to rotate an object about z axis
+#select object, then run this macro
+deg = 0.0282 #degrees to rotate
+objs = FreeCADGui.Selection.getSelection()
+for obj in objs:
+    # Get the current rotation
+    current_rotation = obj.Placement.Rotation
+    # Define the new rotation (30 degrees around Z-axis)
+    new_rotation = FreeCAD.Rotation(FreeCAD.Vector(0,0,1), deg)
+    # Combine the new rotation with the current rotation
+    combined_rotation = new_rotation.multiply(current_rotation)
+    obj.Placement.Rotation = combined_rotation
+    obj.ViewObject.update()
+
+
+
+#get all the objects displayed in the active view
+# Get all objects in the document
+all_objects = App.ActiveDocument.Objects
+# Filter objects to include only visible ones (not hidden)
+sel = [obj for obj in all_objects if obj.ViewObject.Visibility]
+
+

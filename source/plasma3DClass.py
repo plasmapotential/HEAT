@@ -871,7 +871,7 @@ class heatflux3D:
 		q_hat = 2.0/7.0 * kappa/L * (T**3.5 - T0**3.5) * (1e+3)**3.5/1e+6   # in MW/m^2
 		
 		psi = psiN * (self.ep.g['psiSep']-self.ep.g['psiAxis']) + self.ep.g['psiAxis']	# this is flux
-		P0 = 2*np.pi * integ.simps(q_hat, psi)
+		P0 = 2*np.pi * integ.simpson(q_hat, psi)
 		#account for nonphysical power
 		if P0 < 0: P0 = -P0
 		#Scale to input power
@@ -947,7 +947,7 @@ class heatflux3D:
 		#Menard's method
 		psiN = self.ep.psiFunc.ev(R,Z)	# this is normalized
 		psi = psiN * (self.ep.g['psiSep']-self.ep.g['psiAxis']) + self.ep.g['psiAxis']	# this is flux
-		P0 = 2*np.pi * integ.simps(q_hat, psi)
+		P0 = 2*np.pi * integ.simpson(q_hat, psi)
 		#account for nonphysical power
 		if P0 < 0: P0 = -P0
 		#Scale to input power
@@ -1199,7 +1199,7 @@ class heatflux3D:
 		q = qparm*nB
 		
 		# Integrate along line and along toroidal angle (axisymm) to get total power
-		P0 = 2*np.pi * integ.simps(R*q, swall)
+		P0 = 2*np.pi * integ.simpson(R*q, swall)
 		#account for nonphysical power
 		if P0 < 0: P0 = -P0
 		#Scale to input power
@@ -1327,7 +1327,7 @@ class heatflux3D:
 		q = qpar*nB
 		
 		# Integrate along line and along toroidal angle (axisymm) to get total power
-		P0 = 2*np.pi * integ.simps(radius*R*q, theta)
+		P0 = 2*np.pi * integ.simpson(radius*R*q, theta)
 		#account for nonphysical power
 		if P0 < 0: P0 = -P0
 		#Scale to input power
@@ -1411,7 +1411,7 @@ class heatflux3D:
 		#Menard's method
 		psiN = self.ep.psiFunc.ev(R,Z)	# this is normalized
 		psi = psiN * (self.ep.g['psiSep']-self.ep.g['psiAxis']) + self.ep.g['psiAxis']	# this is flux
-		P0 = 2*np.pi * integ.simps(qpar, psi)
+		P0 = 2*np.pi * integ.simpson(qpar, psi)
 		#account for nonphysical power
 		if P0 < 0: P0 = -P0
 		#Scale to input power
@@ -1493,7 +1493,7 @@ class heatflux3D:
 		#Menard's method
 		psiN = self.ep.psiFunc.ev(R,Z)	# this is normalized
 		psi = psiN * (self.ep.g['psiSep']-self.ep.g['psiAxis']) + self.ep.g['psiAxis']	# this is flux
-		P0 = 2*np.pi * integ.simps(q_hat, psi)
+		P0 = 2*np.pi * integ.simpson(q_hat, psi)
 		#account for nonphysical power
 		if P0 < 0: P0 = -P0
 		#Scale to input power
@@ -1550,7 +1550,7 @@ class heatflux3D:
 		
 		#Menard's method
 		psi = psiN * (self.ep.g['psiSep']-self.ep.g['psiAxis']) + self.ep.g['psiAxis']	# this is flux
-		P0 = 2*np.pi * integ.simps(q_hat, psi)
+		P0 = 2*np.pi * integ.simpson(q_hat, psi)
 		#account for nonphysical power
 		if P0 < 0: P0 = -P0
 		#Scale to input power

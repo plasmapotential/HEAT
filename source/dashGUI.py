@@ -470,6 +470,9 @@ def inputDragDrop(file, contents, MachFlag):
               [State('shot', 'value'),
                State('traceLength', 'value'),
                State('dpinit', 'value'),
+               State('psiMult1', 'value'),
+               State('BtMult1', 'value'),
+               State('IpMult1', 'value'),
                State('gridRes', 'value'),
                State('hfMode', 'value'),
                State('eichlqCNmode', 'value'),
@@ -532,6 +535,9 @@ def saveGUIinputs(  n_clicks,
                     shot,
                     traceLength,
                     dpinit,
+                    psiMult,
+                    BtMult,
+                    IpMult,
                     gridRes,
                     hfMode,
                     eichlqCNmode,
@@ -606,6 +612,9 @@ def saveGUIinputs(  n_clicks,
     data['traceLength'] = traceLength
     data['dpinit'] = dpinit
     data['dataPath'] = dataLoc
+    data['psiMult'] = psiMult
+    data['BtMult'] = BtMult
+    data['IpMult'] = IpMult
 
     #hf variables
     data['hfMode'] = hfMode
@@ -703,6 +712,12 @@ def buildMHDbox():
                 dbc.Input(id="traceLength"),
                 dbc.Label("Toroidal Step Size [degrees]"),
                 dbc.Input(id="dpinit"),
+                dbc.Label("Multiplier for Psi (RZ, sep, axis) Values"),
+                dbc.Input(id="psiMult1"),
+                dbc.Label("Multiplier for Bt (Bt0, Fpol) Values"),
+                dbc.Input(id="BtMult1"),
+                dbc.Label("Multiplier for Ip Values"),
+                dbc.Input(id="IpMult1"),
                 html.Br(),
                 dbc.Label("Load MHD Equilibria:"),
                 dcc.Upload(
@@ -755,9 +770,13 @@ def buildMHDbox():
               State('gfiletable-upload', 'contents'),
               State('plasma3Dmask', 'value'),
               State('dataPath', 'value'),
-              State('MachFlag', 'value')]
+              State('MachFlag', 'value'),
+              State('psiMult1', 'value'),
+              State('BtMult1', 'value'),
+              State('IpMult1', 'value')]
               )
-def loadMHD(n_clicks,shot,traceLength,dpinit,gFileList,gFileData,plasma3Dmask,dataPath,MachFlag):
+def loadMHD(n_clicks,shot,traceLength,dpinit,eqList,eqData,plasma3Dmask,dataPath,MachFlag,
+            psiMult, BtMult, IpMult):
     """
     Load MHD
     """
@@ -771,7 +790,7 @@ def loadMHD(n_clicks,shot,traceLength,dpinit,gFileList,gFileData,plasma3Dmask,da
     if plasma3Dmask == 'plasma3D': plasma3Dmask = True
     else:  plasma3Dmask = False
 
-    if (shot is None) and (gFileList is None):
+    if (shot is None) and (eqList is None):
         raise PreventUpdate
 
     if shot is not None: shot = int(shot)
@@ -781,46 +800,60 @@ def loadMHD(n_clicks,shot,traceLength,dpinit,gFileList,gFileData,plasma3Dmask,da
         dpinit = float(dpinit)
     else:
         dpinit = 1.0
-    if gFileList is not None:
-        if type(gFileList) is not list:
-            gFileList = [gFileList]
-    if gFileData is not None:
-        if type(gFileData) is not list:
-            gFileData = [gFileData]
+    if eqList is not None:
+        if type(eqList) is not list:
+            eqList = [eqList]
+    if eqData is not None:
+        if type(eqData) is not list:
+            eqData = [eqData]
 
-    gui.getMHDInputs(shot=shot,
+    gui.getMHDInputsForGUI(shot=shot,
                      traceLength=traceLength,
                      dpinit=dpinit,
-                     gFileList=gFileList,
-                     gFileData=gFileData,
+                     eqList=eqList,
+                     eqData=eqData,
                      plasma3Dmask=plasma3Dmask,
+                     psiMult=psiMult,
+                     BtMult=BtMult,
+                     IpMult=IpMult,
                     )
 
     ts = gui.MHD.timesteps
     tminMHD = ts.min()
     tmaxMHD = ts.max()
-    if gFileList is None:
+    if eqList is None:
         tAll = np.linspace(int(tminMHD), int(tmaxMHD), (int(tmaxMHD)-int(tminMHD)+1))
         data = [dict([{'filename':'', 'timestep':''}][0])]
     else:
         tAll = ts
         keys=["filename"]
-        interpData = pd.DataFrame(gFileList, columns=keys)
+        interpData = pd.DataFrame(eqList, columns=keys)
         interpData["timestep[ms]"] = ""
         data = interpData.to_dict('records')
-        #interpData = [dict([{'filename':g, 'timestep':''} for g in gFileList])]
+        #interpData = [dict([{'filename':g, 'timestep':''} for g in eqList])]
     marks = {}
-    for t in ts:
+    tick_interval = int(len(ts)/10) #max 10 tick marks
+    for tIdx,t in enumerate(ts):
         if t in tAll:
-            marks.update({t:'{}'.format(t)})
+            #display all tick marks
+            #marks.update({t:'{}'.format(t)})
+            #hide all tick marks
+            #marks.update({t:'{}'.format("")})
+            #only display some tick marks
+            if len(ts) > 10:
+                marks.update({t: str(t) if tIdx % tick_interval == 0 else ""})
+            else:
+                marks.update({t:'{}'.format(t)})
     value = ts[0]
-
 
     MHDdata = {
         'Shot Number':shot,
         'Trace Distance [degrees]':traceLength,
         'Toroidal Step Size [degrees]':dpinit,
         '3D Plasma? [0=False]':plasma3Dmask,
+        'Psi Multiplier':psiMult,
+        'Bt Multiplier':BtMult,
+        'Ip Multiplier':IpMult,
         }
 
     return tminMHD, tmaxMHD, marks, value, data, MHDdata
@@ -1718,7 +1751,10 @@ def loadHF(n_clicks,hfMode,MachFlag,
             lqPF = 0.0
             SMode = None
             qFileTag = None
-            qFilePath = None            
+            qFilePath = None
+            #only support one rzqFile
+            rzqFile = rzqFile[0]
+            rzqFiledata = rzqFiledata[0]
         else: #eich mode is default
             lqCNmode = eichlqCNmode
             lqCFmode = None
@@ -1741,7 +1777,7 @@ def loadHF(n_clicks,hfMode,MachFlag,
                         lqCNmode,lqCFmode,lqPNmode,lqPFmode,SMode,
                         qBG,P,radFrac,fG,
                         qFilePath,qFileTag,
-                        rzqFile[0], rzqFiledata[0])
+                        rzqFile, rzqFiledata)
 
 
         #Update output tab table
@@ -2314,7 +2350,12 @@ def loadRAD(n_clicks,phiMin,phiMax,Ntor,Nref,radFile,radData):
         Nref = int(Nref)
         phiMin = float(phiMin)
         phiMax = float(phiMax)
-        gui.getRADInputs(radFile[0], Ntor, Nref, phiMin, phiMax, radData[0])
+        #these values are hard coded for GUI:
+        Prad_mult=1.0
+        rayTracer='open3d'
+        saveRadFrac=False
+
+        gui.getRADInputs(radFile[0], Ntor, Nref, phiMin, phiMax, rayTracer, Prad_mult, saveRadFrac, radData[0])
 
 
         RADdata = {
@@ -2322,6 +2363,9 @@ def loadRAD(n_clicks,phiMin,phiMax,Ntor,Nref,radFile,radData):
             'Maximum phi of radiation source [deg]':phiMax,
             'Number of toroidal repetitions of radiation source':Ntor,
             'Number of photon reflections to trace':Nref,
+            'Raytracer to use for photon calc':rayTracer,
+            'Multiplier for Prad in R,Z,P file':Prad_mult,
+            'Should we save map between emission source and targets?':saveRadFrac,
             }
     return [outDiv, RADdata]
 
@@ -3068,7 +3112,7 @@ def getGfileColumns():
     return [{'id': p, 'name': p} for p in params]
 
 #load data
-def getGfileData(t=None):
+def geteqData(t=None):
     if t is None:
         return [{}]
     idx = np.where(t==gui.MHD.timesteps)[0][0]
@@ -3781,13 +3825,17 @@ def MHDplot():
         children=[
             dcc.Graph(id="2DEQ", className="EQplot"),
             html.Br(),
+            #the dcc.Slider values below are overwritten in the loadMHD function
+            #these are for initialization only (min, max, value, marks)
             dcc.Slider(
                 id='timeSlider',
-                min=0,
+                min=0, 
                 max=100,
                 step=None,
-                value=10,
-                marks={50: 'Load MHD to see timesteps'},
+                value=None,
+                marks={20: 'Load MHD to see timesteps'},
+                tooltip={"placement": "bottom", "always_visible": True},
+                updatemode='drag',
             ),
         ],
     )
@@ -3813,18 +3861,24 @@ def slideEQplot(value, dummy1, tom, themeData):
         raise PreventUpdate
     try: idx = np.where(value==gui.MHD.timesteps)[0][0]
     except:
+        print(value)
+        print(gui.MHD.timesteps)
         print("Trouble loading MHD EQ")
         raise PreventUpdate
     ep = gui.MHD.ep[idx]
     shot = gui.MHD.shot
     t = gui.MHD.timesteps[idx]
+    try:
+        gName = gui.MHD.eqList[idx]
+    except:
+        gName = gui.MHD.eqList[0] #this is for when all EQ are in a single file (ie a JSON)
     #Update Equilibrium plot
     #this import needs to be here (not at top of file) to prevent FreeCAD qt5
     #shared object conflict
     import GUIscripts.plotly2DEQ as plotly2DEQ
     load_figure_template(template_from_url(themeData['theme']))
-    plot = plotly2DEQ.makePlotlyEQDiv(shot, t, MachFlag, ep)
-    data = getGfileData(t)
+    plot = plotly2DEQ.makePlotlyEQDiv(shot, t, MachFlag, ep, gName=gName)
+    data = geteqData(t)
 
     #update plot on gfile cleaner tab with Fpol, psi. etc
     plot2 = plotly2DEQ.makePlotlyGfilePlot(ep)
@@ -3842,10 +3896,6 @@ def slideEQplot(value, dummy1, tom, themeData):
 
 
 
-
-
-
-
 """
 ==============================================================================
 Main Layout
@@ -3859,7 +3909,7 @@ def generateLayout():
             dcc.Store(id='session', storage_type='memory'),
             dcc.Store(id='userInputFileData', storage_type='memory'),
             dcc.Store(id='PFCdataStorage', storage_type='memory'),
-            dcc.Store(id='gFileListStorage', storage_type='memory'),
+            dcc.Store(id='eqListStorage', storage_type='memory'),
             dcc.Store(id='BtraceDataStorage', storage_type='memory'),
             dcc.Store(id='gyroTraceDataStorage', storage_type='memory'),
             dcc.Store(id='MHDDataStorage', storage_type='memory'),
@@ -3912,6 +3962,9 @@ Session storage callbacks and functions
 @app.callback([Output('shot', 'value'),
                Output('traceLength', 'value'),
                Output('dpinit', 'value'),
+               Output('psiMult1', 'value'),
+               Output('BtMult1', 'value'),
+               Output('IpMult1', 'value'),
                Output('gridRes', 'value'),
                Output('hfMode', 'value'), #this causes undefined vars
                Output('eichlqCNmode', 'value'), #this causes undefined vars
@@ -4019,6 +4072,9 @@ def session_data(n_clicks, inputTs, ts, MachFlag, data, inputFileData):
     return [data.get('shot', ''),
             data.get('traceLength', ''),
             data.get('dpinit', ''),
+            data.get('psiMult', ''),
+            data.get('BtMult', ''),
+            data.get('IpMult', ''),
             data.get('gridRes', ''),
             data.get('hfMode', ''), #these dropdowns cause undefined text boxes
             data.get('lqCNmode', ''),

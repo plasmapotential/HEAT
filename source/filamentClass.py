@@ -911,20 +911,33 @@ class filament:
         psiRZ = ep.psiFunc.ev(R,Z)
         distPsi = (psiRZ - psiCtr) / xfm #on grid
 
-
         #===Find poloidal coordinates
         thetaRZ = self.thetaFromRZ(ep, R.flatten(), Z.flatten())
         #surfR, surfZ = ep.flux_surface(psiCtr, Npts, thetaRZ[sortIdx])
         surfR = ep.g['lcfs'][:,0]
         surfZ = ep.g['lcfs'][:,1]
-        thetaSurf = self.thetaFromRZ(ep, surfR, surfZ)
+        surfR = np.append(surfR, surfR[0])
+        surfZ = np.append(surfZ, surfZ[0])
+        thetaSurf = self.thetaFromRZ(ep, surfR, surfZ) #thetas at the LCFS
         #calculate distance along flux surface
         surface = np.vstack((surfR, surfZ)).T
         dSurf = self.distance(surface)
+        
+        #Fixing 2pi issue
+        pi_ind = np.argmin(np.abs(thetaSurf - np.pi))
+        negpi_ind = np.argmin(np.abs(thetaSurf + np.pi))
+        thetaSurf = np.append(thetaSurf, np.array([thetaSurf[negpi_ind] + 2 * np.pi, thetaSurf[pi_ind] - 2 * np.pi]))
+        dSurf = np.append(dSurf, np.array([dSurf[negpi_ind], dSurf[pi_ind]]))
+
+
         #interpolator that maps theta back to distance along the flux surface
-        interpolator = interp.interp1d(thetaSurf, dSurf, kind='slinear', axis=0)
-        dCtr = interpolator(thetaCtr)
-        distTheta = interpolator(thetaRZ) - dCtr
+        #interpolator = interp.interp1d(thetaSurf, dSurf, kind='slinear', axis=0)
+        #dCtr = interpolator(thetaCtr)
+        #distTheta = interpolator(thetaRZ) - dCtr
+
+        dCtr = np.interp(thetaCtr, thetaSurf, dSurf)
+        distTheta = np.interp(thetaRZ, thetaSurf, dSurf) - dCtr
+
         distTheta = distTheta.reshape(R.shape) #on grid
 
         return psiCtr, distPsi, thetaCtr, distTheta
@@ -1027,8 +1040,14 @@ class filament:
         R_hat = np.array([1.0, 0.0])
         theta = np.arccos(np.dot(r_hat, R_hat))
         zMid = ep.g['ZmAxis']
-        idx = np.where(Z < zMid)[0]
-        theta[idx] *= -1.0
+        if type(Z) != np.ndarray:
+            if Z < zMid:
+                theta*=-1.0 
+        else:
+            if (Z < zMid).any():
+                idx = np.where(Z < zMid)[0]
+                theta[idx] *= -1.0
+
         return theta
 
     def discretizeFilament(self, N_r: int, N_p: int, N_b: int, Btrace: np.ndarray, 

@@ -90,8 +90,7 @@
 #
 #
 MachFlag, Tag, Shot, TimeStep, EQ, CAD, PFC, Input, Output
-#example for optical approximation
+# HEAT meshing algorithms
 #nstx,opticalExample, 204118, 0.004, g204118.00004, testCaseIBDH_v3.0.0.step, PFCs.csv, NSTXU_input.csv, hfOpt
-#example for optical approximation temperature calculation (HF + T) 
-nstx,opticalExample, 204118, 0.004, g204118.00004, testCaseIBDH_v3.0.0.step, PFCs.csv, NSTXU_input.csv, hfOpt:T
-nstx,opticalExample, 204118, 0.050, g204118.00050, testCaseIBDH_v3.0.0.step, PFCs.csv, NSTXU_input.csv, hfOpt:T
+# example for BYOM
+nstx,opticalExampleBYOM, 204118, 0.004, g204118.00004, None, PFCs_BYOM.csv, NSTXU_input.csv, hfOpt

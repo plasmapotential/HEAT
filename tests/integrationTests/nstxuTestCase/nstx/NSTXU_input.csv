@@ -5,13 +5,13 @@
 #                IO Variables
 #=============================================================
 vtpMeshOut, True
-vtpPCOut, False
+vtpPCOut, True
 csvOut, True
 #=============================================================
 #                CAD Variables
 #=============================================================
 gridRes, standard
-overWriteMask, False
+overWriteMask, True
 xT, None
 yT, None
 zT, None
@@ -51,6 +51,7 @@ qBG, 0.0
 fG, 0.6
 qFilePath, None
 qFileTag, None
+rzqFile, None
 #==============================================================
 #                Ion Gyro Orbit HF Variables
 #==============================================================
@@ -72,6 +73,9 @@ Ntor, 5
 Nref, 1
 phiMin, 20
 phiMax, 35
+rayTracer, mitsuba
+Prad_mult, 1.0
+saveRadFrac, False
 #==============================================================
 #                OpenFOAM Variables
 #==============================================================

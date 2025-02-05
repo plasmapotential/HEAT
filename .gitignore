@@ -1,4 +1,4 @@
 *.pyc
-docker/docker-compose.yml
+docker/docker-compose_local.yml
 docs/build/
 *.ipynb
