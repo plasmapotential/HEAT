@@ -133,7 +133,7 @@ class PFC:
         self.norms = CAD.ROInorms[ROIidx]
         self.areas = CAD.ROIareas[ROIidx] / (1000.0**2) #convert to meters^2
         self.mesh = CAD.ROImeshes[ROIidx]
-        self.Nfaces = self.mesh.CountFacets
+        self.Nfaces = int(self.mesh.CountFacets)
         self.vertices = self.getVertices(CAD)	# in meters; uses self.mesh and self.Nfaces
         self.qDiv = np.zeros((len(self.centers)))
         R,Z,phi = tools.xyz2cyl(self.centers[:,0],self.centers[:,1],self.centers[:,2])
@@ -145,11 +145,12 @@ class PFC:
         for i,facet in enumerate(self.mesh.Facets):
             neighbours = list(facet.NeighbourIndices)
             for j,n in enumerate(neighbours):
+                n = int(n)
                 if n >= self.Nfaces: 
                     print('Wrong neighbour index detected in PFC ' + self.name + ': facet = ' + str(i) + ' , neighbours = ' + str(neighbours))
                     log.info('Wrong neighbour index detected in PFC ' + self.name + ': facet = ' + str(i) + ' , neighbours = ' + str(neighbours))
                     n = -1
-                neighbours[j] = np.int64(n)
+                neighbours[j] = n
             self.allNeighbours[i] = neighbours
 
         #phi vector at each mesh center
