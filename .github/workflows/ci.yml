@@ -24,7 +24,7 @@ jobs:
     needs: check-final-image
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Pull Docker image
       run: docker pull plasmapotential/heat:v4.2
