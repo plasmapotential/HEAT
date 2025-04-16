@@ -177,7 +177,7 @@ RUN apt-get -yqq install libopenmpi-dev libhdf5-openmpi-dev libnetcdf-dev libnet
 RUN ln -s /usr/lib/x86_64-linux-gnu/libunwind.so /usr/lib/x86_64-linux-gnu/libunwind.so.1
 
 #clone EFIT (note branch can be changed)
-RUN git clone -b master --single-branch https://github.com/ORNL-Fusion/EFIT.git /root/source/EFIT
+RUN git clone -b tomDev --single-branch https://github.com/ORNL-Fusion/EFIT.git /root/source/EFIT
 
 #clone HEAT (note branch can be changed)
 RUN git clone -b v4.1.2 --single-branch https://github.com/plasmapotential/HEAT.git /root/source/HEAT

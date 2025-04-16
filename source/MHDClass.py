@@ -344,7 +344,7 @@ class MHD:
             #netcdf or json
             if self.EQmode != 'geqdsk':
                 if self.singleEQfile == None:
-                    eqfile = timeDir+self.eqFiles[idx]
+                    eqfile = self.eqFiles[idx]
                 else:
                     eqfile = self.singleEQfile
                 self.ep[idx] = EP.equilParams(eqfile, EQmode=self.EQmode, time=t, 

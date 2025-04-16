@@ -2288,8 +2288,7 @@ class engineObj():
             self.combinePFCpointcloud(runList, tPath, tIdx)
             #copy each timestep's composite point clouds to central location for
             #paraview postprocessing (movies)
-            if self.IO.csvMask == True:
-                self.combineTimeSteps(runList, t)
+            self.combineTimeSteps(runList, t)
 
 
 
