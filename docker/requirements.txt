@@ -28,6 +28,5 @@ scikit-learn
 open3d
 mitsuba
 skorch
-json
 
 
