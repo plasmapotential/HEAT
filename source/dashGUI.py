@@ -4155,9 +4155,9 @@ if __name__ == '__main__':
         port = 8050 # default
 
 
-    app.run_server(
-                    debug=True,
-                    dev_tools_ui=True,
-                    port=port,
-                    host=address
-                   )
+    app.run(
+            debug=True,
+            dev_tools_ui=True,
+            port=port,
+            host=address
+            )
