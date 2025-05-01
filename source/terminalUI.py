@@ -252,7 +252,7 @@ class TUI():
                     #CADfiles = machInDir + tagData['CAD'].values
                     PFCfiles = machInDir + tagData['PFC'].values
                     inputFiles = machInDir + tagData['Input'].values
-                    runList = [x.split(":") for x in tagData['Output'].values]
+                    runList = [x.strip().split(":") for x in tagData['Output'].values]
                     runList = np.unique([x for y in runList for x in y])
                 except Exception as e:
                     print("\n\nSomething is wrong with your batchFile!  Error Trace:\n")
