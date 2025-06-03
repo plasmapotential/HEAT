@@ -224,7 +224,7 @@ def launchHEAT(args):
             port = 8050 #default
 
         if runMode == 'local':
-            dashGUI.app.run_server(
+            dashGUI.app.run(
                             debug=True,
                             dev_tools_ui=True,
                             port=port,
@@ -233,7 +233,7 @@ def launchHEAT(args):
                             dev_tools_hot_reload = True, #this can be used in local developer mode only
                             )
         else:
-            dashGUI.app.run_server(
+            dashGUI.app.run(
                             debug=True,
                             dev_tools_ui=True,
                             port=port,

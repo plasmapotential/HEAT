@@ -410,9 +410,9 @@ class engineObj():
             self.plasma3D.plasma3Dmask = plasma3Dmask
 
         #multipliers for EQ variables
-        self.MHD.psiMult = psiMult
-        self.MHD.BtMult = BtMult
-        self.MHD.IpMult = IpMult
+        self.MHD.psiMult = float(psiMult)
+        self.MHD.BtMult = float(BtMult)
+        self.MHD.IpMult = float(IpMult)
 
         #determine if the EQ are GEQDSKs or IMAS formatted JSON / NetCDF
         #and get the timesteps accordingly
@@ -2288,8 +2288,7 @@ class engineObj():
             self.combinePFCpointcloud(runList, tPath, tIdx)
             #copy each timestep's composite point clouds to central location for
             #paraview postprocessing (movies)
-            if self.IO.csvMask == True:
-                self.combineTimeSteps(runList, t)
+            self.combineTimeSteps(runList, t)
 
 
 
