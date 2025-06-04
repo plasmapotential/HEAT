@@ -209,6 +209,16 @@ class engineObj():
             self.CAD.STLpath = self.dataPath + '/SPARC/STLs/'
             self.CAD.STPpath = self.dataPath + '/SPARC/STPs/'
 
+        elif self.MachFlag == 'arc':
+            print('Loading ARC Input Filestream')
+            log.info('Loading ARC Input Filestream')
+#            self.infile = self.rootDir + '/inputs/SPARC/SPARC_input.csv'
+#            self.pfcFile = self.rootDir + '/inputs/SPARC/SPARCpfcs.csv'
+            self.CAD.machPath = self.dataPath + '/ARC'
+            self.OF.meshDir = self.dataPath + '/ARC/3Dmeshes'
+            self.CAD.STLpath = self.dataPath + '/ARC/STLs/'
+            self.CAD.STPpath = self.dataPath + '/ARC/STPs/'
+
         elif self.MachFlag == 'west':
             print('Loading WEST Input Filestream')
             log.info('Loading WEST Input Filestream')
@@ -317,6 +327,11 @@ class engineObj():
             self.CAD.assembly_mask = False
 
         elif self.MachFlag == 'sparc':
+            self.CAD.permute_mask = False
+            self.CAD.unitConvert = 1.0
+            self.CAD.assembly_mask = False
+
+        elif self.MachFlag == 'arc':
             self.CAD.permute_mask = False
             self.CAD.unitConvert = 1.0
             self.CAD.assembly_mask = False

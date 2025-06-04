@@ -179,7 +179,7 @@ def launchHEAT(args):
     runMode = os.environ["runMode"]
 
     #list of tokamak flags that are options in HEAT (if adding new tokamak add flag to list)
-    machineList = ['d3d','nstx','st40','step','sparc','west','kstar', 'aug', 'other']
+    machineList = ['sparc', 'arc', 'd3d','nstx','st40','step', 'west','kstar', 'aug', 'other']
     log = logging.getLogger(__name__)
     
     #run HEAT in terminal mode

@@ -371,11 +371,12 @@ def buildMachineSelector():
                     id='MachFlag',
                     className="SelectorBoxInput",
                     options=[
+                        {'label': 'SPARC', 'value': 'sparc'},
+                        {'label': 'ARC', 'value': 'arc'},
                         {'label': 'NSTXU', 'value': 'nstx'},
                         {'label': 'DIIID', 'value': 'd3d'},
                         {'label': 'ST40', 'value': 'st40'},
                         {'label': 'STEP', 'value': 'step'},
-                        {'label': 'SPARC', 'value': 'sparc'},
                         {'label': 'WEST', 'value': 'west'},
                         {'label': 'KSTAR', 'value': 'kstar'},
                         {'label': 'AUG', 'value': 'aug'},
