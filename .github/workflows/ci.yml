@@ -13,10 +13,10 @@ jobs:
     - name: Check if final Docker image exists on Docker Hub
       id: check-final-image
       run: |
-        if docker pull plasmapotential/heat:v4.2; then
+        if docker pull plasmapotential/heat:v4.2.2; then
           echo "Image exists on Docker Hub."
         else
-          echo "::error ::Final HEAT Docker image v4.2 does not exist."
+          echo "::error ::Final HEAT Docker image v4.2.2 does not exist."
           exit 1 
         fi
 
@@ -27,7 +27,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Pull Docker image
-      run: docker pull plasmapotential/heat:v4.2
+      run: docker pull plasmapotential/heat:latest
 
     - name: Run simple CI configuration test 
       run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.2 python3 /root/source/HEAT/tests/integrationTests/ciTest.py
