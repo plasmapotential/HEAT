@@ -217,7 +217,7 @@ class Runaways:
 
         dictionary is originally a pandas dataframe, so each row in the runaway.csv
         HEAT file is a new id # in the dict.  each row can therefore be accessed by:
-        filDict['<parameter>'][<row#>]
+        REDict['<parameter>'][<row#>]
         ep is equilParams object
         """
         #initialize this RE
@@ -974,6 +974,7 @@ class Runaways:
             if Z < zMid:
                 theta*=-1.0 
         else:
+            Z = np.atleast_1d(Z)
             if (Z < zMid).any():
                 idx = np.where(Z < zMid)[0]
                 theta[idx] *= -1.0

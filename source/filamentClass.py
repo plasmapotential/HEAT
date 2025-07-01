@@ -1044,6 +1044,7 @@ class filament:
             if Z < zMid:
                 theta*=-1.0 
         else:
+            Z = np.atleast_1d(Z)
             if (Z < zMid).any():
                 idx = np.where(Z < zMid)[0]
                 theta[idx] *= -1.0
