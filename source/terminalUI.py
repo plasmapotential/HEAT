@@ -372,6 +372,10 @@ class TUI():
         elif 'hfRE' in runList:
             self.ENG.RE.readREFile(path)
             self.ENG.RE.setupRETime()
+            # See if there are start_pts to input
+            start_file_path = os.path.join(path, "start_pts.csv")
+            if os.path.isfile(start_file_path):
+                self.ENG.RE.read_in_starts(path)
             self.ENG.FIL.tsFil = self.ENG.RE.tsFil
         else:
             self.ENG.FIL.tsFil = None
