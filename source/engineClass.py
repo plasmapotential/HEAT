@@ -1794,7 +1794,6 @@ class engineObj():
             os.remove(structOutfile)
         return
 
-    
 
     def NormPC(self, PFC):
         """
@@ -1825,6 +1824,8 @@ class engineObj():
             self.IO.writePointCloudVTP(PFC.centers,PFC.shadowed_mask,label,prefix,path,tag)
         if self.IO.vtpMeshMask == True:
             self.IO.writeMeshVTP(PFC.mesh, PFC.shadowed_mask, label, prefix, path, tag)
+        if self.IO.glbMeshMask == True:
+            self.IO.writeMeshGLB(PFC.mesh, PFC.shadowed_mask, label, prefix, path, tag)
         return
 
 
@@ -1842,6 +1843,8 @@ class engineObj():
             self.IO.writePointCloudVTP(PFC.centers,PFC.powerDir,label,prefix,path,tag)
         if self.IO.vtpMeshMask == True:
             self.IO.writeMeshVTP(PFC.mesh, PFC.powerDir, label, prefix, path, tag)
+        if self.IO.glbMeshMask == True:
+            self.IO.writeMeshGLB(PFC.mesh, PFC.powerDir, label, prefix, path, tag)
         return
 
     def bdotnPC(self, PFC):
@@ -1861,6 +1864,8 @@ class engineObj():
             self.IO.writePointCloudVTP(PFC.centers,PFC.bdotn,label,prefix,path,tag)
         if self.IO.vtpMeshMask == True:
             self.IO.writeMeshVTP(PFC.mesh, PFC.bdotn, label, prefix, path, tag)
+        if self.IO.glbMeshMask == True:
+            self.IO.writeMeshGLB(PFC.mesh, PFC.bdotn, label, prefix, path, tag)
         return
 
 
@@ -2293,7 +2298,8 @@ class engineObj():
                             self.IO.writePointCloudVTP(PFC.centers,q,label,prefix,path,PFC.tag)
                         if self.IO.vtpMeshMask == True:
                             self.IO.writeMeshVTP(PFC.mesh, q, label, prefix, path, PFC.tag)
-
+                        if self.IO.glbMeshMask == True:
+                            self.IO.writeMeshGLB(PFC.mesh, q, label, prefix, path, PFC.tag)
 
         # Time Loop: postprocessing for steady state heat loads
         for tIdx,t in enumerate(self.MHD.timesteps):
@@ -2765,6 +2771,10 @@ class engineObj():
                 self.IO.writeMeshVTP(mesh, q, label, prefix, path, tag, PClabel=False)
                 if EdepMask==True:
                     self.IO.writeMeshVTP(mesh, Edep, labelE, prefix, path, tag, PClabel=False)
+            if self.IO.glbMeshMask == True:
+                self.IO.writeMeshGLB(mesh, q, label, prefix, path, tag, PClabel=False)
+                if EdepMask==True:
+                    self.IO.writeMeshGLB(mesh, Edep, labelE, prefix, path, tag, PClabel=False)
             if self.IO.vtpPCMask == True:
                 self.IO.writePointCloudVTP(ctrs,q,label,prefix,path+'paraview/',tag, PClabel=True)
                 if EdepMask==True:
@@ -2809,6 +2819,8 @@ class engineObj():
                  self.IO.writePointCloudCSV(ctrs,p,path+'paraview/',label,tag,prefix) #fluxes 
             if self.IO.vtpMeshMask == True:
                 self.IO.writeMeshVTP(mesh, p, label, prefix, path, tag, PClabel=False)
+            if self.IO.glbMeshMask == True:
+                self.IO.writeMeshGLB(mesh, p, label, prefix, path, tag, PClabel=False)
             if self.IO.vtpPCMask == True:
                 self.IO.writePointCloudVTP(ctrs,p,label,prefix,path,tag, PClabel=True)
 
@@ -3020,6 +3032,10 @@ class engineObj():
         if self.IO.vtpMeshMask == True:
             self.IO.writeMeshVTP(PFC.mesh, qDiv, label, prefix, path, PFC.tag)
             self.IO.writeMeshVTP(PFC.mesh, PFC.shadowed_mask, 'shadowMask','shadowMask', path, PFC.tag)
+        if self.IO.glbMeshMask == True:
+            self.IO.writeMeshGLB(PFC.mesh, qDiv, label, prefix, path, PFC.tag)
+            self.IO.writeMeshGLB(PFC.mesh, PFC.shadowed_mask, 'shadowMask','shadowMask', path, PFC.tag)
+
 
         #structOutfile = MHD.shotPath + self.tsFmt.format(t) +'/struct.csv'
         #HF.PointCloudfromStructOutput(structOutfile)
@@ -3075,6 +3091,8 @@ class engineObj():
             self.IO.writePointCloudVTP(self.RAD.sources,self.RAD.sourcePower,'$MW$','Prad',path,PFC.tag)
         if self.IO.vtpMeshMask == True:
             self.IO.writeMeshVTP(PFC.mesh, PFC.qRad, label, prefix, path, PFC.tag)
+        if self.IO.glbMeshMask == True:
+            self.IO.writeMeshGLB(PFC.mesh, PFC.qRad, label, prefix, path, PFC.tag)
 
 
         return
@@ -3165,6 +3183,11 @@ class engineObj():
                 self.IO.writeMeshVTP(PFC.mesh, PFC.qGyro, label, prefix, path, PFC.tag)
                 self.IO.writeMeshVTP(PFC.mesh, qAll, label, 'HF_allSources', path, PFC.tag)
                 self.IO.writeMeshVTP(PFC.mesh, PFC.gyroShadowMask, 'shadowMask','shadowMaskGyro', path, PFC.tag)
+            if self.IO.glbMeshMask == True:
+                self.IO.writeMeshGLB(PFC.mesh, PFC.qGyro, label, prefix, path, PFC.tag)
+                self.IO.writeMeshGLB(PFC.mesh, qAll, label, 'HF_allSources', path, PFC.tag)
+                self.IO.writeMeshGLB(PFC.mesh, PFC.gyroShadowMask, 'shadowMask','shadowMaskGyro', path, PFC.tag)
+
 
         return
 
@@ -3424,6 +3447,7 @@ class engineObj():
         vtpMeshMask = self.IO.vtpMeshMask
         vtpPCMask = self.IO.vtpPCMask
         csvMask = self.IO.csvMask
+        glbMeshMask = self.IO.glbMeshMask
 
         hfOptical = []
         hfGyro = []
@@ -3559,6 +3583,9 @@ class engineObj():
             if vtpMeshMask == True:
                 self.IO.writeMeshVTP(mesh, hfOpticalNumpy, label, prefix, tPath, tag)
                 self.IO.writeMeshVTP(mesh, shadowNumpy, 'shadowMask','shadowMask', tPath, tag)
+            if glbMeshMask == True:
+                self.IO.writeMeshGLB(mesh, hfOpticalNumpy, label, prefix, tPath, tag)
+                self.IO.writeMeshGLB(mesh, shadowNumpy, 'shadowMask','shadowMask', tPath, tag)
 
         if 'hfGyro' in runList:
             prefix = 'HF_gyro'
@@ -3572,6 +3599,10 @@ class engineObj():
             if vtpMeshMask == True:
                 self.IO.writeMeshVTP(mesh, hfGyroNumpy, label, prefix, tPath, tag)
                 self.IO.writeMeshVTP(mesh, shadowGyroNumpy, 'shadowMask','shadowMaskGyro', tPath, tag)
+            if glbMeshMask == True:
+                self.IO.writeMeshGLB(mesh, hfGyroNumpy, label, prefix, tPath, tag)
+                self.IO.writeMeshGLB(mesh, shadowGyroNumpy, 'shadowMask','shadowMaskGyro', tPath, tag)
+
 
         if 'hfRad' in runList:
             prefix = 'HF_rad'
@@ -3587,6 +3618,10 @@ class engineObj():
             if vtpMeshMask == True:
                 self.IO.writeMeshVTP(mesh, hfRadNumpy, label, prefix, tPath, tag)
                 self.IO.writeMeshVTP(mesh, shadowRadNumpy, 'shadowMask','shadowMaskRad', tPath, tag)
+            if glbMeshMask == True:
+                self.IO.writeMeshGLB(mesh, hfRadNumpy, label, prefix, tPath, tag)
+                self.IO.writeMeshGLB(mesh, shadowRadNumpy, 'shadowMask','shadowMaskRad', tPath, tag)
+
 
         #write allSources file, superposition of all fluxes
         if 'hfOpt' in runList or 'hfGyro' in runList or 'hfRad' in runList:
@@ -3597,6 +3632,8 @@ class engineObj():
                 self.IO.writePointCloudVTP(centers,hfAllNumpy,label,prefix,tPath,tag)
             if vtpMeshMask == True:
                 self.IO.writeMeshVTP(mesh, hfAllNumpy, label, prefix, tPath, tag)
+            if glbMeshMask == True:
+                self.IO.writeMeshGLB(mesh, hfAllNumpy, label, prefix, tPath, tag)
 
         if 'shadowPC' in runList:
             prefix = 'shadowMask'
@@ -3607,6 +3644,8 @@ class engineObj():
                 self.IO.writePointCloudVTP(centers,shadowNumpy,label,prefix,tPath,tag)
             if vtpMeshMask == True:
                 self.IO.writeMeshVTP(mesh, shadowNumpy, label, prefix, tPath, tag)
+            if glbMeshMask == True:
+                self.IO.writeMeshGLB(mesh, shadowNumpy, label, prefix, tPath, tag)
 
         if 'pwrDir' in runList:
             prefix = 'powerDir'
@@ -3617,6 +3656,8 @@ class engineObj():
                 self.IO.writePointCloudVTP(centers,powerDirNumpy,label,prefix,tPath,tag)
             if vtpMeshMask == True:
                 self.IO.writeMeshVTP(mesh, powerDirNumpy, label, prefix, tPath, tag)
+            if glbMeshMask == True:
+                self.IO.writeMeshGLB(mesh, powerDirNumpy, label, prefix, tPath, tag)
 
         if 'bdotn' in runList:
             prefix = 'bdotn'
@@ -3627,6 +3668,8 @@ class engineObj():
                 self.IO.writePointCloudVTP(centers,bdotnNumpy,label,prefix,tPath,tag)
             if vtpMeshMask == True:
                 self.IO.writeMeshVTP(mesh, bdotnNumpy, label, prefix, tPath, tag)
+            if glbMeshMask == True:
+                self.IO.writeMeshGLB(mesh, bdotnNumpy, label, prefix, tPath, tag)
 
         if 'psiN' in runList:
             prefix = 'psiN'
@@ -3637,6 +3680,8 @@ class engineObj():
                 self.IO.writePointCloudVTP(centers,psiNumpy,label,prefix,tPath,tag)
             if vtpMeshMask == True:
                 self.IO.writeMeshVTP(mesh, psiNumpy, label, prefix, tPath, tag)
+            if glbMeshMask == True:
+                self.IO.writeMeshGLB(mesh, psiNumpy, label, prefix, tPath, tag)
 
         if 'norm' in runList:
             prefix='NormGlyph'
@@ -3773,6 +3818,8 @@ class engineObj():
             self.IO.writePointCloudVTP(PFC.centers,PFC.psimin,label,prefix,path,tag)
         if self.IO.vtpMeshMask == True:
             self.IO.writeMeshVTP(PFC.mesh, PFC.psimin, label, prefix, path, tag)
+        if self.IO.glbMeshMask == True:
+            self.IO.writeMeshGLB(PFC.mesh, PFC.psimin, label, prefix, path, tag)
 
         return
 
