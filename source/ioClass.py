@@ -5,7 +5,10 @@
 import os
 import numpy as np
 import GUIscripts.vtkOpsClass as vtkOpsClass
-import GUIscripts.meshOpsClass as meshOpsClass
+try:
+    import GUIscripts.meshOpsClass as meshOpsClass
+except:
+    print("Could not load GLTF and USD modules")
 #import GUIscripts.glbOpsClass as glbOpsClass
 
 import logging
