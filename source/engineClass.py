@@ -162,8 +162,6 @@ class engineObj():
         if self.MachFlag == 'nstx':
             print('Loading NSTX-U Input Filestream')
             log.info('Loading NSTX-U Input Filestream')
-#            self.infile = self.rootDir + '/inputs/NSTXU/NSTXU_input.csv'
-#            self.pfcFile = self.rootDir + '/inputs/NSTXU/NSTXUpfcs.csv'
             self.CAD.machPath = self.dataPath + '/NSTX'
             self.OF.meshDir = self.dataPath + '/NSTX/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/NSTX/STLs/'
@@ -172,8 +170,6 @@ class engineObj():
         elif self.MachFlag == 'st40':
             print('Loading ST40 Input Filestream')
             log.info('Loading ST40 Input Filestream')
-#            self.infile = self.rootDir + '/inputs/ST40/ST40_input.csv'
-#            self.pfcFile = self.rootDir + '/inputs/ST40/ST40pfcs.csv'
             self.CAD.machPath = self.dataPath + '/ST40'
             self.OF.meshDir = self.dataPath + '/ST40/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/ST40/STLs/'
@@ -182,8 +178,6 @@ class engineObj():
         elif self.MachFlag == 'd3d':
             print('Loading DIII-D Input Filestream')
             log.info('Loading DIII-D Input Filestream')
-#            self.infile = self.rootDir + '/inputs/D3D/D3D_input.csv'
-#            self.pfcFile = self.rootDir + '/inputs/D3D/D3Dpfcs.csv'
             self.CAD.machPath = self.dataPath + '/D3D'
             self.OF.meshDir = self.dataPath + '/D3D/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/D3D/STLs/'
@@ -192,8 +186,6 @@ class engineObj():
         elif self.MachFlag == 'step':
             print('Loading STEP Input Filestream')
             log.info('Loading STEP Input Filestream')
-#            self.infile = self.rootDir + '/inputs/STEP/STEP_input.csv'
-#            self.pfcFile = self.rootDir + '/inputs/STEP/STEPpfcs.csv'
             self.CAD.machPath = self.dataPath + '/STEP'
             self.OF.meshDir = self.dataPath + '/STEP/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/STEP/STLs/'
@@ -202,8 +194,6 @@ class engineObj():
         elif self.MachFlag == 'sparc':
             print('Loading SPARC Input Filestream')
             log.info('Loading SPARC Input Filestream')
-#            self.infile = self.rootDir + '/inputs/SPARC/SPARC_input.csv'
-#            self.pfcFile = self.rootDir + '/inputs/SPARC/SPARCpfcs.csv'
             self.CAD.machPath = self.dataPath + '/SPARC'
             self.OF.meshDir = self.dataPath + '/SPARC/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/SPARC/STLs/'
@@ -212,18 +202,22 @@ class engineObj():
         elif self.MachFlag == 'arc':
             print('Loading ARC Input Filestream')
             log.info('Loading ARC Input Filestream')
-#            self.infile = self.rootDir + '/inputs/SPARC/SPARC_input.csv'
-#            self.pfcFile = self.rootDir + '/inputs/SPARC/SPARCpfcs.csv'
             self.CAD.machPath = self.dataPath + '/ARC'
             self.OF.meshDir = self.dataPath + '/ARC/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/ARC/STLs/'
             self.CAD.STPpath = self.dataPath + '/ARC/STPs/'
 
+        elif self.MachFlag == 'cmod':
+            print('Loading CMOD Input Filestream')
+            log.info('Loading CMOD Input Filestream')
+            self.CAD.machPath = self.dataPath + '/CMOD'
+            self.OF.meshDir = self.dataPath + '/CMOD/3Dmeshes'
+            self.CAD.STLpath = self.dataPath + '/CMOD/STLs/'
+            self.CAD.STPpath = self.dataPath + '/CMOD/STPs/'
+
         elif self.MachFlag == 'west':
             print('Loading WEST Input Filestream')
             log.info('Loading WEST Input Filestream')
-#            self.infile = self.rootDir + '/inputs/WEST/WEST_input.csv'
-#            self.pfcFile = self.rootDir + '/inputs/WEST/WESTpfcs.csv'
             self.CAD.machPath = self.dataPath + '/WEST'
             self.OF.meshDir = self.dataPath + '/WEST/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/WEST/STLs/'
@@ -232,8 +226,6 @@ class engineObj():
         elif self.MachFlag == 'kstar':
             print('Loading K-STAR Input Filestream')
             log.info('Loading K-STAR Input Filestream')
-#            self.infile = self.rootDir + '/inputs/KSTAR/KSTAR_input.csv'
-#            self.pfcFile = self.rootDir + '/inputs/KSTAR/KSTARpfcs.csv'
             self.CAD.machPath = self.dataPath + '/KSTAR'
             self.OF.meshDir = self.dataPath + '/KSTAR/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/KSTAR/STLs/'
@@ -248,12 +240,21 @@ class engineObj():
             self.CAD.STPpath = self.dataPath + '/AUG/STPs/'
 
         elif self.MachFlag == 'nstx':
-            print('Loading AUG Input Filestream')
-            log.info('Loading AUG Input Filestream')
+            print('Loading NSTX Input Filestream')
+            log.info('Loading NSTX Input Filestream')
             self.CAD.machPath = self.dataPath + '/NSTX'
             self.OF.meshDir = self.dataPath + '/NSTX/3Dmeshes'
             self.CAD.STLpath = self.dataPath + '/NSTX/STLs/'
             self.CAD.STPpath = self.dataPath + '/NSTX/STPs/'
+
+        elif self.MachFlag == 'tcv':
+            print('Loading TCV Input Filestream')
+            log.info('Loading TCV Input Filestream')
+            self.CAD.machPath = self.dataPath + '/TCV'
+            self.OF.meshDir = self.dataPath + '/TCV/3Dmeshes'
+            self.CAD.STLpath = self.dataPath + '/TCV/STLs/'
+            self.CAD.STPpath = self.dataPath + '/TCV/STPs/'
+
 
         else:
             print("INVALID MACHINE SELECTION!  Defaulting to OTHER!")
@@ -347,6 +348,16 @@ class engineObj():
             self.CAD.assembly_mask = False
 
         elif self.MachFlag == 'aug':
+            self.CAD.permute_mask = False
+            self.CAD.unitConvert = 1.0
+            self.CAD.assembly_mask = False
+
+        elif self.MachFlag == 'tcv':
+            self.CAD.permute_mask = False
+            self.CAD.unitConvert = 1.0
+            self.CAD.assembly_mask = False
+
+        elif self.MachFlag == 'cmod':
             self.CAD.permute_mask = False
             self.CAD.unitConvert = 1.0
             self.CAD.assembly_mask = False

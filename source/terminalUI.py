@@ -87,7 +87,7 @@ class TUI():
         Column variables are defined as follows
 
         :MachFlag: machine specific flag.
-          can be 'd3d','nstx','st40','step','sparc','west','kstar','aug','other'
+          can be 'd3d','nstx','st40','step','sparc', 'arc', 'cmod, 'west','kstar','aug','tcv','other'
 
         :Tag:  user specified tag to label the simulation by.  Tags represent
           independent HEAT runs.  For time varying discharges with multiple
@@ -124,17 +124,18 @@ class TUI():
           HF Variables will be read at each timestep.
 
         :Output: Defines what output HEAT should calculate.  Options are:
-          :hfOpt:   optical heat flux point cloud
-          :hfGyro:  gyro orbit heat flux point cloud
-          :hfRad:   radiated power heat flux point cloud
-          :hfFil:   filament heat flux point cloud
-          :B:       magnetic field glyph cloud
-          :psiN:    normalized poloidal flux point cloud
-          :pwrDir:  powerDir point cloud
-          :bdotn:   bdotn point cloud
-          :norm:    normal vector glyph cloud
-          :T:       temperature using openFoam
-          :elmer:       FEM analysis using Elmer FEM
+                 -hfOpt   optical heat flux 
+                 -hfGyro  gyro orbit heat flux 
+                 -hfFil   filament heat flux 
+                 -hfRE    runaway electron heat flux
+                 -hfRad   radiated power heat 
+                 -B       magnetic field glyphs
+                 -psiN    normalized poloidal flux 
+                 -pwrDir  powerDir point 
+                 -bdotn   bdotn point
+                 -norm    normal vector glyphs
+                 -T       temperature calculation using openFOAM
+                 -elmer   runs an Elmer FEM simulation
 
           for multiple outputs, separate options with : (ie hfOpt:psi:T).  Note
           that HEAT will use the first options list provided for each tag.
@@ -476,7 +477,7 @@ class TUI():
 #
 #===Column variables are defined as follows
 # MachFlag: machine specific flag.
-#           can be 'd3d','nstx','st40','step','sparc','west','kstar', 'aug', 'other'
+#           can be 'd3d','nstx','st40','step','sparc', 'arc', 'cmod, 'west','kstar','aug','tcv','other'
 #
 # Tag:  user specified tag to label the simulation by.  Tags represent
 #       independent HEAT runs.  For time varying discharges with multiple

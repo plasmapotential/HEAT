@@ -373,6 +373,7 @@ def buildMachineSelector():
                     options=[
                         {'label': 'SPARC', 'value': 'sparc'},
                         {'label': 'ARC', 'value': 'arc'},
+                        {'label': 'CMOD', 'value': 'cmod'},
                         {'label': 'NSTXU', 'value': 'nstx'},
                         {'label': 'DIIID', 'value': 'd3d'},
                         {'label': 'ST40', 'value': 'st40'},
@@ -380,6 +381,7 @@ def buildMachineSelector():
                         {'label': 'WEST', 'value': 'west'},
                         {'label': 'KSTAR', 'value': 'kstar'},
                         {'label': 'AUG', 'value': 'aug'},
+                        {'label': 'TCV', 'value': 'tcv'},
                         {'label': 'OTHER', 'value': 'other'}
                         ],
                     value=None
