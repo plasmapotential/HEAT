@@ -7,6 +7,7 @@
 vtpMeshOut, True
 vtpPCOut, True
 csvOut, True
+glbMeshOut, True
 #=============================================================
 #                CAD Variables
 #=============================================================

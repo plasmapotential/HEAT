@@ -5,6 +5,11 @@
 import os
 import numpy as np
 import GUIscripts.vtkOpsClass as vtkOpsClass
+try:
+    import GUIscripts.meshOpsClass as meshOpsClass
+except:
+    print("Could not load GLTF and USD modules")
+#import GUIscripts.glbOpsClass as glbOpsClass
 
 import logging
 log = logging.getLogger(__name__)
@@ -44,6 +49,7 @@ class IO_HEAT:
                             'vtpPCOut',
                             'vtpMeshOut',
                             'csvOut',
+                            'glbMeshOut',
                             ]
         return
 
@@ -65,6 +71,12 @@ class IO_HEAT:
                 self.csvMask = True
             else:
                 self.csvMask = False
+
+            if self.glbMeshOut in trueList:
+                self.glbMeshMask = True
+            else:
+                self.glbMeshMask = False
+
         except:
             print("Error in input file.  No output filetypes provided.")
             print("Defaulting to csv and vtp")
@@ -73,6 +85,7 @@ class IO_HEAT:
             self.csvMask = True
             self.vtpMeshMask = True
             self.vtpPCMask = False
+            self.glbMeshMask = False
         return
 
     def outputMasks(self, list):
@@ -84,6 +97,7 @@ class IO_HEAT:
         self.vtpMeshMask = False
         self.vtpPCMask = False
         self.csvMask = False
+        self.glbMeshMask = False
 
         if "vtpMesh" in list:
             self.vtpMeshMask = True
@@ -91,15 +105,19 @@ class IO_HEAT:
             self.vtpPCMask = True
         if "csv" in list:
             self.csvMask = True
+        if "glbMesh" in list:
+            self.glbMeshMask = True
 
         print("\n---Output file settings---")
         print("vtpMeshMask: " + str(self.vtpMeshMask))
         print("vtpPCMask: " + str(self.vtpPCMask))
         print("csvMask: " + str(self.csvMask))
+        print("glbMeshMask: " + str(self.glbMeshMask))
         log.info("\n---Output file settings---")
         log.info("vtpMeshMask: " + str(self.vtpMeshMask))
         log.info("vtpPCMask: " + str(self.vtpPCMask))
         log.info("csvMask: " + str(self.csvMask))
+        log.info("glbMeshMask: " + str(self.glbMeshMask))
 
         return
 
@@ -280,3 +298,36 @@ class IO_HEAT:
             data = json.load(file) 
         return data
     
+
+    def writeMeshGLB(self, mesh, scalar, label, prefix, path, tag=None, PClabel=True):
+        """
+        writes a GLB mesh file
+        output file contains the PFC mesh, and an array of heat flux values,
+        scalar, that is indexed to match the mesh triangles.
+
+        mesh - freecad mesh object
+        scalar - array of scalar values that are indexed to match mesh triangles
+        label - units/label that will be displayed in paraview colorbar
+        tag - name tag for file (<tag>.vtp)
+        path - file path where paraview folder lives
+        """
+        if tag is None:
+            if PClabel == True:
+                fName = prefix + '_mesh.glb'
+            else:
+                fName = prefix + '.glb'
+        else:
+            if PClabel == True:
+                fName = prefix + '_'+tag+'_mesh.glb'
+            else:
+                fName = prefix + '_' + tag + '.glb'
+
+        meshOps = meshOpsClass.meshOps()
+        meshOps.initializeMeshScalar(mesh, scalar, label)
+
+        PVdir = path + "paraview/"
+        f = PVdir+fName
+        tools.makeDir(PVdir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
+
+        meshOps.writeMeshGLB(f)
+        return

@@ -33,16 +33,9 @@ Some examples of what HEAT can predict:
  * Many other quantities
 
 
-The latest release of HEAT is v4.1, which includes the following notable additions / patches:
- * Ability to read 3D magnetic equilibria for RMPs, Error Fields, etc., from M3DC1 and predict associated heat fluxes.
- * A new module that allows HEAT users to run Elmer FEM directly from HEAT for temperature, stress, and metal recrystallization calculations. Elmer:  https://doi.org/10.5281/zenodo.7892181
- * Integration tests
- * Improved developer experience and docker container builder
- * Numerous other bug fixes and user requests
-
+The latest release of HEAT is v4.2.3.
 
 To cite HEAT, you can use a paper published by the journal Fusion Science and Technology under open access.  The paper can be found here: https://doi.org/10.1080/15361055.2021.1951532
-
 
 Other recent HEAT related publications:
  * 3D ion gyro-orbit heat load predictions for NSTX-U, Looby et al, https://iopscience.iop.org/article/10.1088/1741-4326/ac8a05

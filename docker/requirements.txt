@@ -28,5 +28,7 @@ scikit-learn
 open3d
 mitsuba
 skorch
+usd-core
+pygltflib
 
 

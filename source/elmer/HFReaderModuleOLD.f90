@@ -94,7 +94,7 @@ FUNCTION heatFluxOnNodes(Model, n, t) RESULT(hf)
     USE HFReaderModule , except_this_one => heatFluxOnNodes
     IMPLICIT NONE
     TYPE(Model_t) :: Model
-    INTEGER :: n, i
+    INTEGER :: n
     REAL(KIND=dp) :: t, hf, q_flow
     Logical :: GotIt
     TYPE(ValueList_t), POINTER :: BC
@@ -102,13 +102,13 @@ FUNCTION heatFluxOnNodes(Model, n, t) RESULT(hf)
     Character(LEN=100) :: nodalPrefix
     Character(LEN=100) :: timeString
     REAL, SAVE, ALLOCATABLE :: data(:,:)
-    INTEGER, SAVE :: numLines = 0
+    INTEGER :: numLines
     REAL(KIND=dp), SAVE :: tLastRead = -1.0
 
     !Load the boundary condition with variable for filename
     BC => GetBC()
+       
     nodalPrefix = getString(BC, 'nodalHFprefix', GotIt)
-    !create file name based upon time
     write(timeString, '(F15.9)') t
     f = TRIM(nodalPrefix) // '_' // TRIM(ADJUSTL(timeString)) // '.dat'
     IF(.NOT. GotIt) CALL Fatal('heatFluxOnNodes', 'file: ' //  f // ' not found')
@@ -116,32 +116,25 @@ FUNCTION heatFluxOnNodes(Model, n, t) RESULT(hf)
         CALL FATAL('heatFluxOnNodes','No boundary condition found')
     END IF
 
-    ! Load file once per timestep
-    IF (t .NE. tLastRead) THEN
-      CALL ReadCSV(f, data, numLines)
-      tLastRead = t
-    END IF
+    !read file then pass the HF value for each node to g
+    !only read the file once for each timestep
+    IF(t .NE. tLastRead) THEN
+        CALL ReadCSV(f, data, numLines)
+        hf = data(n,2)
+        tLastRead = t
+    ELSE
+        hf = data(n,2)
+    ENDIF
 
-    ! Default to 0 if not found
-    hf = 0.0
-    DO i = 1, numLines
-      IF (INT(data(i,1)) == n) THEN
-        hf = data(i,2)
-        EXIT
-      END IF
-    END DO
-
-    IF (hf < 0.0_dp) THEN
-      PRINT *, "Warning: Negative heat flux at node", n, "→ setting to 0"
-      hf = 0.0
-    END IF
+    IF(hf .LT. 0.0) THEN
+        print *, "Found negative HF value..."
+        hf = 0.0
+    ENDIF
     
     ! Read the heat flux value (q_flow) from the boundary condition
     q_flow = getConstReal(BC, 'q_flow', GotIt)
     IF (.NOT. GotIt) THEN
-        IF (t .NE. tLastRead) THEN
-            print *, "q_flow not found in boundary condition"
-        END IF
+         print *, "q_flow not found in boundary condition"
          q_flow = 0.0
     END IF    
     
