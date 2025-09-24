@@ -3726,19 +3726,36 @@ class engineObj():
         movieDir = self.MHD.shotPath + 'paraview/'
         tPath = self.MHD.shotPath + self.tsFmt.format(t) + '/'
 
+        vtpMeshMask = self.IO.vtpMeshMask
+        vtpPCMask = self.IO.vtpPCMask
+        csvMask = self.IO.csvMask
+        glbMeshMask = self.IO.glbMeshMask
+
+
         #first try to make new directory
         tools.makeDir(movieDir, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
         tStr = self.tsFmt.format(t)
         if 'hfOpt' in runList:
-            src = tPath + 'HF_optical_all.csv'
-            dest = movieDir + 'hfOptical_'+tStr+'.csv'
-            shutil.copy(src,dest)
-            src = tPath + '/paraview/HF_optical_all_mesh.vtp'
-            dest = movieDir + 'hfOptical_mesh_'+tStr+'.vtp'.format(t)
-            shutil.copy(src,dest)            
-            src = tPath + '/paraview/shadowMask_all_mesh.vtp'
-            dest = movieDir + 'shadowMask_mesh_'+tStr+'.vtp'
-            shutil.copy(src,dest)
+            #TO DO - make all the below runList options use the masks
+            if csvMask == True:
+                src = tPath + 'HF_optical_all.csv'
+                dest = movieDir + 'hfOptical_'+tStr+'.csv'
+                shutil.copy(src,dest)
+            if vtpMeshMask == True:
+                src = tPath + '/paraview/HF_optical_all_mesh.vtp'
+                dest = movieDir + 'hfOptical_mesh_'+tStr+'.vtp'.format(t)
+                shutil.copy(src,dest)            
+                src = tPath + '/paraview/shadowMask_all_mesh.vtp'
+                dest = movieDir + 'shadowMask_mesh_'+tStr+'.vtp'
+                shutil.copy(src,dest)
+            if glbMeshMask == True:
+                src = tPath + '/paraview/HF_optical_all_mesh.glb'
+                dest = movieDir + 'hfOptical_mesh_'+tStr+'.glb'.format(t)
+                shutil.copy(src,dest)            
+                src = tPath + '/paraview/shadowMask_all_mesh.glb'
+                dest = movieDir + 'shadowMask_mesh_'+tStr+'.glb'
+                shutil.copy(src,dest)
+
         if 'shadowPC' in runList:
             src = tPath + 'shadowMask_all.csv'
             dest = movieDir + 'shadowMask_'+tStr+'.csv'.format(t)
