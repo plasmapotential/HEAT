@@ -6,7 +6,7 @@
 import numpy as np
 from pygltflib import (
     GLTF2, Scene, Node, Mesh, Buffer, BufferView, Accessor, Asset, Primitive,
-    ELEMENT_ARRAY_BUFFER, ARRAY_BUFFER
+    ELEMENT_ARRAY_BUFFER, ARRAY_BUFFER, Material
 )
 from struct import pack
 import os
@@ -165,6 +165,7 @@ class meshOps:
         # --------------------------
         # Build glTF structure
         # --------------------------
+
         # BufferViews
         bv_idx = BufferView(buffer=0, byteOffset=offset_idx, byteLength=len(idx_blob), target=ELEMENT_ARRAY_BUFFER)
         bv_pos = BufferView(buffer=0, byteOffset=offset_pos, byteLength=len(pos_blob), target=ARRAY_BUFFER)
@@ -198,10 +199,22 @@ class meshOps:
         if offset_q is not None:
             attrs[self.label] = 3
 
+        # --- Material handling ---
+        if unlit:
+            mat = Material(
+                pbrMetallicRoughness={}, 
+                extensions={"KHR_materials_unlit": {}}
+            )
+            extensionsUsed = ["KHR_materials_unlit"]
+        else:
+            mat = Material(pbrMetallicRoughness={})
+            extensionsUsed = []
+
         prim = Primitive(
             attributes=attrs,
             indices=0,
-            mode=4  # TRIANGLES
+            mode=4,  # TRIANGLES
+            material=0
         )
 
         mesh = Mesh(primitives=[prim])
@@ -217,6 +230,8 @@ class meshOps:
             nodes=[node],
             scenes=[scene],
             scene=0,
+            materials=[mat],
+            extensionsUsed=extensionsUsed
         )
 
         # Embed the binary and save
