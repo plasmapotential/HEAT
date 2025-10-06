@@ -2943,7 +2943,7 @@ def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
     if 'Btrace' in Btrace:
         print("Tracing magnetic field lines...")
         log.info("Tracing magnetic field lines...")
-        gui.BtraceMultiple(BtraceTableData, t)
+        gui.BtraceMultiple(t, BtraceTableData)
 
     #gyro orbit trace
     if 'gyrotrace' in gyrotrace:

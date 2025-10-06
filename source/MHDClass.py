@@ -120,8 +120,10 @@ class MHD:
         :traceLength: number of steps to trace along magnetic field lines looking for
           intersections
         :dpinit: toroidal length of each trace step up magnetic field line [degrees]
-
-        
+        :psiMult: multiplier to apply to all psi quantities (psiSep, psiAxis, psiRZ) for normalization (ie the dreaded 2pi) in EQ
+        :BtMult: multiplier to apply to toroidal field quantities (Bt0, Fpol) in EQ
+        :IpMult: multiplier to apply to plasma current, Ip in EQ
+        :BtraceFile: path to file to be used for field line tracing
 
         """
         self.allowed_vars = [
@@ -133,6 +135,7 @@ class MHD:
                             'psiMult',
                             'BtMult',
                             'IpMult',
+                            'BtraceFile',
                             ]
 
         return
@@ -190,6 +193,30 @@ class MHD:
             EQmode = 'geqdsk'
         return EQmode
 
+
+    def readBtraceFile(self):
+        """
+        .. Reads a Btrace file (file for tracing magnetic field lines from)
+        .. first row file should be formatted like this, which defines the columns:
+        .. x[mm], y[mm], z[mm], traceDirection, Length[deg], stepSize[deg]
+        .. every new row represents a new trace that will be run in HEAT
+        
+        Columns in the file:
+        --------------------
+
+        :x: x coordinate of field line trace start locations in [mm]
+        :y: y coordinate of field line trace start locations in [mm]
+        :z: z coordinate of field line trace start locations in [mm]
+        :traceDirection: can be 1 (forward toroidal angle), -1 (reverse toroidal angle), or 0 (both directions) to trace from point
+        :Length[deg]: distance in degrees to trace from the point
+        :stepSize[deg]: step size for magnetic field line integration steps in degrees
+                
+        """
+
+        #read file
+        data = pd.read_csv(self.BtraceFile, delimiter=",")
+        data = data.astype({"x[mm]": float, "y[mm]": float, "z[mm]": float, "traceDirection": int, "Length[deg]":float, "stepSize[deg]":float})
+        return data
 
     def getGEQDSKtimesteps(self, eqList):
         """

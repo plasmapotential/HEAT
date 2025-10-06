@@ -1545,17 +1545,24 @@ class engineObj():
         PFC.Bsign = np.sign(PFC.ep.g['Bt0'])
         return
 
-    def BtraceMultiple(self,data,t):
+    def BtraceMultiple(self,t,data=None):
         """
         Run a MAFOT structure trace from multiple points defined in the gui
         """
-        data = pd.DataFrame.from_dict(data)[list (data[0].keys())]
-        data = data.rename(columns=lambda x: x.strip())
+        if data is not None:
+            data = pd.DataFrame.from_dict(data)[list (data[0].keys())]
+            data = data.rename(columns=lambda x: x.strip())
+        else:
+            try:
+                #read the Btrace data from a csv file
+                data = self.MHD.readBtraceFile()
+            except:
+                print("===== Could not read Btrace CSV file!  Skipping Btraces... =====")
+                return
+
         data = data.astype({"x[mm]": float, "y[mm]": float, "z[mm]": float, "traceDirection": int, "Length[deg]":float, "stepSize[deg]":float})
 
-        #t = int(t)
         tIdx = np.where(float(t)==self.MHD.timesteps)[0][0]
-        traceDirection=data['traceDirection']
         x = data['x[mm]'] / 1000.0
         y = data['y[mm]'] / 1000.0
         z = data['z[mm]'] / 1000.0
@@ -1969,6 +1976,8 @@ class engineObj():
         hfGyro          gyro orbit heat flux 
         hfRad           photon radiation heat flux
         hfFil           filament heat flux
+        hfRE            runaway electron trace
+        Btrace          magnetic field line trace from file
         """
         print('\n')
         print("-"*70)
@@ -1978,7 +1987,7 @@ class engineObj():
 
 
         #make sure that something in runList can be run in this function, else return
-        allowedOptions = ['hfOpt', 'pwrDir', 'bdotn', 'B', 'psiN', 'norm', 'hfGyro', 'hfRad', 'hfFil', 'hfRE']
+        allowedOptions = ['hfOpt', 'pwrDir', 'bdotn', 'B', 'psiN', 'norm', 'hfGyro', 'hfRad', 'hfFil', 'hfRE', 'Btrace']
         if len([i for i in runList if i in allowedOptions]) < 1:
             self.runList = runList
             print("No HEAT runList option to run.  Breaking out of engineClass runHEAT loop.")
@@ -1999,7 +2008,6 @@ class engineObj():
         #set up variables for power balance calculation
         powerTesselate = np.zeros((len(self.MHD.timesteps)))
         powerTrue = np.zeros((len(self.MHD.timesteps)))
-        powerByTile = np.zeros((len(self.PFCs)))
         divCodes = []
         #set up electron frac if not in gyro mode
         if 'hfGyro' not in runList:
@@ -2029,6 +2037,13 @@ class engineObj():
             else:
                 self.inputDicts.append(self.getCurrentInputs())
                 
+            #run B field tracer
+            if 'Btrace' in runList:
+                self.BtraceMultiple(t)
+                #if this is only a Btrace, skip the PFC dependent steps
+                if 'Btrace' in runList and len(runList) == 1:
+                    continue
+
             # 3Dplasma general setup
             if self.plasma3D.plasma3Dmask:
                 gFile = self.MHD.shotPath + self.tsFmt.format(t) + '/' + self.MHD.gFiles[tIdx]
@@ -2312,15 +2327,20 @@ class engineObj():
                         if self.IO.glbMeshMask == True:
                             self.IO.writeMeshGLB(PFC.mesh, q, label, prefix, path, PFC.tag)
 
-        # Time Loop: postprocessing for steady state heat loads
-        for tIdx,t in enumerate(self.MHD.timesteps):
-            #path for this timestep
-            tPath = self.MHD.shotPath + self.tsFmt.format(t) + '/'
-            #merge multiple pointclouds into one single pointcloud for visualization
-            self.combinePFCpointcloud(runList, tPath, tIdx)
-            #copy each timestep's composite point clouds to central location for
-            #paraview postprocessing (movies)
-            self.combineTimeSteps(runList, t)
+        #if we are only running a Btrace, skip PFC specific operations
+        if 'Btrace' in runList and len(runList) == 1:
+            pass
+        #otherwise postprocess the data into combined pointclouds
+        else:
+            # Time Loop: postprocessing for steady state heat loads
+            for tIdx,t in enumerate(self.MHD.timesteps):
+                #path for this timestep
+                tPath = self.MHD.shotPath + self.tsFmt.format(t) + '/'
+                #merge multiple pointclouds into one single pointcloud for visualization
+                self.combinePFCpointcloud(runList, tPath, tIdx)
+                #copy each timestep's composite point clouds to central location for
+                #paraview postprocessing (movies)
+                self.combineTimeSteps(runList, t)
 
 
 
