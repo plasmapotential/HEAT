@@ -236,6 +236,10 @@ class IO_HEAT:
 
         xyz = np.genfromtxt(csvfile, comments='#', delimiter=',')
 
+        #if another scalar field was saved along with xyz (ie distance), discard it
+        if xyz.shape[-1] > 3:
+            xyz = xyz[:,:3]
+
         fName = tag+ '.vtp'
         PVdir = path + "paraview/"
         f = PVdir+fName

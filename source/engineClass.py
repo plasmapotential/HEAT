@@ -1545,9 +1545,11 @@ class engineObj():
         PFC.Bsign = np.sign(PFC.ep.g['Bt0'])
         return
 
-    def BtraceMultiple(self,t,data=None):
+    def BtraceMultiple(self, t, data=None, boundbox=True):
         """
-        Run a MAFOT structure trace from multiple points defined in the gui
+        Run a MAFOT structure trace from multiple points defined in the gui/tui
+
+        if boundbox is True, will not check for intersections against (R,Z) PFC contour
         """
         if data is not None:
             data = pd.DataFrame.from_dict(data)[list (data[0].keys())]
@@ -1569,8 +1571,6 @@ class engineObj():
 
         xyz = np.array([x,y,z]).T
         controlfile = '_structCTL.dat'
-        dphi = 1.0
-
 
         if len(xyz.shape) > 1:
             R,Z,phi = tools.xyz2cyl(xyz[:,0],xyz[:,1],xyz[:,2])
@@ -1587,13 +1587,15 @@ class engineObj():
         #structOutfile = controlfilePath + 'struct.dat'
 
         for i in range(len(xyz)):
+            print("\n --- Tracing pt {:d} for {:f} degrees ---".format(i, data['Length[deg]'][i]))
             tag = 'pt{:03d}'.format(i)
             self.MHD.ittStruct = data['Length[deg]'][i] / data['stepSize[deg]'][i]
             self.MHD.dpinit = data['stepSize[deg]'][i]
             self.MHD.writeControlFile(controlfile, t, data['traceDirection'][i], mode='struct')
             self.MHD.writeMAFOTpointfile(xyz[i,:],gridfile)
-            self.MHD.getFieldpath(dphi, gridfile, controlfilePath, controlfile, paraview_mask=True, tag=tag)
+            self.MHD.getFieldpath(1.0, data['stepSize[deg]'][i], gridfile, controlfilePath, controlfile, paraview_mask=True, tag=tag, bbox=boundbox)
             #os.remove(structOutfile)
+
             outfile = controlfilePath+'struct_'+tag+'.csv'
             self.IO.writeTraceVTP(outfile, 'Field_trace_' + tag, controlfilePath)
 
@@ -2039,7 +2041,7 @@ class engineObj():
                 
             #run B field tracer
             if 'Btrace' in runList:
-                self.BtraceMultiple(t)
+                self.BtraceMultiple(t, boundbox=False)
                 #if this is only a Btrace, skip the PFC dependent steps
                 if 'Btrace' in runList and len(runList) == 1:
                     continue
