@@ -9,13 +9,14 @@
 # 6) Defining any PFCs we want to exclude from the intersection calculation
 #
 #The first line in this file should always be:
-#timesteps, PFCname, resolution, DivCode, intersectName, excludeName
+#timesteps, PFCname, DivCode, intersectName, excludeName
 #
 #Each new row under this header line represents a new PFC in the ROI.
 #Definitions of each column (comma separated variable) from this header line:
 #  timesteps: timesteps we include the PFC in during the HEAT calculation
-#  PFCname: name of the PFC we want to calculate heat loads on.  Name should
-#           be taken directly from the part in the CAD STP file.
+#  PFCname: the name of the CAD object as it appears in the CAD file.  If the 
+#            user Brings Your Own Mesh (BYOM), then the PFC name should be the
+#            name of the mesh (.stl) file.
 #  resolution: heat flux resolution on PFCname.
 #  DivCode:  divertor code.  This can be: LO, LI, UO, UI, which correspond to:
 #            Lower Outer, Lower Inner, Upper Outer, Upper Inner.  These codes
@@ -30,26 +31,21 @@
 #  excludeName:  name of PFCs to exclude in the intersection check.  This can be
 #                useful when we use the "all" switch for intersectName and want
 #                to exclude some obvious PFCs.
-#  outsideFacingThreshold: Value bewteen -1 and 1. Typically less than 0. 
-#                          Set to -1 (or less) to turn filter off
-#                          Optional input. If not given, default is -1 (filter off) 
 #
 #Example to calculate heat loads on PFC001, a PFC in the Lower Outer divertor,
-# at 5.0 mm heat flux mesh resolution, for the first 100ms of the discharge, 
+# at 5.0 mm heat flux mesh resolution, for the first 100ms of the discharge,
 # checking for shadows (intersections) with PFC001 (self), PFC002 and PFC003:
 # timesteps, PFCname, resolution, DivCode, intersectName, excludeName
 # 0:100, PFC001, 5.0, LO, PFC001:PFC002:PFC003, none
 #
 #Example to calculate heat loads on PFC001, a PFC in the Upper Inner divertor,
-# at 1.0 mm heat flux mesh resolution, for timesteps 100:200ms of the discharge, 
+# at 1.0 mm heat flux mesh resolution, for timesteps 100:200ms of the discharge,
 # checking for shadows (intersections), with all PFCs in the CAD file:
 # timesteps, PFCname, resolution, DivCode, intersectName, excludeName
 # 100:200, PFC001, 1.0, UI, all, none
 #
 #
 #
-timesteps, PFCname, resolution, DivCode, intersectName, excludeName, outsideFacingThreshold
-#1000:5000, Floor00, 3.0, LO, all, none, -1
-#1000:5000, CP00, 3.0, LI, all, none, -1
-1000:5000, Inner00, 3.0, LI, all, none, 0.5
-#1000:5000, Shelf01, 3.0, LO, all, none, -1
+timesteps, PFCname, resolution, DivCode, intersectName, excludeName
+#Example for BYOM
+0:5000, SOLID843___5.000000mm.stl, 5.0, LO, SOLID843___5.000000mm.stl:SOLID842___standard.stl:SOLID844___standard.stl:underIBDHPlane___standard.stl, None

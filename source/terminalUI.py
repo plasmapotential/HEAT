@@ -27,14 +27,8 @@ try:
     dataPath = os.environ["dataPath"]
     OFbashrc = os.environ["OFbashrc"]
     FreeCADPath = os.environ["FreeCADPath"]
-    PVPath = os.environ["PVPath"]
-    pvpythonCMD = os.environ["pvpythonCMD"]
 except:
     print("Could not properly set up environment.  Proceed with caution!")
-try:
-    AppDir = os.environ["APPDIR"]
-except:
-    AppDir = 'Not in appImage'
 
 try:
     chmod = int(os.environ["HEATchmod"], 8) #convert from base 8
@@ -88,16 +82,15 @@ class TUI():
         via a batchFile
 
         The fist line of every batchFile should be:
-        MachFlag, Tag, GEQDSK, CAD, PFC, Input, Output
+        MachFlag, Tag, EQ, CAD, PFC, Input, Output
 
         Column variables are defined as follows
 
         :MachFlag: machine specific flag.
-          can be 'd3d','nstx','st40','step','sparc','west','kstar'
+          can be 'd3d','nstx','st40','step','sparc', 'arc', 'cmod, 'west','kstar','aug','tcv','other'
 
         :Tag:  user specified tag to label the simulation by.  Tags represent
           independent HEAT runs.  For time varying discharges with multiple
-
           GEQDSK files, tag should be repeated on multiple lines with the 
           TimeStep column changing.
 
@@ -113,10 +106,12 @@ class TUI():
           radix, which corresponds to nanosecond resolution (defined in engineClass
           initialization function call)
         
-        :GEQDSK:  magnetic equilibrium file (ie EFIT) in GEQDSK format.  
-          Psi should be in units of Wb/rad (divided by 2pi) and the Bt0, Fpol, Psi
-          and Ip values should reflect COCOS.
-
+        :EQ:  magnetic equilibrium file 
+          can be in GEQDSK format or in a JSON following the IMAS schema
+          Psi should be in units of Wb/rad (divide by 2pi) and the Bt0, Fpol, Psi
+          and Ip values should reflect COCOS and match machine helicity.  This column
+          can also be labeled GEQDSK for backwards compatability
+          
         :CAD: CAD file for the tag.  Note that HEAT will use the first CAD file provided
           in for each tag.  Subsequent lines in that tag are ignored.  In other words,
           there can only be one CAD file per tag.  Can be STEP, IGES, or FCStd formats.
@@ -129,15 +124,18 @@ class TUI():
           HF Variables will be read at each timestep.
 
         :Output: Defines what output HEAT should calculate.  Options are:
-          :hfOpt:   optical heat flux point cloud
-          :hfGyro:  gyro orbit heat flux point cloud
-          :hfRad:   radiated power heat flux point cloud
-          :B:       magnetic field glyph cloud
-          :psiN:    normalized poloidal flux point cloud
-          :pwrDir:  powerDir point cloud
-          :bdotn:   bdotn point cloud
-          :norm:    normal vector glyph cloud
-          :T:       temperature
+                 -hfOpt   optical heat flux 
+                 -hfGyro  gyro orbit heat flux 
+                 -hfFil   filament heat flux 
+                 -hfRE    runaway electron heat flux
+                 -hfRad   radiated power heat 
+                 -B       magnetic field glyphs
+                 -psiN    normalized poloidal flux 
+                 -pwrDir  powerDir point 
+                 -bdotn   bdotn point
+                 -norm    normal vector glyphs
+                 -T       temperature calculation using openFOAM
+                 -elmer   runs an Elmer FEM simulation
 
           for multiple outputs, separate options with : (ie hfOpt:psi:T).  Note
           that HEAT will use the first options list provided for each tag.
@@ -157,7 +155,7 @@ class TUI():
 
         Example line for an NSTX-U run for pulse 204118 timestep 4ms:
 
-        MachFlag, Tag, Shot, TimeStep, GEQDSK, CAD, PFC, Input, Output
+        MachFlag, Tag, Shot, TimeStep, EQ, CAD, PFC, Input, Output
 
         nstx,run1, 204118, 0.004, geqdsk.00004, IBDH_2tiles.step, PFCs_run1.csv, NSTXU_input.csv, B:hfOpt
         
@@ -230,18 +228,36 @@ class TUI():
 
                 #get file paths associated with this tag from batchFile
                 try:
+
                     shots = tagData['Shot'].values #only 1 shot per tag allowed
                     timesteps = tagData['TimeStep'].values
-                    gFileNames = tagData['GEQDSK'].values
-                    gFilePaths = machInDir + gFileNames
-                    CADfiles = machInDir + tagData['CAD'].values
+
+                    #this conditional allows for various EQ formats
+                    if 'GEQDSK' in tagData.keys():
+                        eqFileNames = tagData['GEQDSK'].values
+                    else:
+                        eqFileNames = tagData['EQ'].values
+                    
+                    eqFilePaths = machInDir + eqFileNames
+
+                    #if user is bringing their own meshes then the CAD file can be set to None
+                    #NEED TO FIX THIS SO THAT THERE CAN BE NONE AND strings in same batchFile
+                    if True in pd.isna(tagData['CAD'].values):
+                        print("No CAD file provided, assuming you are providing STLs")
+                        log.info("No CAD file provided, assuming you are providing STLs")
+                        CADfiles = tagData['CAD'].values
+                    #normal cases, user supplies CAD file of some kind
+                    else:
+                        CADfiles = machInDir + tagData['CAD'].values
+                    
+                    #CADfiles = machInDir + tagData['CAD'].values
                     PFCfiles = machInDir + tagData['PFC'].values
                     inputFiles = machInDir + tagData['Input'].values
-                    runList = [x.split(":") for x in tagData['Output'].values]
+                    runList = [x.strip().split(":") for x in tagData['Output'].values]
                     runList = np.unique([x for y in runList for x in y])
                 except Exception as e:
                     print("\n\nSomething is wrong with your batchFile!  Error Trace:\n")
-                    print(e.message)
+                    print(e)
                     sys.exit()
 
                 #refresh all subclasses
@@ -260,12 +276,12 @@ class TUI():
                 self.loadTimeSteps(timesteps, shots[0], tag, self.ENG.FIL.tsFil)
 
                 #read GEQDSK and load into MHD object
-                self.loadMHD(machInDir, gFileNames, timesteps)
+                self.loadMHD(machInDir, eqFileNames, timesteps)
 
                 #read CAD and initialize CAD objects
                 #note: current version of HEAT only supports single CAD file
                 #per tag
-                self.loadCAD(CADfiles[0])
+                self.loadCAD(CADfiles[0], machInDir)
 
                 #read PFC file and initialize PFC objects
                 #note: current version of HEAT only supports single CAD file
@@ -285,9 +301,6 @@ class TUI():
 
                 print("Completed all HEAT runs\n")
                 log.info("Completed all HEAT runs\n")
-                shutil.copy(logFile, self.shotPath + 'HEATlog.txt')
-
-
 
         return
 
@@ -301,7 +314,7 @@ class TUI():
         #will be used for the openFOAM settings.
         self.ENG.inputFileList = inputFiles
         self.ENG.runHEAT(runList)
-        #run openFOAM
+        #run thermal analysis
         if 'T' in runList:
             self.loadOF()
             if self.ENG.IO.csvMask == True:
@@ -312,10 +325,18 @@ class TUI():
                 print("Please turn on csv output file switch and re-run")
                 log.info("Error!  Cannot run openFOAM unless you save CSV files!")
                 log.info("Please turn on csv output file switch and re-run")
+
+        if 'elmer' in runList:
+            self.loadElmer()
+            self.ENG.runElmerFEM()
+
+        print("HEAT run completed...")
+        log.info("HEAT run completed...")
         print("Total time: {:f}".format(time.time() - t0))
+        log.info("Total time: {:f}".format(time.time() - t0))
         return
 
-    def prepareDirectories(self,mach,tag, clobber='y'):
+    def prepareDirectories(self,mach,tag):
         """
         build HEAT tree for mach + tag combo
         """
@@ -329,6 +350,14 @@ class TUI():
         #make tree branch for this shot
         tools.makeDir(self.shotPath, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
 
+        #make unique logfile for this tag
+        logFile = self.shotPath + 'HEATlog.txt'
+        self.ENG.logFile = logFile
+        from logConfig import setup_logging
+        log.info("Changing log file to new path for batchMode:")
+        log.info(logFile)
+        setup_logging(logfile_path=logFile)
+
         return
 
     def loadFilaments(self, runList, path):
@@ -341,6 +370,10 @@ class TUI():
         if 'hfFil' in runList:
             self.ENG.FIL.readFilamentFile(path)
             self.ENG.FIL.setupFilamentTime()
+        elif 'hfRE' in runList:
+            self.ENG.RE.readREFile(path)
+            self.ENG.RE.setupRETime()
+            self.ENG.FIL.tsFil = self.ENG.RE.tsFil
         else:
             self.ENG.FIL.tsFil = None
         return
@@ -362,26 +395,27 @@ class TUI():
         return
 
 
-    def loadMHD(self, tmpDir, gFiles, ts):
+    def loadMHD(self, tmpDir, eqFiles, ts):
         """
-        loads GEQDSK file into HEAT tree and MHD object
+        loads EQ files into HEAT tree and MHD object
         """
         #initialize MHD
         self.ENG.MHD.tmpDir = tmpDir
-        self.ENG.MHD.tree = 'EFIT02'
-        self.ENG.MHD.getGEQDSK(ts, gFiles)
+        self.ENG.MHD.EQmode = self.ENG.MHD.determineEQFiletype(eqFiles[0])
+        self.ENG.MHD.getGEQDSK(ts, eqFiles)
         self.ENG.MHD.makeEFITobjects()
         self.ENG.MHD.psiSepLimiter = None
         self.ENG.MHD.setTypes()
         self.ENG.MHD.nTrace = int(self.ENG.MHD.traceLength / self.ENG.MHD.dpinit)
         return
 
-    def loadCAD(self, STPfile):
+    def loadCAD(self, CADfile, machInDir):
         """
         loads CAD files into CAD object
         """
         self.ENG.CAD.rootDir = rootDir #set HEAT rootDir
-        self.ENG.getCADfromTUI(STPfile)
+        self.ENG.CAD.machInDir = machInDir #HEATrun directory
+        self.ENG.getCADfromTUI(CADfile)
         return
 
     def loadPFCs(self, PFCfile):
@@ -414,6 +448,14 @@ class TUI():
                     self.ENG.OF.material
                     )
         return
+    
+    def loadElmer(self):
+        """
+        Loads Elmer FEM parameters into engine object
+        """
+        print("Elmer FEM")
+        self.ENG.FEM.readElmerFile()
+        return
 
     def saveBatchFile(self, path=None):
         """
@@ -431,25 +473,40 @@ class TUI():
 #For use when running HEAT in terminal / batch mode.  Each line is a new entry.
 #
 # The fist line of every batchFile should be (uncommented):
-# MachFlag, Tag, GEQDSK, CAD, PFC, Input, Output
+# MachFlag, Tag, Shot, TimeStep, GEQDSK, CAD, PFC, Input, Output
 #
 #===Column variables are defined as follows
 # MachFlag: machine specific flag.
-#           can be 'd3d','nstx','st40','step','sparc','west','kstar'
+#           can be 'd3d','nstx','st40','step','sparc', 'arc', 'cmod, 'west','kstar','aug','tcv','other'
 #
 # Tag:  user specified tag to label the simulation by.  Tags represent
 #       independent HEAT runs.  For time varying discharges with multiple
-#       GEQDSK files, tag should be repeated on multiple lines with the GEQDSK
-#       for each timestep in each line.
+#       GEQDSK files, tag should be repeated on multiple lines with the 
+#       TimeStep column changing.
 #
-# GEQDSK:  magnetic equilibrium file (ie EFIT) in GEQDSK format
-#          naming convention is g<shot>.<timestep> where <shot> is the integer
-#          shot number (6 digits) and timestep is the timestep in ms (5 digits).
-#          For example, shot 204118 timestep 50ms would be g204118.00050
+# Shot:  pulse number to use for saving HEAT output (MachFlag_Shot).  Default is to
+#        allow for 6 sig figs of shot numbers.  SigFigs can be changed in engineClass
+#        object initialization function call.
+#
+# TimeStep: Timestep that the equilibrium defined in "GEQDSK" column corresponds
+#           to.  GEQDSKs can be named in multiple formats, but the TimeStep in 
+#           this row is what is used by HEAT.  For time varying discharges, tag 
+#           should be repeated on multiple lines with the TimeStep column changing.
+#           Timestep units are [s].  Default is to allow for 9 SigFigs after the
+#           radix, which corresponds to nanosecond resolution (defined in engineClass
+#           initialization function call)
+#
+# EQ:  magnetic equilibrium file 
+#          can be in GEQDSK format or in a JSON following the IMAS schema
+#          Psi should be in units of Wb/rad (divide by 2pi) and the Bt0, Fpol, Psi
+#          and Ip values should reflect COCOS and match machine helicity
 #
 # CAD: CAD file for the tag.  Note that HEAT will use the first CAD file provided
 #      in for each tag.  Subsequent lines in that tag are ignored.  In other words,
-#      there can only be one CAD file per tag.
+#      there can only be one CAD file per tag.  Can be STEP, IGES, or FCStd formats.
+#      User can also supply a mesh (.STL) file and set this value to None.  In that
+#      case, the mesh file should be listed in the PFC CSV file for each ROI or
+#      intersection part
 #
 # PFC: PFC file for the tag.  Note that HEAT will use the first PFC file provided
 #      in for each tag.  Subsequent lines in that tag are ignored.  In other words,
@@ -459,14 +516,18 @@ class TUI():
 #        HF Variables will be read at each timestep.
 #
 # Output: Defines what output HEAT should calculate.  Options are:
-#         -hfOpt   optical heat flux point cloud
-#         -hfGyro  gyro orbit heat flux point cloud
-#         -B       magnetic field glyph cloud
-#         -psiN    normalized poloidal flux point cloud
-#         -pwrDir  powerDir point cloud
-#         -bdotn   bdotn point cloud
-#         -norm    normal vector glyph cloud
-#         -T       temperature
+#         -hfOpt   optical heat flux 
+#         -hfGyro  gyro orbit heat flux 
+#         -hfFil   filament heat flux 
+#         -hfRE    runaway electron heat flux
+#         -hfRad   radiated power heat 
+#         -B       magnetic field glyphs
+#         -psiN    normalized poloidal flux 
+#         -pwrDir  powerDir point 
+#         -bdotn   bdotn point
+#         -norm    normal vector glyphs
+#         -T       temperature calculation using openFOAM
+#         -elmer   runs an Elmer FEM simulation
 #
 #       for multiple outputs, separate options with : (ie hfOpt:psi:T).  Note
 #       that HEAT will use the first options list provided for each tag.
@@ -475,16 +536,19 @@ class TUI():
 #
 #
 # Once you have a batchFile, you need to save all input files in the following
-# directory structure, where <path> is wherever the batchFile is:
+# directory structure, where <path> is wherever the batchFile is and <MachFlag>
+# is the machine name (ie nstx):
 # <path>/batchFile.dat
-# <path>/MachFlag/GEQDSK
-# <path>/MachFlag/CAD
-# <path>/MachFlag/PFC
-# <path>/MachFlag/Input
+# <path>/<MachFlag>/GEQDSK
+# <path>/<MachFlag>/CAD
+# <path>/<MachFlag>/PFC
+# <path>/<MachFlag>/Input
 #
-#  Example line for an NSTX-U run:
-#MachFlag, Tag, GEQDSK, CAD, PFC, Input, Output
-#nstx,run1, g204118.00004, IBDH_2tiles.step, PFCs_run1.csv, NSTXU_input.csv, B:hfOpt
+#  Example line for an NSTX-U run for pulse 204118 timestep 4ms:
+#MachFlag, Tag, Shot, TimeStep, EQ, CAD, PFC, Input, Output
+#nstx,run1, 204118, 0.004, geqdsk.00004, IBDH_2tiles.step, PFCs_run1.csv, NSTXU_input.csv, B:hfOpt
+#  Example line for an NSTX-U run for pulse 204118 using JSON and user supplied mesh
+#nstx,run2, 204118, 0.004, nstx_eq_204118.json, None, PFCs_run2.csv, NSTXU_input.csv, B:hfOpt
 #
 # And the directory structure would look like this
 # <path>/batchFile.dat
@@ -496,7 +560,7 @@ class TUI():
 #
 #
 #
-MachFlag, Tag, GEQDSK, CAD, PFC, Input, Output
+MachFlag, Tag, Shot, TimeStep, EQ, CAD, PFC, Input, Output
             """
         with open(file,'w') as f:
             f.write(text)

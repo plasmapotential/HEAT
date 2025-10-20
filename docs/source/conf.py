@@ -83,5 +83,6 @@ autodoc_mock_imports = ["EFIT", "FreeCAD", "Part", "Mesh", "MeshPart", "Import",
                         "gmsh",
                         "scikit-image",
                         "open3d",
+                        "Fem"
                         ]
 

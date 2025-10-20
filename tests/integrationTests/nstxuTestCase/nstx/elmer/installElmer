@@ -1,0 +1,7 @@
+#!/bin/bash
+apt-get update
+apt-get install -y python-is-python3
+apt-add-repository ppa:elmer-csc-ubuntu/elmer-csc-ppa
+apt-get update
+apt-get install -y elmerfem-csc
+apt-get install -y netgen

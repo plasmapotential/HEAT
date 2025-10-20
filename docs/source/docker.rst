@@ -33,7 +33,7 @@ To pull from docker hub, execute the following command::
 
     docker pull plasmapotential/heat:<tag>
 
-where <tag> reflects the latest HEAT version (ie v3.0)
+where <tag> reflects the latest HEAT version (ie v3.0, v4.1, or whatever version you want)
 
 Download HEAT source code from github
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -189,7 +189,7 @@ To start HEAT using the terminal user interface, perform the following steps:
           - <batchModePath>:/root/terminal
      where <batchModePath> is the directory where your batchFile lives.
 
-  3) In the docker directory, make sure the last line appears as follows:
+  3) In the docker directory, make sure the last line of runDockerCompose appears as follows:
 
   .. code-block:: yaml
 
@@ -203,7 +203,7 @@ To start HEAT using the terminal user interface, perform the following steps:
 
   .. code-block:: bash
 
-    docker-compose up
+    ./runDockerCompose
 
 
   5) Running docker-compose in terminal mode launches a bash terminal inside the
@@ -215,3 +215,8 @@ To start HEAT using the terminal user interface, perform the following steps:
      was binded into the container in step 2)::
 
       python3 launchHEAT.py --m t --f /root/terminal/batchFile.dat
+    
+     There are also convenience bash scripts that run this command for you::
+
+      ./runTerminalMode
+

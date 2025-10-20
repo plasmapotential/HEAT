@@ -14,7 +14,7 @@ tools = toolsClass.tools()
 import EFIT.equilParams_class as EP
 import scipy.interpolate as scinter
 from scipy.optimize import bisect
-from scipy.integrate import simps
+from scipy.integrate import simpson
 
 import multiprocessing
 
@@ -100,9 +100,9 @@ class heatFlux:
           and gyro orbit simulations, P represents PSOL or Psep, the power crossing
           the separatrix and being conducted to the target.  For photon radiation
           calculation, P represents the total emitted power over the entire torus.
-        :lossFrac: fraction of P to be removed.  Useful for prescribing a reduction
+        :radFrac: fraction of P to be removed.  Useful for prescribing a reduction
           to P that arises from various effects. Power that will be used in the 
-          calculation is P*(1-lossFrac).
+          calculation is P*(1-radFrac).
         :qBG: Background heat flux applied to all surfaces when using an Eich profile [MW/m^2].
           Note that this also applies flux on the backs of tiles.
         :fG: Greenwald density fraction [5] to be used when using Makowski S scaling.
@@ -115,6 +115,7 @@ class heatFlux:
           that should be used for the heat flux files.  For example, to read a previous
           HEAT runs photon radiation data, tag would be HF_rad and HEAT would read files
           named HF_rad.csv.  Set to None when no file should be read.
+        :rzqFile: Path for the rzqprofile that contains a csv file with columns R(m),Z(m),q||(W/m2)
 
         """
 
@@ -145,6 +146,7 @@ class heatFlux:
                             'fG',
                             'qFilePath',
                             'qFileTag',
+                            'rzqFile',
                             ]
         return
 
@@ -554,6 +556,33 @@ class heatFlux:
         q[nan_locations] = 0.0
         q[inf_locations] = 0.0
         return q
+    
+    def from_rzq_profile(self, rzq_data, PFC):
+        """"
+        q is from a csv file with R(m), Z(m), q(W/m2) data. This can be taken from SOLPS simulation at the target grid.
+        Psol and q0 for scaling will not be necessary. This will just map the input heatflux data directly
+        to the PFCs.
+        q is mapped from the R,Z grid to OMP
+        q1 output is in MW/m2
+        """
+
+        R = rzq_data['R(m)'].to_numpy()
+        Z = rzq_data['Z(m)'].to_numpy()
+        Q = rzq_data['q(W/m2)'].to_numpy()
+        # make Q positive. Sometimes, the q values from SOLPS is negative to indicate direction.
+        negs = np.where(Q<0.0)[0]
+        Q[negs] *= -1.0
+        psi_rzq = PFC.ep.psiFunc.ev(R,Z) #convert (r,z) coordinate to psi
+        psi_rzq_omp = self.map_R_psi(psi_rzq, PFC) #map the psi_rzq to OMP
+
+        q_interp = scinter.UnivariateSpline(psi_rzq_omp, Q, s = 0, ext = 'const') #interpolate the value of q at OMP
+        psi = self.map_R_psi(PFC.psimin, PFC) #map PFC centers to OMP
+        print("psi:", psi)
+        q1 = q_interp(psi) #calculate the value of q basesd on mapped to OMP PFC centers
+        print('q1:', q1)
+        q1 = q1/1e6 #input is in W/m2
+        
+        return q1
 
     def findScalingCoeffEich(self, PFC, lqEich, S, P):
         """
@@ -603,9 +632,9 @@ class heatFlux:
         q_hat = self.eich_profile_fluxspace(PFC, lqEich, S, R_omp, Bp_omp, psiN)
 
         #Menard's method (also see qDiv function)
-        #P0 = 2*np.pi * simps(q_hat, psi)
+        #P0 = 2*np.pi * simpson(q_hat, psi)
         #Reinke's Method (also see qDiv function)
-        P0 = 2*np.pi * simps(q_hat / B_omp, psi)
+        P0 = 2*np.pi * simpson(q_hat / B_omp, psi)
 
         #account for nonphysical power
         if P0 < 0: P0 = -P0
@@ -681,11 +710,11 @@ class heatFlux:
             qPN_hat = np.exp( s_hat[useP] / lqPN_hat[useP])
             qPF_hat = np.exp( s_hat[useP] / lqPF_hat[useP])
             #reinke method
-            intPN = simps(qPN_hat / B_omp[useP], psi[useP])
-            intPF = simps(qPF_hat / B_omp[useP], psi[useP])
+            intPN = simpson(qPN_hat / B_omp[useP], psi[useP])
+            intPF = simpson(qPF_hat / B_omp[useP], psi[useP])
             #menard method
-            #intPN = simps(qPN_hat, psi[useP])
-            #intPF = simps(qPF_hat, psi[useP])
+            #intPN = simpson(qPN_hat, psi[useP])
+            #intPF = simpson(qPF_hat, psi[useP])
         else:
             qPN_hat = 0.0
             qPF_hat = 0.0
@@ -696,11 +725,11 @@ class heatFlux:
             qCN_hat = np.exp(-s_hat[useC] / lqCN_hat[useC])
             qCF_hat = np.exp(-s_hat[useC] / lqCF_hat[useC])
             #reinke method
-            intCN = simps(qCN_hat / B_omp[useC], psi[useC])
-            intCF = simps(qCF_hat / B_omp[useC], psi[useC])
+            intCN = simpson(qCN_hat / B_omp[useC], psi[useC])
+            intCF = simpson(qCF_hat / B_omp[useC], psi[useC])
             #menard method
-            #intCN = simps(qCN_hat, psi[useC])
-            #intCF = simps(qCF_hat, psi[useC])
+            #intCN = simpson(qCN_hat, psi[useC])
+            #intCF = simpson(qCF_hat, psi[useC])
         else:
             qCN_hat = 0.0
             qCF_hat = 0.0
@@ -763,8 +792,8 @@ class heatFlux:
         # transform hf width into flux space
         lqCN_hat = lqCN*xfm
         lqCF_hat = lqCF*xfm
-
-
+        print("Avg. lqCN_hat: {:f}".format(np.average(lqCN_hat)))
+        print("Avg. lqCF_hat: {:f}".format(np.average(lqCF_hat)))
         #Calculate flux at midplane using gfile
         psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
         psi = psiN*(psiedge - psiaxis) + psiaxis
@@ -783,11 +812,11 @@ class heatFlux:
 
         #note: simps integration will fail if x variable (psi) is not monotonic
         #reinke method
-        intCN = simps(qCN_hat / B_omp, psi)
-        intCF = simps(qCF_hat / B_omp, psi)
+        intCN = simpson(qCN_hat / B_omp, psi)
+        intCF = simpson(qCF_hat / B_omp, psi)
         #menard method
-        #intCN = simps(qCN_hat, psi)
-        #intCF = simps(qCF_hat, psi)
+        #intCN = simpson(qCN_hat, psi)
+        #intCF = simpson(qCF_hat, psi)
 
         P0 = 2*np.pi * (intCN*self.fracCN + intCF*self.fracCF)
         #account for nonphysical power
@@ -848,9 +877,9 @@ class heatFlux:
 
         q_hat = self.tophat_profile_fluxspace(PFC,lq_mm,R_omp,Bp_omp,psiN)
         #Menard's method (also see qDiv function)
-        #P0 = 2*np.pi * simps(q_hat, psi)
+        #P0 = 2*np.pi * simpson(q_hat, psi)
         #Reinke's method (also see qDiv function)
-        P0 = 2*np.pi * simps(q_hat/B_omp, psi)
+        P0 = 2*np.pi * simpson(q_hat/B_omp, psi)
         q0 = np.abs(P / P0)
 
         return q0
@@ -984,7 +1013,14 @@ class heatFlux:
             q *= q0
             print("Tophat lqCN: {}".format(self.lqCN))
             log.info("Tophat lqCN: {}".format(self.lqCN))
-
+        
+        #rzq profile
+        elif self.hfMode == 'rzqprofile':
+            q[use] = self.from_rzq_profile(self.rzq_data, PFC)
+            print("Warning: using R,Z,Q profile bypasses energy balance normalization.")
+            print("P_target may not equal PSOL for RZQ profiles.")
+            log.info("Warning: using R,Z,Q profile bypasses energy balance normalization.")
+            log.info("P_target may not equal PSOL for RZQ profiles.")
 
         #Eich Profile
         else:
@@ -1070,6 +1106,11 @@ class heatFlux:
         #q_div[use] = q[use] * B_div[use] * PFC.bdotn[use]
         #Reinke's method (also see integral in scaling coeffs)
         q_div[use] = q[use] * B_div[use]/B_omp * PFC.bdotn[use]
+
+        #set mesh sliver artifacts to 0 flux so they dont skew the distribution
+        #sizeThresh = 1e-6
+        #tooSmall = np.where(PFC.areas[use] < sizeThresh)[0]
+        #q_div[tooSmall] = 0.0
 
         #for i in range(len(q_div)):
         #	if q_div[i] > 8.0: q_div[i] = 0.0
@@ -1368,7 +1409,126 @@ class heatFlux:
 
 
         return
+        
 
+    def REHeatFlux(self, RE, PFC, ts, tIdx):
+        """
+        assigns energy from runaway to targets
+        calculates heat flux and total energy deposition
+
+        RE.intersectRecord gets overwritten for each runaway source timestep
+        so this function needs to be called once per RE to add 
+        the heat fluxes from each RE source timestep to the tallies on the PFC mesh
+        
+        
+        """
+        RE.calcTotalE()
+        E = RE.density[:,:,:,tIdx].reshape(RE.N_b*RE.N_r*RE.N_p) * RE.E0
+        ptclSum = 0
+        Esum = 0
+
+        #this PFC indexes in target mesh
+        idx1 = np.where(np.array(RE.CADtargetNames) == PFC.name)[0]
+
+        # Create an array with shape (len(ts), RE.N_vS, RE.intersectRecord.shape[1]) and ensure it is of integer type
+        multi_ts_use = np.array([[np.where(np.isin(RE.intersectRecord[j, :, i], idx1))[0].astype(int) for j in range(RE.N_vS)] for i in range(len(ts))], dtype=object)
+
+        # Iterate over the combinations of time and velocity samples (vS)
+        for i in range(len(ts)):
+            for j in range(RE.N_vS):
+                use = multi_ts_use[i, j]
+                if len(use) > 0:
+                    #get indexes where there was a hit from intersectRecord
+                    idx3 = RE.intersectRecord[j, use, i].astype(int)
+                    #map location in target mesh to relative index on this PFC
+                    idxTGT = np.searchsorted(idx1, idx3) 
+                    #scale energy by the v_|| energy bin frac
+                    E_scaled = E[use] * RE.energyFracs[use, j]
+                    #add the sum for this mesh triangle
+                    np.add.at(PFC.Edep[:, i], idxTGT, E_scaled)
+
+           
+                #for particle balance
+                ptclSum += len(use)
+
+        #heat flux is energy deposited per unit area per unit time
+        PFC.qRE = PFC.Edep / PFC.areas[:,np.newaxis] / RE.dt
+        N_pts = RE.N_vS*len(RE.intersectRecord[0,:,0])
+
+        #printing
+        print("Theoretical total energy: {:f} [J]".format(RE.E0))
+        print("Energy Deposited on Mesh: {:f} [J]".format(np.sum(PFC.Edep)))
+        print("Energy balance: {:0.3f}%".format(np.sum(PFC.Edep) / RE.E0 * 100.0)) # why *100 ? todo
+        print('Peak flux: {:1.8e} [W/m^2]'.format(np.max(PFC.qRE)))
+        print('Total number of particles: {:d}'.format(N_pts))
+        print('Number of particles landed on this PFC: {:d}'.format(ptclSum))
+        print('Particle balance: {:0.3f}%'.format(ptclSum / N_pts*100.0))
+        log.info("Theoretical total energy: {:f} [J]".format(RE.E0))
+        log.info("Energy Deposited on Mesh: {:f} [J]".format(np.sum(PFC.Edep)))
+        log.info("Energy balance: {:0.3f}%".format(np.sum(PFC.Edep) / RE.E0 * 100.0))
+        log.info('Peak flux: {:1.8e} [W/m^2]'.format(np.max(PFC.qRE)))
+        log.info('Total number of particles: {:d}'.format(N_pts))
+        log.info('Number of particles landed on this PFC: {:d}'.format(ptclSum))
+        log.info('Particle balance: {:0.3f}%'.format(ptclSum / N_pts*100.0))
+
+
+        return
+
+
+    def REParticleFlux(self, RE, PFC, ts, tIdx):
+        """
+        assigns particles from runaway threads to targets
+
+        RE.intersectRecord gets overwritten for each runaway source timestep
+        so this function needs to be called once per runaway to add 
+        the particles from each runaway source timestep to the tallies on the PFC mesh
+        
+        todo idk if this will work because I didn't impliment velocity fracs, not sure why velocity fracs are important here
+        """
+        density = RE.density[:,:,:,tIdx].reshape(RE.N_b*RE.N_r*RE.N_p) * RE.E0
+        ptclSum = 0
+
+        #this PFC indexes in target mesh
+        idx1 = np.where(np.array(RE.CADtargetNames) == PFC.name)[0]
+
+        # Create an array with shape (len(ts), RE.N_vS, RE.intersectRecord.shape[1]) and ensure it is of integer type
+        multi_ts_use = np.array([[np.where(np.isin(RE.intersectRecord[j, :, i], idx1))[0].astype(int) for j in range(RE.N_vS)] for i in range(len(ts))], dtype=object)
+
+        # Iterate over the combinations of time and vS
+        for i in range(len(ts)):
+            for j in range(RE.N_vS):
+                use = multi_ts_use[i, j]
+                if len(use) > 0:
+                    #get indexes where there was a hit from intersectRecord
+                    idx3 = RE.intersectRecord[j, use, i].astype(int)
+                    #map location in target mesh to relative index on this PFC
+                    idxTGT = np.searchsorted(idx1, idx3) 
+                    #scale energy by the v_|| bin frac Hm why???
+                    den_scaled = density[use] * RE.velocityFracs[use, j]
+                    #add the sum for this mesh triangle
+                    np.add.at(PFC.ptclDep[:, i], idxTGT, den_scaled)
+
+
+                #for particle balance
+                ptclSum += len(use)
+
+        #particle flux is particles deposited per area per time
+        PFC.ptclFluxFil = PFC.ptclDep / PFC.areas[:,np.newaxis] / RE.dt
+        N_pts = RE.N_vS*len(RE.intersectRecord[0,:,0])
+
+        print('Particle deposition fraction: {:f}'.format(np.sum(PFC.ptclDep)))
+        print('Total number of particles: {:d}'.format(N_pts))
+        print('Number of particles landed on this PFC: {:d}'.format(ptclSum))
+        print('Particle balance: {:0.3f}%'.format(ptclSum / N_pts*100.0))
+        print('Peak flux: {:1.8e} [1/m^2/s]'.format(np.max(PFC.ptclFluxFil)))
+        log.info('Particle deposition fraction: {:f}'.format(np.sum(PFC.ptclDep)))
+        log.info('Total number of particles: {:d}'.format(N_pts))
+        log.info('Number of particles landed on this PFC: {:d}'.format(ptclSum))
+        log.info('Particle balance: {:0.3f}%'.format(ptclSum / N_pts*100.0))
+        log.info('Peak flux: {:1.8e} [1/m^2/s]'.format(np.max(PFC.ptclFluxFil)))
+
+
+        return
 
 #===============================================================================
 #                   I/O operations
@@ -1415,6 +1575,33 @@ class heatFlux:
 
         return val
 
+    def readrzqprofile(self, file):
+        if file != None:
+            print("Reading rzq profile data: ",file)
+            log.info("Reading data: "+file)
+            self.rzq_data = pd.read_csv(file, header=0, names=['R(m)','Z(m)','q(W/m2)'])
+        return 
+
+    def writerzqFileData(self,rzqFile,rzqFiledata,tmpDir):
+        """
+        writes data passed in string object (from GUI) to files in
+        tmpDir directory for use later on in HEAT
+
+        the self.tmpDir directory is accessible to the GUI users for uploading
+        and downloading
+
+        this function is called from GUI because objects are json / base64
+        """
+        import base64
+        data = rzqFiledata.encode("utf8").split(b";base64,")[1]
+        path = tmpDir + rzqFile
+        print("Writing local rzqFile: "+path)
+        
+        log.info("Writing local rzqFile: "+path)
+        with open(path, 'wb') as f:
+            f.write(base64.decodebytes(data))
+
+        return path
 
     def readMAFOTLaminarOutput(self,PFC,file):
         """
@@ -1597,9 +1784,14 @@ class heatFlux:
 
         elif self.hfMode == 'tophat':
             HFdict["\u03BB Mode"] = 'TopHat'
-            HFdict["Heat Flux Width (\u03BBq) [mm]"] = self.lqCN           
+            HFdict["Heat Flux Width (\u03BBq) [mm]"] = self.lqCN    
 
-        if self.hfMode != 'qFile':
+        
+        elif self.hfMode == 'rzqprofile':
+            HFdict["Heat Flux Mode"] = 'Read HF from rzq profile data'
+            HFdict['rzqFile'] = self.rzqFile       
+
+        if self.hfMode != 'qFile' or self.hfMode != 'rzqprofile':
             HFdict["Source Power (P) [MW]"] = self.P
             HFdict["Fraction of P radiated by photons"] = self.radFrac
             HFdict["Power Crossing Separatrix (Psol) [MW]"] = self.Psol

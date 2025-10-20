@@ -203,3 +203,34 @@ class VTKops:
 
 
         return
+
+    def writeTraceVTP(self, xyz, f):
+        """
+        writes a field line trace for paraview where xyz are the coordinates
+        and f is the file to write
+        """
+        points = vtk.vtkPoints()
+        for x, y, z in xyz:
+            points.InsertNextPoint(x, y, z)
+
+        polyline = vtk.vtkPolyLine()
+        polyline.GetPointIds().SetNumberOfIds(len(xyz))
+        for i in range(len(xyz)):
+            polyline.GetPointIds().SetId(i, i)
+
+        cells = vtk.vtkCellArray()
+        cells.InsertNextCell(polyline)
+
+        polyData = vtk.vtkPolyData()
+        polyData.SetPoints(points)
+        polyData.SetLines(cells)
+
+        writer = vtk.vtkXMLPolyDataWriter()
+        writer.DebugOn()
+        writer.SetFileName(f)
+        writer.SetInputData(polyData)
+        #writer.SetDataModeToBinary()
+        writer.Write()
+
+        return
+    

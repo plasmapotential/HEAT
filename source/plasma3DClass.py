@@ -52,7 +52,7 @@ class plasma3D:
 		self.NCPUs = 10
 		self.loadHF = False
 		self.loadBasePath = None
-				
+		
 		
 	def allowed_class_vars(self):
 		"""
@@ -250,7 +250,7 @@ class plasma3D:
 			if line[0] == '#': continue
 			words = line.split()
 			c1file = words[0]
-			if ('$CWD' in c1file): c1file = c1file.replace('$CWD', self.inputDir)
+			if ('./' in c1file): c1file = c1file.replace('./', self.inputDir + '/')
 			C1Files.append(c1file)
 			scales.append(tools.makeFloat(words[1]))
 			if len(words) > 2: phases.append(tools.makeFloat(words[2]))
@@ -322,25 +322,31 @@ class plasma3D:
 				f.write(str(R[i]) + "\t" + str(phi[i]) + "\t" + str(Z[i]) + "\n")
 				
 				
-	def launchLaminar(self, NCPUs = None, tag = None, MapDirection = 0):
+	def launchLaminar(self, NCPUs = None, tag = None, MapDirection = 0, verbose=False):
 		"""
 		Write all input files and launch MAFOT
 		Read the output file when finished
 		"""
-		if tag is None: tag = ''		
+		if tag is None: tag = ''
+		self.writeControlFile(MapDirection)
+		self.writeM3DC1supFile()
+		self.writeCoilsupFile()
+		
+		self.tag = tag
 		print('Launching 3D plasma field line tracing on ' + str(self.NCPUs) + ' cores')
 		log.info('Launching 3D plasma field line tracing ' + str(self.NCPUs) + ' cores')
-		self.writeControlFile(MapDirection)
-		self.writeCoilsupFile()
-		self.writeM3DC1supFile()
-			
+		
 		bbLimits = str(self.bbRmin) + ',' + str(self.bbRmax) + ',' + str(self.bbZmin) + ',' + str(self.bbZmax)
 		args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points3DHF.dat','-B',bbLimits,'_lamCTL.dat',tag]
 		current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-		subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
-
+		if verbose == False:
+			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
+		else:
+			subprocess.run(args, env=current_env, cwd=self.cwd) #dont suppress error messages
+		#print('mpirun -n ' + str(self.NCPUs) + ' heatlaminar_mpi' + ' -P points3DHF.dat' + ' _lamCTL.dat' + ' ' + tag)
+		
+		#self.wait2finish(self.NCPUs, tag)
 		self.readLaminar(tag)
-			
 		print('3D plasma field line tracing complete')
 		log.info('3D plasma field line tracing complete')
 		
@@ -394,9 +400,9 @@ class plasma3D:
 		#self.writeCoilsupFile()
 
 		# normalization profile data
-		for normtag in ['LI','LO','UI','UO']:
-			src = path + '/../' + 'lam_' + normtag + '.dat'
-			dst = self.cwd + '/../' + 'lam_' + normtag + '.dat'
+		for tag in ['LI','LO','UI','UO']:
+			src = path + '/../' + 'lam_' + tag + '.dat'
+			dst = self.cwd + '/../' + 'lam_' + tag + '.dat'
 			if (not os.path.isfile(dst)) & os.path.isfile(src): 
 				shutil.copy(src, dst)
 		
@@ -473,9 +479,8 @@ class plasma3D:
 		Write M3D-C1 supplemental input file
 		Overwrites any existing one.
 		"""
-		N = len(self.C1Files)
 		with open(self.cwd + '/' + 'm3dc1sup.in', 'w') as f:
-			for i in range(N):
+			for i in range(len(self.C1Files)):
 				f.write(self.C1Files[i] + '\t' + str(self.C1scales[i]) + '\t' + str(self.C1phases[i]) + '\n')
 
 
@@ -554,13 +559,11 @@ class heatflux3D:
 		self.q0 = None
 		self.ep = None	# equilParams_class instance for EFIT equilibrium
 		self.HFS = None	# True: use high field side SOL, False: use low field side SOL
-		self.fluxExpansion = None
 		
 		#Default inputs
 		self.NCPUs = 100
 		self.teProfileData = None
 		self.neProfileData = None
-		self.scaleSmooth = 1.0
 		
     
 	def allowed_class_vars(self):
@@ -595,10 +598,9 @@ class heatflux3D:
 		:model: string in [layer, conductive, convective] to select heat flux model 
 		:NCPUs: integer, number of CPUs to use in MAFOT, default is 10
 		  same as in plasma3D class
-		:scaleSmooth: float, factor to scale the range of the heat flux moving average filter
 		"""
 		self.allowed_vars = ['Lcmin', 'lcfs', 'lqCN', 'S', 'P', 'radFrac', 'qBG', 
-				'teProfileData', 'neProfileData', 'kappa', 'model','NCPUs','scaleSmooth']
+				'teProfileData', 'neProfileData', 'kappa', 'model','NCPUs']
 
 
 	def setTypes(self):
@@ -606,7 +608,7 @@ class heatflux3D:
 		Set variable types for the stuff that isnt a string from the input file
 		"""
 		integers = ['NCPUs']
-		floats = ['Lcmin', 'lcfs', 'lqCN', 'S', 'P', 'radFrac', 'qBG', 'kappa', 'scaleSmooth']
+		floats = ['Lcmin', 'lcfs', 'lqCN', 'S', 'P', 'radFrac', 'qBG', 'kappa']
 		bools = []
 		setAllTypes(self, integers, floats, bools)
 		
@@ -710,7 +712,6 @@ class heatflux3D:
 		print('radFrac = ' + str(self.radFrac))
 		print('qBG = ' + str(self.qBG))
 		print('kappa = ' + str(self.kappa))
-		print('scaleSmooth = ' + str(self.scaleSmooth))
 		print('#=============================================================')
 		print('#                3D Plasma Variables')
 		print('#=============================================================')
@@ -729,7 +730,6 @@ class heatflux3D:
 		log.info('radFrac = ' + str(self.radFrac))
 		log.info('qBG = ' + str(self.qBG))
 		log.info('kappa = ' + str(self.kappa))
-		log.info('scaleSmooth = ' + str(self.scaleSmooth))
 		log.info('#=============================================================')
 		log.info('#                3D Plasma Variables')
 		log.info('#=============================================================')
@@ -795,14 +795,10 @@ class heatflux3D:
 		print('3D Heat flux model type: ' + self.model)
 		log.info('3D Heat flux model type: ' + self.model)
 		if self.model in ['Layer', 'layer', 'eich', 'Eich', 'heuristic']:
-			if 'O' in DivCode: 
-				self.fluxExpansion = self.ep.fluxExpansion(target = 'out')
-				self.HFS = False		# an Outer divertor is on low-field-side
-			elif 'I' in DivCode: 
-				self.fluxExpansion = self.ep.fluxExpansion(target = 'in')
-				self.HFS = True		# an Inner divertor is on High-Field-Side
+			if 'O' in DivCode: HFS = False		# an Outer divertor is on low-field-side
+			elif 'I' in DivCode: HFS = True		# an Inner divertor is on High-Field-Side
 			else: raise ValueError('PFC Divertor Code cannot be identified. Check your PFC input file')
-
+			self.HFS = HFS	# True: use high field side SOL, False: use low field side SOL
 			print('Layer width lq =', self.lqCN)
 			print('PFR spread S =', self.S)
 			print('LCFS at', self.lcfs)
@@ -875,7 +871,7 @@ class heatflux3D:
 		q_hat = 2.0/7.0 * kappa/L * (T**3.5 - T0**3.5) * (1e+3)**3.5/1e+6   # in MW/m^2
 		
 		psi = psiN * (self.ep.g['psiSep']-self.ep.g['psiAxis']) + self.ep.g['psiAxis']	# this is flux
-		P0 = 2*np.pi * integ.simps(q_hat, psi)
+		P0 = 2*np.pi * integ.simpson(q_hat, psi)
 		#account for nonphysical power
 		if P0 < 0: P0 = -P0
 		#Scale to input power
@@ -883,7 +879,7 @@ class heatflux3D:
 		return q0 #,q_hat,psiN
 
 
-	def scale_conduct2(self, P, kappa, L, lq, S, ratio, T0 = 0, pfr = 1.0):
+	def scale_conduct2(self, P, kappa, L, lq, S, ratio, T0 = 0, pfr = 1.0, verbose=False):
 		"""
 		"""		
 		if pfr is None: pfr = self.lcfs
@@ -918,7 +914,10 @@ class heatflux3D:
 			#nproc = 10
 			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
+			if verbose == False:
+				subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
+			else:
+				subprocess.run(args, env=current_env, cwd=self.cwd) #dont suppress error messages
 			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
 			# move one folder down
 			src = self.cwd + '/' + 'lam_' + tag + '.dat'
@@ -948,7 +947,7 @@ class heatflux3D:
 		#Menard's method
 		psiN = self.ep.psiFunc.ev(R,Z)	# this is normalized
 		psi = psiN * (self.ep.g['psiSep']-self.ep.g['psiAxis']) + self.ep.g['psiAxis']	# this is flux
-		P0 = 2*np.pi * integ.simps(q_hat, psi)
+		P0 = 2*np.pi * integ.simpson(q_hat, psi)
 		#account for nonphysical power
 		if P0 < 0: P0 = -P0
 		#Scale to input power
@@ -1005,7 +1004,7 @@ class heatflux3D:
 
 	def map_R_psi(self, psi, HFS = None):
 		"""
-		Map normalized poloidal flux psi to R at midplane (Z = Z_axis)
+		Map normalized poloidal flux psi to R at midplane (Z = 0)
 		psi is flat array
 		return R(psi)
 		"""
@@ -1022,7 +1021,7 @@ class heatflux3D:
 		return f(psi)
 
 
-	def scale_layer(self, lq, S, P, DivCode, verfyScaling = True):
+	def scale_layer(self, lq, S, P, DivCode, verfyScaling = True, verbose=False):
 		"""
 		scales HF using a part of the limiter outline in the g-file 
 		q-profile is obtained using laminar and apply the heat flux layer to psimin
@@ -1112,7 +1111,10 @@ class heatflux3D:
 			# call MAFOT
 			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','-B',bbLimits,'_lamCTL.dat',tag]
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
+			if verbose == False:
+				subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
+			else:
+				subprocess.run(args, env=current_env, cwd=self.cwd) #dont suppress error messages
 			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
 			
 			# move one folder down
@@ -1180,11 +1182,6 @@ class heatflux3D:
 			
 		# average over the toroidal angles
 		qparm = qpar.mean(0)
-		
-		# simple moving average filter
-		delta = np.abs(0.5*self.fluxExpansion * self.S *1e-3 * self.scaleSmooth)	# in meters
-		w = 2*int(delta/ds) + 1
-		qparav = np.convolve(qparm, np.ones(w), 'same') / w
 
 		# get incident angle
 		BR = self.ep.BRFunc.ev(R,Z)
@@ -1199,53 +1196,15 @@ class heatflux3D:
 		nB = np.abs(nR*BR + nZ*BZ)/B
 		
 		# perpendicular heat flux
-		q = qparav*nB
+		q = qparm*nB
 		
 		# Integrate along line and along toroidal angle (axisymm) to get total power
-		P0 = 2*np.pi * integ.simps(R*q, swall)
+		P0 = 2*np.pi * integ.simpson(R*q, swall)
 		#account for nonphysical power
 		if P0 < 0: P0 = -P0
 		#Scale to input power
 		q0 = P/P0
 		return q0	#, q,mask,nB,qpar
-
-
-	def smoothq(self, allNeighbours, centers, shadowed_mask, q = None):
-		"""
-		smooth heat flux with neighbouring triangles within distance delta
-		this uses all triangles in a mesh, shadowed and unshadowed, but only smoothes the unshadowed ones
-		"""
-		delta = 0.5*self.fluxExpansion * self.S *1e-3 * self.scaleSmooth	# in meters
-		deltasq = delta**2
-		numberOfNeighbours = []
-		
-		N_facets = len(centers)
-		qav = np.zeros(N_facets)
-		if q is None:
-			q = np.zeros(N_facets)
-			use = np.where(shadowed_mask == 0)[0]
-			q[use] = self.q		# self.q lives on the 'use' subset 
-			
-		if self.scaleSmooth <= 0:				# skip the smoothing and return the input unchanged
-			print('No smoothing of heat flux')
-			log.info('No smoothing of heat flux')
-			return q
-			
-		print('Smoothing heat flux with moving average filter within radius: ' + str(np.round(delta*1e3,2)) + ' mm')
-		log.info('Smoothing heat flux with moving average filter within radius: ' + str(np.round(delta*1e3,2)) + ' mm')
-		for idx in range(N_facets):
-			if shadowed_mask[idx] > 0: continue		# skip shadowed triangles 
-			stack = set([idx])
-			getNeighbourTriangleIndices(idx,idx,allNeighbours,centers,deltasq,stack)
-			stack = np.fromiter(stack, int, len(stack))
-			qav[idx] = np.mean(q[stack])
-			numberOfNeighbours.append(len(stack))
-		
-		numberOfNeighbours = np.array(numberOfNeighbours)
-		print('Number of triangles used for smoothing: ' + str(int(numberOfNeighbours.mean()+0.5)) + ' ± ' + str(int(numberOfNeighbours.std()+0.5)))
-		log.info('Number of triangles used for smoothing: ' + str(int(numberOfNeighbours.mean()+0.5)) + ' ± ' + str(int(numberOfNeighbours.std()+0.5)))
-		
-		return qav
 
 
 	def scale_layer_circle(self, lq, S, P, DivCode):
@@ -1368,7 +1327,7 @@ class heatflux3D:
 		q = qpar*nB
 		
 		# Integrate along line and along toroidal angle (axisymm) to get total power
-		P0 = 2*np.pi * integ.simps(radius*R*q, theta)
+		P0 = 2*np.pi * integ.simpson(radius*R*q, theta)
 		#account for nonphysical power
 		if P0 < 0: P0 = -P0
 		#Scale to input power
@@ -1452,7 +1411,7 @@ class heatflux3D:
 		#Menard's method
 		psiN = self.ep.psiFunc.ev(R,Z)	# this is normalized
 		psi = psiN * (self.ep.g['psiSep']-self.ep.g['psiAxis']) + self.ep.g['psiAxis']	# this is flux
-		P0 = 2*np.pi * integ.simps(qpar, psi)
+		P0 = 2*np.pi * integ.simpson(qpar, psi)
 		#account for nonphysical power
 		if P0 < 0: P0 = -P0
 		#Scale to input power
@@ -1534,7 +1493,7 @@ class heatflux3D:
 		#Menard's method
 		psiN = self.ep.psiFunc.ev(R,Z)	# this is normalized
 		psi = psiN * (self.ep.g['psiSep']-self.ep.g['psiAxis']) + self.ep.g['psiAxis']	# this is flux
-		P0 = 2*np.pi * integ.simps(q_hat, psi)
+		P0 = 2*np.pi * integ.simpson(q_hat, psi)
 		#account for nonphysical power
 		if P0 < 0: P0 = -P0
 		#Scale to input power
@@ -1591,7 +1550,7 @@ class heatflux3D:
 		
 		#Menard's method
 		psi = psiN * (self.ep.g['psiSep']-self.ep.g['psiAxis']) + self.ep.g['psiAxis']	# this is flux
-		P0 = 2*np.pi * integ.simps(q_hat, psi)
+		P0 = 2*np.pi * integ.simpson(q_hat, psi)
 		#account for nonphysical power
 		if P0 < 0: P0 = -P0
 		#Scale to input power
@@ -1821,36 +1780,6 @@ def checkScaling(file, plotme =True):
 		plt.ylabel('q$_{||}$ [a.u.]')
 		
 	return swall, qpar
-
-
-def getNeighbourTriangleIndices(k,idx,allNeighbours,centers,deltasq,stack):
-	"""
-	Recursive algorithm to find indices of all neighbouring triangles to source triangle idx 
-	within distance delta, with deltasq = delta**2, of respective centers.
-	k is index of current triangle
-	idx is index of source triangle
-	allNeighbours is list of 3-tupples of neighbour indices for each triangle in mesh
-	centers is list of (xyz) center coordinates for each triangle in mesh 
-	stack is a set of a list of the neighbours of idx within distance delta
-	stack gets recursively updated by this algorithm
-	initial call with k = idx; stack = set([idx]); deltasq = delta**2
 	
-	# for a given mesh
-	N_facets = mesh.CountFacets
-	norms,centers,areas = CAD.normsCentersAreas(mesh)
-	allNeighbours = [0]*N_facets
-	for i,facet in enumerate(mesh.Facets):
-		allNeighbours[i] = facet.NeighbourIndices
-	"""
-	#neighbours = mesh.Facets[k].NeighbourIndices	# DO NOT USE THIS: this is very slow!
-	neighbours = allNeighbours[k]
-	for n in neighbours:
-		if n < 0: continue
-		if n in stack: continue
-		distancesq = (centers[n,0] - centers[idx,0])**2 + (centers[n,1] - centers[idx,1])**2 + (centers[n,2] - centers[idx,2])**2
-		if distancesq < deltasq: 
-			stack.add(n)
-			getNeighbourTriangleIndices(n,idx,allNeighbours,centers,deltasq,stack)
-
 	
 	

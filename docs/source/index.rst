@@ -17,9 +17,9 @@ Contents
 General Information
 -------------------
 The Heat flux Engineering Analysis Toolkit (HEAT) is a suite of tools for predicting the heat flux
-incident upon PFCs in tokamaks, and the associated PFC state (ie temperature).
-The toolkit connects CAD, FVM, MHD, ray tracing, plasma physics, and more, in one streamlined package.
-The objective is to enable engineers and physicists to quickly ascertain heat loads given specific magnetic
+incident upon PFCs in tokamaks, and the associated PFC state (ie temperature, stress, etc).
+The toolkit connects CAD, FVM, FEM, MHD, ray tracing, plasma physics, and more, in one streamlined package.
+The objective is to enable engineers and physicists to quickly calculate heat loads given specific magnetic
 configurations and geometric configurations.
 
 Some examples of what HEAT can predict:
@@ -27,35 +27,27 @@ Some examples of what HEAT can predict:
  * Heat fluxes from the optical approximation, ion gyro orbit approximation, and photon flux
  * Heat and particle fluxes from filaments
  * 3D heat flux profiles from RMPs and Error Fields
- * Time varying heat loads and temperature profiles
+ * Temperature, Stress, Recrystallization Kinetics
+ * Time varying heat fluxes and thermal state
  * Magnetic field line traces
  * Many other quantities
 
 
-The latest release of HEAT is v3.0, which includes the following notable additions / patches:
- * A filament tracer, based upon the Fundamenski Free Streaming Model (W Fundamenski et al 2006 Plasma Phys. Control. Fusion 48 109)
- * Compatibility with M3DC1 equilibria for 3D field tracing and footprints
- * Patch for photon tracing which results in 10X speedup in some cases
- * Numerous other bug fixes and user requests
-
-
-The following physics modules are scheduled to be added to HEAT soon:
- * GPU Support
+The latest release of HEAT is v4.2.3.
 
 To cite HEAT, you can use a paper published by the journal Fusion Science and Technology under open access.  The paper can be found here: https://doi.org/10.1080/15361055.2021.1951532
-
 
 Other recent HEAT related publications:
  * 3D ion gyro-orbit heat load predictions for NSTX-U, Looby et al, https://iopscience.iop.org/article/10.1088/1741-4326/ac8a05
  * 3D PFC Power Exhaust Predictions for the SPARC Tokamak, Looby et al, https://meetings.aps.org/Meeting/DPP22/Session/NO03.11
  * Measurements of multiple heat flux components at the divertor target by using surface eroding thermocouples (invited), Ren et al, https://aip.scitation.org/doi/full/10.1063/5.0101719
 
-For users who want to run HEAT, you will need to download the HEAT docker container from dockerhub.  There is no longer support for the Linux appImage, as the docker container is OS agnostic and achieves equal speeds as the appImage.  Users must download the docker container to get the HEAT environment.  The HEAT docker container has been tested on Linux, MacOS, and Windows.  See the tutorials link below for more information on installation.
+For users who want to run HEAT, you will need to download the HEAT docker container from dockerhub.
 Dockerhub repo:  https://hub.docker.com/r/plasmapotential/heat
 There is a companion repo to this one, which provides some HEAT pre/post processing functions:
 https://github.com/plasmapotential/HEATtools.git
 
-The developer is Tom Looby, a Scientist at Commonwealth Fusion Systems.
+The developer is Tom Looby, Senior Scientist at Commonwealth Fusion Systems.
 
 This project is open source under the MIT license.
 

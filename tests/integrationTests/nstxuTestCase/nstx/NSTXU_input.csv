@@ -5,13 +5,14 @@
 #                IO Variables
 #=============================================================
 vtpMeshOut, True
-vtpPCOut, False
+vtpPCOut, True
 csvOut, True
+glbMeshOut, True
 #=============================================================
 #                CAD Variables
 #=============================================================
 gridRes, standard
-overWriteMask, False
+overWriteMask, True
 xT, None
 yT, None
 zT, None
@@ -51,6 +52,7 @@ qBG, 0.0
 fG, 0.6
 qFilePath, None
 qFileTag, None
+rzqFile, None
 #==============================================================
 #                Ion Gyro Orbit HF Variables
 #==============================================================
@@ -67,11 +69,14 @@ gyroSources, gyroSourcePlane
 #==============================================================
 #                Radiated Power HF Variables
 #==============================================================
-radFile, /root/source/HEAT/source/tests/integrationTests/nstxuTestCase/nstx/RZpower.csv
+radFile, /root/source/HEAT/tests/integrationTests/nstxuTestCase/nstx/RZpower.csv
 Ntor, 5
 Nref, 1
 phiMin, 20
 phiMax, 35
+rayTracer, mitsuba
+Prad_mult, 1.0
+saveRadFrac, False
 #==============================================================
 #                OpenFOAM Variables
 #==============================================================
@@ -83,11 +88,19 @@ STLscale, 1.0
 meshMinLevel, 1
 meshMaxLevel, 2
 material, SGL
+#==============================================================
+#                Elmer FEM Variables
+#==============================================================
+meshFEMminRes, 5.0
+meshFEMmaxRes, 20.0
+elmerDir, /root/source/HEAT/tests/integrationTests/nstxuTestCase/nstx/elmer/
+elmerFile, elmerFile.csv
+elmerHEATlib, HEATLibrary.so
 #=============================================================
 #                3D Plasma Variables
 #=============================================================
 plasma3Dmask, False
-itt, 300
+itt, 335
 response, 1
 selectField, 2
 useIcoil, 0

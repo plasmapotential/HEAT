@@ -27,6 +27,7 @@ import Mesh
 import MeshPart
 #sys.path = oldpath
 import Import
+import Fem
 import stl
 
 
@@ -41,6 +42,7 @@ import logging
 log = logging.getLogger(__name__)
 
 import open3d as o3d
+
 
 
 class CAD:
@@ -225,27 +227,62 @@ class CAD:
         """
         Checks to see if STLs at desired resolution exist.  If they do, load em.
         If they don't, create them.
+
+        BYOM = Bring Your Own Mesh.  This will be set to True when using
+        terminal user interface if PFC csv file has an STL instead of
+        a part name in the PFCname column.  To BYOM, place the stl file
+        in the HEATrun directory and modify the PFC csv file.
         """
+        self.BYOM = False
         for idx,partnum in enumerate(self.ROI):
-            if resolution == None:
-                if type(self.ROIresolutions[idx]) == str:
-                    resolution = self.ROIresolutions[idx]
+
+            #user supplied STL file ( Bring Your Own Mesh (BYOM) )
+            _, extension = os.path.splitext(partnum)
+            if extension == '.stl':
+                print("Using user supplied mesh")
+                log.info("Using user supplied mesh")
+                #load mesh from file
+                self.BYOM=True
+                self.loadROIMesh(self.machInDir + partnum, idx)
+            #use HEAT generated mesh 
+            else:
+                #if BYOM was previously set to True, user is trying to mix user supplied
+                #meshes with the HEAT meshing algorithm -> not supported
+                if self.BYOM == True:
+                    print("\n===Meshing Error:===")
+                    print("You cannot mix user supplied meshes with the HEAT meshing algs.")
+                    print("Either change your PFC file so that all PFCnames correspond")
+                    print("to user supplied mesh objects (ie suffix .stl), or change")
+                    print("your PFC file so that all PFCnames correspond to STEP file") 
+                    print("object names (not .stls) for HEAT meshing.")
+                    print("Exiting...\n")
+                    log.info("\n===Meshing Error:===")
+                    log.info("You cannot mix user supplied meshes with the HEAT meshing algs.")
+                    log.info("Either change your PFC file so that all PFCnames correspond")
+                    log.info("to user supplied mesh objects (ie suffix .stl), or change")
+                    log.info("your PFC file so that all PFCnames correspond to STEP file") 
+                    log.info("object names (not .stls)  for HEAT meshing.")
+                    log.info("Exiting...\n")
+                    sys.exit()
+                if resolution == None:
+                    if type(self.ROIresolutions[idx]) == str:
+                        resolution = self.ROIresolutions[idx]
+                    else:
+                        resolution = float(self.ROIresolutions[idx])
+
+                #standard meshing algorithm
+                if type(resolution) == str:
+                    name = self.STLpath + partnum + "___"+resolution+".stl".format(resolution)
+                #mefisto meshing algorithm
                 else:
-                    resolution = float(self.ROIresolutions[idx])
+                    name = self.STLpath + partnum + "___{:.6f}mm.stl".format(resolution)
 
-            #standard meshing algorithm
-            if type(resolution) == str:
-                name = self.STLpath + partnum + "___"+resolution+".stl".format(resolution)
-            #mefisto meshing algorithm
-            else:
-                name = self.STLpath + partnum + "___{:.6f}mm.stl".format(resolution)
-
-            if os.path.exists(name) and self.overWriteMask == False:
-                print("Mesh exists, loading...")
-                self.loadROIMesh(name,idx)
-            else:
-                print("New mesh.  Creating...")
-                self.ROIobjFromPartnum(partnum,idx)
+                if os.path.exists(name) and self.overWriteMask == False:
+                    print("Mesh exists, loading...")
+                    self.loadROIMesh(name,idx)
+                else:
+                    print("New mesh.  Creating...")
+                    self.ROIobjFromPartnum(partnum,idx)
 
 
         #global mesh translations if requested
@@ -263,19 +300,49 @@ class CAD:
         """
         if resolution == None:  resolution=self.gridRes
         for partnum in self.intersectList:
-            #standard meshing algorithm
-            if type(resolution) == str:
-                name = self.STLpath + partnum + "___"+resolution+".stl".format(resolution)
-            #mefisto meshing algorithm
-            else:
-                name = self.STLpath + partnum + "___{:.6f}mm.stl".format(resolution)
+            #user supplied STL file ( Bring Your Own Mesh (BYOM) )
+            _, extension = os.path.splitext(partnum)
+            if extension == '.stl':
+                print("Using user supplied mesh")
+                log.info("Using user supplied mesh")
+                #load mesh from file
+                self.loadIntersectMesh(self.machInDir + partnum)                   
 
-            if os.path.exists(name) and self.overWriteMask == False:
-                print("Mesh exists, loading...")
-                self.loadIntersectMesh(name)
+            #use HEAT generated mesh 
             else:
-                print("New mesh.  Creating "+partnum)
-                self.intersectObjFromPartnum(partnum, resolution)
+                #if BYOM was previously set to True, user is trying to mix user supplied
+                #meshes with the HEAT meshing algorithm -> not supported
+                if self.BYOM == True:
+                    print("\n===Meshing Error:===")
+                    print("You cannot mix user supplied meshes with the HEAT meshing algs.")
+                    print("Either change your PFC file so that all PFCnames correspond")
+                    print("to user supplied mesh objects (ie suffix .stl), or change")
+                    print("your PFC file so that all PFCnames correspond to STEP file") 
+                    print("object names (not .stls) for HEAT meshing.")
+                    print("Exiting...\n")
+                    log.info("\n===Meshing Error:===")
+                    log.info("You cannot mix user supplied meshes with the HEAT meshing algs.")
+                    log.info("Either change your PFC file so that all PFCnames correspond")
+                    log.info("to user supplied mesh objects (ie suffix .stl), or change")
+                    log.info("your PFC file so that all PFCnames correspond to STEP file") 
+                    log.info("object names (not .stls)  for HEAT meshing.")
+                    log.info("Exiting...\n")
+                    sys.exit()
+                #standard meshing algorithm
+                if type(resolution) == str:
+                    name = self.STLpath + partnum + "___"+resolution+".stl".format(resolution)
+                #mefisto meshing algorithm
+                else:
+                    name = self.STLpath + partnum + "___{:.6f}mm.stl".format(resolution)
+
+                if os.path.exists(name) and self.overWriteMask == False:
+                    print("Intersect mesh exists, loading...")
+                    log.info("Intersect mesh exists, loading...")
+                    self.loadIntersectMesh(name)
+                else:
+                    print("New intersect mesh.  Creating "+partnum)
+                    log.info("New intersect mesh.  Creating "+partnum)
+                    self.intersectObjFromPartnum(partnum, resolution)
 
         #global mesh translations if requested
         for i,mesh in enumerate(self.intersectMeshes):
@@ -413,6 +480,8 @@ class CAD:
         for obj in self.CADobjs:
             if type(obj) == Part.Feature:
                 self.CADparts.append(obj)
+            else:
+                print("Part "+obj.Label+" not Part.Feature.  Type is "+str(type(obj)))
 
         print("Loaded STEP file: " + self.STPfile)
         log.info("Loaded STEP file: " + self.STPfile)
@@ -579,11 +648,13 @@ class CAD:
         return meshes
 
 
-    def writeMesh2file(self, mesh, label, resolution, path='./'):
+    def writeMesh2file(self, mesh, label, resolution, path='./', fType='stl'):
         """
         Writes a mesh object to STL file named by part number.
         If mesh is a list of mesh objects, then write a separate file for
         each mesh object in the list.  Clobbers if overWriteMask is True
+
+        type defines mesh type / suffix (defaults to .stl file)
         """
         #Check if this is a single file or list and make it a list
         if type(mesh) != list:
@@ -605,11 +676,14 @@ class CAD:
 
             #standard meshing algorithm
             stdList = ['standard', 'Standard', 'STANDARD']
-            if resolution[i] in stdList:
-                filename = path + label[i] + "___"+resolution[i]+".stl"
-            #mefisto meshing algorithm
+            if self.BYOM==True:
+                filename = path + label[i]
             else:
-                filename = path + label[i] + "___{:.6f}mm.stl".format(float(resolution[i]))
+                if resolution[i] in stdList:
+                    filename = path + label[i] + "___"+resolution[i]+"."+fType
+                #mefisto meshing algorithm
+                else:
+                    filename = path + label[i] + "___{:.6f}mm.".format(float(resolution[i]))+fType
             if os.path.exists(filename) and self.overWriteMask == False:
                 print("Not clobbering mesh file...")
             else:
@@ -629,19 +703,27 @@ class CAD:
         filename is a list of filenames, then read each into a separate index
         of mesh variable in class.  filename should match a part number from the
         ROI
+
+        BYOM = Bring Your Own Mesh.  This will be set to True when using
+        terminal user interface if PFC csv file has an STL instead of
+        a part name in the PFCname column
+
         """
         #Check if this is a single file or list and make it a list
         if type(filenames) == str:
             filenames = [filenames]
         for file in filenames:
             mesh = Mesh.Mesh(file)
-            partnum = file.split('/')[-1].split('___')[0]
-#            idx = np.where(np.asarray(self.ROI) == partnum)[0][0]
-            #Find CAD object that matches this part number
-            for i in range(len(self.CADobjs)):
-                if partnum == self.CADobjs[i].Label:
-                    self.ROIparts[idx] = self.CADobjs[i]
+            #HEAT generated mesh
+            if self.BYOM==False:
+                partnum = file.split('/')[-1].split('___')[0]
+    #            idx = np.where(np.asarray(self.ROI) == partnum)[0][0]
+                #Find CAD object that matches this part number
+                for i in range(len(self.CADobjs)):
+                    if partnum == self.CADobjs[i].Label:
+                        self.ROIparts[idx] = self.CADobjs[i]
             self.ROImeshes[idx] = mesh
+
         print("Loaded STL files")
         log.info("Loaded STL files")
         return
@@ -659,15 +741,21 @@ class CAD:
             print('Loading ' + file)
             log.info('Loading ' + file)
             mesh = Mesh.Mesh(file)
-            partnum = file.split('/')[-1].split('___')[0]
-            idx = np.where(np.asarray(self.intersectList) == partnum)[0][0]
-            #Find CAD object that matches this part number
-            for i in range(len(self.CADobjs)):
-                if partnum == self.CADobjs[i].Label:
-                    self.intersectParts[idx] = self.CADobjs[i]
+            #HEAT generated mesh
+            if self.BYOM==False:
+                partnum = file.split('/')[-1].split('___')[0]
+                idx = np.where(np.asarray(self.intersectList) == partnum)[0][0]
+                #Find CAD object that matches this part number
+                for i in range(len(self.CADobjs)):
+                    if partnum == self.CADobjs[i].Label:
+                        self.intersectParts[idx] = self.CADobjs[i]
+            #BYOM
+            else:
+                partnum = file.split('/')[-1]
+                idx = np.where(np.asarray(self.intersectList) == partnum)[0][0]
             self.intersectMeshes[idx] = mesh
-        print("Loaded STL files")
-        log.info("Loaded STL files")
+        print("Loaded Intersection STL files")
+        log.info("Loaded Intersection STL files")
         return
 
     def loadGyroMesh(self, filenames, idx):
@@ -708,7 +796,7 @@ class CAD:
         mesh = Mesh.Mesh()
         return mesh
 
-    def minmaxExtent(self, x,y,z, unitConvert = 1000.0):
+    def minmaxExtent(self, x,y,z, unitConvert = 1000.0, verbose=False):
         """
         Gets the Rmin, Rmax, Zmin and Zmax of all facets xyz in a mesh to 
         determine the overall extent of the meshed surface. A global set is then updated.
@@ -719,7 +807,8 @@ class CAD:
         Rmax = R.max()/unitConvert
         Zmin = z.min()/unitConvert
         Zmax = z.max()/unitConvert
-        print('Extent of mesh:',Rmin, Rmax, Zmin, Zmax)
+        if verbose == True:
+            print('Extent of mesh:',Rmin, Rmax, Zmin, Zmax)
         if self.Rmin is None: self.Rmin = Rmin
         elif Rmin < self.Rmin: self.Rmin = Rmin
         
@@ -733,7 +822,7 @@ class CAD:
         elif Zmax > self.Zmax: self.Zmax = Zmax
         return
 
-    def normsCentersAreas(self, meshes, bndybox = False):
+    def normsCentersAreas(self, meshes, bndybox = False, verbose=False):
         """
         Gets face normals and face centers.  Both norms and centers are arrays
         of length mesh.CountFacets, consisting of three components (x,y,z) per
@@ -775,8 +864,10 @@ class CAD:
                 centers.append(self.faceCenters(x,y,z))
                 areas.append(self.faceAreas(mesh))
                 if bndybox:
-                    print('Part:',self.intersectParts[k].Label)
-                    self.minmaxExtent(x,y,z)
+                    if verbose == True:
+                        print('Part:',self.intersectParts[k].Label)
+                    if len(x) > 0:
+                        self.minmaxExtent(x,y,z)
         return norms,centers,areas
 
 
@@ -790,6 +881,10 @@ class CAD:
             permute_mask = self.permute_mask
         if hasattr(self,'unitConvert'):
             unitConvert = self.unitConvert
+        if hasattr(self, 'BYOM'):
+            if self.BYOM == True:
+                permute_mask = False
+
 
         #First handle coordinate permutations (preserve right hand rule)
         if permute_mask==True:
@@ -1489,3 +1584,107 @@ class CAD:
         colors[:] = color
         ls.colors = o3d.utility.Vector3dVector(colors)
         return ls
+    
+    def createFEMmeshNetgen(self, obj, MaxSize=1000, Fineness="Moderate",
+                          Optimize = True, SecondOrder=True, name='FEMMeshNetgen'):
+        """
+        Creates a FEM mesh object using the netgen mesher.  User specifies
+        the size and fineness of the mesh.  Uses freecad api to netgen
+
+        Some of the functionality in this function may not work depending on the 
+        freecad version.  older versions do not have netgen module.
+        also requires an environment with netgen installed (from apt repo)
+
+        """
+        print("Generating Mesh Obj")
+        doc = self.CADdoc
+        mesh = doc.addObject('Fem::FemMeshShapeNetgenObject', name)
+        mesh.Shape = obj
+        mesh.MaxSize = MaxSize
+        mesh.Fineness = Fineness
+        mesh.Optimize = Optimize
+        mesh.SecondOrder = SecondOrder
+        doc.recompute()
+        
+        if hasattr(self, 'FEMmeshes'):
+            if self.FEMmeshes is None:
+                self.FEMmeshes = [mesh]
+            else:
+                self.FEMmeshes.append(mesh)
+        else:
+            self.FEMmeshes = [mesh]
+        return mesh
+
+
+    def createFEMmeshGmsh(self, obj, minLength=0, maxLength=0, name='FEMMeshGmsh'):
+        """
+        Creates a FEM mesh object using the Gmsh mesher.  User specifies
+        the minimum / maximum length of the mesh elements, which defaults 
+        to 0 (auto).  Uses freecad api to gmsh
+
+        Some of the functionality in this function may not work depending on the 
+        freecad version.  older versions do not have ObjectsFem module.
+        also requires an environment with gmsh installed (from apt repo)
+        """
+        import ObjectsFem
+        print("Generating Mesh Obj")
+        doc = self.CADdoc
+        mesh = ObjectsFem.makeMeshGmsh(doc, name + "_Mesh")
+        mesh.Label = name
+        mesh.Part = obj
+        #mesh.ElementDimension = "From Shape"
+        mesh.CharacteristicLengthMin = minLength
+        mesh.CharacteristicLengthMax = maxLength
+        #mesh.SecondOrderLinear = True
+        #mesh.ElementOrder = 2  # Set to 2 for second order elements   
+
+        #optimizations that prevent degenerate mesh elements
+        mesh.MeshSizeFromCurvature = 12
+        mesh.Recombine3DAll = True
+        mesh.RecombinationAlgorithm = "Simple"
+        mesh.OptimizeNetgen = True
+        doc.recompute()
+
+        from femmesh.gmshtools import GmshTools as gt
+        gmsh_mesh = gt(mesh)
+
+        error = None
+        try:
+            error = gmsh_mesh.create_mesh()
+        except:
+            print("Could not create 3D mesh...")
+            print(error)
+            print("Do you have the python-is-python3 package installed?")
+            log.info("Could not create 3D mesh...")
+            log.info(error)
+            log.info("Do you have the python-is-python3 package installed?")
+        
+        if hasattr(self, 'FEMmeshes'):
+            if self.FEMmeshes is None:
+                self.FEMmeshes = [mesh]
+            else:
+                self.FEMmeshes.append(mesh)
+        else:
+            self.FEMmeshes = [mesh]
+
+        return mesh
+    
+    def importFEMmesh(self, file):
+        """
+        imports FEM mesh and returns FEM mesh object
+        """
+        print(file)
+        mesh = Fem.open(file)
+        self.CADdoc = FreeCAD.ActiveDocument
+        self.FEMmeshes = self.CADdoc.Objects
+        return
+
+    def exportFEMmesh(self, mesh, file):
+        """
+        exports FEM mesh
+        """
+        print(file)
+        if type(mesh) != 'list':
+            mesh = [mesh]
+        Fem.export(mesh, file)
+        return

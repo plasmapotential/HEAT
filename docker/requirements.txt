@@ -24,6 +24,11 @@ netCDF4
 mpi4py
 gmsh
 scikit-image
+scikit-learn
 open3d
+mitsuba
+skorch
+usd-core
+pygltflib
 
 
