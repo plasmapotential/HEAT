@@ -791,6 +791,8 @@ class heatflux3D:
 		zeroes out invalid points
 		updates self.q
 		sets self.q0 this first time its called
+
+		TO DO: make this function compatible with PFC divFracs as a mesh quantity
 		"""
 		print('3D Heat flux model type: ' + self.model)
 		log.info('3D Heat flux model type: ' + self.model)

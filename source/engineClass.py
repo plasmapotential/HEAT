@@ -822,30 +822,33 @@ class engineObj():
         return
 
 
-    def getCADResInputs(self,gridRes=None,gTx=None,gTy=None,gTz=None):
+    def getCADinputs(self,gridRes=None,gTx=None,gTy=None,gTz=None, mode='tui'):
         """
         Loads CAD inputs
         """
-        tools.initializeInput(self.CAD, infile=self.infile)
-        self.CAD.rootDir = self.rootDir #set HEAT rootDir
-        if gridRes is not None:
-            #check if intersection grid resolution string is a number,
-            #if not use standard mesh algorithms
-            if tools.is_number(gridRes):
-                self.CAD.gridRes = gridRes
-            else:
-                self.CAD.gridRes = "standard"
+        if mode == 'gui':
+            if gridRes is not None:
+                #check if intersection grid resolution string is a number,
+                #if not use standard mesh algorithms
+                if tools.is_number(gridRes):
+                    self.CAD.gridRes = gridRes
+                else:
+                    self.CAD.gridRes = "standard"
 
-        self.CAD.gTx = gTx
-        self.CAD.gTy = gTy
-        self.CAD.gTz = gTz
-
+            self.CAD.xT = gTx
+            self.CAD.yT = gTy
+            self.CAD.zT = gTz
+        else:
+            tools.initializeInput(self.CAD, infile=self.infile)
+        
         return
 
     def getCAD(self,STPfile=None,STPdata=None, ts=None):
         """
         Loads CAD file for GUI users
         """
+        falseList = [False, 'F', 'f', 'false', 'False', 'FALSE']
+
         if hasattr(self.CAD, 'gridRes'):
             pass
         else:
@@ -882,7 +885,6 @@ class engineObj():
                     os.chown(newSTPpath, self.UID, self.GID)
                 #meshes are already up to date, only overwrite if user requests
                 else:
-                    falseList = [False, 'F', 'f', 'false', 'False', 'FALSE']
                     if self.CAD.overWriteMask in falseList:
                         self.CAD.overWriteMask = False
                         print("STP file is already in the HEAT database.  Not overwriting...")
@@ -901,7 +903,6 @@ class engineObj():
         Loads CAD file for terminal users.  Here we call this file an STPfile,
         but it could be other formats (ie BREP, FCStd, IGES, etc.)
         """
-
         tools.makeDir(self.CAD.STPpath, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
         #if CAD file is set to None, do not load
         #(this is true when user brings their own meshes and no STEP file)
@@ -1051,8 +1052,6 @@ class engineObj():
         log.info("All potential intersects on these tiles:")
         print(self.CAD.intersectList)
         log.info(self.CAD.intersectList)
-
-
         print(self.MHD.timesteps)
 
         self.PFCs = []
@@ -1072,18 +1071,6 @@ class engineObj():
                                UID=self.UID,
                                GID=self.GID
                               )
-
-        #assign tag if PFC is run in multiple directions (multiple lines in XXXpfc.csv)
-        for PFC in self.PFCs:
-            bool = np.where(self.timestepMap['PFCname'] == PFC.name)[0]
-            if len(bool) > 1:
-                if PFC.mapDirection > 0:
-                    PFC.tag = 'forward'
-                else:
-                    PFC.tag = 'reverse'
-            else:
-                PFC.tag = None
-
 
         for PFC in self.PFCs:
             ctrs = PFC.centers
@@ -1888,7 +1875,6 @@ class engineObj():
             self.IO.writeMeshGLB(PFC.mesh, PFC.bdotn, label, prefix, path, tag)
         return
 
-
     def initializeHF(self, infile=None):
         """
         Initialize heat flux variables
@@ -2010,7 +1996,6 @@ class engineObj():
         #set up variables for power balance calculation
         powerTesselate = np.zeros((len(self.MHD.timesteps)))
         powerTrue = np.zeros((len(self.MHD.timesteps)))
-        divCodes = []
         #set up electron frac if not in gyro mode
         if 'hfGyro' not in runList:
             self.HF.elecFrac = 1.0
@@ -2054,125 +2039,132 @@ class engineObj():
                 self.hf3D.initializeHF3D(self.MHD.tmpDir[0:-1])     # this no longer reads the input file. This is now done by self.loadInputs
                 self.plasma3D.print_settings()
                 self.hf3D.print_settings()
-            
-            # Loop through all PFCs
+
+            #build list of PFCs for this timestep
+            PFClist = []
             for PFC in self.PFCs:
                 if t not in PFC.timesteps:
                     pass
                 else:
-                    #set up file directory structure
-                    PFC.controlfile = '_lamCTL.dat'
-                    PFC.controlfileStruct = '_struct_CTL.dat'
-                    PFC.controlfilePath = self.MHD.shotPath + self.tsFmt.format(t) +'/'+PFC.name+'/'
-                    PFC.gridfile = PFC.controlfilePath + 'grid.dat'
-                    PFC.gridfileStruct = PFC.controlfilePath + 'struct_grid.dat'
-                    PFC.outputFile = PFC.controlfilePath + 'lam.dat'
-                    PFC.structOutfile = PFC.controlfilePath + 'struct.dat'
-                    #set up time and equilibrium
-                    PFC.t = t
-                    PFC.ep = PFC.EPs[tIdx]
-                    PFC.shadowed_mask = PFC.shadowMasks[tIdx]
+                    PFClist.append(PFC)
 
-                    #bfield info for this timestep
-                    r,z,phi = tools.xyz2cyl(PFC.centers[:,0],PFC.centers[:,1],PFC.centers[:,2])
-                    PFC.BNorms = self.MHD.Bfield_pointcloud(PFC.ep, r, z, phi, powerDir=None, normal=True)
-                    PFC.bdotn = np.multiply(PFC.norms, PFC.BNorms).sum(1)
-                    PFC.powerDir = np.sign(PFC.bdotn)*np.sign(PFC.ep.g['Bt0'])*-1.0
-                    #powerDir can also be calculated using dot product of phi
-                    #PFC.bdotphi = np.multiply(PFC.BNorms, PFC.phiVec).sum(1)
-                    #PFC.powerDir = np.sign(PFC.bdotn)*np.sign(PFC.bdotphi)*-1.0
-                    
-                    print('\n')
-                    print("*"*80)
-                    print('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
-                    print("*"*80)
-                    print('\n')
-                    log.info('\n')
-                    log.info("*"*80)
-                    log.info('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
-                    log.info("*"*80)
-                    log.info('\n')
-                    
-                    # 3Dplasma PFC specific setup
-                    if self.plasma3D.plasma3Dmask:
-                        self.plasma3D.updatePFCdata(PFC.controlfilePath[0:-1])  # remove / at the end of paths
-                        self.hf3D.updatePFCdata(PFC.ep, PFC.controlfilePath[0:-1])
-                    
-                    if 'hfOpt' in runList:
-                        #load HF settings for this timestep if applicable (terminal mode)
-                        try:
-                            self.loadHFParams(infile=self.inputFileList[tIdx], tIdx=tIdx)
-                        except Exception as e:
-                            print("Could not load HF parameters.  Expected for GUI.  Check error message:")
-                            print(e)
-                        #check if this timestep contains an MHD EQ we already traced
-                        repeatIdx = self.MHD.check4repeatedEQ(PFC.ep, PFC.EPs[:tIdx])
-                        #if the inputs are different, flag it to prevent copying
-                        #shadowMask of repeatIdx
-                        self.newInputsFlag = True
-                        if repeatIdx != None:
-                            if self.inputDicts[-1] == self.inputDicts[repeatIdx]:
-                                self.newInputsFlag = False
+            #if we are doing all PFCs in one pass
+            if self.CAD.mergedPFCs == True:
+                #build a merged PFC from all PFCs
+                PFCs = [pfcClass.mergedPFCs(PFClist, self.MHD, self.tsSigFigs, self.shotSigFigs, self.chmod, self.UID, self.GID)]
+            #if we are doing PFCs one by one
+            else:
+                PFCs = PFClist
 
-                        #get the optical heat flux
-                        if self.HF.qFileTag is None:
+            # Loop through all PFCs
+            for PFC in PFCs:
+                #set up file directory structure
+                PFC.controlfile = '_lamCTL.dat'
+                PFC.controlfileStruct = '_struct_CTL.dat'
+                PFC.controlfilePath = self.MHD.shotPath + self.tsFmt.format(t) +'/'+PFC.name+'/'
+                PFC.gridfile = PFC.controlfilePath + 'grid.dat'
+                PFC.gridfileStruct = PFC.controlfilePath + 'struct_grid.dat'
+                PFC.outputFile = PFC.controlfilePath + 'lam.dat'
+                PFC.structOutfile = PFC.controlfilePath + 'struct.dat'
+                #set up time and equilibrium
+                PFC.t = t
+                PFC.ep = PFC.EPs[tIdx]
+                PFC.shadowed_mask = PFC.shadowMasks[tIdx]
+                #bfield info for this timestep
+                r,z,phi = tools.xyz2cyl(PFC.centers[:,0],PFC.centers[:,1],PFC.centers[:,2])
+                PFC.BNorms = self.MHD.Bfield_pointcloud(PFC.ep, r, z, phi, powerDir=None, normal=True)
+                PFC.bdotn = np.multiply(PFC.norms, PFC.BNorms).sum(1)
+                PFC.powerDir = np.sign(PFC.bdotn)*np.sign(PFC.ep.g['Bt0'])*-1.0
+                #powerDir can also be calculated using dot product of phi
+                #PFC.bdotphi = np.multiply(PFC.BNorms, PFC.phiVec).sum(1)
+                #PFC.powerDir = np.sign(PFC.bdotn)*np.sign(PFC.bdotphi)*-1.0
+                
+                print('\n')
+                print("*"*80)
+                print('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+                print("*"*80)
+                print('\n')
+                log.info('\n')
+                log.info("*"*80)
+                log.info('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+                log.info("*"*80)
+                log.info('\n')
+                
+                # 3Dplasma PFC specific setup
+                if self.plasma3D.plasma3Dmask:
+                    self.plasma3D.updatePFCdata(PFC.controlfilePath[0:-1])  # remove / at the end of paths
+                    self.hf3D.updatePFCdata(PFC.ep, PFC.controlfilePath[0:-1])
+                
+                if 'hfOpt' in runList:
+                    #load HF settings for this timestep if applicable (terminal mode)
+                    try:
+                        self.loadHFParams(infile=self.inputFileList[tIdx], tIdx=tIdx)
+                    except Exception as e:
+                        print("Could not load HF parameters.  Expected for GUI.  Check error message:")
+                        print(e)
+                    
+                    #build list of divertor power sharing fracs and broadcast to PFC mesh elements
+                    divFracs = [self.HF.fracUI, self.HF.fracUO, self.HF.fracLI, self.HF.fracLO]
+                    PFC.broadcastDivFracs(divFracs)
+
+                    #check if this timestep contains an MHD EQ we already traced
+                    repeatIdx = self.MHD.check4repeatedEQ(PFC.ep, PFC.EPs[:tIdx])
+                    #if the inputs are different, flag it to prevent copying
+                    #shadowMask of repeatIdx
+                    self.newInputsFlag = True
+                    if repeatIdx != None:
+                        if self.inputDicts[-1] == self.inputDicts[repeatIdx]:
+                            self.newInputsFlag = False
+                    #get the optical heat flux
+                    if self.HF.qFileTag is None:
+                        self.HF_PFC(PFC, repeatIdx, PFC.tag)
+                    else:
+                        #try to read HF from file
+                        val = self.HF.readqFile(PFC, t)
+                        #read from file failed, run regular q calculation
+                        if val == -1:
                             self.HF_PFC(PFC, repeatIdx, PFC.tag)
-                        else:
-                            #try to read HF from file
-                            val = self.HF.readqFile(PFC, t)
-                            #read from file failed, run regular q calculation
-                            if val == -1:
-                                self.HF_PFC(PFC, repeatIdx, PFC.tag)
-
-                        PFC.shadowMasks[tIdx] = PFC.shadowed_mask
-                        PFC.powerSumOptical[tIdx] = self.HF.power_sum_mesh(PFC, mode='optical')
-
-                        print('\nMaximum optical heat load on tile: {:f}'.format(max(PFC.qDiv)))
-                        print('Theoretical optical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac*self.HF.elecFrac))
-                        print('Tessellated divertor power to this PFC = {:f}'.format(PFC.powerSumOptical[tIdx]))
-                        log.info('\nMaximum heat load on tile: {:f}'.format(max(PFC.qDiv)))
-                        log.info('Theoretical optical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac*self.HF.elecFrac))
-                        log.info('Tessellated Total Power = {:f}'.format(PFC.powerSumOptical[tIdx]))
-                        print("Optical Calculation Time Elapsed: {:f}".format(time.time() - t0))
-                        log.info("Optical Calculation Time Elapsed: {:f}\n".format(time.time() - t0))
-                        powerTesselate[tIdx] += PFC.powerSumOptical[tIdx]
-                        #Add ground truth power for all the PFCs, but not if we
-                        #already counted this divertor
-                        if PFC.DivCode not in divCodes:
-                            powerTrue[tIdx] += self.HF.Psol*PFC.powerFrac
-                        divCodes.append(PFC.DivCode)
-                          
-
-                    if 'hfRad' in runList:
-                        #load RAD settings for this timestep if applicable (terminal mode)
-                        try:
-                            self.loadRADParams(infile=self.inputFileList[tIdx])
-                        except Exception as e:
-                            print("Could not load RAD parameters.  Expected for GUI.  Check error message:")
-                            print(e)
-                        #location where we will save a memmap if necessary
-                        self.RAD.powFracFile = self.MHD.shotPath + self.tsFmt.format(t) +'/photonPowerFrac.nc'
-                        #calculate the radiated power on the PFC mesh
-                        self.radPower(PFC)
-                        #save output files
-                        self.radPowerOutput(PFC)
-                        PFC.powerSumRad[tIdx] = np.sum(PFC.Prad)
-                        print('\nSummation radiated power to this PFC = {:0.10f}'.format(PFC.powerSumRad[tIdx]))
-                        log.info('\nSummation radiated power to this PFC = {:0.10f}'.format(PFC.powerSumRad[tIdx]))
-                        print('Peak qRad to this PFC: {:0.10f}'.format(np.max(PFC.qRad)))
-                        log.info('Peak qRad to this PFC: {:0.10f}'.format(np.max(PFC.qRad)))
-
-                    if 'B' in runList:
-                        print('Writing Bfield Glyphs')
-                        self.bfieldAtSurface(PFC,paraview=True)
-                    if 'psiN' in runList:
-                        self.psiPC(PFC)
-                    if 'norm' in runList:
-                        self.NormPC(PFC)
-                    if 'pwrDir' in runList:
-                        self.powerDirPC(PFC)
-                    if 'bdotn' in runList:
-                        self.bdotnPC(PFC)
+                    PFC.shadowMasks[tIdx] = PFC.shadowed_mask
+                    PFC.powerSumOptical[tIdx] = self.HF.power_sum_mesh(PFC, mode='optical')
+                    print('\nMaximum optical heat load on tile: {:f}'.format(max(PFC.qDiv)))
+                    print('Theoretical optical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac*self.HF.elecFrac))
+                    print('Tessellated divertor power to this PFC = {:f}'.format(PFC.powerSumOptical[tIdx]))
+                    log.info('\nMaximum heat load on tile: {:f}'.format(max(PFC.qDiv)))
+                    log.info('Theoretical optical power to this divertor: {:f}'.format(self.HF.Psol*PFC.powerFrac*self.HF.elecFrac))
+                    log.info('Tessellated Total Power = {:f}'.format(PFC.powerSumOptical[tIdx]))
+                    print("Optical Calculation Time Elapsed: {:f}".format(time.time() - t0))
+                    log.info("Optical Calculation Time Elapsed: {:f}\n".format(time.time() - t0))
+                    powerTesselate[tIdx] += PFC.powerSumOptical[tIdx]
+                    
+                if 'hfRad' in runList:
+                    #load RAD settings for this timestep if applicable (terminal mode)
+                    try:
+                        self.loadRADParams(infile=self.inputFileList[tIdx])
+                    except Exception as e:
+                        print("Could not load RAD parameters.  Expected for GUI.  Check error message:")
+                        print(e)
+                    #location where we will save a memmap if necessary
+                    self.RAD.powFracFile = self.MHD.shotPath + self.tsFmt.format(t) +'/photonPowerFrac.nc'
+                    #calculate the radiated power on the PFC mesh
+                    self.radPower(PFC)
+                    #save output files
+                    self.radPowerOutput(PFC)
+                    PFC.powerSumRad[tIdx] = np.sum(PFC.Prad)
+                    print('\nSummation radiated power to this PFC = {:0.10f}'.format(PFC.powerSumRad[tIdx]))
+                    log.info('\nSummation radiated power to this PFC = {:0.10f}'.format(PFC.powerSumRad[tIdx]))
+                    print('Peak qRad to this PFC: {:0.10f}'.format(np.max(PFC.qRad)))
+                    log.info('Peak qRad to this PFC: {:0.10f}'.format(np.max(PFC.qRad)))
+                if 'B' in runList:
+                    print('Writing Bfield Glyphs')
+                    self.bfieldAtSurface(PFC,paraview=True)
+                if 'psiN' in runList:
+                    self.psiPC(PFC)
+                if 'norm' in runList:
+                    self.NormPC(PFC)
+                if 'pwrDir' in runList:
+                    self.powerDirPC(PFC)
+                if 'bdotn' in runList:
+                    self.bdotnPC(PFC)
 
             totalPowPow = 0
             totalPowPowCirc = 0
@@ -2301,7 +2293,10 @@ class engineObj():
             log.info("Completed all steady state heat flux calculations\n")
 
             #generating allSources heat fluxes
-            if ('hfGyro' in runList) or ('hfOpt' in runList) or ('hfRad' in runList):
+            test1 = 'hfGyro' in runList
+            test2 = 'hfOpt' in runList
+            test3 = 'hfRad' in runList
+            if (test1 + test2 + test3) > 1:
                 #set up time and equilibrium
                 PFC.t = t
                 for PFC in self.PFCs:
@@ -2329,11 +2324,16 @@ class engineObj():
                         if self.IO.glbMeshMask == True:
                             self.IO.writeMeshGLB(PFC.mesh, q, label, prefix, path, PFC.tag)
 
+        #if we used a mergedPFCs object, revert back to the old PFCs object
+        if self.CAD.mergedPFCs == True:
+           self.PFCs = PFCs[0].PFClist 
+
         #if we are only running a Btrace, skip PFC specific operations
         if 'Btrace' in runList and len(runList) == 1:
             pass
         #otherwise postprocess the data into combined pointclouds
         else:
+
             # Time Loop: postprocessing for steady state heat loads
             for tIdx,t in enumerate(self.MHD.timesteps):
                 #path for this timestep
@@ -2958,7 +2958,6 @@ class engineObj():
         return
 
     #--- Optical approximation ---
-
     def HF_PFC(self, PFC, repeatIdx=None, tag=None, rayTriMode='open3d'):
         """
         meat and potatoes of the HF calculation.  Called in loop or by parallel
@@ -2977,6 +2976,7 @@ class engineObj():
                 if rayTriMode=='open3d':
                     #newer ray-triangle calcs using Open3D
                     PFC.findOpticalShadowsOpen3D(self.MHD,self.CAD)
+                    #PFC.findOpticalShadowsOpen3DBatch(self.MHD,self.CAD)
                 else:
                     #original HEAT homebrew MT ray-triangle method
                     PFC.findShadows_structure(self.MHD, self.CAD)
@@ -3019,6 +3019,8 @@ class engineObj():
             print('\n----Calculating 3D Heat Flux Profile----')
             log.info('\n----Calculating 3D Heat Flux Profile----')
             self.hf3D.updateLaminarData(PFC.psimin[use],PFC.Lc[use])
+
+            #TO DO: make this hf3D function compatible with divFracs as a mesh quantity
             PFC.powerFrac = self.HF.getDivertorPowerFraction(PFC.DivCode)
             self.hf3D.heatflux(PFC.DivCode, PFC.powerFrac)                # heat flux is scaled by power fraction here
             print("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
@@ -3052,22 +3054,26 @@ class engineObj():
         log.info('\n----Creating Output Files----')
         R,Z,phi = tools.xyz2cyl(PFC.centers[:,0],PFC.centers[:,1],PFC.centers[:,2])
 
-        #write all the files
-        prefix = 'HF_optical'
-        label = '$MW/m^2$'
-        path = PFC.controlfilePath
-        if self.IO.csvMask == True:
-            self.IO.writePointCloudCSV(PFC.centers,qDiv,path,label,PFC.tag,prefix)
-            self.IO.writePointCloudCSV(PFC.centers,PFC.shadowed_mask,path,'shadowMask',PFC.tag,'shadowMask')
-        if self.IO.vtpPCMask == True:
-            self.IO.writePointCloudVTP(PFC.centers,qDiv,label,prefix,path,PFC.tag)
-            self.IO.writePointCloudVTP(PFC.centers,PFC.shadowed_mask,'shadowMask','shadowMask',path,PFC.tag)
-        if self.IO.vtpMeshMask == True:
-            self.IO.writeMeshVTP(PFC.mesh, qDiv, label, prefix, path, PFC.tag)
-            self.IO.writeMeshVTP(PFC.mesh, PFC.shadowed_mask, 'shadowMask','shadowMask', path, PFC.tag)
-        if self.IO.glbMeshMask == True:
-            self.IO.writeMeshGLB(PFC.mesh, qDiv, label, prefix, path, PFC.tag)
-            self.IO.writeMeshGLB(PFC.mesh, PFC.shadowed_mask, 'shadowMask','shadowMask', path, PFC.tag)
+        if PFC.mergedPFCs == True:
+            print("Scattering back to PFC objects")
+            PFC.scatter_back('hfOpt', self.IO)
+        else:
+            #write all the files
+            prefix = 'HF_optical'
+            label = '$MW/m^2$'
+            path = PFC.controlfilePath
+            if self.IO.csvMask == True:
+                self.IO.writePointCloudCSV(PFC.centers,qDiv,path,label,PFC.tag,prefix)
+                self.IO.writePointCloudCSV(PFC.centers,PFC.shadowed_mask,path,'shadowMask',PFC.tag,'shadowMask')
+            if self.IO.vtpPCMask == True:
+                self.IO.writePointCloudVTP(PFC.centers,qDiv,label,prefix,path,PFC.tag)
+                self.IO.writePointCloudVTP(PFC.centers,PFC.shadowed_mask,'shadowMask','shadowMask',path,PFC.tag)
+            if self.IO.vtpMeshMask == True:
+                self.IO.writeMeshVTP(PFC.mesh, qDiv, label, prefix, path, PFC.tag)
+                self.IO.writeMeshVTP(PFC.mesh, PFC.shadowed_mask, 'shadowMask','shadowMask', path, PFC.tag)
+            if self.IO.glbMeshMask == True:
+                self.IO.writeMeshGLB(PFC.mesh, qDiv, label, prefix, path, PFC.tag)
+                self.IO.writeMeshGLB(PFC.mesh, PFC.shadowed_mask, 'shadowMask','shadowMask', path, PFC.tag)
 
 
         #structOutfile = MHD.shotPath + self.tsFmt.format(t) +'/struct.csv'
@@ -3466,279 +3472,214 @@ class engineObj():
 
 
     #--- Generic Outputs + File Saving ---
-
     def combinePFCpointcloud(self, runList, tPath, tIdx):
         """
-        Combines multiple pointclouds into a single pointcloud then saves to file
-        Run this function once for each timestep
-
-        vtpMeshMask saves a vtp file
-        vtpPCMask saves a vtk file
-        csvMask saves a csv file
-
+        Combines multiple pointclouds into a single pointcloud then saves to file.
+        Optimized to avoid quadratic growth from np.append and to cut copies.
         """
         vtpMeshMask = self.IO.vtpMeshMask
-        vtpPCMask = self.IO.vtpPCMask
-        csvMask = self.IO.csvMask
+        vtpPCMask   = self.IO.vtpPCMask
+        csvMask     = self.IO.csvMask
         glbMeshMask = self.IO.glbMeshMask
 
-        hfOptical = []
-        hfGyro = []
-        hfRad = []
-        hfAll = []
-        shadow =[]
-        powerDir =[]
-        shadowGyro = []
-        shadowRad = []
-        bdotn = []
-        psi = []
-        Bp = []
-        Bt = []
-        Br = []
-        Bz = []
-        norm = np.array([])
-        bField = np.array([])
+        want_opt  = 'hfOpt'  in runList
+        want_gyro = 'hfGyro' in runList
+        want_rad  = 'hfRad'  in runList
+        want_all  = want_opt or want_gyro or want_rad
+        want_shPC = 'shadowPC' in runList
+        want_pdir = 'pwrDir' in runList
+        want_bdn  = 'bdotn'  in runList
+        want_psi  = 'psiN'   in runList
+        want_norm = 'norm'   in runList
+        want_B    = 'B'      in runList
 
+        # -------- Pass 1: count points and merge mesh --------
         mesh = self.CAD.createEmptyMesh()
-        #update mesh placement to reflect global translations
         mesh = self.CAD.globalMeshTranslation(mesh)
 
-        centers = np.array([])
-        Npoints = 0
+        counts = []
+        valid_pfcs = []
         for PFC in self.PFCs:
             if self.MHD.timesteps[tIdx] not in PFC.timesteps:
-                print("This timestep not in PFC.timesteps. ")
-                print("If this is an error, check your PFC CSV file time bounds.")
-                print("length if MHD.timesteps: {:d}".format(len(self.MHD.timesteps)))
-                print("Length of PFC.qOptList = {:d}".format(len(PFC.qOpticalList)))
-                print("Timestep index: {:d}".format(tIdx))
-                print("Timestep [s]: {:d}".format(self.MHD.timesteps[tIdx]))
-                print("Skipping to next PFC...")
+                print("This timestep not in PFC.timesteps. Skipping PFC…")
                 continue
-
             mesh.addMesh(PFC.mesh)
+            n = len(PFC.centers)
+            counts.append(n)
+            valid_pfcs.append(PFC)
 
-            if 'hfOpt' in runList:
-                hfOptical.append(PFC.qOpticalList[tIdx].copy())
-                shadow.append(PFC.shadowMasks[tIdx].copy())
-                hfAll.append(PFC.qOpticalList[tIdx].copy())
-            if 'hfGyro' in runList:
-                hfGyro.append(PFC.qGyroList[tIdx].copy())
-                shadowGyro.append(PFC.gyroShadowMaskList[tIdx].copy())
-                if 'hfOpt' not in runList: #when we run HEAT twice, 2nd time gyro only
-                    hfAll.append(PFC.qOpticalList[tIdx].copy()+PFC.qGyroList[tIdx].copy())
-                else:
-                    hfAll[-1]+=PFC.qGyroList[tIdx].copy()
-            if 'hfRad' in runList:
-                hfRad.append(PFC.qRadList[tIdx].copy())
-                shadowRad.append(PFC.radShadowMaskList[tIdx].copy())
-                if 'hfOpt' not in runList: #when we run HEAT for only rad
-                    hfAll.append(PFC.qRadList[tIdx].copy())
-                else:
-                    hfAll[-1]+=PFC.qRadList[tIdx].copy()
-            if 'pwrDir' in runList:
-                powerDir.append(PFC.powerDir.copy())
-            if 'bdotn' in runList:
-                bdotn.append(PFC.bdotn.copy())
-            if 'psiN' in runList:
-                psi.append(PFC.psimin.copy())
-            if 'norm' in runList:
-                norm = np.append(norm, PFC.norms.copy())
-            if 'B' in runList:
-                bField = np.append(bField, PFC.Bxyz.copy())
-                #Bt.append(PFC.Bt.copy())
-                #Bp.append(PFC.Bp.copy())
-                #Br.append(PFC.Br.copy())
-                #Bz.append(PFC.Bz.copy())
-            #note that I don't do the normal vector norm (its same every timestep)
-            #user can just get norm individually for each tile
-            Npoints += len(PFC.centers)
-            centers = np.append(centers,PFC.centers)
+        if not counts:
+            print("No PFCs at this timestep; nothing to combine.")
+            return
 
-        #now build something we can write to csv (ie numpy)
-        hfOpticalNumpy = np.array([])
-        hfGyroNumpy = np.array([])
-        hfRadNumpy = np.array([])
-        hfAllNumpy = np.array([])
-        shadowNumpy = np.array([])
-        shadowGyroNumpy = np.array([])
-        shadowRadNumpy = np.array([])
-        powerDirNumpy = np.array([])
-        bdotnNumpy = np.array([])
-        psiNumpy = np.array([])
-        normNumpy = np.array([])
-        BpNumpy = np.array([])
-        BtNumpy = np.array([])
-        BrNumpy = np.array([])
-        BzNumpy = np.array([])
-        for arr in hfOptical:
-            hfOpticalNumpy = np.append(hfOpticalNumpy, arr)
-        for arr in hfGyro:
-            hfGyroNumpy = np.append(hfGyroNumpy, arr)
-        for arr in hfRad:
-            hfRadNumpy = np.append(hfRadNumpy, arr)
-        for arr in hfAll:
-            hfAllNumpy = np.append(hfAllNumpy, arr)
-        for arr in shadow:
-            shadowNumpy = np.append(shadowNumpy, arr)
-        for arr in shadowGyro:
-            shadowGyroNumpy = np.append(shadowGyroNumpy, arr)
-        for arr in shadowRad:
-            shadowRadNumpy = np.append(shadowRadNumpy, arr)
-        for arr in powerDir:
-            powerDirNumpy = np.append(powerDirNumpy, arr)
-        for arr in bdotn:
-            bdotnNumpy = np.append(bdotnNumpy, arr)
-        for arr in psi:
-            psiNumpy = np.append(psiNumpy, arr)
-        #for arr in Bp:
-        #    BpNumpy = np.append(BpNumpy, arr)
-        #for arr in Bt:
-        #    BtNumpy = np.append(BtNumpy, arr)
-        #for arr in Br:
-        #    BrNumpy = np.append(BrNumpy, arr)
-        #for arr in Bz:
-        #    BzNumpy = np.append(BzNumpy, arr)
+        Npoints = int(sum(counts))
 
-        tag='all'
-        centers = centers.reshape(Npoints,3)
+        # -------- Preallocate outputs we actually need --------
+        centers = np.empty((Npoints, 3), dtype=np.float32)
 
-        #write all the files
-        if 'hfOpt' in runList:
-            prefix = 'HF_optical'
-            label = '$MW/m^2$'
-            if csvMask == True:
-                self.IO.writePointCloudCSV(centers,hfOpticalNumpy,tPath,label,tag,prefix)
-                self.IO.writePointCloudCSV(centers,shadowNumpy,tPath,'shadowMask',tag,'shadowMask')
-            if vtpPCMask == True:
-                self.IO.writePointCloudVTP(centers,hfOpticalNumpy,label,prefix,tPath,tag)
-                self.IO.writePointCloudVTP(centers,shadowNumpy,'shadowMask','shadowMask',tPath,tag)
-            if vtpMeshMask == True:
-                self.IO.writeMeshVTP(mesh, hfOpticalNumpy, label, prefix, tPath, tag)
-                self.IO.writeMeshVTP(mesh, shadowNumpy, 'shadowMask','shadowMask', tPath, tag)
-            if glbMeshMask == True:
-                self.IO.writeMeshGLB(mesh, hfOpticalNumpy, label, prefix, tPath, tag)
-                self.IO.writeMeshGLB(mesh, shadowNumpy, 'shadowMask','shadowMask', tPath, tag)
+        hfOpticalNumpy   = np.empty(Npoints, dtype=np.float32) if want_opt  else None
+        hfGyroNumpy      = np.empty(Npoints, dtype=np.float32) if want_gyro else None
+        hfRadNumpy       = np.empty(Npoints, dtype=np.float32) if want_rad  else None
+        hfAllNumpy       = np.empty(Npoints, dtype=np.float32) if want_all  else None
 
-        if 'hfGyro' in runList:
-            prefix = 'HF_gyro'
-            label = '$MW/m^2$'
-            if csvMask == True:
-                self.IO.writePointCloudCSV(centers,hfGyroNumpy,tPath,label,tag,prefix)
-                self.IO.writePointCloudCSV(centers,shadowGyroNumpy,tPath,'shadowMask',tag,'shadowMaskGyro')
-            if vtpPCMask == True:
-                self.IO.writePointCloudVTP(centers,hfGyroNumpy,label,prefix,tPath,tag)
-                self.IO.writePointCloudVTP(centers,shadowGyroNumpy,'shadowMask','shadowMaskGyro',tPath,tag)
-            if vtpMeshMask == True:
-                self.IO.writeMeshVTP(mesh, hfGyroNumpy, label, prefix, tPath, tag)
-                self.IO.writeMeshVTP(mesh, shadowGyroNumpy, 'shadowMask','shadowMaskGyro', tPath, tag)
-            if glbMeshMask == True:
-                self.IO.writeMeshGLB(mesh, hfGyroNumpy, label, prefix, tPath, tag)
-                self.IO.writeMeshGLB(mesh, shadowGyroNumpy, 'shadowMask','shadowMaskGyro', tPath, tag)
+        shadowNumpy      = np.empty(Npoints, dtype=np.uint8)   if want_opt or want_shPC else None
+        shadowGyroNumpy  = np.empty(Npoints, dtype=np.uint8)   if want_gyro else None
+        shadowRadNumpy   = np.empty(Npoints, dtype=np.uint8)   if want_rad  else None
 
+        powerDirNumpy    = np.empty(Npoints, dtype=np.int8)    if want_pdir else None
+        bdotnNumpy       = np.empty(Npoints, dtype=np.float32) if want_bdn  else None
+        psiNumpy         = np.empty(Npoints, dtype=np.float32) if want_psi  else None
+        normNumpy        = np.empty((Npoints, 3), dtype=np.float32) if want_norm else None
+        bFieldNumpy      = np.empty((Npoints, 3), dtype=np.float32) if want_B    else None
 
-        if 'hfRad' in runList:
-            prefix = 'HF_rad'
-            label = '$MW/m^2$'
-            if csvMask == True:
-                self.IO.writePointCloudCSV(centers,hfRadNumpy,tPath,label,tag,prefix)
-                self.IO.writePointCloudCSV(self.RAD.sources,self.RAD.sourcePower,tPath,'$MW$',tag,'Prad')
-                self.IO.writePointCloudCSV(centers,shadowRadNumpy,tPath,'shadowMask',tag,'shadowMaskRad')
-            if vtpPCMask == True:
-                self.IO.writePointCloudVTP(centers,hfRadNumpy,label,prefix,tPath,tag)
-                self.IO.writePointCloudVTP(self.RAD.sources,self.RAD.sourcePower,'$MW$','Prad',tPath,tag)
-                self.IO.writePointCloudVTP(centers,shadowRadNumpy,'shadowMask','shadowMaskRad',tPath,tag)
-            if vtpMeshMask == True:
-                self.IO.writeMeshVTP(mesh, hfRadNumpy, label, prefix, tPath, tag)
-                self.IO.writeMeshVTP(mesh, shadowRadNumpy, 'shadowMask','shadowMaskRad', tPath, tag)
-            if glbMeshMask == True:
-                self.IO.writeMeshGLB(mesh, hfRadNumpy, label, prefix, tPath, tag)
-                self.IO.writeMeshGLB(mesh, shadowRadNumpy, 'shadowMask','shadowMaskRad', tPath, tag)
+        # -------- Pass 2: fill by slices --------
+        off = 0
+        for PFC, n in zip(valid_pfcs, counts):
+            s, e = off, off + n
 
+            # centers
+            # (cast once to float32 to avoid hidden copies later)
+            centers[s:e, :] = PFC.centers.astype(np.float32, copy=False)
 
-        #write allSources file, superposition of all fluxes
-        if 'hfOpt' in runList or 'hfGyro' in runList or 'hfRad' in runList:
-            prefix = 'HF_allSources'
-            if csvMask == True:
-                self.IO.writePointCloudCSV(centers,hfAllNumpy,tPath,label,tag,prefix)
-            if vtpPCMask == True:
-                self.IO.writePointCloudVTP(centers,hfAllNumpy,label,prefix,tPath,tag)
-            if vtpMeshMask == True:
-                self.IO.writeMeshVTP(mesh, hfAllNumpy, label, prefix, tPath, tag)
-            if glbMeshMask == True:
-                self.IO.writeMeshGLB(mesh, hfAllNumpy, label, prefix, tPath, tag)
+            # optical
+            if want_opt:
+                qopt = PFC.qOpticalList[tIdx].astype(np.float32, copy=False)
+                hfOpticalNumpy[s:e] = qopt
+                if shadowNumpy is not None:
+                    shadowNumpy[s:e] = PFC.shadowMasks[tIdx].astype(np.uint8, copy=False)
 
-        if 'shadowPC' in runList:
-            prefix = 'shadowMask'
-            label = 'shadowMask'
-            if csvMask == True:
-                self.IO.writePointCloudCSV(centers,shadowNumpy,tPath,label,tag,prefix)
-            if vtpPCMask == True:
-                self.IO.writePointCloudVTP(centers,shadowNumpy,label,prefix,tPath,tag)
-            if vtpMeshMask == True:
-                self.IO.writeMeshVTP(mesh, shadowNumpy, label, prefix, tPath, tag)
-            if glbMeshMask == True:
-                self.IO.writeMeshGLB(mesh, shadowNumpy, label, prefix, tPath, tag)
+            # gyro
+            if want_gyro:
+                qg = PFC.qGyroList[tIdx].astype(np.float32, copy=False)
+                hfGyroNumpy[s:e] = qg
+                if shadowGyroNumpy is not None:
+                    shadowGyroNumpy[s:e] = PFC.gyroShadowMaskList[tIdx].astype(np.uint8, copy=False)
 
-        if 'pwrDir' in runList:
-            prefix = 'powerDir'
-            label = 'powerDir'
-            if csvMask == True:
-                self.IO.writePointCloudCSV(centers,powerDirNumpy,tPath,label,tag,prefix)
-            if vtpPCMask == True:
-                self.IO.writePointCloudVTP(centers,powerDirNumpy,label,prefix,tPath,tag)
-            if vtpMeshMask == True:
-                self.IO.writeMeshVTP(mesh, powerDirNumpy, label, prefix, tPath, tag)
-            if glbMeshMask == True:
-                self.IO.writeMeshGLB(mesh, powerDirNumpy, label, prefix, tPath, tag)
+            # rad
+            if want_rad:
+                qr = PFC.qRadList[tIdx].astype(np.float32, copy=False)
+                hfRadNumpy[s:e] = qr
+                if shadowRadNumpy is not None:
+                    shadowRadNumpy[s:e] = PFC.radShadowMaskList[tIdx].astype(np.uint8, copy=False)
 
-        if 'bdotn' in runList:
-            prefix = 'bdotn'
-            label = '$\hat{b} \cdot \hat{n}$'
-            if csvMask == True:
-                self.IO.writePointCloudCSV(centers,bdotnNumpy,tPath,label,tag,prefix)
-            if vtpPCMask == True:
-                self.IO.writePointCloudVTP(centers,bdotnNumpy,label,prefix,tPath,tag)
-            if vtpMeshMask == True:
-                self.IO.writeMeshVTP(mesh, bdotnNumpy, label, prefix, tPath, tag)
-            if glbMeshMask == True:
-                self.IO.writeMeshGLB(mesh, bdotnNumpy, label, prefix, tPath, tag)
+            # all sources (sum as we go)
+            if want_all:
+                total = np.zeros(n, dtype=np.float32)
+                if want_opt:  total += hfOpticalNumpy[s:e]
+                if want_gyro: total += hfGyroNumpy[s:e]
+                if want_rad:  total += hfRadNumpy[s:e]
+                hfAllNumpy[s:e] = total
 
-        if 'psiN' in runList:
-            prefix = 'psiN'
-            label = '$\psi_N$'
-            if csvMask == True:
-                self.IO.writePointCloudCSV(centers,psiNumpy,tPath,label,tag,prefix)
-            if vtpPCMask == True:
-                self.IO.writePointCloudVTP(centers,psiNumpy,label,prefix,tPath,tag)
-            if vtpMeshMask == True:
-                self.IO.writeMeshVTP(mesh, psiNumpy, label, prefix, tPath, tag)
-            if glbMeshMask == True:
-                self.IO.writeMeshGLB(mesh, psiNumpy, label, prefix, tPath, tag)
+            if want_pdir:
+                powerDirNumpy[s:e] = PFC.powerDir.astype(np.int8, copy=False)
 
-        if 'norm' in runList:
-            prefix='NormGlyph'
-            header = "X,Y,Z,Nx,Ny,Nz"
-            norm = norm.reshape(Npoints,3)
-            label = "N"
-            if csvMask == True:
-                self.IO.writeGlyphCSV(centers,norm,tPath,prefix,header,tag)
-            if vtpPCMask == True:
-                self.IO.writeGlyphVTP(centers,norm,label,prefix,tPath,tag)
+            if want_bdn:
+                bdotnNumpy[s:e] = PFC.bdotn.astype(np.float32, copy=False)
 
-        if 'B' in runList:
-            bField = bField.reshape(Npoints,3)
-            prefix='BfieldGlyph'
-            header = "X,Y,Z,Bx,By,Bz"
-            label = "B [T]"
-            if csvMask == True:
-                self.IO.writeGlyphCSV(centers,bField,tPath,prefix,header,tag)
-            if vtpPCMask == True:
-                self.IO.writeGlyphVTP(centers,bField,label,prefix,tPath,tag)
+            if want_psi:
+                psiNumpy[s:e] = PFC.psimin.astype(np.float32, copy=False)
 
-        print("Wrote combined pointclouds")
-        log.info("Wrote combined pointclouds")
+            if want_norm:
+                # Nx,Ny,Nz per point
+                normNumpy[s:e, :] = PFC.norms.astype(np.float32, copy=False)
+
+            if want_B:
+                bFieldNumpy[s:e, :] = PFC.Bxyz.astype(np.float32, copy=False)
+
+            off = e
+
+        tag = 'all'
+
+        # -------- Write files --------
+        if want_opt:
+            prefix = 'HF_optical'; label = '$MW/m^2$'
+            if csvMask:   self.IO.writePointCloudCSV(centers, hfOpticalNumpy, tPath, label, tag, prefix)
+            if vtpPCMask: self.IO.writePointCloudVTP(centers, hfOpticalNumpy, label, prefix, tPath, tag)
+            if vtpMeshMask:self.IO.writeMeshVTP(mesh, hfOpticalNumpy, label, prefix, tPath, tag)
+            if glbMeshMask:self.IO.writeMeshGLB(mesh, hfOpticalNumpy, label, prefix, tPath, tag)
+            # shadow paired with optical
+            if csvMask:   self.IO.writePointCloudCSV(centers, shadowNumpy, tPath, 'shadowMask', tag, 'shadowMask')
+            if vtpPCMask: self.IO.writePointCloudVTP(centers, shadowNumpy, 'shadowMask', 'shadowMask', tPath, tag)
+            if vtpMeshMask:self.IO.writeMeshVTP(mesh, shadowNumpy, 'shadowMask', 'shadowMask', tPath, tag)
+            if glbMeshMask:self.IO.writeMeshGLB(mesh, shadowNumpy, 'shadowMask', 'shadowMask', tPath, tag)
+
+        if want_gyro:
+            prefix = 'HF_gyro'; label = '$MW/m^2$'
+            if csvMask:   self.IO.writePointCloudCSV(centers, hfGyroNumpy, tPath, label, tag, prefix)
+            if vtpPCMask: self.IO.writePointCloudVTP(centers, hfGyroNumpy, label, prefix, tPath, tag)
+            if vtpMeshMask:self.IO.writeMeshVTP(mesh, hfGyroNumpy, label, prefix, tPath, tag)
+            if glbMeshMask:self.IO.writeMeshGLB(mesh, hfGyroNumpy, label, prefix, tPath, tag)
+            # mask
+            if csvMask:   self.IO.writePointCloudCSV(centers, shadowGyroNumpy, tPath, 'shadowMask', tag, 'shadowMaskGyro')
+            if vtpPCMask: self.IO.writePointCloudVTP(centers, shadowGyroNumpy, 'shadowMask', 'shadowMaskGyro', tPath, tag)
+            if vtpMeshMask:self.IO.writeMeshVTP(mesh, shadowGyroNumpy, 'shadowMask', 'shadowMaskGyro', tPath, tag)
+            if glbMeshMask:self.IO.writeMeshGLB(mesh, shadowGyroNumpy, 'shadowMask', 'shadowMaskGyro', tPath, tag)
+
+        if want_rad:
+            prefix = 'HF_rad'; label = '$MW/m^2$'
+            if csvMask:
+                self.IO.writePointCloudCSV(centers, hfRadNumpy, tPath, label, tag, prefix)
+                self.IO.writePointCloudCSV(self.RAD.sources, self.RAD.sourcePower, tPath, '$MW$', tag, 'Prad')
+            if vtpPCMask:
+                self.IO.writePointCloudVTP(centers, hfRadNumpy, label, prefix, tPath, tag)
+                self.IO.writePointCloudVTP(self.RAD.sources, self.RAD.sourcePower, '$MW$', 'Prad', tPath, tag)
+            if vtpMeshMask: self.IO.writeMeshVTP(mesh, hfRadNumpy, label, prefix, tPath, tag)
+            if glbMeshMask: self.IO.writeMeshGLB(mesh, hfRadNumpy, label, prefix, tPath, tag)
+            # mask
+            if csvMask:   self.IO.writePointCloudCSV(centers, shadowRadNumpy, tPath, 'shadowMask', tag, 'shadowMaskRad')
+            if vtpPCMask: self.IO.writePointCloudVTP(centers, shadowRadNumpy, 'shadowMask', 'shadowMaskRad', tPath, tag)
+            if vtpMeshMask:self.IO.writeMeshVTP(mesh, shadowRadNumpy, 'shadowMask', 'shadowMaskRad', tPath, tag)
+            if glbMeshMask:self.IO.writeMeshGLB(mesh, shadowRadNumpy, 'shadowMask', 'shadowMaskRad', tPath, tag)
+
+        if want_all:
+            prefix = 'HF_allSources'; label = '$MW/m^2$'
+            if csvMask:   self.IO.writePointCloudCSV(centers, hfAllNumpy, tPath, label, tag, prefix)
+            if vtpPCMask: self.IO.writePointCloudVTP(centers, hfAllNumpy, label, prefix, tPath, tag)
+            if vtpMeshMask:self.IO.writeMeshVTP(mesh, hfAllNumpy, label, prefix, tPath, tag)
+            if glbMeshMask:self.IO.writeMeshGLB(mesh, hfAllNumpy, label, prefix, tPath, tag)
+
+        if want_shPC and not want_opt:
+            # if user asked only for a shadow PC export
+            prefix = 'shadowMask'; label = 'shadowMask'
+            if csvMask:   self.IO.writePointCloudCSV(centers, shadowNumpy, tPath, label, tag, prefix)
+            if vtpPCMask: self.IO.writePointCloudVTP(centers, shadowNumpy, label, prefix, tPath, tag)
+            if vtpMeshMask:self.IO.writeMeshVTP(mesh, shadowNumpy, label, prefix, tPath, tag)
+            if glbMeshMask:self.IO.writeMeshGLB(mesh, shadowNumpy, label, prefix, tPath, tag)
+
+        if want_pdir:
+            prefix = 'powerDir'; label = 'powerDir'
+            if csvMask:   self.IO.writePointCloudCSV(centers, powerDirNumpy, tPath, label, tag, prefix)
+            if vtpPCMask: self.IO.writePointCloudVTP(centers, powerDirNumpy, label, prefix, tPath, tag)
+            if vtpMeshMask:self.IO.writeMeshVTP(mesh, powerDirNumpy, label, prefix, tPath, tag)
+            if glbMeshMask:self.IO.writeMeshGLB(mesh, powerDirNumpy, label, prefix, tPath, tag)
+
+        if want_bdn:
+            prefix = 'bdotn'; label = '$\\hat{b} \\cdot \\hat{n}$'
+            if csvMask:   self.IO.writePointCloudCSV(centers, bdotnNumpy, tPath, label, tag, prefix)
+            if vtpPCMask: self.IO.writePointCloudVTP(centers, bdotnNumpy, label, prefix, tPath, tag)
+            if vtpMeshMask:self.IO.writeMeshVTP(mesh, bdotnNumpy, label, prefix, tPath, tag)
+            if glbMeshMask:self.IO.writeMeshGLB(mesh, bdotnNumpy, label, prefix, tPath, tag)
+
+        if want_psi:
+            prefix = 'psiN'; label = '$\\psi_N$'
+            if csvMask:   self.IO.writePointCloudCSV(centers, psiNumpy, tPath, label, tag, prefix)
+            if vtpPCMask: self.IO.writePointCloudVTP(centers, psiNumpy, label, prefix, tPath, tag)
+            if vtpMeshMask:self.IO.writeMeshVTP(mesh, psiNumpy, label, prefix, tPath, tag)
+            if glbMeshMask:self.IO.writeMeshGLB(mesh, psiNumpy, label, prefix, tPath, tag)
+
+        if want_norm:
+            prefix='NormGlyph'; header="X,Y,Z,Nx,Ny,Nz"; label="N"
+            if csvMask:   self.IO.writeGlyphCSV(centers, normNumpy, tPath, prefix, header, tag)
+            if vtpPCMask: self.IO.writeGlyphVTP(centers, normNumpy, label, prefix, tPath, tag)
+
+        if want_B:
+            prefix='BfieldGlyph'; header="X,Y,Z,Bx,By,Bz"; label="B [T]"
+            if csvMask:   self.IO.writeGlyphCSV(centers, bFieldNumpy, tPath, prefix, header, tag)
+            if vtpPCMask: self.IO.writeGlyphVTP(centers, bFieldNumpy, label, prefix, tPath, tag)
+
+        print("Wrote combined pointclouds"); log.info("Wrote combined pointclouds")
         return
+
 
     def combineTimeSteps(self, runList, t):
         """

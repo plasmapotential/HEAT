@@ -78,7 +78,6 @@ class tools:
         Example:
         #Important Comment
         variable_name,value
-
         """
         if infile == None:
             print("No input file.  Please provide input file")
@@ -1126,8 +1125,8 @@ class tools:
         if var == None:
             newVar = None
         else:
-            if var in ['t','T','true','True','TRUE','Tru','TRU','1']: newVar = True
-            elif var in ['f','F','false','False','FALSE','Fal','FAL','0']: newVar = False
+            if var in ['t','T','true','True','TRUE','Tru','TRU','1', 1, 1.0]: newVar = True
+            elif var in ['f','F','false','False','FALSE','Fal','FAL','0', 0, 0.0]: newVar = False
             else: raise ValueError('Input variable ' + str(var) + ' needs to be of type boolean')
         return newVar
 

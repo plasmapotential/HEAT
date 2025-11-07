@@ -420,6 +420,7 @@ class TUI():
         """
         self.ENG.CAD.rootDir = rootDir #set HEAT rootDir
         self.ENG.CAD.machInDir = machInDir #HEATrun directory
+        self.ENG.getCADinputs()
         self.ENG.getCADfromTUI(CADfile)
         return
 

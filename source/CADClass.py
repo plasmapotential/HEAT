@@ -90,6 +90,8 @@ class CAD:
         self.Zmin = None
         self.Zmax = None
 
+        #default is to assume we run PFCs one by one, not merged
+        self.mergedPFCs = False
         return
 
     def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
@@ -127,16 +129,20 @@ class CAD:
         :xT: global translation of entire ROI in x direction [mm]
         :yT: global translation of entire ROI in y direction [mm]
         :zT: global translation of entire ROI in z direction [mm]
+        :mergedPFCs: boolean.  if True, runs the intersection calculations for all PFCs at once 
+          rather than running each PFC individually.  This is usually faster, but occasionally
+          comes with a RAM limitation.
 
         """
 
 
         self.allowed_vars = [
-                            'gTx',
-                            'gTy',
-                            'gTz',
+                            'xT',
+                            'yT',
+                            'zT',
                             'gridRes',
-                            'overWriteMask'
+                            'overWriteMask',
+                            'mergedPFCs'
                             ]
         return
 
@@ -144,6 +150,33 @@ class CAD:
         """
         Nothing to do for this class
         """
+        integers = []
+        floats = ['xT','yT','zT']
+        bools = ['overWriteMask', 'mergedPFCs']
+
+        for var in integers:
+            if (getattr(self, var) is not None) and (~np.isnan(float(getattr(self, var)))):
+                try:
+                    setattr(self, var, tools.makeInt(getattr(self, var)))
+                except:
+                    print("Error with input file var "+var+".  Perhaps you have invalid input values?")
+                    log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
+        for var in floats:
+            if var is not None:
+                if (getattr(self, var) is not None) and (~np.isnan(float(getattr(self, var)))):
+                    try:
+                        setattr(self, var, tools.makeFloat(getattr(self, var)))
+                    except:
+                        print("Error with input file var "+var+".  Perhaps you have invalid input values?")
+                        log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
+        for var in bools:
+            if (getattr(self, var) is not None):
+                try:
+                    setattr(self, var, tools.makeBool(getattr(self, var)))
+                except Exception as e:
+                    print("Error with input file var "+var+".  Perhaps you have invalid input values?")
+                    log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
+                    print(e)
         return
 
 
@@ -1374,21 +1407,21 @@ class CAD:
         translates a mesh by global xyzT (in [mm]) vector
         """
         noneList = [None, 'None', 'none', 'NA', 'na']
-        testx = self.gTx not in noneList
-        testy = self.gTy not in noneList
-        testz = self.gTz not in noneList
+        testx = self.xT not in noneList
+        testy = self.yT not in noneList
+        testz = self.zT not in noneList
 
         if np.logical_or(np.logical_or(testx,testy), testz):
-            if self.gTx != None:
-                xT = float(self.gTx)
+            if self.xT != None:
+                xT = float(self.xT)
             else:
                 xT = 0.0
-            if self.gTy != None:
-                yT = float(self.gTy)
+            if self.yT != None:
+                yT = float(self.yT)
             else:
                 yT = 0.0
-            if self.gTz != None:
-                zT = float(self.gTz)
+            if self.zT != None:
+                zT = float(self.zT)
             else:
                 zT = 0.0
 
