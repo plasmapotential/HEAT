@@ -160,6 +160,52 @@ The subdirectory contains three key files:
 
 A FEM mesh file is not mandatory to provide, but is recommended to incorporate FEM boundary conditions, which must be predefined during mesh generation: the FEM mesh generator incorporated into HEAT provides a generic mesh based on the provided .stp file and PFCname without dedicated boundary conditions. The ELMER output is stored in a data format compatible with HEAT and ParaView for post-processing.
 
-Running a 3D Plasma heat flux simulation using M3DC1 output
+Running a 3D Plasma heat flux simulation using M3D-C1 output
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-TO BE COMPLETED
+This module enables the use of 3D magnetic field configurations, like error fields or applied perturbation fields, in a HEAT simulation. To keep the code machine agnostic, we use use the output of the MHD code M3D-C1 instead of an EFIT g-file for the 3D plasma equilibrium. HEAT calculates the shadow mask the same way as in the axisymmetric case, but then calls the MAFOT code to calculate the field line penetration depth. Using the Layer model HEAT then assigns heat flux to the penetration depth and smoothes the result. 
+
+  The details of this module are published in: A. Wingen et al, https://iopscience.iop.org/article/10.1088/1741-4326/adeff1
+  The MAFOT code is developed by A. Wingen and is documented here: https://github.com/ORNL-Fusion/MAFOT/tree/master/doc
+
+The following files from M3D-C1 are required in addition to the other HEAT input files:
+  * All files ending in .h5: C1.h5, equilibrium.h5, time_000.h5, etc.
+  * m3dc1sup.in
+
+The m3dc1sup.in file tells the MAFOT code where to find the M3D-C1 HDF5 files and how to scale the perturbation. Each line in the file corresponds to a set of M3D-C1 output files. Up to 20 different M3D-C1 simulations can be combined. Here is an example of a line in m3dc1sup.in
+
+  .. code-block:: bash
+
+    # Path to file    scale     phase shift in deg
+    /myPath/C1.h5     1.0       0
+
+A D3D test case can be found in the source code in /tests/integrationTests/D3DTestCase
+
+The following list of input parameters are set in the input.csv file. Some are needed by MAFOT and are not used in HEAT (do not change):
+
+  .. code-block:: bash
+
+    plasma3Dmask, True    # this turns on the 3D module
+    itt, 335              # toroidial iterations to trace field lines
+    response, 1           # use plasma resonse: 0 No, 1 Yes
+    selectField, 2        # use M3D-C1 in MAFOT, set to 2, DO NOT CHANGE
+    useIcoil, 0           # do not change
+    sigma, 0              # do not change
+    charge, -1            # do not change
+    Ekin, 10              # do not change
+    Lambda, 0.1           # do not change
+    Mass, 2               # do not change
+    kappa, 200            # electron conductivity in the conduction model
+    Lcmin, 0.075          # Important! connection length that separates SOL from lobes, different for each machine
+    lcfs, 1.0             # Important! Last Closed Flux Surface location. See the paper for details on how to determine this
+    model, layer          # layer is the recommended model to use
+    teProfileData, None   # optional, M3D-C1 profile_te file location
+    neProfileData, None   # optional, M3D-C1 profile_ne file location
+    loadHF, False         # True: use MAFOT data from previous run. False: caluclate anew
+    loadBasePath, None    # folder of previous run for loadHF = True
+    NCPUs, 10             # number of CPUs to use in MAFOT
+    scaleSmooth, 1.0      # optional, scale the smoothing range, recommended default is 1.0. Set to 0 to turn off smoothing.
+
+The layer model also uses the lq, S, P and radFrac parameters set in the input.csv file. Using loadHF = True allows changing these parameters, or the model, lcfs, Lcmin or kappa, without rerunning the MAFOT field line tracing. If using the 3D module to run an axisymmetric case, it is recommended to turn off the smoothing.
+
+
+
