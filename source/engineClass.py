@@ -2974,8 +2974,9 @@ class engineObj():
             #and that the inputs have not changed
             if (repeatIdx == None) or (self.newInputsFlag == True):
                 if rayTriMode=='open3d':
-                    #newer ray-triangle calcs using Open3D
+                    #ray triangle calcs using open3D
                     PFC.findOpticalShadowsOpen3D(self.MHD,self.CAD)
+                    #this function runs all trace steps at one time, rather than walking up the field line:
                     #PFC.findOpticalShadowsOpen3DBatch(self.MHD,self.CAD)
                 else:
                     #original HEAT homebrew MT ray-triangle method
@@ -3110,6 +3111,11 @@ class engineObj():
         loaded = np.where(PFC.qRad != 0.0)
         shadowMask[loaded] = 0.0
         PFC.radShadowMaskList.append(shadowMask)
+        PFC.radShadowMask = shadowMask
+
+        if PFC.mergedPFCs == True:
+            print("Scattering back to PFC objects")
+            PFC.scatter_back('hfRad', self.IO)
         return
 
     def radPowerOutput(self,PFC):

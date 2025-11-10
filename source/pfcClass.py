@@ -268,6 +268,118 @@ class shadowKernels:
         print("Completed Intersection Check")
         return shadowed_mask
 
+
+    def opticalShadowsBatch(self, use, centers, intersects, powerDir, MHD, CAD,
+                            shadowed_mask, controlfilePath, controlfileStruct, gridfileStruct, structOutfile,
+                            targetPoints, targetNorms, targetCtrs,
+                            t, ep, shadowMaskClouds=False):
+        """
+        Does all rayTri intersection checking in a single pass rather than step by step
+        This is not always faster, as going step by step enables us to prune traces that
+        intersect as we go.
+        
+        Find shadowed faces for a given PFC object using MAFOT structure.
+        Traces field lines from PFC surface, looking for intersections with
+        triangles from intersectList meshes
+
+        Uses Open3D to accelerate the calculation:
+        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
+        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
+        """
+        print("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
+        log.info("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
+        print('Number of target parts: {:f}'.format(len(self.intersects)))
+        log.info('Number of target parts: {:f}'.format(len(self.intersects)))
+
+        #build the target mesh
+        r,z,phi = tools.xyz2cyl(targetCtrs[:,0],targetCtrs[:,1],targetCtrs[:,2])
+        targetBNorms = MHD.Bfield_pointcloud(self.ep, r, z, phi, powerDir=None, normal=True)
+        bdotnTgt = np.multiply(targetNorms, targetBNorms).sum(1)
+        powerDirTgt = tools.calculatePowerDir(bdotnTgt, self.ep.g['Bt0'])
+        fwdUseTgt = np.where(powerDirTgt > 0)[0]
+        revUseTgt = np.where(powerDirTgt < 0)[0]
+
+        #trace field lines
+        dphi = 1.0
+        MHD.ittStruct = MHD.nTrace #actual trace is (nTrace + 1)*dphi/dpinit degrees
+        if MHD.nTrace > 0:
+            print("\n----Tracing Field Lines----")
+            log.info("\n----Tracing Field Lines----")
+            CTLfile = self.controlfilePath + self.controlfileStruct
+
+            q1_blocks, q2_blocks, q1_0, q2_0, face_idx_blocks = [], [], [], [], []
+            #run forward mesh elements
+            print("-Forward Trace-")
+            log.info("-Forward Trace-")
+            mapDirectionStruct = 1.0
+            fwdUse = np.where(self.powerDir[use]==-1)[0]
+            if len(fwdUse) != 0:
+                #run full MAFOT trace
+                MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
+                MHD.writeMAFOTpointfile(self.centers[use[fwdUse]],self.gridfileStruct)
+                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                structDataFwd = tools.readStructOutput(self.structOutfile)
+                os.remove(self.structOutfile) #clean up
+                structData = structDataFwd.reshape(len(fwdUse), MHD.nTrace+1, 3)
+                #tricky front face culling for 1st field line step
+                q1Fwd0 = structData[:, 0, :].reshape(-1, 3)
+                q2Fwd0 = structData[:, 1, :].reshape(-1, 3)
+                scene = self.buildOpen3Dscene(targetPoints[fwdUseTgt])
+                self.shadowed_mask[use[fwdUse]] = self.intersectTestOpen3D(q1Fwd0,q2Fwd0,targetPoints[fwdUseTgt],targetNorms[fwdUseTgt], scene)
+                #all remaining trace steps in single array
+                q1Fwd = structData[:, 1:MHD.nTrace, :]
+                q2Fwd = structData[:, 2:MHD.nTrace+1, :]
+                q1_blocks.append(q1Fwd.reshape(-1, 3)) 
+                q2_blocks.append(q2Fwd.reshape(-1, 3)) 
+                face_idx_blocks.append(use[fwdUse])
+
+            #run reverse mesh elements
+            print("-Reverse Trace-")
+            log.info("-Reverse Trace-")
+            mapDirectionStruct = -1.0
+            revUse = np.where(self.powerDir[use]==1)[0]
+            if len(revUse) != 0:
+                #run full MAFOT trace
+                MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
+                MHD.writeMAFOTpointfile(self.centers[use[revUse]],self.gridfileStruct)
+                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                structDataRev = tools.readStructOutput(self.structOutfile)
+                os.remove(self.structOutfile) #clean up
+                structData = structDataRev.reshape(len(revUse), MHD.nTrace+1, 3)
+                structData = np.flip(structData, axis=1) #flip data because these are reverse traces
+                #tricky front face culling for 1st field line step
+                q1Rev0 = structData[:, 0, :].reshape(-1, 3)
+                q2Rev0 = structData[:, 1, :].reshape(-1, 3)
+                scene = self.buildOpen3Dscene(targetPoints[revUseTgt])
+                self.shadowed_mask[use[revUse]] = self.intersectTestOpen3D(q1Rev0,q2Rev0,targetPoints[revUseTgt],targetNorms[revUseTgt], scene)
+                q1Rev = structData[:, 1:MHD.nTrace, :]
+                q2Rev = structData[:, 2:MHD.nTrace+1, :] 
+                q1_blocks.append(q1Rev.reshape(-1, 3)) 
+                q2_blocks.append(q2Rev.reshape(-1, 3))
+                face_idx_blocks.append(use[revUse])
+
+            # concatenate all available traces
+            q1_all = np.concatenate(q1_blocks, axis=0)
+            q2_all = np.concatenate(q2_blocks, axis=0)
+            face_idx_all = np.concatenate(face_idx_blocks, axis=0)
+            seg2seed = np.repeat(face_idx_all, MHD.nTrace-1) #maps trace steps (segments) to PFC centroid indexes (seeds) (subtract one for first steps)
+
+            # batch intersection calculation for entire trace
+            scene = self.buildOpen3Dscene(targetPoints)
+            ray_mask = self.intersectTestOpen3D(q1_all, q2_all, targetPoints, targetNorms, scene)
+
+            # --- Reduce per-seed: a seed is shadowed if ANY of its segments hit ---
+            # Use indexed accumulation, then threshold
+            N_faces = self.shadowed_mask.shape[0]
+            acc = np.zeros(N_faces, dtype=np.int32)           
+            np.add.at(acc, seg2seed, ray_mask.astype(np.int8))
+            seed_hit = acc > 0  # boolean per global face index
+            self.shadowed_mask[face_idx_all] += seed_hit[face_idx_all].astype(self.shadowed_mask.dtype)
+            self.shadowed_mask[self.shadowed_mask > 0] = 1 #convert back to bool
+        print("Completed Intersection Check")
+        return
+
+
     def buildOpen3Dscene(self, targets):
         """
         builds a scene for open3D
@@ -330,6 +442,7 @@ class shadowKernels:
         log.info('Time elapsed: {:f}'.format(time.time() - t0))
 
         return mask
+
 
 
 class PFC(shadowKernels):
@@ -625,39 +738,6 @@ class PFC(shadowKernels):
         shadowed_mask[np.where(dot >= 0.0)] = 1
         return shadowed_mask
 
-#    def write_shadow_pointcloud(self,centers,scalar,dataPath,tag=None,mode='optical'):
-#        print("Creating Shadow Point Cloud")
-#        log.info("Creating Shadow Point Cloud")
-#        if mode == 'gyro':
-#            prefix = 'shadowMask_gyro'
-#        elif mode == 'rad':
-#            prefix = 'shadowMask_rad'
-#        else:
-#            prefix = 'shadowMask_optical'
-#
-#        if tag == None:
-#            pcfile = dataPath + prefix + '.csv'
-#        else:
-#            pcfile = dataPath + prefix + '_'+tag+'.csv'
-#        #print("Shadow point cloud filename: "+pcfile)
-#        #log.info("Shadow point cloud filename: "+pcfile)
-#
-#        pc = np.zeros((len(centers), 4))
-#        pc[:,0] = centers[:,0]*1000.0
-#        pc[:,1] = centers[:,1]*1000.0
-#        pc[:,2] = centers[:,2]*1000.0
-#        pc[:,3] = scalar
-#        head = "X,Y,Z,ShadowMask"
-#        np.savetxt(pcfile, pc, delimiter=',',fmt='%.10f', header=head)
-#
-#        #Now save a vtk file for paraviewweb
-#        if tag is None:
-#            tools.createVTKOutput(pcfile, 'points', prefix)
-#        else:
-#            name = prefix+'_'+tag
-#            tools.createVTKOutput(pcfile, 'points', name)
-#        return
-
     def buildTargetMesh(self, CAD, mode=None):
         """
         build targetPoints and targetNorms arrays from CAD object meshes.
@@ -817,250 +897,6 @@ class PFC(shadowKernels):
 
         return
 
-#    def findOpticalShadowsOpen3D(self,MHD,CAD,verbose=False, shadowMaskClouds=False):
-#        """
-#        Find shadowed faces for a given PFC object using MAFOT structure.
-#        Traces field lines from PFC surface, looking for intersections with
-#        triangles from intersectList meshes
-#
-#        Uses Open3D to accelerate the calculation:
-#        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
-#        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
-#        """
-#        # Remove faces that cannot see the plasma
-#        facingOut = self.removeOutsideFacingFacets(self.centers, self.norms, MHD, threshold = self.outsideFacingThreshold)
-#        self.shadowed_mask[facingOut] = 1
-#        use = np.where(self.shadowed_mask == 0)[0]
-#
-#        print("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
-#        log.info("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
-#        print('Number of target parts: {:f}'.format(len(self.intersects)))
-#        log.info('Number of target parts: {:f}'.format(len(self.intersects)))
-#
-#        #build the target mesh
-#        targetPoints, targetNorms = self.buildTargetMesh(CAD, mode='standard')
-#        targetCtrs = self.getTargetCenters(targetPoints)
-#        r,z,phi = tools.xyz2cyl(targetCtrs[:,0],targetCtrs[:,1],targetCtrs[:,2])
-#        targetBNorms = MHD.Bfield_pointcloud(self.ep, r, z, phi, powerDir=None, normal=True)
-#        bdotnTgt = np.multiply(targetNorms, targetBNorms).sum(1)
-#        powerDirTgt = tools.calculatePowerDir(bdotnTgt, self.ep.g['Bt0'])
-#        fwdUseTgt = np.where(powerDirTgt > 0)[0]
-#        revUseTgt = np.where(powerDirTgt < 0)[0]
-#
-#        #for debugging, save a shadowmask at each step up fieldline
-#        if shadowMaskClouds == True:
-#            self.write_shadow_pointcloud(self.centers,self.shadowed_mask,self.controlfilePath,tag='original')
-#
-#        #===INTERSECTION TEST 1 (tricky frontface culling / first step up field line)
-#        dphi = 1.0
-#        MHD.ittStruct = 1.0
-#        numSteps = MHD.nTrace #actual trace is (numSteps + 1)*dphi/dpinit degrees
-#        #If numSteps = 0, dont do intersection checking
-#        if numSteps > 0:
-#            print("\n----Intersection Step 1----")
-#            log.info("\n----Intersection Step 1----")
-#            CTLfile = self.controlfilePath + self.controlfileStruct
-#            #q1 = np.zeros((len(self.centers[use]),3))
-#            #q2 = np.zeros((len(self.centers[use]),3))
-#
-#            #run forward mesh elements
-#            print("-Forward Trace-")
-#            log.info("-Forward Trace-")
-#            mapDirectionStruct = 1.0
-#            startIdx = 1 #Match MAFOT sign convention for toroidal direction (CCW=+)
-#            fwdUse = np.where(self.powerDir[use]==-1)[0]
-#            if len(fwdUse) != 0:
-#                MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
-#                #Perform first integration step
-#                #MHD.writeMAFOTpointfile(self.centers[fwdUse],self.gridfileStruct)
-#                MHD.writeMAFOTpointfile(self.centers[use[fwdUse]],self.gridfileStruct)
-#                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
-#                structData = tools.readStructOutput(self.structOutfile)
-#                os.rename(self.structOutfile,self.structOutfile + '_fwdUse_step1')
-#                q1 = structData[0::2,:] #even indexes are first trace point
-#                q2 = structData[1::2,:] #odd indexes are second trace point
-#                intersect_mask = self.intersectTestOpen3D(q1,q2,targetPoints[fwdUseTgt],targetNorms[fwdUseTgt])
-#                self.shadowed_mask[use[fwdUse]] = intersect_mask
-#
-#            #run reverse mesh elements
-#            print("-Reverse Trace-")
-#            log.info("-Reverse Trace-")
-#            mapDirectionStruct = -1.0
-#            startIdx = 0 #Match MAFOT sign convention for toroidal direction
-#            revUse = np.where(self.powerDir[use]==1)[0]
-#            if len(revUse) != 0:
-#                MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
-#                #Perform first integration step
-#                #MHD.writeMAFOTpointfile(self.centers[revUse],self.gridfileStruct)
-#                MHD.writeMAFOTpointfile(self.centers[use[revUse]],self.gridfileStruct)
-#                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
-#                structData = tools.readStructOutput(self.structOutfile)
-#                os.rename(self.structOutfile,self.structOutfile + '_revUse_step1')
-#                q1 = structData[1::2,:] #odd indexes are first trace point
-#                q2 = structData[0::2,:] #even indexes are second trace point                
-#                intersect_mask = self.intersectTestOpen3D(q1,q2,targetPoints[revUseTgt],targetNorms[revUseTgt])
-#                self.shadowed_mask[use[revUse]] = intersect_mask
-#
-#            #this is for printing information about a specific mesh element
-#            #you can get the element # from paraview Point ID
-#            #by default turned off
-#            paraviewIndex = None
-#            #paraviewIndex = 1
-#            if paraviewIndex is not None:
-#                ptIdx = np.where(use==paraviewIndex)[0]
-#                print("Finding intersection face for point at:")
-#                print(self.centers[paraviewIndex])
-#            else:
-#                ptIdx = None
-#
-#            #for debugging, save a shadowmask at each step up fieldline
-#            if shadowMaskClouds == True:
-#                self.write_shadow_pointcloud(self.centers,self.shadowed_mask,self.controlfilePath,tag='test0')
-#
-#        #===INTERSECTION TEST 2 (multiple steps up field line)
-#        #Starts at second step up field line
-#        if numSteps > 1:
-#            print("\n----Intersection Step 2----")
-#            log.info("\n----Intersection Step 2----")
-#            use = np.where(self.shadowed_mask == 0)[0]
-#            intersect_mask2 = np.zeros((len(use)))
-#            q2 = np.zeros((len(self.centers[use]),3))
-#
-#            #calculate q2 for initialization of the big loop below
-#            #run forward mesh elements
-#            print("-Forward Trace-")
-#            log.info("-Forward Trace-")
-#            mapDirectionStruct = 1.0
-#            startIdx = 1 #Match MAFOT sign convention for toroidal direction
-#            fwdUse = np.where(self.powerDir[use]==-1)[0]
-#            if len(fwdUse) != 0:
-#                MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
-#                #Perform first integration step
-#                MHD.writeMAFOTpointfile(self.centers[use[fwdUse]],self.gridfileStruct)
-#                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
-#                structData = tools.readStructOutput(self.structOutfile)
-#                os.remove(self.structOutfile) #clean up
-#                q2[fwdUse] = structData[1::2,:] #odd indexes are second trace point
-#
-#            #run reverse mesh elements
-#            print("-Reverse Trace-")
-#            log.info("-Reverse Trace-")
-#            mapDirectionStruct = -1.0
-#            startIdx = 0 #Match MAFOT sign convention for toroidal direction
-#            revUse = np.where(self.powerDir[use]==1)[0]
-#            if len(revUse) != 0:
-#                MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
-#                #Perform first integration step
-#                MHD.writeMAFOTpointfile(self.centers[use[revUse]],self.gridfileStruct)
-#                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
-#                structData = tools.readStructOutput(self.structOutfile)
-#                os.remove(self.structOutfile) #clean up
-#                q2[revUse] = structData[0::2,:] #even indexes are second trace point
-#
-#            if paraviewIndex is not None:
-#                ptIdx = np.where(use==paraviewIndex)[0]
-#                print("Finding intersection face for point at:")
-#                print(self.centers[paraviewIndex])
-#            else:
-#                ptIdx = None
-#
-#
-#
-#            #Perform subsequent integration steps.  Use the point we left off at in
-#            #last loop iteration as the point we launch from in next loop iteration
-#            #This amounts to 'walking' up the field line looking for intersections,
-#            #which is important when field line curvature makes intersections happen
-#            #farther than 1-2 degrees from PFC surface.
-#            #
-#            #if you need to reference stuff from the original arrays (ie self.centers)
-#            #you need to do nested uses (ie: self.centers[use][use2]).
-#            use2 = np.where(intersect_mask2 == 0)[0]
-#            for i in range(numSteps):
-#                print("\n----Intersect Trace Step {:d}----".format(i+3))
-#                log.info("\n----Intersect Trace Step {:d}----".format(i+3))
-#
-#                useOld = use2
-#                use2 = np.where(intersect_mask2 == 0)[0]
-#
-#                #if all faces are shadowed, break
-#                if len(use2) == 0:
-#                    print("All faces shadowed on this PFC. Moving onto next PFC...")
-#                    log.info("All faces shadowed on this PFC. Moving onto next PFC...")
-#                    break
-#
-#                #map current steps's index back to intersect_mask2 index
-#                indexes = np.intersect1d(use2,useOld, return_indices=True)[-1]
-#                if paraviewIndex is not None:
-#                    ptIdx = np.where(use2==useOld[ptIdx])[0] #for tracing intersection locations
-#                else:
-#                    ptIdx = None
-#
-#                StartPoints = q2[indexes].copy() #odd indexes are second trace point
-#                q1 = np.zeros((len(StartPoints),3))
-#                q2 = np.zeros((len(StartPoints),3))
-#                #run forward mesh elements
-#                print("-Forward Trace-")
-#                log.info("-Forward Trace-")
-#                mapDirectionStruct = 1.0
-#                startIdx = 1 #Match MAFOT sign convention for toroidal direction
-#                fwdUse = np.where(self.powerDir[use[use2]]==-1)[0]
-#                if len(fwdUse) == 0:
-#                    print("No more traces in forward direction")
-#                    log.info("No more traces in forward direction")
-#                else:
-#                    MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
-#                    #Perform first integration step
-#                    MHD.writeMAFOTpointfile(StartPoints[fwdUse],self.gridfileStruct)
-#                    MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
-#                    structData = tools.readStructOutput(self.structOutfile)
-#                    os.remove(self.structOutfile) #clean up
-#                    q1[fwdUse] = structData[0::2,:] #odd indexes are second trace point
-#                    q2[fwdUse] = structData[1::2,:] #odd indexes are second trace point
-#                    #checkMask1 = self.intersectTestOpen3D(q1[fwdUse],q2[fwdUse],targetPoints,targetNorms)
-#                    insideBndy,insideBndyIdx = self.checkInsideBoundingBox(q2[fwdUse], MHD, CAD)
-#                    checkMask2 = ~insideBndy     # field lines outside the Bounding box are shadowed
-#                    checkMask2[insideBndyIdx] = self.intersectTestOpen3D(q1[fwdUse][insideBndyIdx],q2[fwdUse][insideBndyIdx],targetPoints,targetNorms)
-#                    #print('Verify the Box Mask Fwd: old =', np.sum(checkMask1), '  new =', np.sum(checkMask2), '  Okay?', np.sum(checkMask1) <= np.sum(checkMask2))
-#                    intersect_mask2[use2[fwdUse]] = checkMask2
-#
-#                #run reverse mesh elements
-#                print("-Reverse Trace-")
-#                log.info("-Reverse Trace-")
-#                mapDirectionStruct = -1.0
-#                startIdx = 0 #Match MAFOT sign convention for toroidal direction
-#                revUse = np.where(self.powerDir[use[use2]]==1)[0]
-#                if len(revUse) == 0:
-#                    print("No more traces in reverse direction")
-#                    log.info("No more traces in reverse direction")
-#                else:
-#                    MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
-#                    #Perform first integration step
-#                    MHD.writeMAFOTpointfile(StartPoints[revUse],self.gridfileStruct)
-#                    MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
-#                    structData = tools.readStructOutput(self.structOutfile)
-#                    os.remove(self.structOutfile) #clean up
-#                    q1[revUse] = structData[1::2,:] #odd indexes are second trace point
-#                    q2[revUse] = structData[0::2,:] #odd indexes are second trace point
-#                    #checkMask1 = self.intersectTestOpen3D(q1[revUse],q2[revUse],targetPoints,targetNorms)
-#                    insideBndy,insideBndyIdx = self.checkInsideBoundingBox(q2[revUse], MHD, CAD)
-#                    checkMask2 = ~insideBndy     # field lines outside the Bounding box are shadowed
-#                    checkMask2[insideBndyIdx] = self.intersectTestOpen3D(q1[revUse][insideBndyIdx],q2[revUse][insideBndyIdx],targetPoints,targetNorms)
-#                    #print('Verify the Box Mask Rev: old =', np.sum(checkMask1), '  new =', np.sum(checkMask2), '  Okay?', np.sum(checkMask1) <= np.sum(checkMask2))
-#                    intersect_mask2[use2[revUse]] = checkMask2
-#
-#                #for debugging, save a shadowmask at each step up fieldline
-#                if shadowMaskClouds == True:
-#                    self.shadowed_mask[use] = intersect_mask2
-#                    self.write_shadow_pointcloud(self.centers,self.shadowed_mask,self.controlfilePath,tag='test{:d}'.format(i+1))
-#                print("Step {:d} complete".format(i))
-#                log.info("Step {:d} complete".format(i))
-#            #Now revise shadowed_mask taking intersections into account
-#            self.shadowed_mask[use] = intersect_mask2
-#
-#
-#        print("Completed Intersection Check")
-#        return
-
 
     def findOpticalShadowsOpen3DBatch(self,MHD,CAD,verbose=False, shadowMaskClouds=False):
         """
@@ -1075,102 +911,22 @@ class PFC(shadowKernels):
         library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
         """
         # Remove faces that cannot see the plasma
-        #facingOut = self.removeOutsideFacingFacets(self.centers, self.norms, MHD, threshold = self.outsideFacingThreshold)
-        #self.shadowed_mask[facingOut] = 1
+        facingOut = self.removeOutsideFacingFacets(self.centers, self.norms, MHD, threshold = self.outsideFacingThreshold)
+        self.shadowed_mask[facingOut] = 1
         use = np.where(self.shadowed_mask == 0)[0]
-
-        print("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
-        log.info("\nFinding intersections for {:d} faces".format(len(self.centers[use])))
-        print('Number of target parts: {:f}'.format(len(self.intersects)))
-        log.info('Number of target parts: {:f}'.format(len(self.intersects)))
 
         #build the target mesh
         targetPoints, targetNorms = self.buildTargetMesh(CAD, mode='standard')
         targetCtrs = self.getTargetCenters(targetPoints)
-        r,z,phi = tools.xyz2cyl(targetCtrs[:,0],targetCtrs[:,1],targetCtrs[:,2])
-        targetBNorms = MHD.Bfield_pointcloud(self.ep, r, z, phi, powerDir=None, normal=True)
-        bdotnTgt = np.multiply(targetNorms, targetBNorms).sum(1)
-        powerDirTgt = tools.calculatePowerDir(bdotnTgt, self.ep.g['Bt0'])
-        fwdUseTgt = np.where(powerDirTgt > 0)[0]
-        revUseTgt = np.where(powerDirTgt < 0)[0]
 
-        #trace field lines
-        dphi = 1.0
-        MHD.ittStruct = MHD.nTrace #actual trace is (nTrace + 1)*dphi/dpinit degrees
-        if MHD.nTrace > 0:
-            print("\n----Tracing Field Lines----")
-            log.info("\n----Tracing Field Lines----")
-            CTLfile = self.controlfilePath + self.controlfileStruct
+        #run field line tracing and ray tracing
+        self.shadowed_mask = self.opticalShadowsBatch(use, self.centers, self.intersects, self.powerDir, MHD, CAD,
+                                                 self.shadowed_mask, self.controlfilePath, self.controlfileStruct, 
+                                                 self.gridfileStruct, self.structOutfile,
+                                                 targetPoints, targetNorms, targetCtrs,
+                                                 self.t, self.ep, shadowMaskClouds=False)
 
-            q1_blocks, q2_blocks, q1_0, q2_0, face_idx_blocks = [], [], [], [], []
-            #run forward mesh elements
-            print("-Forward Trace-")
-            log.info("-Forward Trace-")
-            mapDirectionStruct = 1.0
-            fwdUse = np.where(self.powerDir[use]==-1)[0]
-            if len(fwdUse) != 0:
-                #run full MAFOT trace
-                MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
-                MHD.writeMAFOTpointfile(self.centers[use[fwdUse]],self.gridfileStruct)
-                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
-                structDataFwd = tools.readStructOutput(self.structOutfile)
-                os.remove(self.structOutfile) #clean up
-                structData = structDataFwd.reshape(len(fwdUse), MHD.nTrace+1, 3)
-                #tricky front face culling for 1st field line step
-                q1Fwd0 = structData[:, 0, :].reshape(-1, 3)
-                q2Fwd0 = structData[:, 1, :].reshape(-1, 3)
-                self.shadowed_mask[use[fwdUse]] = self.intersectTestOpen3D(q1Fwd0,q2Fwd0,targetPoints[fwdUseTgt],targetNorms[fwdUseTgt])
-                #all remaining trace steps in single array
-                q1Fwd = structData[:, 1:MHD.nTrace, :]
-                q2Fwd = structData[:, 2:MHD.nTrace+1, :]
-                q1_blocks.append(q1Fwd.reshape(-1, 3)) 
-                q2_blocks.append(q2Fwd.reshape(-1, 3)) 
-                face_idx_blocks.append(use[fwdUse])
-
-            #run reverse mesh elements
-            print("-Reverse Trace-")
-            log.info("-Reverse Trace-")
-            mapDirectionStruct = -1.0
-            revUse = np.where(self.powerDir[use]==1)[0]
-            if len(revUse) != 0:
-                #run full MAFOT trace
-                MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
-                MHD.writeMAFOTpointfile(self.centers[use[revUse]],self.gridfileStruct)
-                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
-                structDataRev = tools.readStructOutput(self.structOutfile)
-                os.remove(self.structOutfile) #clean up
-                structData = structDataRev.reshape(len(revUse), MHD.nTrace+1, 3)
-                structData = np.flip(structData, axis=1) #flip data because these are reverse traces
-                #tricky front face culling for 1st field line step
-                q1Rev0 = structData[:, 0, :].reshape(-1, 3)
-                q2Rev0 = structData[:, 1, :].reshape(-1, 3)
-                self.shadowed_mask[use[revUse]] = self.intersectTestOpen3D(q1Rev0,q2Rev0,targetPoints[revUseTgt],targetNorms[revUseTgt])
-                q1Rev = structData[:, 1:MHD.nTrace, :]
-                q2Rev = structData[:, 2:MHD.nTrace+1, :] 
-                q1_blocks.append(q1Rev.reshape(-1, 3)) 
-                q2_blocks.append(q2Rev.reshape(-1, 3))
-                face_idx_blocks.append(use[revUse])
-
-            # concatenate all available traces
-            q1_all = np.concatenate(q1_blocks, axis=0)
-            q2_all = np.concatenate(q2_blocks, axis=0)
-            face_idx_all = np.concatenate(face_idx_blocks, axis=0)
-            seg2seed = np.repeat(face_idx_all, MHD.nTrace-1) #maps trace steps (segments) to PFC centroid indexes (seeds) (subtract one for first steps)
-
-            # batch intersection calculation for entire trace
-            ray_mask = self.intersectTestOpen3D(q1_all, q2_all, targetPoints, targetNorms)
-
-            # --- Reduce per-seed: a seed is shadowed if ANY of its segments hit ---
-            # Use indexed accumulation, then threshold
-            N_faces = self.shadowed_mask.shape[0]
-            acc = np.zeros(N_faces, dtype=np.int32)           
-            np.add.at(acc, seg2seed, ray_mask.astype(np.int8))
-            seed_hit = acc > 0  # boolean per global face index
-            self.shadowed_mask[face_idx_all] += seed_hit[face_idx_all].astype(self.shadowed_mask.dtype)
-            self.shadowed_mask[self.shadowed_mask > 0] = 1 #convert back to bool
-        print("Completed Intersection Check")
         return
-
 
 
     def findGuidingCenterPaths(self, MHD, GYRO):
@@ -1415,63 +1171,6 @@ class PFC(shadowKernels):
         #
         return
 
-
-
-
-#    def intersectTestOpen3D(self,q1,q2,targets,targetNorms, batchSize=1000):
-#        """
-#        checks if any of the lines (field line traces) generated by MAFOT
-#        struct program intersect any of the target mesh faces.
-#
-#        Uses Open3D to accelerate the calculation:
-#        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
-#        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
-#        """
-#        t0 = time.time()
-#        N = len(q2)
-#        Nt = len(targets)
-#        print('{:d} Source Faces and {:d} Target Faces in PFC object'.format(N,Nt))
-#
-#        mask = np.ones((N))
-#
-#        #construct rays
-#        r = q2-q1
-#        rMag = np.linalg.norm(r, axis=1)
-#        rNorm = r / rMag.reshape((-1,1))
-#
-#        #cast variables to 32bit for C
-#        vertices = np.array(targets.reshape(Nt*3,3), dtype=np.float32)
-#        triangles = np.array(np.arange(Nt*3).reshape(Nt,3), dtype=np.uint32)
-#
-#        #build intersection mesh and tensors for open3d
-#        mesh = o3d.t.geometry.TriangleMesh()
-#        scene = o3d.t.geometry.RaycastingScene()
-#        mesh_id = scene.add_triangles(vertices, triangles)
-#
-#        #calculate size of potential arrays in RAM
-#        #availableRAM = psutil.virtual_memory().available #bytes
-#
-#        #calculate intersections
-#        rays = o3d.core.Tensor([np.hstack([np.float32(q1),np.float32(rNorm)])],dtype=o3d.core.Dtype.Float32)
-#        hits = scene.cast_rays(rays)
-#        #convert open3d CPU tensors back to numpy
-#        hitMap = hits['primitive_ids'][0].numpy()
-#        distMap = hits['t_hit'][0].numpy()
-#
-#        #escapes occur where we have 32 bits all set: 0xFFFFFFFF = 4294967295 base10
-#        escapes = np.where(hitMap == 4294967295)[0]
-#        mask[escapes] = 0.0
-#
-#        #when distances to target exceed the trace step, we exclude any hits
-#        tooLong = np.where(distMap > rMag)[0]
-#        mask[tooLong] = 0.0
-#
-#        print('Found {:f} shadowed faces'.format(np.sum(mask)))
-#        log.info('Found {:f} shadowed faces'.format(np.sum(mask)))
-#        print('Time elapsed: {:f}'.format(time.time() - t0))
-#        log.info('Time elapsed: {:f}'.format(time.time() - t0))
-#
-#        return mask
 
     def findHelicalPathsOpen3D_NoLoop(self, GYRO):
         """
@@ -2871,4 +2570,17 @@ class mergedPFCs(PFC):
                 if IO.glbMeshMask == True:
                     IO.writeMeshGLB(PFC.mesh, PFC.qDiv, label, prefix, path, PFC.tag)
                     IO.writeMeshGLB(PFC.mesh, PFC.shadowed_mask, 'shadowMask','shadowMask', path, PFC.tag)
+        if mode=='hfRad':
+            for PFC in self.PFClist:
+                #map parameters from the big merged PFC back to individual PFCs
+                use = np.where(PFC.name == self.nameMap)[0]
+                PFC.Prad = self.Prad[use]
+                PFC.qRad = self.qRad[use]
+                PFC.qRadList.append(PFC.qRad)
+                PFC.radShadowMask = self.radShadowMask[use]
+                PFC.radShadowMaskList.append(PFC.radShadowMask)
+
+
+
+
         return
