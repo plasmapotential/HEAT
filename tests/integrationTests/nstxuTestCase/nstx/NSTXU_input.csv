@@ -75,7 +75,7 @@ Ntor, 5
 Nref, 1
 phiMin, 20
 phiMax, 35
-rayTracer, mitsuba
+rayTracer, open3d
 Prad_mult, 1.0
 saveRadFrac, True
 #==============================================================

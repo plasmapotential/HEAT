@@ -1,16 +1,22 @@
 # Input file for HEAT
 # Format is: Variable, Value
+# See HEAT readthedocs or code comments for descriptions
 #==============================================================
 #                IO Variables
 #==============================================================
-vtpPCOut, True
+vtpPCOut, False
 vtpMeshOut, True
 csvOut, True
+glbMeshOut, False
 #=============================================================
 #                CAD Variables
 #=============================================================
 gridRes, standard
 overWriteMask, False
+xT, None
+yT, None
+zT, None
+mergedPFCs, False
 #==============================================================
 #                MHD Variables
 #==============================================================
@@ -19,11 +25,8 @@ tmin, 0
 tmax, 5000
 traceLength, 5
 dpinit, 0.5
-dataPath, /home/wingen/HEAT/data
-torFilt, True
-psiFilt, True
 #==============================================================
-#                HF Variables
+#                Optical HF Variables
 #==============================================================
 hfMode, eich
 lqCN, 3.0
@@ -50,6 +53,7 @@ qBG, 0.0
 fG, 0.6
 qFilePath, None
 qFileTag, None
+rzqFile, None
 #==============================================================
 #                Ion Gyro Orbit HF Variables
 #==============================================================
@@ -71,6 +75,9 @@ Ntor, 1
 Nref, 1
 phiMin, 10
 phiMax, 20
+rayTracer, open3d
+Prad_mult, 1.0
+saveRadFrac, True
 #==============================================================
 #                OpenFOAM Variables
 #==============================================================
