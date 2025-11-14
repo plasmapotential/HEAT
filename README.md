@@ -24,7 +24,7 @@ The latest release of HEAT is v4.2, which includes the following notable additio
 ---
 To cite HEAT, you can use a paper published by the journal Fusion Science and Technology under open access.  The paper can be found here: https://doi.org/10.1080/15361055.2021.1951532
 
-Other recent HEAT related publications:
+Other HEAT related publications:
  - There is a 2019 paper by A. Wingen [here](https://info.fusion.ciemat.es/OCS/EPS2019PAP/pdf/P2.1040.pdf) that describes a code called SHEFT, which was a HEAT predecessor
  - [The Experimental Validation of HEAT on the ASDEX Upgrade Tokamak](https://doi.org/10.1080/15361055.2025.2478720), A Redl et al 2025
  - [3D modeling of n = 1 RMP driven heat fluxes on the SPARC tokamak PFCs using HEAT](https://iopscience.iop.org/article/10.1088/1741-4326/adf760/meta), M D'Abusco et al 2025
