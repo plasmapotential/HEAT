@@ -322,7 +322,7 @@ class plasma3D:
 				f.write(str(R[i]) + "\t" + str(phi[i]) + "\t" + str(Z[i]) + "\n")
 				
 				
-	def launchLaminar(self, NCPUs = None, tag = None, MapDirection = 0, verbose=False):
+	def launchLaminar(self, NCPUs = None, tag = None, MapDirection = 0, verbose=True):
 		"""
 		Write all input files and launch MAFOT
 		Read the output file when finished
