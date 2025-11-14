@@ -930,7 +930,7 @@ def loadRes(n_clicks, gridRes, gTx, gTy, gTz, MachFlag):
         raise PreventUpdate
     if MachFlag is None:
         return [dbc.Label("Select a machine", style={'color':'#fc0313'})]
-    gui.getCADResInputs(gridRes, gTx, gTy, gTz)
+    gui.getCADinputs(gridRes, gTx, gTy, gTz, mode='gui')
 
     CADdata = {
         'Intersect Max Edge Length [mm]':gridRes
@@ -2943,7 +2943,7 @@ def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
     if 'Btrace' in Btrace:
         print("Tracing magnetic field lines...")
         log.info("Tracing magnetic field lines...")
-        gui.BtraceMultiple(BtraceTableData, t)
+        gui.BtraceMultiple(t, BtraceTableData)
 
     #gyro orbit trace
     if 'gyrotrace' in gyrotrace:

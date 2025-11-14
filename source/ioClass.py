@@ -5,6 +5,7 @@
 import os
 import numpy as np
 import GUIscripts.vtkOpsClass as vtkOpsClass
+import pandas as pd
 try:
     import GUIscripts.meshOpsClass as meshOpsClass
 except:
@@ -236,6 +237,10 @@ class IO_HEAT:
 
         xyz = np.genfromtxt(csvfile, comments='#', delimiter=',')
 
+        #if another scalar field was saved along with xyz (ie distance), discard it
+        if xyz.shape[-1] > 3:
+            xyz = xyz[:,:3]
+
         fName = tag+ '.vtp'
         PVdir = path + "paraview/"
         f = PVdir+fName
@@ -245,10 +250,25 @@ class IO_HEAT:
         VTKops.writeTraceVTP(xyz, f)
         return
 
+    def writePointCloudCSV_pd(self, centers, scalar, dataPath, label, tag=None, prefix='Undefined'):
+        print(f"Writing point cloud CSV for {prefix}")
+        if tag is None:
+            pcfile = f"{dataPath}{prefix}.csv"
+        else:
+            pcfile = f"{dataPath}{prefix}_{tag}.csv"
+
+        # Build DataFrame directly
+        df = pd.DataFrame({
+            "X": centers[:,0] * 1000.0,
+            "Y": centers[:,1] * 1000.0,
+            "Z": centers[:,2] * 1000.0,
+            label: scalar
+        })
+        df.to_csv(pcfile, index=False, float_format="%.6f")
 
     def writePointCloudCSV(self,centers,Scalar,dataPath,label,tag=None,prefix='Undefined'):
         """
-        writes a point cloud CSV file
+        writes a point cloud CSV file using np
         """
         print("Writing point cloud CSV for "+prefix)
         log.info("Writing point cloud CSV for "+prefix)

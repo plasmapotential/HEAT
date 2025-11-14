@@ -6,12 +6,12 @@
 import numpy as np
 from pygltflib import (
     GLTF2, Scene, Node, Mesh, Buffer, BufferView, Accessor, Asset, Primitive,
-    ELEMENT_ARRAY_BUFFER, ARRAY_BUFFER
+    ELEMENT_ARRAY_BUFFER, ARRAY_BUFFER, Material
 )
 from struct import pack
 import os
 from pxr import Usd, UsdGeom, Sdf, Vt, Gf
-
+import plotly.colors as pc
 
 class meshOps:
     def __init__(self):
@@ -33,7 +33,53 @@ class meshOps:
         return
 
 
-    def writeMeshGLB(self, outFile, clim=None, embed_scalar_as_custom=True, unlit=False):
+    def values_to_plotly_rgba(self, values, colorscale="Jet"):
+        """
+        Map normalized values in [0,1] to RGBA uint8 using a Plotly colorscale.
+        Accepts both named Plotly colorscales ("Viridis", "Inferno", etc.)
+        and custom scales ([[0,"blue"],[1,"red"]]).
+        """
+
+        # get the colorscale
+        if isinstance(colorscale, str):
+            cs = pc.get_colorscale(colorscale)
+        else:
+            cs = colorscale
+
+        def parse_plotly_color(c):
+            """Convert a Plotly color string ("rgb()", "rgba()", "#hex") to (r,g,b)."""
+            if isinstance(c, str):
+                if c.startswith("#"):  # hex
+                    return pc.hex_to_rgb(c)
+                elif c.startswith("rgb"):  # rgb or rgba
+                    nums = pc.unlabel_rgb(c)
+                    return tuple(int(x) for x in nums[:3])  # drop alpha if present
+            elif isinstance(c, (list, tuple)) and len(c) >= 3:
+                return tuple(int(x) for x in c[:3])
+            raise ValueError(f"Unsupported color format: {c}")
+
+        def interp(val):
+            """Interpolate a single value against the colorscale."""
+            for i in range(1, len(cs)):
+                if val <= cs[i][0]:
+                    f0, c0 = cs[i-1]
+                    f1, c1 = cs[i]
+                    w = (val - f0) / (f1 - f0) if f1 > f0 else 0
+                    r0, g0, b0 = parse_plotly_color(c0)
+                    r1, g1, b1 = parse_plotly_color(c1)
+                    r = int((1-w)*r0 + w*r1)
+                    g = int((1-w)*g0 + w*g1)
+                    b = int((1-w)*b0 + w*b1)
+                    return [r, g, b, 255]
+            # fallback: last color
+            r, g, b = parse_plotly_color(cs[-1][1])
+            return [r, g, b, 255]
+
+        return np.array([interp(v) for v in values], dtype=np.uint8)
+
+
+
+    def writeMeshGLB(self, outFile, clim=None, cmap="Jet", embed_scalar_as_custom=True, unlit=False):
         """
         Write a valid .glb with:
           - POSITION (float32)
@@ -67,7 +113,7 @@ class meshOps:
         HF = np.repeat(facet_vals, 3).astype(np.float32)     # (Nvert,)
 
         # --------------------------
-        # Map HF -> vertex RGBA u8
+        # Map HF -> vertex RGBA u8 (Plotly colormap)
         # --------------------------
         if HF.size == 0:
             t = np.zeros(0, dtype=np.float32)
@@ -82,8 +128,8 @@ class meshOps:
                 if vmax <= vmin: vmax = vmin + 1.0
             t = np.clip((HF - vmin) / (vmax - vmin), 0.0, 1.0).astype(np.float32)
 
-        gray = np.rint(t * 255.0).astype(np.uint8)
-        C_u8 = np.column_stack([gray, gray, gray, np.full(Nvert, 255, np.uint8)])  # (Nvert,4)
+        C_u8 = self.values_to_plotly_rgba(t, cmap)
+
         # (optional) exact floats we may embed as custom attribute
         Q_f32 = HF
 
@@ -119,6 +165,7 @@ class meshOps:
         # --------------------------
         # Build glTF structure
         # --------------------------
+
         # BufferViews
         bv_idx = BufferView(buffer=0, byteOffset=offset_idx, byteLength=len(idx_blob), target=ELEMENT_ARRAY_BUFFER)
         bv_pos = BufferView(buffer=0, byteOffset=offset_pos, byteLength=len(pos_blob), target=ARRAY_BUFFER)
@@ -152,10 +199,22 @@ class meshOps:
         if offset_q is not None:
             attrs[self.label] = 3
 
+        # --- Material handling ---
+        if unlit:
+            mat = Material(
+                pbrMetallicRoughness={}, 
+                extensions={"KHR_materials_unlit": {}}
+            )
+            extensionsUsed = ["KHR_materials_unlit"]
+        else:
+            mat = Material(pbrMetallicRoughness={})
+            extensionsUsed = []
+
         prim = Primitive(
             attributes=attrs,
             indices=0,
-            mode=4  # TRIANGLES
+            mode=4,  # TRIANGLES
+            material=0
         )
 
         mesh = Mesh(primitives=[prim])
@@ -171,6 +230,8 @@ class meshOps:
             nodes=[node],
             scenes=[scene],
             scene=0,
+            materials=[mat],
+            extensionsUsed=extensionsUsed
         )
 
         # Embed the binary and save

@@ -58,9 +58,17 @@ RUN apt-get -yqq install python3 && \
     apt-get -yqq install python3-distutils
 #RUN apt-get -yqq install mdsplus-python
 
+# Create venv for PEP 668 (ubuntu 24.04+)
+#RUN apt-get -yqq install python3-venv && \
+#    python3 -m venv /opt/venv && \
+#    /opt/venv/bin/pip install --upgrade pip
+## Make sure venv is always active
+#ENV VIRTUAL_ENV=/opt/venv
+#ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
 #utility tools/libs layers
 #RUN apt-get -yqq libnglib-6.2 
-RUN apt-get -yqq install coreutils libcurl4 libunwind-dev nano git gfortran iputils-ping iproute2 htop
+RUN apt-get -yqq install coreutils libcurl4 libunwind-dev nano git git-lfs gfortran iputils-ping iproute2 htop 
 
 #3D plasmas layer
 RUN apt-get -yqq install libopenmpi-dev libhdf5-openmpi-dev libnetcdf-dev libnetcdff-dev libblas-dev liblapack-dev
@@ -168,7 +176,7 @@ RUN apt-get -yqq update && \
     apt-get install -yqq elmerfem-csc libglu1 libscotch-dev libptscotch-dev python-is-python3
 
 #RUN apt-get -yqq libnglib-6.2 
-RUN apt-get -yqq install coreutils libcurl4 libunwind-dev nano git gfortran iputils-ping iproute2 htop
+RUN apt-get -yqq update && apt-get -yqq install coreutils libcurl4 libunwind-dev nano git gfortran iputils-ping iproute2 htop git-lfs
 
 #3D plasmas layer
 RUN apt-get -yqq install libopenmpi-dev libhdf5-openmpi-dev libnetcdf-dev libnetcdff-dev
@@ -177,10 +185,13 @@ RUN apt-get -yqq install libopenmpi-dev libhdf5-openmpi-dev libnetcdf-dev libnet
 RUN ln -s /usr/lib/x86_64-linux-gnu/libunwind.so /usr/lib/x86_64-linux-gnu/libunwind.so.1
 
 #clone EFIT (note branch can be changed)
-RUN git clone -b tomDev --single-branch https://github.com/ORNL-Fusion/EFIT.git /root/source/EFIT
+RUN git clone -b master --single-branch https://github.com/ORNL-Fusion/EFIT.git /root/source/EFIT
 
 #clone HEAT (note branch can be changed)
 RUN git clone -b v4.3 --single-branch https://github.com/plasmapotential/HEAT.git /root/source/HEAT
+WORKDIR /root/source/HEAT
+RUN     git lfs install && git lfs pull
+WORKDIR /root
 
 # fetch HEAT specific python dependencies
 RUN python3 -m pip install --upgrade pip && \

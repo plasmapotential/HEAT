@@ -93,5 +93,5 @@ MachFlag, Tag, Shot, TimeStep, EQ, CAD, PFC, Input, Output
 #example for optical approximation
 #nstx,opticalExample, 204118, 0.004, g204118.00004, testCaseIBDH_v3.0.0.step, PFCs.csv, NSTXU_input.csv, hfOpt
 #example for optical approximation temperature calculation (HF + T) 
-nstx,opticalExample, 204118, 0.004, g204118.00004, testCaseIBDH_v3.0.0.step, PFCs.csv, NSTXU_input.csv, hfOpt:T
-nstx,opticalExample, 204118, 0.050, g204118.00050, testCaseIBDH_v3.0.0.step, PFCs.csv, NSTXU_input.csv, hfOpt:T
+nstx,opticalExample, 204118, 0.004, g204118.00004, testCaseIBDH_v3.0.0.step, PFCs.csv, NSTXU_input.csv, hfOpt:psiN:bdotn:pwrDir:norm:T
+nstx,opticalExample, 204118, 0.050, g204118.00050, testCaseIBDH_v3.0.0.step, PFCs.csv, NSTXU_input.csv, hfOpt:psiN:bdotn:pwrDir:norm:T

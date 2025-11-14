@@ -24,7 +24,7 @@ The latest release of HEAT is v4.2, which includes the following notable additio
 ---
 To cite HEAT, you can use a paper published by the journal Fusion Science and Technology under open access.  The paper can be found here: https://doi.org/10.1080/15361055.2021.1951532
 
-Other recent HEAT related publications:
+Other HEAT related publications:
  - There is a 2019 paper by A. Wingen [here](https://info.fusion.ciemat.es/OCS/EPS2019PAP/pdf/P2.1040.pdf) that describes a code called SHEFT, which was a HEAT predecessor
  - [The Experimental Validation of HEAT on the ASDEX Upgrade Tokamak](https://doi.org/10.1080/15361055.2025.2478720), A Redl et al 2025
  - [3D modeling of n = 1 RMP driven heat fluxes on the SPARC tokamak PFCs using HEAT](https://iopscience.iop.org/article/10.1088/1741-4326/adf760/meta), M D'Abusco et al 2025
@@ -34,6 +34,7 @@ Other recent HEAT related publications:
  - 3D ion gyro-orbit heat load predictions for NSTX-U, Looby et al, https://iopscience.iop.org/article/10.1088/1741-4326/ac8a05
  - 3D PFC Power Exhaust Predictions for the SPARC Tokamak, Looby et al, https://meetings.aps.org/Meeting/DPP22/Session/NO03.11
  - Measurements of multiple heat flux components at the divertor target by using surface eroding thermocouples (invited), Ren et al, https://aip.scitation.org/doi/full/10.1063/5.0101719
+ - The MAFOT code by A. Wingen is documented [here](https://github.com/ORNL-Fusion/MAFOT/tree/master/doc)
 
  ---
 For users who want to run HEAT, you will need to download the HEAT docker container from dockerhub.  The HEAT docker container has been tested on Linux, MacOS, and Windows.  See the tutorials link below for more information on installation.
@@ -43,6 +44,11 @@ Dockerhub repo:  https://hub.docker.com/r/plasmapotential/heat
 There is a companion repo to this one, which provides some HEAT pre/post processing functions:
 https://github.com/plasmapotential/HEATtools.git
 
+This repository uses Git LFS for large data files (specifically for the 3D fields test case).
+To run the 3D fields test case, please run:
+    git lfs install
+    git lfs pull
+before running the command ./runTerminalModeTest3Dfields
 ---
 The developer is Tom Looby, a Scientist at Commonwealth Fusion Systems.
 

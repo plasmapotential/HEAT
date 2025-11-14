@@ -339,10 +339,36 @@ class plasma3D:
 		bbLimits = str(self.bbRmin) + ',' + str(self.bbRmax) + ',' + str(self.bbZmin) + ',' + str(self.bbZmax)
 		args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points3DHF.dat','-B',bbLimits,'_lamCTL.dat',tag]
 		current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-		if verbose == False:
-			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
-		else:
-			subprocess.run(args, env=current_env, cwd=self.cwd) #dont suppress error messages
+		
+		try:
+			if verbose:
+				proc = subprocess.Popen(args, env=current_env, cwd=self.cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,)
+				for line in proc.stdout:
+					sys.stdout.write(line)
+				returncode = proc.wait()
+				if returncode != 0:
+					raise subprocess.CalledProcessError(returncode, args)
+			else:
+				result = subprocess.run(args, env=current_env, cwd=self.cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False,)
+				if result.returncode != 0:
+					log.error("Laminar run failed with code %s", result.returncode)
+					log.error("Laminar output:\n%s", result.stdout)
+					print.error("Laminar run failed with code %s", result.returncode)
+					print.error("Laminar output:\n%s", result.stdout)
+					raise subprocess.CalledProcessError(
+                    	result.returncode, args, output=result.stdout
+                		)
+		except Exception as e:
+			print("Error: laminar run failed")
+			print(e.output)
+			log.info("Error: laminar run failed")
+			log.info(e.output)
+
+		
+		#if verbose == False:
+		#	subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
+		#else:
+		#	subprocess.run(args, env=current_env, cwd=self.cwd) #dont suppress error messages
 		#print('mpirun -n ' + str(self.NCPUs) + ' heatlaminar_mpi' + ' -P points3DHF.dat' + ' _lamCTL.dat' + ' ' + tag)
 		
 		#self.wait2finish(self.NCPUs, tag)
@@ -791,6 +817,8 @@ class heatflux3D:
 		zeroes out invalid points
 		updates self.q
 		sets self.q0 this first time its called
+
+		TO DO: make this function compatible with PFC divFracs as a mesh quantity
 		"""
 		print('3D Heat flux model type: ' + self.model)
 		log.info('3D Heat flux model type: ' + self.model)

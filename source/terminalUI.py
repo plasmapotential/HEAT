@@ -136,6 +136,7 @@ class TUI():
                  -norm    normal vector glyphs
                  -T       temperature calculation using openFOAM
                  -elmer   runs an Elmer FEM simulation
+                 -Btrace  Bfield tracing from a trace csv file
 
           for multiple outputs, separate options with : (ie hfOpt:psi:T).  Note
           that HEAT will use the first options list provided for each tag.
@@ -278,15 +279,19 @@ class TUI():
                 #read GEQDSK and load into MHD object
                 self.loadMHD(machInDir, eqFileNames, timesteps)
 
-                #read CAD and initialize CAD objects
-                #note: current version of HEAT only supports single CAD file
-                #per tag
-                self.loadCAD(CADfiles[0], machInDir)
+                #if we are only running a Bfield trace, no need to load CAD
+                if 'Btrace' in runList and len(runList) == 1:
+                    pass
+                else:
+                    #read CAD and initialize CAD objects
+                    #note: current version of HEAT only supports single CAD file
+                    #per tag
+                    self.loadCAD(CADfiles[0], machInDir)
 
-                #read PFC file and initialize PFC objects
-                #note: current version of HEAT only supports single CAD file
-                #per tag
-                self.loadPFCs(PFCfiles[0])
+                    #read PFC file and initialize PFC objects
+                    #note: current version of HEAT only supports single CAD file
+                    #per tag
+                    self.loadPFCs(PFCfiles[0])
 
                 #note that we load HF settings (optical, gyro, rad) dynamically
                 #from input file in the self.ENG.runHEAT loop
@@ -415,6 +420,7 @@ class TUI():
         """
         self.ENG.CAD.rootDir = rootDir #set HEAT rootDir
         self.ENG.CAD.machInDir = machInDir #HEATrun directory
+        self.ENG.getCADinputs()
         self.ENG.getCADfromTUI(CADfile)
         return
 

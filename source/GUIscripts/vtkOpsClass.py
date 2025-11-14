@@ -3,7 +3,7 @@
 #Engineer:      T Looby
 #Date:          20221108
 import vtk
-from vtk.util.numpy_support import vtk_to_numpy as vtk2np
+from vtk.util.numpy_support import numpy_to_vtk, numpy_to_vtkIdTypeArray
 import sys
 import numpy as np
 
@@ -59,52 +59,66 @@ class VTKops:
         self.label = label
         return
 
-    def writeMeshVTP(self, outFile):
+    def writeMeshVTP(self, outFile, binary=True, compress=False):
         """
         writes a .vtp file that contains the mesh triangle data, and has the
         scalar field data stored in the Colors object.
         """
-        # setup colors
-        Colors = vtk.vtkFloatArray()
-        #Colors.SetNumberOfComponents(3)
-        Colors.SetNumberOfTuples(self.Npts)
-        Colors.SetName(self.label) #can change to any string
+        facets = self.mesh.Facets
+        ntri = len(facets)
+        if ntri == 0:
+            poly = vtk.vtkPolyData()
+            writer = vtk.vtkXMLPolyDataWriter()
+            writer.SetFileName(outFile)
+            writer.SetInputData(poly)
+            if binary: writer.SetDataModeToBinary()
+            if not compress: writer.SetCompressorTypeToNone()
+            writer.Write()
+            return
 
-        #points
-        vtkPts = vtk.vtkPoints()
+        pts = np.empty((ntri * 3, 3), dtype=np.float32)
+        for i, f in enumerate(facets):
+            pts[3*i:3*i+3, :] = np.asarray(f.Points, dtype=np.float32)
 
-        #build points and colors
-        for i,facet in enumerate(self.mesh.Facets):
-            for j in range(3):
-                x = facet.Points[j][0]
-                y = facet.Points[j][1]
-                z = facet.Points[j][2]
-                vtkPts.InsertNextPoint(x,y,z)
-                #        Colors.InsertTuple( i*3+j, (arr[i],arr[i],arr[i]) )
-                Colors.InsertTuple( i*3+j, [self.scalar[i]] )
+        conn = np.arange(ntri * 3, dtype=np.int64)
 
-        #build vtp triangular mesh
-        Triangles = vtk.vtkCellArray()
-        for i in range(self.Npts):
-            Triangle = vtk.vtkTriangle()
-            Triangle.GetPointIds().SetId(0, i*3+0)
-            Triangle.GetPointIds().SetId(1, i*3+1)
-            Triangle.GetPointIds().SetId(2, i*3+2)
-            Triangles.InsertNextCell(Triangle)
+        cells = vtk.vtkCellArray()
+        if vtk.VTK_MAJOR_VERSION >= 9:
+            offsets = np.arange(0, ntri * 3, 3, dtype=np.int64)
+            cells.SetData(
+                numpy_to_vtkIdTypeArray(offsets, deep=False),
+                numpy_to_vtkIdTypeArray(conn,   deep=False)
+            )
+        else:
+            ids = np.empty(ntri * 4, dtype=np.int64)
+            ids[0::4] = 3
+            ids[1::4] = conn[0::3]
+            ids[2::4] = conn[1::3]
+            ids[3::4] = conn[2::3]
+            cells.SetCells(ntri, numpy_to_vtkIdTypeArray(ids, deep=False))
 
-        #build final vtp object for writing
-        polydata = vtk.vtkPolyData()
-        polydata.SetPoints(vtkPts)
-        polydata.SetPolys(Triangles)
-        polydata.GetPointData().SetScalars(Colors)
-        polydata.Modified()
+        vtk_points = vtk.vtkPoints()
+        vtk_points.SetData(numpy_to_vtk(pts, deep=False))
+
+        # --- scalar per triangle (cell data) ---
+        cell_scal = numpy_to_vtk(np.asarray(self.scalar, dtype=np.float32), deep=False)
+        cell_scal.SetName(self.label)
+
+        poly = vtk.vtkPolyData()
+        poly.SetPoints(vtk_points)
+        poly.SetPolys(cells)
+        poly.GetCellData().SetScalars(cell_scal)   # <— key change (CellData)
+        poly.Modified()
+        # -------- Write (binary + no compression = fastest) -------
         writer = vtk.vtkXMLPolyDataWriter()
         writer.SetFileName(outFile)
-        writer.SetInputData(polydata)
-        #writer.SetDataModeToBinary()
+        writer.SetInputData(poly)
+        if binary:
+            writer.SetDataModeToBinary()
+        if not compress:
+            writer.SetCompressorTypeToNone()
         writer.Write()
 
-        return
 
     def writePointCloudVTP(self, outFile):
         """

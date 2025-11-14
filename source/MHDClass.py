@@ -120,8 +120,10 @@ class MHD:
         :traceLength: number of steps to trace along magnetic field lines looking for
           intersections
         :dpinit: toroidal length of each trace step up magnetic field line [degrees]
-
-        
+        :psiMult: multiplier to apply to all psi quantities (psiSep, psiAxis, psiRZ) for normalization (ie the dreaded 2pi) in EQ
+        :BtMult: multiplier to apply to toroidal field quantities (Bt0, Fpol) in EQ
+        :IpMult: multiplier to apply to plasma current, Ip in EQ
+        :BtraceFile: path to file to be used for field line tracing
 
         """
         self.allowed_vars = [
@@ -133,6 +135,7 @@ class MHD:
                             'psiMult',
                             'BtMult',
                             'IpMult',
+                            'BtraceFile',
                             ]
 
         return
@@ -569,6 +572,7 @@ class MHD:
             #f.write('useECcoil(0=no,1=yes)=\t{:d}\n'.format(self.useECcoil))
             f.write('unused=\t0\n')
             f.write('unused=\t0\n')
+#            f.write('unused=\t0\n')
             f.write('dpinit=\t{:f}\n'.format(self.dpinit)) # This must be entry index 23
             f.write('pi=\t3.141592653589793\n')
             f.write('2*pi=\t6.283185307179586\n')           
@@ -617,9 +621,16 @@ class MHD:
         return
 
 
+    def distance(self, traceData:np.ndarray):
+        """
+        Calculate distance along
+        """
+        distance = np.cumsum(np.sqrt(np.sum(np.diff(traceData,axis=0)**2,axis=1)))
+        distance = np.insert(distance, 0, 0)
+        return distance
 
-    def getFieldpath(self, dphi, gridfile, controlfilePath,
-                    controlfile, paraview_mask=False, tag=None):
+    def getFieldpath(self, dphi, dpinit, gridfile, controlfilePath,
+                    controlfile, paraview_mask=False, tag=None, bbox=True, distance_mask=True):
         """
         Uses MAFOT's structure script to get the full magnetic field line
         starting from a user defined R,Z,phi location.  Integrates back up
@@ -648,20 +659,27 @@ class MHD:
         args = []
         #MAFOT now runs a program called HEAT that is generic for all machines
         args.append('heatstructure')
-        #args 1,2 are the number of degrees we want to run the trace for
+        #step size for output
         args.append('-d')
         args.append(str(dphi))
-
-        #args 3,4 are the points that we launch traces from
+        #integrator step size
+        args.append('-i')
+        args.append(str(dpinit))
+        #the points that we launch traces from
         args.append('-P')
         args.append(gridfile)
-        #args 5 is the MAFOT control file
+        #now use simple boundary instead of g-file wall as limiter
+	    #This must be used with MAFOT version 5.7 or newer for the Shadow Mask calculation
+        if bbox == True:
+            args.append('-b')
+	    #args 6 is the MAFOT control file
         args.append(controlfile)
         #args 6 is the tag, if not None
         if tag is not None: args.append(tag)
         #Copy the current environment (important when in appImage mode)
         current_env = os.environ.copy()
         #run MAFOT structure for points in gridfile
+        print(args)
         from subprocess import run
         run(args, env=current_env, cwd=controlfilePath)
         try:
@@ -687,7 +705,7 @@ class MHD:
             xyz[:,2] = structdata[:,2]
             xyz*=1000 #Scale for ParaVIEW
             xyz = xyz[~(np.abs(xyz[:,:2])<1e-50).any(axis=1)]
-            head = 'X[mm],Y[mm],Z[mm]'
+            head = 'X[mm],Y[mm],Z[mm],distance[mm]'
             #head = 'X[m],Y[m],Z[m],R[m],phi[rad]'
             if tag == None:
                 outfile = controlfilePath+'struct.csv'
@@ -695,13 +713,15 @@ class MHD:
             else:
                 outfile = controlfilePath+'struct_'+tag+'.csv'
                 vtkName = 'Field_trace_'+tag
-            np.savetxt(outfile, xyz, delimiter=',', header=head)
+
+            d = self.distance(xyz)
+            xyzd = np.hstack((xyz, d.reshape(-1,1)))
+            np.savetxt(outfile, xyzd, delimiter=',', header=head)
             
             #Now save a vtk file for paraviewweb
             #old method (new method happens in engineClass using ioClass)
             #delete this comment after v5.0
             #tools.createVTKOutput(outfile, 'trace', vtkName)
-           
 
         return
 
@@ -730,6 +750,32 @@ class MHD:
         from subprocess import run
         run(args, env=current_env, cwd=controlfilePath)
         return
+
+
+    def readBtraceFile(self):
+        """
+        .. Reads a Btrace file (file for tracing magnetic field lines from)
+        .. first row file should be formatted like this, which defines the columns:
+        .. x[mm], y[mm], z[mm], traceDirection, Length[deg], stepSize[deg]
+        .. every new row represents a new trace that will be run in HEAT
+        
+        Columns in the file:
+        --------------------
+
+        :x: x coordinate of field line trace start locations in [mm]
+        :y: y coordinate of field line trace start locations in [mm]
+        :z: z coordinate of field line trace start locations in [mm]
+        :traceDirection: can be 1 (forward toroidal angle), -1 (reverse toroidal angle), or 0 (both directions) to trace from point
+        :Length[deg]: distance in degrees to trace from the point
+        :stepSize[deg]: step size for magnetic field line integration steps in degrees
+                
+        """
+
+        #read file
+        data = pd.read_csv(self.BtraceFile, delimiter=",")
+        data = data.astype({"x[mm]": float, "y[mm]": float, "z[mm]": float, "traceDirection": int, "Length[deg]":float, "stepSize[deg]":float})
+        return data
+
 
     def runMAFOTlaminar(self,gridfile,controlfilePath,controlfile,NCPUs):
         """

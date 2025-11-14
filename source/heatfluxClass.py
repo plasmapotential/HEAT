@@ -914,6 +914,7 @@ class heatFlux:
             frac = 1.0
         return frac
 
+
 #===============================================================================
 #                   Heat flux functions and helper functions
 #===============================================================================
@@ -936,7 +937,7 @@ class heatFlux:
         f = scinter.UnivariateSpline(p, R, s = 0, ext = 'const')	# psi outside of spline domain return the boundary value
         return f(psi)
 
-    def getHFprofile(self, PFC, mafotPsi=False):
+    def getHFprofile(self, PFC, mafotPsi=False, mergePFC=False):
         """
         Calculates heat flux profile from psi.  Default is an Eich profile.
 
@@ -1034,12 +1035,12 @@ class heatFlux:
             log.info("S: {} [mm]".format(self.S))
 
 
-        #Scale by fraction of power going to this PFC's divertor
-        PFC.powerFrac = self.getDivertorPowerFraction(PFC.DivCode)
-        q *= PFC.powerFrac
-        print("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
-        log.info("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
+        #legacy method.  can be deleted after HEAT v4.5.  this now happens for each mesh element in PFCclass.py
+        #PFC.powerFrac = self.getDivertorPowerFraction(PFC.DivCode)
+        #print("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
+        #log.info("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
 
+        q *= PFC.divFracs
         return q
 
 
