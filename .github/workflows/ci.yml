@@ -32,13 +32,13 @@ jobs:
     - name: Run simple CI configuration test 
       run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.2.3 python3 /root/source/HEAT/tests/integrationTests/ciTest.py
 
+    #test the various HEAT modules
     - name: NSTX-U Optical HEAT Calculation
       run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.2.3 /root/source/HEAT/source/runTerminalModeTestOptical
-
     - name: NSTX-U Optical Elmer FEM HEAT Calculation
       run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.2.3 /root/source/HEAT/source/runTerminalModeTestOpticalElmer     
-#    - name: NSTX-U Gyro-orbit HEAT Calculation
-#      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.2.3 /root/source/HEAT/source/runTerminalModeTestGyro
+    - name: NSTX-U Gyro-orbit HEAT Calculation
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.2.3 /root/source/HEAT/source/runTerminalModeTestGyro
     - name: NSTX-U Photon Radiation HEAT Calculation
       run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.2.3 /root/source/HEAT/source/runTerminalModeTestRad
     - name: NSTX-U RZQ File HEAT Calculation
