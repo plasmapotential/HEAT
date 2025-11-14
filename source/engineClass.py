@@ -2296,7 +2296,9 @@ class engineObj():
             test1 = 'hfGyro' in runList
             test2 = 'hfOpt' in runList
             test3 = 'hfRad' in runList
-            if (test1 + test2 + test3) > 1:
+            test4 = 'T' in runList #openfoam and elmer read allSources.csv, so we write it
+            test5 = 'elmer' in runList
+            if (test1 + test2 + test3 + test4 + test5) > 1:
                 #set up time and equilibrium
                 PFC.t = t
                 for PFC in self.PFCs:
@@ -3454,12 +3456,12 @@ class engineObj():
         self.GYRO.intersectRecord = np.ones((self.GYRO.N_gyroPhase,
                                             self.GYRO.N_vPhase,
                                             self.GYRO.N_vSlice,
-                                            self.GYRO.N_HOT), dtype=int)*np.NaN
+                                            self.GYRO.N_HOT), dtype=int)*np.nan
 
         self.GYRO.hdotn = np.ones((self.GYRO.N_gyroPhase,
                                             self.GYRO.N_vPhase,
                                             self.GYRO.N_vSlice,
-                                            self.GYRO.N_HOT), dtype=int)*np.NaN
+                                            self.GYRO.N_HOT), dtype=int)*np.nan
         return
 
 
