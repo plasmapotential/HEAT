@@ -176,7 +176,7 @@ RUN apt-get -yqq update && \
     apt-get install -yqq elmerfem-csc libglu1 libscotch-dev libptscotch-dev python-is-python3
 
 #RUN apt-get -yqq libnglib-6.2 
-RUN apt-get -yqq install coreutils libcurl4 libunwind-dev nano git gfortran iputils-ping iproute2 htop git-lfs
+RUN apt-get -yqq update && apt-get -yqq install coreutils libcurl4 libunwind-dev nano git gfortran iputils-ping iproute2 htop git-lfs
 
 #3D plasmas layer
 RUN apt-get -yqq install libopenmpi-dev libhdf5-openmpi-dev libnetcdf-dev libnetcdff-dev
