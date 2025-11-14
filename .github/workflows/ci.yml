@@ -45,4 +45,6 @@ jobs:
       run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.2.3 /root/source/HEAT/source/runTerminalModeTestrzq
     - name: NSTX-U BYOM HEAT calculation
       run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.2.3 /root/source/HEAT/source/runTerminalModeTestBYOM
-  
+    - name: DIII-D 3D Fields HEAT calculation
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:v4.2.3 /root/source/HEAT/source/runTerminalModeTest3Dfields
+    

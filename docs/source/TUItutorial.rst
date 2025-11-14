@@ -178,7 +178,11 @@ The m3dc1sup.in file tells the MAFOT code where to find the M3D-C1 HDF5 files an
     # Path to file    scale     phase shift in deg
     /myPath/C1.h5     1.0       0
 
-A D3D test case can be found in the source code in /tests/integrationTests/D3DTestCase
+A D3D test case can be found in the source code in /tests/integrationTests/D3DTestCase.  The HEAT repo uses Git LFS for the D3D test case .h5 files.
+To run the 3D fields test case, please run:
+    git lfs install
+    git lfs pull
+before running the command ./runTerminalModeTest3Dfields
 
 The following list of input parameters are set in the input.csv file. Some are needed by MAFOT and are not used in HEAT (do not change):
 
