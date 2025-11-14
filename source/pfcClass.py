@@ -2550,7 +2550,7 @@ class mergedPFCs(PFC):
                 #map parameters from the big merged PFC back to individual PFCs
                 use = np.where(PFC.name == self.nameMap)[0]
                 PFC.q = self.q[use]
-                PFC.qDiv = self.q[use]
+                PFC.qDiv = self.qDiv[use]
                 PFC.shadowed_mask = self.shadowed_mask[use]
                 PFC.qOpticalList.append(PFC.qDiv)
 
