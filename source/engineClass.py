@@ -1499,18 +1499,22 @@ class engineObj():
         #B vector field
         PFC.Bxyz = self.MHD.Bfield_pointcloud(PFC.ep, R, Z, phi)
 
-        prefix='BfieldGlyph'
-        header = "X,Y,Z,Bx,By,Bz"
-        path = PFC.controlfilePath
-        label = 'B [T]'
-        tag = None
-        if self.IO.csvMask == True:
-            self.IO.writeGlyphCSV(ctrs,PFC.Bxyz,path,prefix,header,tag)
-        if self.IO.vtpPCMask == True:
-            self.IO.writeGlyphVTP(ctrs,PFC.Bxyz,label,prefix,path,tag)
-        if self.IO.csvMask==False and self.IO.vtpPCMask == False:
-            print("To write glyphs (Normal and Bfield) you must choose a PC option")
-            log.info("To write glyphs (Normal and Bfield) you must choose a PC option")
+        if PFC.mergedPFCs == True:
+            print("Scattering back to PFC objects")
+            PFC.scatter_back('B', self.IO, self.MHD.shotPath)
+        else:
+            prefix='BfieldGlyph'
+            header = "X,Y,Z,Bx,By,Bz"
+            path = PFC.controlfilePath
+            label = 'B [T]'
+            tag = None
+            if self.IO.csvMask == True:
+                self.IO.writeGlyphCSV(ctrs,PFC.Bxyz,path,prefix,header,tag)
+            if self.IO.vtpPCMask == True:
+                self.IO.writeGlyphVTP(ctrs,PFC.Bxyz,label,prefix,path,tag)
+            if self.IO.csvMask==False and self.IO.vtpPCMask == False:
+                print("To write glyphs (Normal and Bfield) you must choose a PC option")
+                log.info("To write glyphs (Normal and Bfield) you must choose a PC option")
 
 
         #B scalar point clouds
@@ -1806,15 +1810,19 @@ class engineObj():
         """
         create a normal vector point cloud for mesh centers on tile surface
         """
-        prefix='NormGlyph'
-        header = "X,Y,Z,Nx,Ny,Nz"
-        path = PFC.controlfilePath
-        tag = None
-        label = 'N'
-        if self.IO.csvMask == True:
-            self.IO.writeGlyphCSV(PFC.centers,PFC.norms,path,prefix,header,tag)
-        if self.IO.vtpPCMask == True:
-            self.IO.writeGlyphVTP(PFC.centers,PFC.norms,label,prefix,path,tag)
+        if PFC.mergedPFCs == True:
+            print("Scattering back to PFC objects")
+            PFC.scatter_back('norm', self.IO, self.MHD.shotPath)
+        else:
+            prefix='NormGlyph'
+            header = "X,Y,Z,Nx,Ny,Nz"
+            path = PFC.controlfilePath
+            tag = None
+            label = 'N'
+            if self.IO.csvMask == True:
+                self.IO.writeGlyphCSV(PFC.centers,PFC.norms,path,prefix,header,tag)
+            if self.IO.vtpPCMask == True:
+                self.IO.writeGlyphVTP(PFC.centers,PFC.norms,label,prefix,path,tag)
         return
 
     def shadowPC(self, PFC):
@@ -1840,18 +1848,22 @@ class engineObj():
         """
         create a pointcloud for mesh center locations for power direction
         """
-        prefix = 'powerDir'
-        label = 'powerDir'
-        path = PFC.controlfilePath
-        tag = None
-        if self.IO.csvMask == True:
-            self.IO.writePointCloudCSV(PFC.centers,PFC.powerDir,path,label,tag,prefix)
-        if self.IO.vtpPCMask == True:
-            self.IO.writePointCloudVTP(PFC.centers,PFC.powerDir,label,prefix,path,tag)
-        if self.IO.vtpMeshMask == True:
-            self.IO.writeMeshVTP(PFC.mesh, PFC.powerDir, label, prefix, path, tag)
-        if self.IO.glbMeshMask == True:
-            self.IO.writeMeshGLB(PFC.mesh, PFC.powerDir, label, prefix, path, tag)
+        if PFC.mergedPFCs == True:
+            print("Scattering back to PFC objects")
+            PFC.scatter_back('pwrDir', self.IO, self.MHD.shotPath)
+        else:
+            prefix = 'powerDir'
+            label = 'powerDir'
+            path = PFC.controlfilePath
+            tag = None
+            if self.IO.csvMask == True:
+                self.IO.writePointCloudCSV(PFC.centers,PFC.powerDir,path,label,tag,prefix)
+            if self.IO.vtpPCMask == True:
+                self.IO.writePointCloudVTP(PFC.centers,PFC.powerDir,label,prefix,path,tag)
+            if self.IO.vtpMeshMask == True:
+                self.IO.writeMeshVTP(PFC.mesh, PFC.powerDir, label, prefix, path, tag)
+            if self.IO.glbMeshMask == True:
+                self.IO.writeMeshGLB(PFC.mesh, PFC.powerDir, label, prefix, path, tag)
         return
 
     def bdotnPC(self, PFC):
@@ -1861,18 +1873,23 @@ class engineObj():
         normal vector
         """
         self.HF.HFincidentAngle(PFC,self.MHD)
-        prefix = 'bdotn'
-        label = '$\hat{b} \cdot \hat{n}$'
-        path = PFC.controlfilePath
-        tag = None
-        if self.IO.csvMask == True:
-            self.IO.writePointCloudCSV(PFC.centers,PFC.bdotn,path,label,tag,prefix)
-        if self.IO.vtpPCMask == True:
-            self.IO.writePointCloudVTP(PFC.centers,PFC.bdotn,label,prefix,path,tag)
-        if self.IO.vtpMeshMask == True:
-            self.IO.writeMeshVTP(PFC.mesh, PFC.bdotn, label, prefix, path, tag)
-        if self.IO.glbMeshMask == True:
-            self.IO.writeMeshGLB(PFC.mesh, PFC.bdotn, label, prefix, path, tag)
+
+        if PFC.mergedPFCs == True:
+            print("Scattering back to PFC objects")
+            PFC.scatter_back('bdotn', self.IO, self.MHD.shotPath)
+        else:
+            prefix = 'bdotn'
+            label = '$\hat{b} \cdot \hat{n}$'
+            path = PFC.controlfilePath
+            tag = None
+            if self.IO.csvMask == True:
+                self.IO.writePointCloudCSV(PFC.centers,PFC.bdotn,path,label,tag,prefix)
+            if self.IO.vtpPCMask == True:
+                self.IO.writePointCloudVTP(PFC.centers,PFC.bdotn,label,prefix,path,tag)
+            if self.IO.vtpMeshMask == True:
+                self.IO.writeMeshVTP(PFC.mesh, PFC.bdotn, label, prefix, path, tag)
+            if self.IO.glbMeshMask == True:
+                self.IO.writeMeshGLB(PFC.mesh, PFC.bdotn, label, prefix, path, tag)
         return
 
     def initializeHF(self, infile=None):
@@ -2168,7 +2185,7 @@ class engineObj():
 
             totalPowPow = 0
             totalPowPowCirc = 0
-            for PFC in self.PFCs:
+            for PFC in PFCs:
                 if 'hfOpt' in runList:
                     print("\n=== Final PFC tallies: Optical ===")
                     tmpPow = self.HF.power_sum_mesh(PFC, scale2circ=False, verbose=False)
@@ -2194,6 +2211,13 @@ class engineObj():
                 print("\n===+++ GYRO ORBIT CALCULATION +++===")
                 log.info("\n===+++ GYRO ORBIT CALCULATION +++===")
                 tGyro = time.time()
+
+                #mergedPFCs not supported currently for gyro orbits (could be changed in future)
+                if self.CAD.mergedPFCs == True:
+                    print("Cannot use mergedPFC mode for gyro orbit calculation. Set mergedPFCs to False in input file.  Aborting")
+                    log.info("Cannot use mergedPFC mode for gyro orbit calculation. Set mergedPFCs to False in input file.  Aborting")
+                    sys.exit()
+
                 #load GYRO settings for this timestep if applicable (terminal mode)
                 try:
                     self.loadGYROParams(infile=self.inputFileList[tIdx])
@@ -2278,7 +2302,7 @@ class engineObj():
                     print("=== Final PFC Tallies: Photon Radiation ===")
                     log.info("=== Final PFC Tallies: Photon Radiation ===")
                     totalPowPow = 0
-                    for PFC in self.PFCs:
+                    for PFC in PFCs:
                         if t not in PFC.timesteps:
                             pass
                         else:
@@ -2301,7 +2325,7 @@ class engineObj():
             if (test1 + test2 + test3 + test4 + test5) > 1:
                 #set up time and equilibrium
                 PFC.t = t
-                for PFC in self.PFCs:
+                for PFC in self.PFCs: #using self.PFCs here, not PFCs
                     if t not in PFC.timesteps:
                         pass
                     else:
@@ -2316,7 +2340,7 @@ class engineObj():
                         #write hf files
                         prefix = 'HF_allSources'
                         label = '$MW/m^2$'
-                        path = PFC.controlfilePath
+                        path = self.MHD.shotPath + self.tsFmt.format(t) +'/'+PFC.name+'/'
                         if self.IO.csvMask == True:
                             self.IO.writePointCloudCSV(PFC.centers,q,path,label,PFC.tag,prefix)
                         if self.IO.vtpPCMask == True:
@@ -3059,7 +3083,7 @@ class engineObj():
 
         if PFC.mergedPFCs == True:
             print("Scattering back to PFC objects")
-            PFC.scatter_back('hfOpt', self.IO)
+            PFC.scatter_back('hfOpt', self.IO, self.MHD.shotPath)
         else:
             #write all the files
             prefix = 'HF_optical'
@@ -3115,9 +3139,6 @@ class engineObj():
         PFC.radShadowMaskList.append(shadowMask)
         PFC.radShadowMask = shadowMask
 
-        if PFC.mergedPFCs == True:
-            print("Scattering back to PFC objects")
-            PFC.scatter_back('hfRad', self.IO)
         return
 
     def radPowerOutput(self,PFC):
@@ -3127,20 +3148,23 @@ class engineObj():
         #if saveFracs==True:
         #    self.RAD.savePowerFrac(PFC)
 
-        prefix = 'HF_rad'
-        label = '$MW/m^2$'
-        path = PFC.controlfilePath
-        if self.IO.csvMask == True:
-            self.IO.writePointCloudCSV(PFC.centers,PFC.qRad,path,label,PFC.tag,prefix)
-            self.IO.writePointCloudCSV(self.RAD.sources,self.RAD.sourcePower,path,'$MW$',PFC.tag,'Prad')
-        if self.IO.vtpPCMask == True:
-            self.IO.writePointCloudVTP(PFC.centers,PFC.qRad,label,prefix,path,PFC.tag)
-            self.IO.writePointCloudVTP(self.RAD.sources,self.RAD.sourcePower,'$MW$','Prad',path,PFC.tag)
-        if self.IO.vtpMeshMask == True:
-            self.IO.writeMeshVTP(PFC.mesh, PFC.qRad, label, prefix, path, PFC.tag)
-        if self.IO.glbMeshMask == True:
-            self.IO.writeMeshGLB(PFC.mesh, PFC.qRad, label, prefix, path, PFC.tag)
-
+        if PFC.mergedPFCs == True:
+            print("Scattering back to PFC objects")
+            PFC.scatter_back('hfRad', self.IO, self.MHD.shotPath)
+        else:
+            prefix = 'HF_rad'
+            label = '$MW/m^2$'
+            path = PFC.controlfilePath
+            if self.IO.csvMask == True:
+                self.IO.writePointCloudCSV(PFC.centers,PFC.qRad,path,label,PFC.tag,prefix)
+                self.IO.writePointCloudCSV(self.RAD.sources,self.RAD.sourcePower,path,'$MW$',PFC.tag,'Prad')
+            if self.IO.vtpPCMask == True:
+                self.IO.writePointCloudVTP(PFC.centers,PFC.qRad,label,prefix,path,PFC.tag)
+                self.IO.writePointCloudVTP(self.RAD.sources,self.RAD.sourcePower,'$MW$','Prad',path,PFC.tag)
+            if self.IO.vtpMeshMask == True:
+                self.IO.writeMeshVTP(PFC.mesh, PFC.qRad, label, prefix, path, PFC.tag)
+            if self.IO.glbMeshMask == True:
+                self.IO.writeMeshGLB(PFC.mesh, PFC.qRad, label, prefix, path, PFC.tag)
 
         return
 
@@ -3807,18 +3831,22 @@ class engineObj():
             PFC.shadowed_mask = np.zeros((len(PFC.shadowed_mask)))
             self.MHD.psi2DfromEQ(PFC)
 
-        prefix = 'psiN'
-        label = '$\psi_N$'
-        path = PFC.controlfilePath
-        tag=None
-        if self.IO.csvMask == True:
-            self.IO.writePointCloudCSV(PFC.centers,PFC.psimin,path,label,tag,prefix)
-        if self.IO.vtpPCMask == True:
-            self.IO.writePointCloudVTP(PFC.centers,PFC.psimin,label,prefix,path,tag)
-        if self.IO.vtpMeshMask == True:
-            self.IO.writeMeshVTP(PFC.mesh, PFC.psimin, label, prefix, path, tag)
-        if self.IO.glbMeshMask == True:
-            self.IO.writeMeshGLB(PFC.mesh, PFC.psimin, label, prefix, path, tag)
+        if PFC.mergedPFCs == True:
+            print("Scattering back to PFC objects")
+            PFC.scatter_back('psiN', self.IO, self.MHD.shotPath)
+        else:
+            prefix = 'psiN'
+            label = '$\psi_N$'
+            path = PFC.controlfilePath
+            tag=None
+            if self.IO.csvMask == True:
+                self.IO.writePointCloudCSV(PFC.centers,PFC.psimin,path,label,tag,prefix)
+            if self.IO.vtpPCMask == True:
+                self.IO.writePointCloudVTP(PFC.centers,PFC.psimin,label,prefix,path,tag)
+            if self.IO.vtpMeshMask == True:
+                self.IO.writeMeshVTP(PFC.mesh, PFC.psimin, label, prefix, path, tag)
+            if self.IO.glbMeshMask == True:
+                self.IO.writeMeshGLB(PFC.mesh, PFC.psimin, label, prefix, path, tag)
 
         return
 

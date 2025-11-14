@@ -16,7 +16,7 @@ overWriteMask, False
 xT, None
 yT, None
 zT, None
-mergedPFCs, False
+mergedPFCs, True
 #==============================================================
 #                MHD Variables
 #==============================================================

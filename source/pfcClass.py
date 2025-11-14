@@ -2537,12 +2537,13 @@ class mergedPFCs(PFC):
         log.info("Built merged PFC object")
         return
     
-    def scatter_back(self, mode, IO):
+    def scatter_back(self, mode, IO, shotPath):
         """
         scatters the mergedPFC fields back into the children PFC objects and writes files as needed
 
         mode is the runList parameter we are scattering back
-        IO is the ioClass object that is configured for this HEATrun        
+        IO is the ioClass object that is configured for this HEATrun 
+        shotPath is the path for this specific shot (where the time dirs are stored)
         """
         #optical heat flux
         if mode=='hfOpt':
@@ -2553,11 +2554,12 @@ class mergedPFCs(PFC):
                 PFC.qDiv = self.qDiv[use]
                 PFC.shadowed_mask = self.shadowed_mask[use]
                 PFC.qOpticalList.append(PFC.qDiv)
+                PFC.t = self.t
 
                 #write all the files
                 prefix = 'HF_optical'
                 label = '$MW/m^2$'
-                path = PFC.controlfilePath
+                path = shotPath + self.tsFmt.format(PFC.t) +'/'+PFC.name+'/'
                 if IO.csvMask == True:
                     IO.writePointCloudCSV(PFC.centers,PFC.qDiv,path,label,PFC.tag,prefix)
                     IO.writePointCloudCSV(PFC.centers,PFC.shadowed_mask,path,'shadowMask',PFC.tag,'shadowMask')
@@ -2579,8 +2581,111 @@ class mergedPFCs(PFC):
                 PFC.qRadList.append(PFC.qRad)
                 PFC.radShadowMask = self.radShadowMask[use]
                 PFC.radShadowMaskList.append(PFC.radShadowMask)
+                PFC.t = self.t
+                prefix = 'HF_rad'
+                label = '$MW/m^2$'
+                path = shotPath + self.tsFmt.format(PFC.t) +'/'+PFC.name+'/'
+                if IO.csvMask == True:
+                    IO.writePointCloudCSV(PFC.centers,PFC.qRad,path,label,PFC.tag,prefix)
+                if IO.vtpPCMask == True:
+                    IO.writePointCloudVTP(PFC.centers,PFC.qRad,label,prefix,path,PFC.tag)
+                if IO.vtpMeshMask == True:
+                    IO.writeMeshVTP(PFC.mesh, PFC.qRad, label, prefix, path, PFC.tag)
+                if IO.glbMeshMask == True:
+                    IO.writeMeshGLB(PFC.mesh, PFC.qRad, label, prefix, path, PFC.tag)
 
+        if mode=='bdotn':
+            for PFC in self.PFClist:
+                #map parameters from the big merged PFC back to individual PFCs
+                use = np.where(PFC.name == self.nameMap)[0]
+                PFC.bdotn = self.bdotn[use]
+                PFC.t = self.t
+                prefix = 'bdotn'
+                label = '$\hat{b} \cdot \hat{n}$'
+                path = shotPath + self.tsFmt.format(PFC.t) +'/'+PFC.name+'/'
+                tag = None
+                if IO.csvMask == True:
+                    IO.writePointCloudCSV(PFC.centers,PFC.bdotn,path,label,tag,prefix)
+                if IO.vtpPCMask == True:
+                    IO.writePointCloudVTP(PFC.centers,PFC.bdotn,label,prefix,path,tag)
+                if IO.vtpMeshMask == True:
+                    IO.writeMeshVTP(PFC.mesh, PFC.bdotn, label, prefix, path, tag)
+                if IO.glbMeshMask == True:
+                    IO.writeMeshGLB(PFC.mesh, PFC.bdotn, label, prefix, path, tag)            
 
+        if mode=='psiN':
+            for PFC in self.PFClist:
+                #map parameters from the big merged PFC back to individual PFCs
+                use = np.where(PFC.name == self.nameMap)[0]
+                PFC.psimin = self.psimin[use]
+                PFC.t = self.t
+                prefix = 'psiN'
+                label = '$\psi_N$'
+                path = shotPath + self.tsFmt.format(PFC.t) +'/'+PFC.name+'/'
+                
+                tag=None
+                if IO.csvMask == True:
+                    IO.writePointCloudCSV(PFC.centers,PFC.psimin,path,label,tag,prefix)
+                if IO.vtpPCMask == True:
+                    IO.writePointCloudVTP(PFC.centers,PFC.psimin,label,prefix,path,tag)
+                if IO.vtpMeshMask == True:
+                    IO.writeMeshVTP(PFC.mesh, PFC.psimin, label, prefix, path, tag)
+                if IO.glbMeshMask == True:
+                    IO.writeMeshGLB(PFC.mesh, PFC.psimin, label, prefix, path, tag)
+
+        if mode=='pwrDir':
+            for PFC in self.PFClist:
+                #map parameters from the big merged PFC back to individual PFCs
+                use = np.where(PFC.name == self.nameMap)[0]
+                PFC.powerDir = self.powerDir[use]
+                PFC.t = self.t
+                prefix = 'powerDir'
+                label = 'powerDir'
+                path = shotPath + self.tsFmt.format(PFC.t) +'/'+PFC.name+'/'
+                tag = None
+                if IO.csvMask == True:
+                    IO.writePointCloudCSV(PFC.centers,PFC.powerDir,path,label,tag,prefix)
+                if IO.vtpPCMask == True:
+                    IO.writePointCloudVTP(PFC.centers,PFC.powerDir,label,prefix,path,tag)
+                if IO.vtpMeshMask == True:
+                    IO.writeMeshVTP(PFC.mesh, PFC.powerDir, label, prefix, path, tag)
+                if IO.glbMeshMask == True:
+                    IO.writeMeshGLB(PFC.mesh, PFC.powerDir, label, prefix, path, tag)
+
+        if mode=='norm':
+            for PFC in self.PFClist:
+                #map parameters from the big merged PFC back to individual PFCs
+                use = np.where(PFC.name == self.nameMap)[0]
+                PFC.norms = self.norms[use]
+                PFC.t = self.t
+                prefix='NormGlyph'
+                header = "X,Y,Z,Nx,Ny,Nz"
+                path = shotPath + self.tsFmt.format(PFC.t) +'/'+PFC.name+'/'
+                tag = None
+                label = 'N'
+                if IO.csvMask == True:
+                    IO.writeGlyphCSV(PFC.centers,PFC.norms,path,prefix,header,tag)
+                if IO.vtpPCMask == True:
+                    IO.writeGlyphVTP(PFC.centers,PFC.norms,label,prefix,path,tag)
+        
+        if mode=='B':
+            for PFC in self.PFClist:
+                #map parameters from the big merged PFC back to individual PFCs
+                use = np.where(PFC.name == self.nameMap)[0]
+                PFC.Bxyz = self.Bxyz[use]
+                PFC.t = self.t
+                prefix='BfieldGlyph'
+                header = "X,Y,Z,Bx,By,Bz"
+                path = shotPath + self.tsFmt.format(PFC.t) +'/'+PFC.name+'/'
+                label = 'B [T]'
+                tag = None
+                if IO.csvMask == True:
+                    IO.writeGlyphCSV(PFC.centers,PFC.Bxyz,path,prefix,header,tag)
+                if IO.vtpPCMask == True:
+                    IO.writeGlyphVTP(PFC.centers,PFC.Bxyz,label,prefix,path,tag)
+                if IO.csvMask==False and self.IO.vtpPCMask == False:
+                    print("To write glyphs (Normal and Bfield) you must choose a PC option")
+                    log.info("To write glyphs (Normal and Bfield) you must choose a PC option")            
 
 
         return

@@ -16,7 +16,7 @@ overWriteMask, True
 xT, None
 yT, None
 zT, None
-mergedPFCs, False
+mergedPFCs, True
 #==============================================================
 #                MHD Variables
 #==============================================================
@@ -77,7 +77,7 @@ phiMin, 20
 phiMax, 35
 rayTracer, mitsuba
 Prad_mult, 1.0
-saveRadFrac, False
+saveRadFrac, True
 #==============================================================
 #                OpenFOAM Variables
 #==============================================================
