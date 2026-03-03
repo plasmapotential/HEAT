@@ -219,7 +219,7 @@ class FEM:
             args = ['mpirun', '-np', str(self.numberpartitions), 'ElmerSolver', SIFfile]
             current_env = os.environ.copy()
 		    #run Elmer Solver
-			from subprocess import run
+            from subprocess import run
             run(args_mesh, env=current_env, cwd=self.elmerOutDir)		
 			run(args, env=current_env, cwd=self.elmerOutDir)
 			try:
