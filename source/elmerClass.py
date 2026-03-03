@@ -221,7 +221,7 @@ class FEM:
 		    #run Elmer Solver
             from subprocess import run
             run(args_mesh, env=current_env, cwd=self.elmerOutDir)		
-			run(args, env=current_env, cwd=self.elmerOutDir)
+            run(args, env=current_env, cwd=self.elmerOutDir)
 			try:
 				self.merge_Rex(name, SIFfile)
 			except:
