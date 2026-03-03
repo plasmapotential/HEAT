@@ -222,7 +222,7 @@ class FEM:
             from subprocess import run
             run(args_mesh, env=current_env, cwd=self.elmerOutDir)		
             run(args, env=current_env, cwd=self.elmerOutDir)
-			try:
+            try:
 				self.merge_Rex(name, SIFfile)
 			except:
 				print('no ReX calcs were done')
