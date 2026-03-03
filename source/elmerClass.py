@@ -319,11 +319,11 @@ class FEM:
             for line in f:
                 if "nodalReXprefix" in line:
                     prefix = line.split("String ")[-1].strip()
-		try:
-        	ReXfile = prefix + '.dat'
-        	#copy Rex init from elmerDir to elmerOutDir
-        	src = self.elmerDir + ReXfile
-        	dst = self.elmerOutDir + ReXfile
+        try:
+            ReXfile = prefix + '.dat'
+            #copy Rex init from elmerDir to elmerOutDir
+            src = self.elmerDir + ReXfile
+            dst = self.elmerOutDir + ReXfile
             shutil.copyfile(src, dst)
         except:
             print('no Rex init file provided')
