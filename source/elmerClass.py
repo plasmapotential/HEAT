@@ -222,7 +222,10 @@ class FEM:
             from subprocess import run
             run(args_mesh, env=current_env, cwd=self.elmerOutDir)		
             run(args, env=current_env, cwd=self.elmerOutDir)
-            self.merge_Rex(name, SIFfile)
+			try:
+            	self.merge_Rex(name, SIFfile)
+			except:
+				print('no ReX calcs were done')
         else:
             args = ['ElmerSolver', SIFfile]
             current_env = os.environ.copy()
@@ -316,12 +319,11 @@ class FEM:
             for line in f:
                 if "nodalReXprefix" in line:
                     prefix = line.split("String ")[-1].strip()
-
-        ReXfile = prefix + '.dat'
-        #copy Rex init from elmerDir to elmerOutDir
-        src = self.elmerDir + ReXfile
-        dst = self.elmerOutDir + ReXfile
-        try:
+		try:
+        	ReXfile = prefix + '.dat'
+        	#copy Rex init from elmerDir to elmerOutDir
+        	src = self.elmerDir + ReXfile
+        	dst = self.elmerOutDir + ReXfile
             shutil.copyfile(src, dst)
         except:
             print('no Rex init file provided')
