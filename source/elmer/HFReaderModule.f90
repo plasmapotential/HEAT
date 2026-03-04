@@ -51,51 +51,71 @@ MODULE HFReaderCore
     USE Types
     USE DefUtils
     IMPLICIT NONE
+    
+    !Dynamically allocated arrays to hold the node IDs and heat fluxes from the .csv input file. Split the information into two arrays
     REAL(KIND=dp), ALLOCATABLE :: CSV_Nodes(:), CSV_Fluxes(:)
-    INTEGER, ALLOCATABLE :: LocalMap(:)
-    INTEGER :: numLines = 0
-    REAL(KIND=dp) :: tLastRead = -1.0_dp
-    REAL(KIND=dp) :: cached_q_flow = 0.0_dp
-    LOGICAL :: FirstVisit = .TRUE.
-    LOGICAL :: MapInitialized = .FALSE.
-    CHARACTER(LEN=100) :: nodalPrefix
+    !Array to map Elmer's local node index to the index in the CSV arrays
+    INTEGER, ALLOCATABLE :: LocalMap(:) 
+    
+    INTEGER :: numLines = 0                      
+    REAL(KIND=dp) :: tLastRead = -1.0_dp         
+    REAL(KIND=dp) :: cached_q_flow = 0.0_dp      
+    LOGICAL :: FirstVisit = .TRUE.               
+    LOGICAL :: MapInitialized = .FALSE.          
+    CHARACTER(LEN=100) :: nodalPrefix            
+
 CONTAINS
+
     SUBROUTINE ReadCSV(filename)
         CHARACTER(LEN=*) :: filename
         INTEGER :: ioStat, fileUnit, i
         LOGICAL :: exists
+        
+        !Check if the file actually exists on the disk before trying to open it
         INQUIRE(FILE=filename, EXIST=exists)
         IF (.NOT. exists) CALL Fatal('ReadCSV', 'File not found: '//TRIM(filename))
+        
         OPEN(NEWUNIT=fileUnit, FILE=filename, STATUS='OLD', ACTION='READ')
+        
+        !Count the number of lines in the file to size our arrays
         numLines = 0
         DO
             READ(fileUnit, *, IOSTAT=ioStat)
-            IF (ioStat /= 0) EXIT
+            IF (ioStat /= 0) EXIT ! Exit loop when EOF is reached
             numLines = numLines + 1
         END DO
+        
+        !Clean up old memory and allocate fresh arrays for the new data
         IF (ALLOCATED(CSV_Nodes)) DEALLOCATE(CSV_Nodes, CSV_Fluxes)
         IF (numLines > 0) ALLOCATE(CSV_Nodes(numLines), CSV_Fluxes(numLines))
+        
+        !Rewind to the start of the file and read the actual data
         REWIND(fileUnit)
         DO i = 1, numLines
             READ(fileUnit, *, IOSTAT=ioStat) CSV_Nodes(i), CSV_Fluxes(i)
         END DO
+        
         CLOSE(fileUnit)
     END SUBROUTINE ReadCSV
+
     SUBROUTINE SortCSV()
         INTEGER :: i, j, gap
         REAL(KIND=dp) :: tmpNode, tmpFlux
+        
         gap = numLines / 2
         DO WHILE (gap > 0)
             DO i = gap + 1, numLines
                 tmpNode = CSV_Nodes(i)
                 tmpFlux = CSV_Fluxes(i)
                 j = i
+                !Shift elements that are greater than tmpNode to the right
                 DO WHILE (j > gap)
                     IF (CSV_Nodes(j-gap) <= tmpNode) EXIT
                     CSV_Nodes(j) = CSV_Nodes(j-gap)
                     CSV_Fluxes(j) = CSV_Fluxes(j-gap)
                     j = j - gap
                 END DO
+                !Place tmpNode in its correct sorted position
                 CSV_Nodes(j) = tmpNode
                 CSV_Fluxes(j) = tmpFlux
             END DO
@@ -103,10 +123,12 @@ CONTAINS
         END DO
     END SUBROUTINE SortCSV
 END MODULE HFReaderCore
+
 FUNCTION heatFluxOnNodes(Model, n, t) RESULT(hf)
     USE DefUtils
     USE HFReaderCore
     IMPLICIT NONE
+    
     TYPE(Model_t) :: Model
     INTEGER :: n, i, globalNode, low, high, mid
     REAL(KIND=dp) :: t, hf
@@ -114,38 +136,54 @@ FUNCTION heatFluxOnNodes(Model, n, t) RESULT(hf)
     TYPE(ValueList_t), POINTER :: BC
     CHARACTER(LEN=255) :: f
     CHARACTER(LEN=100) :: timeString
+    
+    !Get the Boundary Condition section from the .sif file
     BC => GetBC()
     IF (.NOT. ASSOCIATED(BC)) CALL FATAL('heatFluxOnNodes','No BC found')
+    
+    !Grab the file prefix and base constant flux from the .sif file on the first run
     IF (FirstVisit) THEN
         nodalPrefix = GetString(BC, 'nodalHFprefix', GotIt)
         IF(.NOT. GotIt) CALL Fatal('heatFluxOnNodes', 'Keyword nodalHFprefix missing')
+        
         cached_q_flow = GetConstReal(BC, 'q_flow', GotIt)
         IF (.NOT. GotIt) cached_q_flow = 0.0_dp
+        
         FirstVisit = .FALSE.
     END IF
+    
+    !Only read the file if the simulation time has proceed
     IF (ABS(t - tLastRead) > 1.0e-9_dp) THEN
         WRITE(timeString, '(F15.9)') t
         f = TRIM(nodalPrefix) // '_' // TRIM(ADJUSTL(timeString)) // '.dat'
+        
         CALL ReadCSV(f)
         IF (numLines > 1) CALL SortCSV()
+        
         tLastRead = t
         MapInitialized = .FALSE. 
     END IF
+    
+    !This maps the local node index (1 to N) to the row in the sorted CSV array
     IF (.NOT. MapInitialized) THEN
         IF (ALLOCATED(LocalMap)) DEALLOCATE(LocalMap)
         ALLOCATE(LocalMap(Model % Mesh % NumberOfNodes))
         LocalMap = 0
+        
         DO i = 1, Model % Mesh % NumberOfNodes
+            !Determine the true Global Node ID (important for correct mapping when using MPI parallel runs)
             IF (ASSOCIATED(Model % Mesh % ParallelInfo % GlobalDoFs)) THEN
                 globalNode = Model % Mesh % ParallelInfo % GlobalDoFs(i)
             ELSE
                 globalNode = i
             END IF
+            
+            !Find this globalNode in the sorted CSV_Nodes array
             low = 1; high = numLines
             DO WHILE (low <= high)
                 mid = (low + high) / 2
                 IF (NINT(CSV_Nodes(mid)) == globalNode) THEN
-                    LocalMap(i) = mid
+                    LocalMap(i) = mid ! Match found, store the CSV index
                     EXIT
                 ELSE IF (NINT(CSV_Nodes(mid)) < globalNode) THEN
                     low = mid + 1
@@ -156,8 +194,16 @@ FUNCTION heatFluxOnNodes(Model, n, t) RESULT(hf)
         END DO
         MapInitialized = .TRUE.
     END IF
+    
     hf = 0.0_dp
+    
+    !If this node was found in the CSV (LocalMap > 0), grab its flux value
     IF (LocalMap(n) > 0) hf = CSV_Fluxes(LocalMap(n))
+    
+    !Clamp negative fluxes to zero
     IF (hf < 0.0_dp) hf = 0.0_dp
+    
+    !Add the constant background flux imported from the .sif file
     hf = hf + cached_q_flow
+    
 END FUNCTION heatFluxOnNodes
