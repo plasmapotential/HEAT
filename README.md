@@ -106,3 +106,4 @@ As an open-source software, HEAT is extremely open to contributions. You have ma
 2. Documentation (add clearest examples or fill non-documented code sections)
 3. Code (Add new features or enhance the existing ones)
 4. Issues (Help another to achieve the expected use of HEAT or report any problem, bug or misoperation that you can note)
+
