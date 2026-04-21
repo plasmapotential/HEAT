@@ -2177,6 +2177,24 @@ class mergedPFCs(PFC):
                 if IO.glbMeshMask == True:
                     IO.writeMeshGLB(PFC.mesh, PFC.qRad, label, prefix, path, PFC.tag)
 
+        #transient filament heat flux (filamentClass); no per-PFC IO here (engine saveFilamentHFOutput)
+        if mode == 'hfFil':
+            for PFC in self.PFClist:
+                use = np.where(PFC.name == self.nameMap)[0]
+                PFC.qFil = self.qFil[use]
+                PFC.Edep = self.Edep[use]
+                PFC.ptclDep = self.ptclDep[use]
+                if hasattr(self, 'ptclFluxFil'):
+                    PFC.ptclFluxFil = self.ptclFluxFil[use]
+
+        #transient runaway-electron deposition (runawayClass)
+        if mode == 'hfRE':
+            for PFC in self.PFClist:
+                use = np.where(PFC.name == self.nameMap)[0]
+                PFC.qRE = self.qRE[use]
+                PFC.Edep = self.Edep[use]
+                PFC.ptclDep = self.ptclDep[use]
+
         if mode=='bdotn':
             for PFC in self.PFClist:
                 #map parameters from the big merged PFC back to individual PFCs

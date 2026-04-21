@@ -16,7 +16,6 @@ import scipy.interpolate as interp
 from scipy.interpolate import interp1d
 import scipy.integrate as integrate
 import pandas as pd
-import open3d as o3d
 import time
 import shutil
 
@@ -26,6 +25,7 @@ import toolsClass
 tools = toolsClass.tools()
 import ioClass
 IO = ioClass.IO_HEAT()
+from rayTracerClass import shadowKernels
 
 import logging
 log = logging.getLogger(__name__)
@@ -282,7 +282,8 @@ class filament:
         MHD.ittStruct = 360.0 #360 degree trace
         MHD.writeMAFOTpointfile(xyz,self.gridfileStruct)
         MHD.writeControlFile(self.controlfilePath+self.controlfileStruct, t, 0, mode='struct') #0 for both directions
-        MHD.getFieldpath(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, paraview_mask=False, tag=None)
+        dpinit = getattr(MHD, 'dpinit', None) or 1.0
+        MHD.getFieldpath(dphi, dpinit, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, paraview_mask=False, tag=None)
         Btrace = tools.readStructOutput(self.structOutfile) 
         os.remove(self.structOutfile)
         return Btrace
@@ -318,26 +319,34 @@ class filament:
 
     def buildIntersectionMesh(self):
         """
-        builds intersection mesh for open3d ray tracing
+        Builds ray–mesh scene via rayTracerClass.shadowKernels (Open3D or Mitsuba).
+
+        Engine sets filamentRayTracer from HF.rayTracer (e.g. open3d, mitsuba_gpu, mitsuba_cpu).
         """
-        Nt = len(self.t1)
-        targets = np.hstack([self.t1, self.t2, self.t3]).reshape(Nt*3,3)
-        #cast variables to 32bit for C
-        vertices = np.array(targets.reshape(Nt*3,3), dtype=np.float32)
-        triangles = np.array(np.arange(Nt*3).reshape(Nt,3), dtype=np.uint32)
-        #build intersection mesh and tensors for open3d
-        self.mesh = o3d.t.geometry.TriangleMesh()
-        self.scene = o3d.t.geometry.RaycastingScene()
-        self.mesh_id = self.scene.add_triangles(vertices, triangles)
+        tri = np.stack([self.t1, self.t2, self.t3], axis=1)
+        raw = getattr(self, 'filamentRayTracer', None) or 'open3d'
+        raw = str(raw).strip().lower()
+        self._fil_rt = shadowKernels()
+        if raw in ('mitsuba_gpu', 'mitsuba_cuda'):
+            self._fil_rt.buildMitsubaScene(tri, mitsubaMode='cuda')
+            self._fil_rt_engine = 'mitsuba'
+            self._fil_mitsuba_mode = 'cuda'
+        elif raw == 'mitsuba_cpu':
+            self._fil_rt.buildMitsubaScene(tri, mitsubaMode='cpu')
+            self._fil_rt_engine = 'mitsuba'
+            self._fil_mitsuba_mode = 'cpu'
+        else:
+            self._fil_rt.buildOpen3Dscene(tri.astype(np.float32))
+            self._fil_rt_engine = 'open3d'
+        self.scene = getattr(self._fil_rt, 'scene', None)
         return
 
     def traceFilamentParticles(self, MHD: object, ts:np.ndarray , tIdx:int):
         """
         Traces filament macro-particles
 
-        Uses Open3D to accelerate the calculation:
-        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
-        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
+        Ray–mesh tests use rayTracerClass.shadowKernels; engine sets filamentRayTracer
+        from HF.rayTracer (open3d, mitsuba_gpu / mitsuba_cuda, mitsuba_cpu).
         """
         pts = self.xyzPts.reshape(self.N_b*self.N_r*self.N_p, 3)
         N_pts = len(pts)
@@ -418,20 +427,21 @@ class filament:
                 rMag = np.linalg.norm(vec[use], axis=1)
                 rNorm = vec[use] / rMag.reshape((-1,1))
 
-                #calculate intersections
+                #calculate intersections (rayTracerClass.shadowKernels)
                 mask = np.ones((len(q3)))
-                rays = o3d.core.Tensor([np.hstack([np.float32(q1),np.float32(rNorm)])],dtype=o3d.core.Dtype.Float32)
-                hits = self.scene.cast_rays(rays)
-                #convert open3d CPU tensors back to numpy
-                hitMap = hits['primitive_ids'][0].numpy()
-                distMap = hits['t_hit'][0].numpy()
-
-                #escapes occur where we have 32 bits all set: 0xFFFFFFFF = 4294967295 base10
-                escapes = np.where(hitMap == 4294967295)[0]
-                mask[escapes] = 0.0
-                #when distances to target exceed the trace step, we exclude any hits
-                tooLong = np.where(distMap > rMag)[0]
-                mask[tooLong] = 0.0
+                if getattr(self, '_fil_rt_engine', 'open3d') == 'mitsuba':
+                    prim = self._fil_rt.intersect_segments_mitsuba(
+                        q1, q3, self._fil_rt.scene, mitsubaMode=self._fil_mitsuba_mode)
+                    miss = prim < 0
+                    mask[:] = 0.0
+                    mask[~miss] = 1.0
+                    hitMap = prim.astype(np.uint32)
+                else:
+                    hitMap, distMap = self._fil_rt.cast_rays_open3d_segments(q1, rNorm, rMag)
+                    escapes = np.where(hitMap == 4294967295)[0]
+                    mask[escapes] = 0.0
+                    tooLong = np.where(distMap > rMag)[0]
+                    mask[tooLong] = 0.0
 
                 #put hit index in intersectRecord for tIdxNext if we hit
                 if np.sum(mask)>0:
@@ -579,66 +589,6 @@ class filament:
             
         return
 
-    def intersectTestOpen3D(self,
-                            q1:np.ndarray,
-                            q2:np.ndarray,
-                            targets:np.ndarray,
-                            targetNorms:np.ndarray,
-                            ):
-        """
-        checks if any of the lines (field line traces) generated by MAFOT
-        struct program intersect any of the target mesh faces.
-
-        Uses Open3D to accelerate the calculation:
-        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
-        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
-        """
-        t0 = time.time()
-        N = len(q2)
-        Nt = len(targets)
-        print('{:d} Source Faces and {:d} Target Faces in PFC object'.format(N,Nt))
-
-        mask = np.ones((N))
-
-        #construct rays
-        r = q2-q1
-        rMag = np.linalg.norm(r, axis=1)
-        rNorm = r / rMag.reshape((-1,1))
-
-        #cast variables to 32bit for C
-        vertices = np.array(targets.reshape(Nt*3,3), dtype=np.float32)
-        triangles = np.array(np.arange(Nt*3).reshape(Nt,3), dtype=np.uint32)
-
-        #build intersection mesh and tensors for open3d
-        mesh = o3d.t.geometry.TriangleMesh()
-        scene = o3d.t.geometry.RaycastingScene()
-        mesh_id = scene.add_triangles(vertices, triangles)
-
-        #calculate size of potential arrays in RAM
-        #availableRAM = psutil.virtual_memory().available #bytes
-
-        #calculate intersections
-        rays = o3d.core.Tensor([np.hstack([np.float32(q1),np.float32(rNorm)])],dtype=o3d.core.Dtype.Float32)
-        hits = scene.cast_rays(rays)
-        #convert open3d CPU tensors back to numpy
-        hitMap = hits['primitive_ids'][0].numpy()
-        distMap = hits['t_hit'][0].numpy()
-
-        #escapes occur where we have 32 bits all set: 0xFFFFFFFF = 4294967295 base10
-        escapes = np.where(hitMap == 4294967295)[0]
-        mask[escapes] = 0.0
-
-        #when distances to target exceed the trace step, we exclude any hits
-        tooLong = np.where(distMap > rMag)[0]
-        mask[tooLong] = 0.0
-
-        print('Found {:f} shadowed faces'.format(np.sum(mask)))
-        log.info('Found {:f} shadowed faces'.format(np.sum(mask)))
-        print('Time elapsed: {:f}'.format(time.time() - t0))
-        log.info('Time elapsed: {:f}'.format(time.time() - t0))
-
-        return mask
-
     def createSource(self, t:float, Btrace:np.ndarray):
         """
         creates a filament at time t
@@ -663,10 +613,8 @@ class filament:
 
         phiNorm is returned as 0
         """       
-        if np.isscalar(R):                   
-            R = np.array([R])
-        if np.isscalar(Z):                   
-            Z = np.array([Z])
+        R = np.atleast_1d(np.asarray(R))
+        Z = np.atleast_1d(np.asarray(Z))
 
         Br = ep.BRFunc.ev(R,Z)
         Bz = ep.BZFunc.ev(R,Z)
@@ -705,12 +653,8 @@ class filament:
 
         phiNorm is returned as 0
         """
-
-        if np.isscalar(R):                   
-            R = np.array([R])
-        if np.isscalar(Z):                   
-            Z = np.array([Z])
-
+        R = np.atleast_1d(np.asarray(R))
+        Z = np.atleast_1d(np.asarray(Z))
 
         Br = ep.BRFunc.ev(R,Z)
         Bz = ep.BZFunc.ev(R,Z)
@@ -1040,13 +984,9 @@ class filament:
         R_hat = np.array([1.0, 0.0])
         theta = np.arccos(np.dot(r_hat, R_hat))
         zMid = ep.g['ZmAxis']
-        if type(Z) != np.ndarray:
-            if Z < zMid:
-                theta*=-1.0 
-        else:
-            if (Z < zMid).any():
-                idx = np.where(Z < zMid)[0]
-                theta[idx] *= -1.0
+        # Broadcast-safe sign (0-d Z from xyz2cyl; NumPy 2 disallows np.where(Z<zMid)[0] on 0-d)
+        Zb = np.atleast_1d(np.asarray(Z))
+        theta = np.where(Zb < zMid, -theta, theta)
 
         return theta
 

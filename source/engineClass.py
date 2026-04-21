@@ -1642,7 +1642,7 @@ class engineObj():
         self.MHD.dpinit = dpinit
         self.MHD.writeControlFile(controlfile, t, direction, mode='struct')
         self.MHD.writeMAFOTpointfile(xyz,gridfile)
-        self.MHD.getFieldpath(dphi, gridfile, controlfilePath, controlfile, paraview_mask=True, tag=tag)
+        self.MHD.getFieldpath(dphi, dpinit, gridfile, controlfilePath, controlfile, paraview_mask=True, tag=tag)
         return
 
     def gyroTrace(self,x,y,z,t,gPhase,vPhase,gyroTraceLength,dpinit,N_helix,traceDirection,gyroT_eV,tag=None):
@@ -2402,8 +2402,25 @@ class engineObj():
         if 'hfFil' in runList:
             filDict = self.FIL.filData.to_dict()
 
+            try:
+                if self.inputFileList is not None:
+                    self.loadHFParams(infile=self.inputFileList[0], tIdx=0)
+                elif getattr(self, 'infile', None) is not None:
+                    self.loadHFParams(infile=self.infile, tIdx=0)
+            except Exception as e:
+                log.info('Could not load HF params for filament ray tracer (defaults ok): %s', e)
+            self.FIL.filamentRayTracer = getattr(self.HF, 'rayTracer', None) or 'open3d'
+
             #build filament meshes
             self.getFilMeshes()
+
+            filMergedPFC = None
+            if self.CAD.mergedPFCs == True:
+                filMergedPFC = pfcClass.mergedPFCs(self.PFCs, self.MHD, self.tsSigFigs, self.shotSigFigs, self.chmod, self.UID, self.GID)
+                filMergedPFC.qFil = np.zeros((len(filMergedPFC.centers), len(self.timesteps)))
+                filMergedPFC.Edep = np.zeros((len(filMergedPFC.centers), len(self.timesteps)))
+                filMergedPFC.ptclDep = np.zeros((len(filMergedPFC.centers), len(self.timesteps)))
+                filMergedPFC.filTimesteps = self.timesteps
 
             #loop thru ROI PFCs initializing filament HF matrix
             for PFC in self.PFCs:
@@ -2468,21 +2485,37 @@ class engineObj():
                         self.FIL.tEQ = ts[0]
                         self.FIL.traceFilamentParticles(self.MHD, ts, tIdx)
                         #loop thru ROI PFCs, mapping power to targets
-                        for PFC in self.PFCs:
-                            if t not in PFC.timesteps:
-                                pass
-                            else:
+                        if filMergedPFC is not None:
+                            if any(t in PFC.timesteps for PFC in self.PFCs):
                                 print("*"*20)
-                                print('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+                                print('mergedPFCs filament HF, timestep: '+self.tsFmt.format(t))
                                 log.info("*"*20)
-                                log.info('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
-
-                                pfcDir = self.MHD.shotPath + self.tsFmt.format(t) +'/'+PFC.name+'/'
+                                log.info('mergedPFCs filament HF, timestep: '+self.tsFmt.format(t))
+                                pfcDir = self.MHD.shotPath + self.tsFmt.format(t) +'/'+filMergedPFC.name+'/'
                                 tools.makeDir(pfcDir, clobberFlag=False)
-                                self.HF.filamentHeatFlux(self.FIL, PFC, ts, tIdx)
-                                self.HF.filamentParticleFlux(self.FIL, PFC, ts, tIdx)
-                                pTotROI += np.sum(PFC.ptclDep)
-                                EtotROI += np.sum(PFC.Edep)
+                                self.HF.filamentHeatFlux(self.FIL, filMergedPFC, ts, tIdx)
+                                self.HF.filamentParticleFlux(self.FIL, filMergedPFC, ts, tIdx)
+                                pTotROI += np.sum(filMergedPFC.ptclDep)
+                                EtotROI += np.sum(filMergedPFC.Edep)
+                                print("Scattering filament HF back to PFC objects")
+                                log.info("Scattering filament HF back to PFC objects")
+                                filMergedPFC.scatter_back('hfFil', self.IO, self.MHD.shotPath)
+                        else:
+                            for PFC in self.PFCs:
+                                if t not in PFC.timesteps:
+                                    pass
+                                else:
+                                    print("*"*20)
+                                    print('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+                                    log.info("*"*20)
+                                    log.info('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+
+                                    pfcDir = self.MHD.shotPath + self.tsFmt.format(t) +'/'+PFC.name+'/'
+                                    tools.makeDir(pfcDir, clobberFlag=False)
+                                    self.HF.filamentHeatFlux(self.FIL, PFC, ts, tIdx)
+                                    self.HF.filamentParticleFlux(self.FIL, PFC, ts, tIdx)
+                                    pTotROI += np.sum(PFC.ptclDep)
+                                    EtotROI += np.sum(PFC.Edep)
 
                         #energy balance calculation
                         energy, particles = self.filDepositedEnergyParticles(tIdx)
@@ -2545,8 +2578,25 @@ class engineObj():
         if 'hfRE' in runList:
             REDict = self.RE.REData.to_dict()
 
+            try:
+                if self.inputFileList is not None:
+                    self.loadHFParams(infile=self.inputFileList[0], tIdx=0)
+                elif getattr(self, 'infile', None) is not None:
+                    self.loadHFParams(infile=self.infile, tIdx=0)
+            except Exception as e:
+                log.info('Could not load HF params for RE ray tracer (defaults ok): %s', e)
+            self.RE.runawayRayTracer = getattr(self.HF, 'rayTracer', None) or 'open3d'
+
             #build filament meshes
             self.getFilMeshes(filtype = 'RE')
+
+            reMergedPFC = None
+            if self.CAD.mergedPFCs == True:
+                reMergedPFC = pfcClass.mergedPFCs(self.PFCs, self.MHD, self.tsSigFigs, self.shotSigFigs, self.chmod, self.UID, self.GID)
+                reMergedPFC.qRE = np.zeros((len(reMergedPFC.centers), len(self.timesteps)))
+                reMergedPFC.Edep = np.zeros((len(reMergedPFC.centers), len(self.timesteps)))
+                reMergedPFC.ptclDep = np.zeros((len(reMergedPFC.centers), len(self.timesteps)))
+                reMergedPFC.FilTimesteps = self.timesteps
 
             #loop thru ROI PFCs initializing filament HF matrix
             for PFC in self.PFCs:
@@ -2619,21 +2669,37 @@ class engineObj():
                         self.RE.tEQ = ts[0]
                         self.RE.traceREParticles(self.MHD, ts, tIdx)
                         #loop thru ROI PFCs, mapping power to targets
-                        for PFC in self.PFCs:
-                            if t not in PFC.timesteps:
-                                pass
-                            else:
+                        if reMergedPFC is not None:
+                            if any(t in PFC.timesteps for PFC in self.PFCs):
                                 print("*"*20)
-                                print('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+                                print('mergedPFCs RE HF, timestep: '+self.tsFmt.format(t))
                                 log.info("*"*20)
-                                log.info('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
-
-                                pfcDir = self.MHD.shotPath + self.tsFmt.format(t) +'/'+PFC.name+'/'
+                                log.info('mergedPFCs RE HF, timestep: '+self.tsFmt.format(t))
+                                pfcDir = self.MHD.shotPath + self.tsFmt.format(t) +'/'+reMergedPFC.name+'/'
                                 tools.makeDir(pfcDir, clobberFlag=False)
-                                self.HF.REHeatFlux(self.RE, PFC, ts, tIdx)
-                                #self.HF.REParticleFlux(self.RE, PFC, ts, tIdx)
-                                pTotROI += np.sum(PFC.ptclDep)
-                                EtotROI += np.sum(PFC.Edep)
+                                self.HF.REHeatFlux(self.RE, reMergedPFC, ts, tIdx)
+                                #self.HF.REParticleFlux(self.RE, reMergedPFC, ts, tIdx)
+                                pTotROI += np.sum(reMergedPFC.ptclDep)
+                                EtotROI += np.sum(reMergedPFC.Edep)
+                                print("Scattering RE HF back to PFC objects")
+                                log.info("Scattering RE HF back to PFC objects")
+                                reMergedPFC.scatter_back('hfRE', self.IO, self.MHD.shotPath)
+                        else:
+                            for PFC in self.PFCs:
+                                if t not in PFC.timesteps:
+                                    pass
+                                else:
+                                    print("*"*20)
+                                    print('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+                                    log.info("*"*20)
+                                    log.info('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+
+                                    pfcDir = self.MHD.shotPath + self.tsFmt.format(t) +'/'+PFC.name+'/'
+                                    tools.makeDir(pfcDir, clobberFlag=False)
+                                    self.HF.REHeatFlux(self.RE, PFC, ts, tIdx)
+                                    #self.HF.REParticleFlux(self.RE, PFC, ts, tIdx)
+                                    pTotROI += np.sum(PFC.ptclDep)
+                                    EtotROI += np.sum(PFC.Edep)
 
                         #energy balance calculation
                         energy, particles = self.filDepositedEnergyParticles(tIdx, filtype = 'RE') #akf
@@ -2693,7 +2759,7 @@ class engineObj():
                         self.combineFilTimesteps(name, oldPath, newPath)
                     tCount +=1
 
-        #set tree permissions
+        # Entire shot output tree (steady-state, filament, RE, paraview, MAFOT, etc.)
         tools.recursivePermissions(self.MHD.shotPath, self.UID, self.GID, self.chmod)
             
         print("Total Time Elapsed: {:f}".format(time.time() - t0))
@@ -2931,6 +2997,11 @@ class engineObj():
         
         very similar to getGYROMeshes, so could probably be consolidated into single function
         one day...
+
+        When CAD.mergedPFCs is True, ROI faces follow self.PFCs order and CADtargetNames
+        use each child's part name (same layout as mergedPFCs concatenated centers).
+        Intersect entries whose names are already ROI children are skipped so occluder
+        geometry is not duplicated.
         """
         
         if filtype == 'RE':
@@ -2950,29 +3021,50 @@ class engineObj():
         obj.CADROIindexes = []
         obj.CADROINames = []
 
+        child_names = set()
+        if getattr(self.CAD, 'mergedPFCs', False):
+            child_names = {p.name for p in self.PFCs}
+
       
         #build arrays for intersections
         #first include the PFCs in the ROI
         print("CAD ROI List:")
         print(self.CAD.ROIList)
 
-        for i,target in enumerate(self.CAD.ROImeshes):
-            totalMeshCounter+=target.CountFacets
-            numTargetFaces += target.CountFacets
-            numROIFaces += target.CountFacets
-            #append target data
-            for face in target.Facets:
-                obj.CADtargetNames.append(self.CAD.ROIList[i]) #do this for future HF reassignment
-                obj.CADROIindexes.append(i)
-                obj.CADROINames.append(self.CAD.ROIList[i])
-                targetPoints.append(face.Points)
-                targetNorms.append(face.Normal)
+        if getattr(self.CAD, 'mergedPFCs', False):
+            for pfc in self.PFCs:
+                for i, target in enumerate(self.CAD.ROImeshes):
+                    if self.CAD.ROIList[i] != pfc.name:
+                        continue
+                    totalMeshCounter += target.CountFacets
+                    numTargetFaces += target.CountFacets
+                    numROIFaces += target.CountFacets
+                    for face in target.Facets:
+                        obj.CADtargetNames.append(pfc.name)
+                        obj.CADROIindexes.append(i)
+                        obj.CADROINames.append(pfc.name)
+                        targetPoints.append(face.Points)
+                        targetNorms.append(face.Normal)
+        else:
+            for i,target in enumerate(self.CAD.ROImeshes):
+                totalMeshCounter+=target.CountFacets
+                numTargetFaces += target.CountFacets
+                numROIFaces += target.CountFacets
+                #append target data
+                for face in target.Facets:
+                    obj.CADtargetNames.append(self.CAD.ROIList[i]) #do this for future HF reassignment
+                    obj.CADROIindexes.append(i)
+                    obj.CADROINames.append(self.CAD.ROIList[i])
+                    targetPoints.append(face.Points)
+                    targetNorms.append(face.Normal)
 
         #now include PFCs in the intersection list not in ROI
         for i,target in enumerate(self.CAD.intersectMeshes):
             totalMeshCounter+=target.CountFacets
             #we already have the ROI version of this PFC
             if self.CAD.intersectList[i] in self.CAD.ROIList:
+                pass
+            elif getattr(self.CAD, 'mergedPFCs', False) and self.CAD.intersectList[i] in child_names:
                 pass
             else:
                 print("Adding target "+self.CAD.intersectList[i]+" to intersects with {:f} faces".format(target.CountFacets))

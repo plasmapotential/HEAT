@@ -16,7 +16,6 @@ import scipy.interpolate as interp
 from scipy.interpolate import interp1d
 import scipy.integrate as integrate
 import pandas as pd
-import open3d as o3d
 import time
 import shutil
 
@@ -26,6 +25,7 @@ import toolsClass
 tools = toolsClass.tools()
 import ioClass
 IO = ioClass.IO_HEAT()
+from rayTracerClass import shadowKernels
 
 import logging
 log = logging.getLogger(__name__)
@@ -157,14 +157,13 @@ class Runaways:
     """
     
     def E2v_electron(self, RE_KE):
-    	"""
-    	Calculates the velocity from the energy of an electron
-    	
-    	KE is in eV
-    	
-    	   	
-    	"""
-    	return np.sqrt(self.c**2 * (1 - (self.me)**2/(RE_KE + self.me)**2))
+        """
+        Calculates the velocity from the energy of an electron
+
+        KE is in eV
+
+        """
+        return np.sqrt(self.c**2 * (1 - (self.me)**2/(RE_KE + self.me)**2))
 
 
     def calc_gamma(self, v):
@@ -287,7 +286,8 @@ class Runaways:
         MHD.ittStruct = 360.0 #360 degree trace
         MHD.writeMAFOTpointfile(xyz,self.gridfileStruct)
         MHD.writeControlFile(self.controlfilePath+self.controlfileStruct, t, 0, mode='struct') #0 for both directions
-        MHD.getFieldpath(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, paraview_mask=False, tag=None)
+        dpinit = getattr(MHD, 'dpinit', None) or 1.0
+        MHD.getFieldpath(dphi, dpinit, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, paraview_mask=False, tag=None)
         Btrace = tools.readStructOutput(self.structOutfile) 
         os.remove(self.structOutfile)
         return Btrace
@@ -328,17 +328,26 @@ class Runaways:
     
     def buildIntersectionMesh(self):
         """
-        builds intersection mesh for open3d ray tracing
+        Ray–mesh scene via rayTracerClass.shadowKernels (Open3D or Mitsuba).
+
+        Engine sets runawayRayTracer from HF.rayTracer.
         """
-        Nt = len(self.t1)
-        targets = np.hstack([self.t1, self.t2, self.t3]).reshape(Nt*3,3)
-        #cast variables to 32bit for C
-        vertices = np.array(targets.reshape(Nt*3,3), dtype=np.float32)
-        triangles = np.array(np.arange(Nt*3).reshape(Nt,3), dtype=np.uint32)
-        #build intersection mesh and tensors for open3d
-        self.mesh = o3d.t.geometry.TriangleMesh()
-        self.scene = o3d.t.geometry.RaycastingScene()
-        self.mesh_id = self.scene.add_triangles(vertices, triangles)
+        tri = np.stack([self.t1, self.t2, self.t3], axis=1)
+        raw = getattr(self, 'runawayRayTracer', None) or 'open3d'
+        raw = str(raw).strip().lower()
+        self._re_rt = shadowKernels()
+        if raw in ('mitsuba_gpu', 'mitsuba_cuda'):
+            self._re_rt.buildMitsubaScene(tri, mitsubaMode='cuda')
+            self._re_rt_engine = 'mitsuba'
+            self._re_mitsuba_mode = 'cuda'
+        elif raw == 'mitsuba_cpu':
+            self._re_rt.buildMitsubaScene(tri, mitsubaMode='cpu')
+            self._re_rt_engine = 'mitsuba'
+            self._re_mitsuba_mode = 'cpu'
+        else:
+            self._re_rt.buildOpen3Dscene(tri.astype(np.float32))
+            self._re_rt_engine = 'open3d'
+        self.scene = getattr(self._re_rt, 'scene', None)
         return
 
     def traceREParticles(self, MHD: object, ts:np.ndarray , tIdx:int):
@@ -349,9 +358,8 @@ class Runaways:
         Based on the filament tracing code 
         
         
-        Uses Open3D to accelerate the calculation:
-        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
-        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
+        Ray–mesh tests use rayTracerClass.shadowKernels; engine sets runawayRayTracer
+        from HF.rayTracer.
         """
         pts = self.xyzPts.reshape(self.N_b*self.N_r*self.N_p, 3)
         print(pts)
@@ -469,20 +477,20 @@ class Runaways:
                 rMag = np.linalg.norm(vec[use], axis=1)
                 rNorm = vec[use] / rMag.reshape((-1,1))
 
-                #calculate intersections
                 mask = np.ones((len(q3)))
-                rays = o3d.core.Tensor([np.hstack([np.float32(q1),np.float32(rNorm)])],dtype=o3d.core.Dtype.Float32)
-                hits = self.scene.cast_rays(rays)
-                #convert open3d CPU tensors back to numpy
-                hitMap = hits['primitive_ids'][0].numpy()
-                distMap = hits['t_hit'][0].numpy()
-
-                #escapes occur where we have 32 bits all set: 0xFFFFFFFF = 4294967295 base10
-                escapes = np.where(hitMap == 4294967295)[0]
-                mask[escapes] = 0.0
-                #when distances to target exceed the trace step, we exclude any hits
-                tooLong = np.where(distMap > rMag)[0]
-                mask[tooLong] = 0.0
+                if getattr(self, '_re_rt_engine', 'open3d') == 'mitsuba':
+                    prim = self._re_rt.intersect_segments_mitsuba(
+                        q1, q3, self._re_rt.scene, mitsubaMode=self._re_mitsuba_mode)
+                    miss = prim < 0
+                    mask[:] = 0.0
+                    mask[~miss] = 1.0
+                    hitMap = prim.astype(np.uint32)
+                else:
+                    hitMap, distMap = self._re_rt.cast_rays_open3d_segments(q1, rNorm, rMag)
+                    escapes = np.where(hitMap == 4294967295)[0]
+                    mask[escapes] = 0.0
+                    tooLong = np.where(distMap > rMag)[0]
+                    mask[tooLong] = 0.0
 
                 #put hit index in intersectRecord for tIdxNext if we hit
                 if np.sum(mask)>0:
@@ -1135,8 +1143,8 @@ class Runaways:
     def setupRadius(self, vPerp):
         """
         calculates gyro radius using equations from Boozer PofP 2015
-	
-	
+
+
         rGyro has a column for each MC run (N_MC columns), and a
         row for each point on the PFC (N_pts), so it is a matrix
         of shape: N_pts X N_MC
@@ -1157,11 +1165,11 @@ class Runaways:
         return
 
     def setupVelocities(self, N):
-	#todo
+        #todo
         return
 
     def pullEqualProbabilityVelocities(self):
-	#todo
+        #todo
         return
 
     def uniformGyroPhaseAngle(self):
