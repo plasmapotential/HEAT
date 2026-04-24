@@ -283,7 +283,7 @@ class filament:
         MHD.writeMAFOTpointfile(xyz,self.gridfileStruct)
         MHD.writeControlFile(self.controlfilePath+self.controlfileStruct, t, 0, mode='struct') #0 for both directions
         dpinit = getattr(MHD, 'dpinit', None) or 1.0
-        MHD.getFieldpath(dphi, dpinit, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, paraview_mask=False, tag=None)
+        MHD.getFieldpath(dphi, dpinit, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, paraview_mask=False, tag=None, bbox=MHD.mafot_bbox)
         Btrace = tools.readStructOutput(self.structOutfile) 
         os.remove(self.structOutfile)
         return Btrace
@@ -303,7 +303,7 @@ class filament:
         MHD.writeMAFOTpointfile(pts,self.gridfileStruct)
         MHD.writeControlFile(self.controlfilePath+self.controlfileStruct, self.tEQ, traceDir, mode='struct') #0 for both directions
         MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
-                                self.controlfileStruct)
+                                self.controlfileStruct, bbox=MHD.mafot_bbox)
 
         structData = tools.readStructOutput(self.structOutfile)
         os.remove(self.structOutfile) #clean up
@@ -684,13 +684,27 @@ class filament:
         """
         #calculate distance along wall
         dist = self.distance(traceData)
-        
+        span = float(dist[-1] - dist[0])
+        if traceData.shape[0] < 2 or (not np.isfinite(span)) or span <= 0.0:
+            raise ValueError(
+                'Filament interpolateTrace: field-line segment has zero or invalid arc length '
+                '(span={!r} m over {:d} point(s)). MAFOT may have stopped immediately, or '
+                'discretizeFilament selected too few points inside N_sig_b*sig_b along B. '
+                'Try: non-axis rCtr/zCtr, longer center trace (ittStruct for filamentCtrBtrace), '
+                'larger sig_b or N_sig_b, or check traceDir / equilibrium at this time.'
+                .format(span, int(traceData.shape[0]))
+            )
         # Resolution we need given the inputs
-        resolution = (dist[-1] - dist[0])/float(N)
+        resolution = span / float(N)
         print("Resolution: {:f} m".format(resolution))
+        if (not np.isfinite(resolution)) or resolution <= 0.0:
+            raise ValueError(
+                'Filament interpolateTrace: resolution is invalid ({!r} m). '
+                'Increase parallel extent of Btrace or reduce N_b.'.format(resolution)
+            )
         # Calculate how many total grid points we need based upon resolution and
         # total distance around curve/wall
-        numpoints = int(np.ceil((dist[-1] - dist[0])/resolution))
+        numpoints = int(np.ceil(span / resolution))
         # Spline Interpolation (linear) - Make higher resolution wall.
         interpolator = interp.interp1d(dist, traceData, kind='slinear', axis=0)
         alpha = np.linspace(dist[0], dist[-1], numpoints+2)[1:-1]
@@ -847,9 +861,18 @@ class filament:
         #Find coordinate transformation at ctr
         psiaxis = ep.g['psiAxis']
         psiedge = ep.g['psiSep']
-        deltaPsi = np.abs(psiedge - psiaxis)
-        Bp = ep.BpFunc(r0,z0)
-        gradPsi = Bp*r0
+        deltaPsi = max(float(np.abs(psiedge - psiaxis)), 1e-30)
+        Bp = float(ep.BpFunc(r0, z0))
+        r0_n = float(np.asarray(r0).reshape(-1)[0])
+        # |R| at magnetic axis is ~0: Bp*|R| -> 0 and distPsi = dpsi/xfm blows up. Floor |R| for scaling only.
+        r_scale = max(abs(r0_n), 1e-6)
+        if abs(r0_n) < 1e-6:
+            log.warning(
+                'fluxCoordDistance: filament rCtr=%g is near the magnetic axis; using |R|=%g m '
+                'only for psi-distance scaling (distPsi). Place the source at finite major radius if possible.',
+                r0_n, r_scale,
+            )
+        gradPsi = max(abs(Bp) * r_scale, 1e-30)
         xfm = gradPsi / deltaPsi
         #convert distance in psi to euclidean coordinates
         psiRZ = ep.psiFunc.ev(R,Z)
@@ -1008,6 +1031,13 @@ class filament:
         idx = np.argmin(np.sum(np.abs(Btrace-ctr), axis=1))      
         d_b = d_b - d_b[idx]
         use = np.where(np.abs(d_b) < N_sig_b*self.sig_b)[0]
+        if use.size < 2:
+            raise ValueError(
+                'Filament discretizeFilament: fewer than 2 Btrace points fall inside the parallel '
+                'window |s-s_ctr| < N_sig_b*sig_b = {} m (got {:d} point(s), {:d} in full trace). '
+                'Widen sig_b / N_sig_b, or use a longer MAFOT center trace (more points along B).'
+                .format(float(N_sig_b * self.sig_b), int(use.size), int(Btrace.shape[0]))
+            )
 
         #calculate center coordinates along field line
         self.ctrPts, alpha = self.interpolateTrace(Btrace[use], N_b, addRawData=False)

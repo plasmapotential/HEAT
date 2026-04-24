@@ -124,6 +124,8 @@ class MHD:
         :BtMult: multiplier to apply to toroidal field quantities (Bt0, Fpol) in EQ
         :IpMult: multiplier to apply to plasma current, Ip in EQ
         :BtraceFile: path to file to be used for field line tracing
+        :mafot_bbox: boolean (input as True/False text). When True, MAFOT heatstructure uses 
+          -b (simple R-Z box). When False, uses the g-file wall limiter. Omit for default True.
 
         """
         self.allowed_vars = [
@@ -136,6 +138,7 @@ class MHD:
                             'BtMult',
                             'IpMult',
                             'BtraceFile',
+                            'mafot_bbox',
                             ]
 
         return
@@ -174,6 +177,18 @@ class MHD:
                     except:
                         print("Error with input file var "+var+".  Perhaps you have invalid input values?")
                         log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
+
+        bools = ['mafot_bbox']
+        for var in bools:
+            if getattr(self, var, None) is not None:
+                try:
+                    setattr(self, var, tools.makeBool(getattr(self, var)))
+                except Exception as e:
+                    print("Error with input file var "+var+".  Perhaps you have invalid input values?")
+                    log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
+                    print(e)
+            else:
+                self.mafot_bbox = True
 
         return
 

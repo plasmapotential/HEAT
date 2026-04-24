@@ -483,6 +483,7 @@ class PFC(shadowKernels):
         triangles from intersectList meshes
 
         rayTriMode defines the render engine that we use for ray tracing
+        opticalShadows functions are inherited from rayTracerClass.py
         """
         # Remove faces that cannot see the plasma
         facingOut = self.removeOutsideFacingFacets(self.centers, self.norms, MHD, threshold = self.outsideFacingThreshold)
@@ -494,14 +495,14 @@ class PFC(shadowKernels):
         targetCtrs = self.getTargetCenters(targetPoints)
 
         #run field line tracing and ray tracing
-        #run entire trace at once
+        #run entire trace at once (batchMode=True)
         if batchMode == True:
             self.shadowed_mask = self.opticalShadowsBatch(use, self.centers, self.intersects, self.powerDir, MHD, CAD,
                                                      self.shadowed_mask, self.controlfilePath, self.controlfileStruct, 
                                                      self.gridfileStruct, self.structOutfile,
                                                      targetPoints, targetNorms, targetCtrs,
                                                      self.t, self.ep, rayTriMode, shadowMaskClouds)
-        #walk along field line
+        #walk along field line (batchMode=False)
         else: 
             self.shadowed_mask = self.opticalShadows(use, self.centers, self.intersects, self.powerDir, MHD, CAD,
                                                      self.shadowed_mask, self.controlfilePath, self.controlfileStruct, 
@@ -527,7 +528,7 @@ class PFC(shadowKernels):
             MHD.writeMAFOTpointfile(self.gyroCenters,self.gridfileStruct)
             MHD.writeControlFile(CTLfile, self.t, 0, mode='gyro') #0 for both directions
             MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
-                                    self.controlfileStruct)
+                                    self.controlfileStruct, bbox=MHD.mafot_bbox)
 
 
         else:
@@ -536,12 +537,12 @@ class PFC(shadowKernels):
                 MHD.writeMAFOTpointfile(self.gyroCenters,self.gridfileStruct)
                 MHD.writeControlFile(CTLfile, self.t, 1, mode='gyro') #0 for both directions
                 MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
-                                        self.controlfileStruct)
+                                        self.controlfileStruct, bbox=MHD.mafot_bbox)
             else:
                 MHD.writeMAFOTpointfile(self.gyroCenters,self.gridfileStruct)
                 MHD.writeControlFile(CTLfile, self.t, -1, mode='gyro') #0 for both directions
                 MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
-                                        self.controlfileStruct)
+                                        self.controlfileStruct, bbox=MHD.mafot_bbox)
 
             #currently only support tracing one direction for gyroSourcePlanes.
             #could modify this else to have fwd and rev capabilities for
@@ -972,7 +973,7 @@ class PFC(shadowKernels):
                 MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
                 #Perform first integration step
                 MHD.writeMAFOTpointfile(self.centers[self.fwdUse],self.gridfileStruct)
-                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, bbox=MHD.mafot_bbox)
                 structData = tools.readStructOutput(self.structOutfile)
                 os.remove(self.structOutfile) #clean up
                 q1[self.fwdUse] = structData[0::2,:] #even indexes are first trace point
@@ -988,7 +989,7 @@ class PFC(shadowKernels):
                 MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
                 #Perform first integration step
                 MHD.writeMAFOTpointfile(self.centers[self.revUse],self.gridfileStruct)
-                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, bbox=MHD.mafot_bbox)
                 structData = tools.readStructOutput(self.structOutfile)
                 os.remove(self.structOutfile) #clean up
                 q1[self.revUse] = structData[1::2,:] #even indexes are first trace point
@@ -1036,7 +1037,7 @@ class PFC(shadowKernels):
                 MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
                 #Perform first integration step
                 MHD.writeMAFOTpointfile(self.centers[use[self.fwdUse]],self.gridfileStruct)
-                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, bbox=MHD.mafot_bbox)
                 structData = tools.readStructOutput(self.structOutfile)
                 os.remove(self.structOutfile) #clean up
                 q2[self.fwdUse] = structData[1::2,:] #odd indexes are second trace point
@@ -1051,7 +1052,7 @@ class PFC(shadowKernels):
                 MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
                 #Perform first integration step
                 MHD.writeMAFOTpointfile(self.centers[use[self.revUse]],self.gridfileStruct)
-                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, bbox=MHD.mafot_bbox)
                 structData = tools.readStructOutput(self.structOutfile)
                 os.remove(self.structOutfile) #clean up
                 q2[self.revUse] = structData[0::2,:] #even indexes are second trace point
@@ -1110,7 +1111,7 @@ class PFC(shadowKernels):
                     MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
                     #Perform first integration step
                     MHD.writeMAFOTpointfile(StartPoints[self.fwdUse],self.gridfileStruct)
-                    MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                    MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, bbox=MHD.mafot_bbox)
                     structData = tools.readStructOutput(self.structOutfile)
                     os.remove(self.structOutfile) #clean up
                     q1[self.fwdUse] = structData[0::2,:] #odd indexes are second trace point
@@ -1129,7 +1130,7 @@ class PFC(shadowKernels):
                     MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
                     #Perform first integration step
                     MHD.writeMAFOTpointfile(StartPoints[self.revUse],self.gridfileStruct)
-                    MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                    MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, bbox=MHD.mafot_bbox)
                     structData = tools.readStructOutput(self.structOutfile)
                     os.remove(self.structOutfile) #clean up
                     q1[self.revUse] = structData[1::2,:] #odd indexes are second trace point
@@ -1766,7 +1767,7 @@ class PFC(shadowKernels):
 #            print("Start Point")
 #            print(startPoint)
             MHD.writeMAFOTpointfile(startPoint,self.gridfileStruct)
-            MHD.getMultipleFieldPaths(distPhi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+            MHD.getMultipleFieldPaths(distPhi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, bbox=MHD.mafot_bbox)
             structData = tools.readStructOutput(self.structOutfile)
             os.remove(self.structOutfile) #clean up
             #create source format that intersectTest2 reads (odd start points, even end points)
@@ -1880,7 +1881,7 @@ class PFC(shadowKernels):
             MHD.writeControlFile(CTLfile, self.t, self.mapDirectionStruct, mode='struct')
             #Perform first integration step
             MHD.writeMAFOTpointfile(self.centers[use],self.gridfileStruct)
-            MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+            MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, bbox=MHD.mafot_bbox)
             structData = tools.readStructOutput(self.structOutfile)
             os.remove(self.structOutfile) #clean up
 
@@ -1904,7 +1905,7 @@ class PFC(shadowKernels):
 
             #Perform first integration step but dont use for finding intersections
             MHD.writeMAFOTpointfile(self.centers[use],self.gridfileStruct)
-            MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+            MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, bbox=MHD.mafot_bbox)
             structData = tools.readStructOutput(self.structOutfile)
             os.remove(self.structOutfile) #clean up
 
@@ -1932,7 +1933,7 @@ class PFC(shadowKernels):
 
                 StartPoints = structData[startIdx::2,:][indexes] #odd indexes are second trace point
                 MHD.writeMAFOTpointfile(StartPoints,self.gridfileStruct)
-                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, bbox=MHD.mafot_bbox)
                 structData = tools.readStructOutput(self.structOutfile)
                 os.remove(self.structOutfile) #clean up
 

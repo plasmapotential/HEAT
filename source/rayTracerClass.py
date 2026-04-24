@@ -225,7 +225,7 @@ class shadowKernels:
         # ===INTERSECTION TEST 1 (tricky frontface culling / first step up field line)
         dphi = 1.0
         MHD.ittStruct = 1.0
-        numSteps = MHD.nTrace  # actual trace is (numSteps + 1)*dphi/dpinit degrees
+        numSteps = MHD.nTrace  # defined in TUIclass, actual trace is (numSteps + 1)*dphi/dpinit degrees
         # If numSteps = 0, dont do intersection checking
         if numSteps > 0:
             print("\n----Intersection Step 1----")
@@ -240,7 +240,7 @@ class shadowKernels:
             if len(fwdUse) != 0:
                 MHD.writeControlFile(CTLfile, t, mapDirectionStruct, mode='struct')
                 MHD.writeMAFOTpointfile(centers[use[fwdUse]], gridfileStruct)
-                MHD.getMultipleFieldPaths(dphi, gridfileStruct, controlfilePath, controlfileStruct)
+                MHD.getMultipleFieldPaths(dphi, gridfileStruct, controlfilePath, controlfileStruct, bbox=MHD.mafot_bbox)
                 structData = tools.readStructOutput(structOutfile)
                 shutil.copyfile(structOutfile, structOutfile + '_fwdUse_step1')
                 os.remove(structOutfile)
@@ -266,7 +266,7 @@ class shadowKernels:
             if len(revUse) != 0:
                 MHD.writeControlFile(CTLfile, t, mapDirectionStruct, mode='struct')
                 MHD.writeMAFOTpointfile(centers[use[revUse]], gridfileStruct)
-                MHD.getMultipleFieldPaths(dphi, gridfileStruct, controlfilePath, controlfileStruct)
+                MHD.getMultipleFieldPaths(dphi, gridfileStruct, controlfilePath, controlfileStruct, bbox=MHD.mafot_bbox)
                 structData = tools.readStructOutput(structOutfile)
                 shutil.copyfile(structOutfile, structOutfile + '_revUse_step1')
                 os.remove(structOutfile)
@@ -323,7 +323,7 @@ class shadowKernels:
             if len(fwdUse) != 0:
                 MHD.writeControlFile(CTLfile, t, mapDirectionStruct, mode='struct')
                 MHD.writeMAFOTpointfile(centers[use[fwdUse]], gridfileStruct)
-                MHD.getMultipleFieldPaths(dphi, gridfileStruct, controlfilePath, controlfileStruct)
+                MHD.getMultipleFieldPaths(dphi, gridfileStruct, controlfilePath, controlfileStruct, bbox=MHD.mafot_bbox)
                 structData = tools.readStructOutput(structOutfile)
                 os.remove(structOutfile)  # clean up
                 q2[fwdUse] = structData[1::2, :]  # odd indexes are second trace point
@@ -336,7 +336,7 @@ class shadowKernels:
             if len(revUse) != 0:
                 MHD.writeControlFile(CTLfile, t, mapDirectionStruct, mode='struct')
                 MHD.writeMAFOTpointfile(centers[use[revUse]], gridfileStruct)
-                MHD.getMultipleFieldPaths(dphi, gridfileStruct, controlfilePath, controlfileStruct)
+                MHD.getMultipleFieldPaths(dphi, gridfileStruct, controlfilePath, controlfileStruct, bbox=MHD.mafot_bbox)
                 structData = tools.readStructOutput(structOutfile)
                 os.remove(structOutfile)  # clean up
                 q2[revUse] = structData[0::2, :]  # even indexes are second trace point
@@ -384,7 +384,7 @@ class shadowKernels:
                 else:
                     MHD.writeControlFile(CTLfile, t, mapDirectionStruct, mode='struct')
                     MHD.writeMAFOTpointfile(StartPoints[fwdUse], gridfileStruct)
-                    MHD.getMultipleFieldPaths(dphi, gridfileStruct, controlfilePath, controlfileStruct)
+                    MHD.getMultipleFieldPaths(dphi, gridfileStruct, controlfilePath, controlfileStruct, bbox=MHD.mafot_bbox)
                     structData = tools.readStructOutput(structOutfile)
                     os.remove(structOutfile)  # clean up
                     q1[fwdUse] = structData[0::2, :]
@@ -415,7 +415,7 @@ class shadowKernels:
                 else:
                     MHD.writeControlFile(CTLfile, t, mapDirectionStruct, mode='struct')
                     MHD.writeMAFOTpointfile(StartPoints[revUse], gridfileStruct)
-                    MHD.getMultipleFieldPaths(dphi, gridfileStruct, controlfilePath, controlfileStruct)
+                    MHD.getMultipleFieldPaths(dphi, gridfileStruct, controlfilePath, controlfileStruct, bbox=MHD.mafot_bbox)
                     structData = tools.readStructOutput(structOutfile)
                     os.remove(structOutfile)  # clean up
                     q1[revUse] = structData[1::2, :]
@@ -489,7 +489,7 @@ class shadowKernels:
             if len(fwdUse) != 0:
                 MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
                 MHD.writeMAFOTpointfile(self.centers[use[fwdUse]], self.gridfileStruct)
-                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, bbox=MHD.mafot_bbox)
                 structDataFwd = tools.readStructOutput(self.structOutfile)
                 os.remove(self.structOutfile)
                 structData = structDataFwd.reshape(len(fwdUse), MHD.nTrace + 1, 3)
@@ -521,7 +521,7 @@ class shadowKernels:
             if len(revUse) != 0:
                 MHD.writeControlFile(CTLfile, self.t, mapDirectionStruct, mode='struct')
                 MHD.writeMAFOTpointfile(self.centers[use[revUse]], self.gridfileStruct)
-                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct)
+                MHD.getMultipleFieldPaths(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, bbox=MHD.mafot_bbox)
                 structDataRev = tools.readStructOutput(self.structOutfile)
                 os.remove(self.structOutfile)
                 structData = structDataRev.reshape(len(revUse), MHD.nTrace + 1, 3)

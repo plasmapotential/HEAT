@@ -287,7 +287,7 @@ class Runaways:
         MHD.writeMAFOTpointfile(xyz,self.gridfileStruct)
         MHD.writeControlFile(self.controlfilePath+self.controlfileStruct, t, 0, mode='struct') #0 for both directions
         dpinit = getattr(MHD, 'dpinit', None) or 1.0
-        MHD.getFieldpath(dphi, dpinit, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, paraview_mask=False, tag=None)
+        MHD.getFieldpath(dphi, dpinit, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, paraview_mask=False, tag=None, bbox=MHD.mafot_bbox)
         Btrace = tools.readStructOutput(self.structOutfile) 
         os.remove(self.structOutfile)
         return Btrace
@@ -312,7 +312,7 @@ class Runaways:
         MHD.writeMAFOTpointfile(pts,self.gridfileStruct)
         MHD.writeControlFile(self.controlfilePath+self.controlfileStruct, self.tEQ, traceDir, mode='struct') #0 for both directions
         MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
-                                self.controlfileStruct)
+                                self.controlfileStruct, bbox=MHD.mafot_bbox)
 
         structData = tools.readStructOutput(self.structOutfile)
         os.remove(self.structOutfile) #clean up

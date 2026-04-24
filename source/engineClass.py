@@ -298,6 +298,7 @@ class engineObj():
         self.MHD.Zmax = 5.0
         self.MHD.Rmin = 0.01
         self.MHD.Rmax = 13.0
+        self.MHD.mafot_bbox = True
         self.MHD.useECcoil = 0
         self.MHD.useIcoil = 0
         self.MHD.useCcoil = 0
@@ -1559,9 +1560,10 @@ class engineObj():
 
     def BtraceMultiple(self, t, data=None, boundbox=True):
         """
-        Run a MAFOT structure trace from multiple points defined in the gui/tui
+        Run a MAFOT structure trace from multiple points defined in the gui/tui.
 
-        if boundbox is True, will not check for intersections against (R,Z) PFC contour
+        boundbox: passed to MHD.getFieldpath as bbox; when True, MAFOT gets -b
+        (simple R-Z box from EFIT extent). When False, g-file limiter wall is used.
         """
         if data is not None:
             data = pd.DataFrame.from_dict(data)[list (data[0].keys())]
@@ -1642,7 +1644,8 @@ class engineObj():
         self.MHD.dpinit = dpinit
         self.MHD.writeControlFile(controlfile, t, direction, mode='struct')
         self.MHD.writeMAFOTpointfile(xyz,gridfile)
-        self.MHD.getFieldpath(dphi, dpinit, gridfile, controlfilePath, controlfile, paraview_mask=True, tag=tag)
+        self.MHD.getFieldpath(dphi, dpinit, gridfile, controlfilePath, controlfile, paraview_mask=True, tag=tag,
+                                bbox=self.MHD.mafot_bbox)
         return
 
     def gyroTrace(self,x,y,z,t,gPhase,vPhase,gyroTraceLength,dpinit,N_helix,traceDirection,gyroT_eV,tag=None):
@@ -2043,6 +2046,10 @@ class engineObj():
         #list of dictionaries for time varying inputs
         self.inputDicts = []
 
+        # mergedPFCs path assigns local PFCs inside the timestep loop; Btrace-only uses
+        # continue and never touches it — keep None so post-loop revert can test safely.
+        PFCs = None
+
         # Time Loop 1: HF, bdotn, B, psi, Norms
         for tIdx,t in enumerate(self.MHD.timesteps):
             print('\n')
@@ -2062,9 +2069,9 @@ class engineObj():
             else:
                 self.inputDicts.append(self.getCurrentInputs())
                 
-            #run B field tracer
+            #run B field tracer (respect mafot_bbox from input CSV / MHD.setTypes)
             if 'Btrace' in runList:
-                self.BtraceMultiple(t, boundbox=False)
+                self.BtraceMultiple(t, boundbox=bool(self.MHD.mafot_bbox))
                 #if this is only a Btrace, skip the PFC dependent steps
                 if 'Btrace' in runList and len(runList) == 1:
                     continue
@@ -2373,8 +2380,8 @@ class engineObj():
                             self.IO.writeMeshGLB(PFC.mesh, q, label, prefix, path, PFC.tag)
 
         #if we used a mergedPFCs object, revert back to the old PFCs object
-        if self.CAD.mergedPFCs == True:
-           self.PFCs = PFCs[0].PFClist 
+        if self.CAD.mergedPFCs and PFCs is not None:
+            self.PFCs = PFCs[0].PFClist
 
         #if we are only running a Btrace, skip PFC specific operations
         if 'Btrace' in runList and len(runList) == 1:
