@@ -8,7 +8,7 @@
 services:
   HEAT:
     #user: ${UID}:${GID}
-    image: "plasmapotential/heat:v4.2.6"
+    image: "plasmapotential/heat:v4.2.7"
     # for terminal (batch) mode, override default args by uncommenting and setting your batchFile path:
     #command: ["--m", "t", "--f", "/root/terminal/batchFile.dat"]
     ports:
@@ -50,4 +50,4 @@ services:
 # Interactive shell (override entrypoint so we get bash, not launchHEAT.py):
 #   docker compose run --entrypoint "" HEAT /bin/bash
 # From inside a shell you can still run: python3 ./source/HEAT/source/launchHEAT.py --m t --f /root/terminal/batchFile.dat
-# To change image tag: docker tag plasmapotential/heat:v4.2.6
+# To change image tag: docker tag plasmapotential/heat:v4.2.7
