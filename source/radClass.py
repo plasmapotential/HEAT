@@ -737,6 +737,32 @@ class RAD:
         scene = rt.scene
         print("Scene building took {:f} [s]\n".format(time.time() - t0))
 
+        n_tri = int(np.asarray(self.intersectPoints).shape[0])
+        if n_tri < self.Nj:
+            raise ValueError(
+                "Radiation Open3D scene has fewer triangles ({}) than ROI facets Nj ({}). "
+                "ROI rows in intersectPoints must match PFC.centers order.".format(n_tri, self.Nj)
+            )
+
+        # Mitsuba aims rays at centroids derived from self.intersectPoints (float64). Open3D
+        # previously used PFC.centers + float32 rays; tiny mismatches vs the mesh used for
+        # primitive_ids can make the first hit land on the wrong triangle (speckled qRad).
+        roi_tris = np.asarray(self.intersectPoints[: self.Nj], dtype=np.float64)
+        roi_ray_targets, _ = triangle_centroids_and_areas(roi_tris)
+        ctr_delta = np.max(
+            np.linalg.norm(roi_ray_targets - np.asarray(self.targetCtrs, dtype=np.float64), axis=1)
+        )
+        if ctr_delta > 1e-5:
+            log.warning(
+                "Photon Open3D: max |ROI mesh centroid - PFC.centers| = {:.3e} m (>1e-5). "
+                "Rays use mesh centroids; qRad still uses PFC areas/norms.".format(ctr_delta)
+            )
+            print(
+                "WARNING Photon Open3D: ROI mesh centroids differ from PFC.centers by up to {:.3e} m".format(
+                    ctr_delta
+                )
+            )
+
         #check how much memory we have
         #memNeeded = np.dtype(np.float64).itemsize * self.Ni * self.Nj
         #print("Required memory for this calculation: {:f} GB".format(memNeeded / (1024**3)))
@@ -766,9 +792,8 @@ class RAD:
                 print("Source point {:d}.  1k time: {:f}. Memory Used: {:f} MB".format(i, time.time() - t1, usage))
                 t1 = time.time()
 
-            #r_ij = np.zeros((self.Nj,3))
-            r_ij = self.targetCtrs - self.sources[i]
-            #r_ij *= 1000.0
+            # Ray targets: same geometry as Open3D triangle soup (matches Mitsuba convention).
+            r_ij = roi_ray_targets - self.sources[i]
             rMag = np.linalg.norm(r_ij, axis=1)
             rNorm = (r_ij / rMag.reshape((-1, 1))).astype(np.float32)
             rdotn = np.sum(rNorm.astype(np.float64) * self.targetNorms, axis=1)
@@ -778,10 +803,24 @@ class RAD:
             rays = o3d.core.Tensor([np.hstack([q1, rNorm])], dtype=o3d.core.Dtype.Float32)
             hits = scene.cast_rays(rays)
 
-            #convert open3d CPU tensors back to numpy
-            hitMap = hits['primitive_ids'][0].numpy()
-            distMap = hits['t_hit'][0].numpy()
-            condition = hitMap == np.arange(self.Nj)
+            # Flatten leading batch dims (Open3D preserves rays' shape; [0] alone can be wrong).
+            hitMap = np.asarray(hits["primitive_ids"].numpy(), dtype=np.uint32).reshape(-1)
+            distMap = np.asarray(hits["t_hit"].numpy(), dtype=np.float64).reshape(-1)
+            if hitMap.size != self.Nj or distMap.size != self.Nj:
+                raise RuntimeError(
+                    "Open3D cast_rays output length mismatch: primitive_ids {}, t_hit {}, Nj {}".format(
+                        hitMap.size, distMap.size, self.Nj
+                    )
+                )
+
+            # Line-of-sight along the segment to the aim point (cf. intersectTestOpen3D).
+            # Without this, an infinite ray can register a first hit beyond the target centroid
+            # on unrelated geometry, breaking the prim_id == j visibility test.
+            miss_id = np.uint32(0xFFFFFFFF)
+            finite = np.isfinite(distMap)
+            valid_hit = finite & (hitMap != miss_id) & (distMap > 1e-12)
+            los = distMap <= rMag * (1.0 + 1e-5)
+            condition = (hitMap == np.arange(self.Nj, dtype=np.uint32)) & valid_hit & los
             powFrac = np.abs(rdotn)*self.targetAreas/(4*np.pi*rMag**2)
 
             if self.saveRadFrac == True:

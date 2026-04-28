@@ -1484,7 +1484,7 @@ class engineObj():
         self.RAD.Nref = int(Nref)
         self.RAD.phiMin = float(phiMin)
         self.RAD.phiMax = float(phiMax)
-        self.RAD.rayTracer = str(rayTracer)
+        self.RAD.rayTracer = str(rayTracer).strip()
         self.RAD.Prad_mult = float(Prad_mult)
         self.RAD.saveRadFrac = bool(saveRadFrac)
 
@@ -2766,7 +2766,7 @@ class engineObj():
                         self.combineFilTimesteps(name, oldPath, newPath)
                     tCount +=1
 
-        # Entire shot output tree (steady-state, filament, RE, paraview, MAFOT, etc.)
+        # set HEAT output tree permissions
         tools.recursivePermissions(self.MHD.shotPath, self.UID, self.GID, self.chmod)
             
         print("Total Time Elapsed: {:f}".format(time.time() - t0))
