@@ -87,6 +87,7 @@ RUN git clone https://github.com/nferraro/fusion-io.git /root/source/M3DC1/fusio
 COPY docker/buildM3DC1 /root/source/M3DC1/fusion-io/buildM3DC1
 COPY docker/make.inc.ubuntu_x86 /root/source/M3DC1/fusion-io/install/make.inc.ubuntu_x86
 # Upstream util/makefile forces Intel mpiicpc / -qopenmp; Ubuntu image uses GCC + Open MPI only.
+# we create a custom makefile that uses GCC + Open MPI.
 COPY docker/fusion-io-util-makefile /root/source/M3DC1/fusion-io/util/makefile
 # write_neo_input.cpp calls MPI but omits <mpi.h>; mpiicpc often still compiles, Open MPI mpic++ does not.
 #this needs to be fixed in fusion-io upstream, but for now we can add the include here.
