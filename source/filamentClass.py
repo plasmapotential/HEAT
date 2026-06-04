@@ -690,8 +690,6 @@ class filament:
                 'Filament interpolateTrace: field-line segment has zero or invalid arc length '
                 '(span={!r} m over {:d} point(s)). MAFOT may have stopped immediately, or '
                 'discretizeFilament selected too few points inside N_sig_b*sig_b along B. '
-                'Try: non-axis rCtr/zCtr, longer center trace (ittStruct for filamentCtrBtrace), '
-                'larger sig_b or N_sig_b, or check traceDir / equilibrium at this time.'
                 .format(span, int(traceData.shape[0]))
             )
         # Resolution we need given the inputs
@@ -864,11 +862,11 @@ class filament:
         deltaPsi = max(float(np.abs(psiedge - psiaxis)), 1e-30)
         Bp = float(ep.BpFunc(r0, z0))
         r0_n = float(np.asarray(r0).reshape(-1)[0])
-        # |R| at magnetic axis is ~0: Bp*|R| -> 0 and distPsi = dpsi/xfm blows up. Floor |R| for scaling only.
+        # |R|~0: Bp*|R| -> 0 and distPsi = dpsi/xfm blows up. Floor |R| for scaling only.
         r_scale = max(abs(r0_n), 1e-6)
         if abs(r0_n) < 1e-6:
             log.warning(
-                'fluxCoordDistance: filament rCtr=%g is near the magnetic axis; using |R|=%g m '
+                'fluxCoordDistance: filament rCtr=%g is very small; using |R|=%g m '
                 'only for psi-distance scaling (distPsi). Place the source at finite major radius if possible.',
                 r0_n, r_scale,
             )
@@ -1034,8 +1032,7 @@ class filament:
         if use.size < 2:
             raise ValueError(
                 'Filament discretizeFilament: fewer than 2 Btrace points fall inside the parallel '
-                'window |s-s_ctr| < N_sig_b*sig_b = {} m (got {:d} point(s), {:d} in full trace). '
-                'Widen sig_b / N_sig_b, or use a longer MAFOT center trace (more points along B).'
+                'window (got {:d} point(s), {:d} in full trace). '
                 .format(float(N_sig_b * self.sig_b), int(use.size), int(Btrace.shape[0]))
             )
 

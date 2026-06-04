@@ -10,7 +10,7 @@ on:
 
 # Single place to update when cutting a new release (image tag on Docker Hub)
 env:
-  HEAT_IMAGE_TAG: v4.2.7
+  HEAT_IMAGE_TAG: v4.2.8
 
 jobs:
   check-final-image:

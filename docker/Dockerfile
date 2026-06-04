@@ -38,7 +38,7 @@
 #1st build stage.  build all necessary packages from source
 #======================================================================
 # start from base
-FROM ubuntu:22.04 AS heatbuilder
+FROM ubuntu:24.04 AS heatbuilder
 SHELL ["/bin/bash", "-c"] 
 
 LABEL maintainer="tlooby@cfs.energy"
@@ -55,8 +55,7 @@ RUN apt-get -yqq update
 #python layer
 RUN apt-get -yqq install python3 && \
     apt-get -yqq install python3-pip && \
-    apt-get -yqq install python3-pkg-resources && \
-    apt-get -yqq install python3-distutils
+    apt-get -yqq install python3-pkg-resources
 #RUN apt-get -yqq install mdsplus-python
 
 # Create venv for PEP 668 (ubuntu 24.04+)
@@ -81,28 +80,6 @@ RUN ln -s /usr/lib/x86_64-linux-gnu/libunwind.so /usr/lib/x86_64-linux-gnu/libun
 #RUN git clone https://github.com/ORNL-Fusion/EFIT.git /root/source/EFIT
 
 WORKDIR /root
-
-#clone and build M3DC1 fusion-io libs (buildM3DC1 uses make -k; doc/latex errors are harmless)
-RUN git clone https://github.com/nferraro/fusion-io.git /root/source/M3DC1/fusion-io
-COPY docker/buildM3DC1 /root/source/M3DC1/fusion-io/buildM3DC1
-COPY docker/make.inc.ubuntu_x86 /root/source/M3DC1/fusion-io/install/make.inc.ubuntu_x86
-# Upstream util/makefile forces Intel mpiicpc / -qopenmp; Ubuntu image uses GCC + Open MPI only.
-# we create a custom makefile that uses GCC + Open MPI.
-COPY docker/fusion-io-util-makefile /root/source/M3DC1/fusion-io/util/makefile
-# write_neo_input.cpp calls MPI but omits <mpi.h>; mpiicpc often still compiles, Open MPI mpic++ does not.
-#this needs to be fixed in fusion-io upstream, but for now we can add the include here.
-RUN grep -q '#include <mpi.h>' /root/source/M3DC1/fusion-io/util/write_neo_input.cpp || \
-    sed -i '/#include <netcdf.h>/a#include <mpi.h>' /root/source/M3DC1/fusion-io/util/write_neo_input.cpp
-RUN mkdir -p /root/source/M3DC1/build && /root/source/M3DC1/fusion-io/buildM3DC1
-
-#clone and build MAFOT
-ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/hdf5/openmpi
-#note branch here can be changed 
-RUN git clone -b master --single-branch https://github.com/ORNL-Fusion/MAFOT.git /root/source/MAFOT
-COPY docker/buildMAFOT /root/source/MAFOT/buildMAFOT
-RUN mkdir -p /root/source/MAFOT/build/bin && \
-    mkdir -p /root/source/MAFOT/build/lib && \
-    /root/source/MAFOT/buildMAFOT
 
 #clone openfoam, third party libs
 #OpenFOAM version defined by user
@@ -138,6 +115,30 @@ RUN source /root/source/openfoam/OpenFOAM-v${OFversion}/etc/bashrc && \
     hg update develop && \
     ./AllwmakeAll
 
+#clone and build M3DC1 fusion-io libs (buildM3DC1 uses make -k; doc/latex errors are harmless)
+RUN git clone https://github.com/nferraro/fusion-io.git /root/source/M3DC1/fusion-io
+COPY docker/buildM3DC1 /root/source/M3DC1/fusion-io/buildM3DC1
+COPY docker/make.inc.ubuntu_x86 /root/source/M3DC1/fusion-io/install/make.inc.ubuntu_x86
+# Upstream util/makefile forces Intel mpiicpc / -qopenmp; Ubuntu image uses GCC + Open MPI only.
+# we create a custom makefile that uses GCC + Open MPI.
+COPY docker/fusion-io-util-makefile /root/source/M3DC1/fusion-io/util/makefile
+# write_neo_input.cpp calls MPI but omits <mpi.h>; mpiicpc often still compiles, Open MPI mpic++ does not.
+#this needs to be fixed in fusion-io upstream, but for now we can add the include here.
+RUN grep -q '#include <mpi.h>' /root/source/M3DC1/fusion-io/util/write_neo_input.cpp || \
+    sed -i '/#include <netcdf.h>/a#include <mpi.h>' /root/source/M3DC1/fusion-io/util/write_neo_input.cpp
+RUN mkdir -p /root/source/M3DC1/build && /root/source/M3DC1/fusion-io/buildM3DC1
+
+#clone and build MAFOT
+# MAFOT uses the MPI C API (mpi.h), already provided by libopenmpi-dev above;
+# no C++ MPI bindings needed (OpenMPI 5.0 on Ubuntu 26 removed them).
+ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/hdf5/openmpi
+ARG MAFOT_BRANCH_CACHE_BUST=1
+RUN git clone -b mafot_gpu --single-branch https://github.com/ORNL-Fusion/MAFOT.git /root/source/MAFOT
+COPY docker/buildMAFOT /root/source/MAFOT/buildMAFOT
+RUN mkdir -p /root/source/MAFOT/build/bin && \
+    mkdir -p /root/source/MAFOT/build/lib && \
+    /root/source/MAFOT/buildMAFOT
+
 #clean up
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -149,7 +150,7 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 #dockerhub using the following command (need to comment out first stage too):
 #FROM plasmapotential/HEATbuilder:<tag> as HEATbuilder
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 LABEL maintainer="tlooby@cfs.energy"
 ARG DEBIAN_FRONTEND=noninteractive
 ENV runMode docker
@@ -161,7 +162,6 @@ RUN apt-get -yqq update && apt-get -yqq upgrade
 RUN apt-get -yqq install python3 && \
     apt-get -yqq install python3-pip && \
     apt-get -yqq install python3-pkg-resources && \
-    apt-get -yqq install python3-distutils && \
     apt-get -yqq install python3-paraview
 
 #RUN apt-get -yqq install mdsplus-python

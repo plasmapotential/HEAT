@@ -110,7 +110,7 @@ class MHD:
         """
         .. Writes a list of recognized class variables to HEAT object
         .. Used for error checking input files and for initialization
-        
+
         MHD EQ Variables:
         -----------------
 
@@ -124,8 +124,15 @@ class MHD:
         :BtMult: multiplier to apply to toroidal field quantities (Bt0, Fpol) in EQ
         :IpMult: multiplier to apply to plasma current, Ip in EQ
         :BtraceFile: path to file to be used for field line tracing
-        :mafot_bbox: boolean (input as True/False text). When True, MAFOT heatstructure uses 
+        :mafot_bbox: boolean (input as True/False text). When True, MAFOT heatstructure uses
           -b (simple R-Z box). When False, uses the g-file wall limiter. Omit for default True.
+        :mafot_gpu: boolean (input as True/False text). When True, uses GPU-accelerated MAFOT
+          field-line tracing (requires GPU-enabled MAFOT binaries: heatstructure_gpu and heatlaminar_gpu).
+          GPU laminar mode uses a single MPI rank (NCPUs is automatically set to 1). Omit for default False.
+        :mafot_bfield_file: optional path to netCDF B-field grid file. If provided,
+          MAFOT will use this pre-computed B-field grid instead of sampling the equilibrium. Currently only
+          supported with GPU mode (mafot_gpu=True). File must have dimensions (nr, nphi, nz) and variables
+          R, phi, Z, BR, Bphi, BZ. Set to None for default behavior.
 
         """
         self.allowed_vars = [
@@ -139,6 +146,8 @@ class MHD:
                             'IpMult',
                             'BtraceFile',
                             'mafot_bbox',
+                            'mafot_gpu',
+                            'mafot_bfield_file',
                             ]
 
         return
@@ -178,7 +187,7 @@ class MHD:
                         print("Error with input file var "+var+".  Perhaps you have invalid input values?")
                         log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
 
-        bools = ['mafot_bbox']
+        bools = ['mafot_bbox', 'mafot_gpu']
         for var in bools:
             if getattr(self, var, None) is not None:
                 try:
@@ -188,7 +197,14 @@ class MHD:
                     log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
                     print(e)
             else:
-                self.mafot_bbox = True
+                if var == 'mafot_bbox':
+                    self.mafot_bbox = True
+                elif var == 'mafot_gpu':
+                    self.mafot_gpu = False
+
+        # Set default for mafot_bfield_file if not provided
+        if not hasattr(self, 'mafot_bfield_file') or getattr(self, 'mafot_bfield_file', None) is None:
+            self.mafot_bfield_file = None
 
         return
 
@@ -673,13 +689,20 @@ class MHD:
         #MAFOT now runs a program called heatstructure that is generic for all machines
         args = []
         #MAFOT now runs a program called HEAT that is generic for all machines
-        args.append('heatstructure')
+        args.append('heatstructure_gpu' if self.mafot_gpu else 'heatstructure')
         #step size for output
         args.append('-d')
         args.append(str(dphi))
         #integrator step size
         args.append('-i')
         args.append(str(dpinit))
+        #GPU flag (if enabled)
+        if self.mafot_gpu:
+            args.append('-g')
+            #optional GPU netCDF B-field file
+            if self.mafot_bfield_file is not None:
+                args.append('-N')
+                args.append(self.mafot_bfield_file)
         #the points that we launch traces from
         args.append('-P')
         args.append(gridfile)
@@ -746,10 +769,17 @@ class MHD:
         args = []
         #args 0 is MAFOT structure binary call
         #MAFOT now runs a program called HEAT that is generic for all machines
-        args.append('heatstructure')
+        args.append('heatstructure_gpu' if self.mafot_gpu else 'heatstructure')
         #args 1,2 are the number of degrees we want to run the trace for
         args.append('-d')
         args.append(str(dphi))
+        #GPU flag (if enabled)
+        if self.mafot_gpu:
+            args.append('-g')
+            #optional GPU netCDF B-field file
+            if self.mafot_bfield_file is not None:
+                args.append('-N')
+                args.append(self.mafot_bfield_file)
         #args 3,4 are the points that we launch traces from
         args.append('-P')
         args.append(gridfile)
@@ -796,12 +826,29 @@ class MHD:
         """
         Runs MAFOT laminar program to trace field lines and return connection
         length, psi, penetration depth, etc.
+
+        Note: GPU laminar mode runs on a single MPI rank. If mafot_gpu is True,
+        NCPUs is automatically overridden to 1.
         """
         #Create MAFOT shell command
         #MAFOT now runs a program called HEAT that is generic for all machines
-        tool = 'heatlaminar_mpi'
+        tool = 'heatlaminar_gpu' if self.mafot_gpu else 'heatlaminar_mpi'
+        # GPU laminar runs on single rank
+        gpu_ncpus = 1 if self.mafot_gpu else NCPUs
         cmd = 'mpirun'
-        args = [cmd,'-n','{:d}'.format(NCPUs),tool,controlfile,'-P',gridfile]
+        args = [cmd,'-n','{:d}'.format(gpu_ncpus),tool]
+
+        #GPU flag (if enabled)
+        if self.mafot_gpu:
+            args.append('-g')
+            #optional GPU netCDF B-field file
+            if self.mafot_bfield_file is not None:
+                args.append('-N')
+                args.append(self.mafot_bfield_file)
+
+        args.append(controlfile)
+        args.append('-P')
+        args.append(gridfile)
         #Copy the current environment (important when in appImage mode)
         current_env = os.environ.copy()
         #run MAFOT structure for points in gridfile
@@ -817,6 +864,46 @@ class MHD:
         #os.remove(controlfilePath+'log_*') #clean up
 
         return
+
+    def buildLaminarCommand(self, ncpus, points_file, control_file, tag, bbLimits=None):
+        """
+        Build laminar MPI command arguments with GPU support if enabled.
+        This is the central method for constructing laminar commands across all of HEAT.
+
+        Parameters:
+            ncpus: number of CPUs (will be overridden to 1 if GPU is enabled)
+            points_file: path to points file
+            control_file: path to control file
+            tag: output tag
+            bbLimits: optional boundary box limits string (Rmin,Rmax,Zmin,Zmax)
+
+        Returns:
+            list of arguments for subprocess.call() or subprocess.run()
+        """
+        # GPU laminar must use single rank
+        ncpus_to_use = 1 if self.mafot_gpu else ncpus
+        tool = 'heatlaminar_gpu' if self.mafot_gpu else 'heatlaminar_mpi'
+
+        args = ['mpirun', '-n', str(ncpus_to_use), tool]
+
+        # Add GPU flag if enabled
+        if self.mafot_gpu:
+            args.append('-g')
+            # Add optional netCDF B-field file
+            if self.mafot_bfield_file is not None:
+                args.append('-N')
+                args.append(self.mafot_bfield_file)
+
+        # Add standard arguments
+        args.append('-P')
+        args.append(points_file)
+        if bbLimits is not None:
+            args.append('-B')
+            args.append(bbLimits)
+        args.append(control_file)
+        args.append(tag)
+
+        return args
 
     def renormalizeLCFS(self, ep, rNew=None, zNew=None, psiSep=None):
         """

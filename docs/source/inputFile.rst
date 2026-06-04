@@ -9,6 +9,17 @@ This page describes the following files:
  * filament input file, which is used to prescibe individual filaments for the filament tracer
  * elmer input file, which is used to prescribe the inputs for Elmer
 
+.. note::
+
+   GPU Acceleration Support
+
+   HEAT now supports GPU-accelerated MAFOT field-line tracing. This requires MAFOT to be
+   built with GPU support (``GPU=True`` in ``make.inc`` and compiled with CUDA). To enable GPU
+   acceleration in your HEAT simulations, set ``mafot_gpu=True`` in your input CSV file.
+   GPU-accelerated laminar mode automatically uses a single MPI rank regardless of the
+   ``NCPUs`` setting. Optionally, you can provide a pre-computed B-field grid in netCDF format
+   via the ``mafot_bfield_file`` parameter (currently GPU mode only).
+
 
 X_input.csv File Description
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -25,6 +25,8 @@ dpinit, 0.25
 psiMult, 1.0
 BtMult, 1.0
 IpMult, 1.0
+mafot_gpu, False
+mafot_bfield_file, None
 #==============================================================
 #                Optical HF Variables
 #==============================================================
