@@ -129,10 +129,6 @@ class MHD:
         :mafot_gpu: boolean (input as True/False text). When True, uses GPU-accelerated MAFOT
           field-line tracing (requires GPU-enabled MAFOT binaries: heatstructure_gpu and heatlaminar_gpu).
           GPU laminar mode uses a single MPI rank (NCPUs is automatically set to 1). Omit for default False.
-        :mafot_bfield_file: optional path to netCDF B-field grid file. If provided,
-          MAFOT will use this pre-computed B-field grid instead of sampling the equilibrium. Currently only
-          supported with GPU mode (mafot_gpu=True). File must have dimensions (nr, nphi, nz) and variables
-          R, phi, Z, BR, Bphi, BZ. Set to None for default behavior.
 
         """
         self.allowed_vars = [
@@ -147,7 +143,6 @@ class MHD:
                             'BtraceFile',
                             'mafot_bbox',
                             'mafot_gpu',
-                            'mafot_bfield_file',
                             ]
 
         return
@@ -201,10 +196,6 @@ class MHD:
                     self.mafot_bbox = True
                 elif var == 'mafot_gpu':
                     self.mafot_gpu = False
-
-        # Set default for mafot_bfield_file if not provided
-        if not hasattr(self, 'mafot_bfield_file') or getattr(self, 'mafot_bfield_file', None) is None:
-            self.mafot_bfield_file = None
 
         return
 
@@ -699,10 +690,6 @@ class MHD:
         #GPU flag (if enabled)
         if self.mafot_gpu:
             args.append('-g')
-            #optional GPU netCDF B-field file
-            if self.mafot_bfield_file is not None:
-                args.append('-N')
-                args.append(self.mafot_bfield_file)
         #the points that we launch traces from
         args.append('-P')
         args.append(gridfile)
@@ -776,10 +763,6 @@ class MHD:
         #GPU flag (if enabled)
         if self.mafot_gpu:
             args.append('-g')
-            #optional GPU netCDF B-field file
-            if self.mafot_bfield_file is not None:
-                args.append('-N')
-                args.append(self.mafot_bfield_file)
         #args 3,4 are the points that we launch traces from
         args.append('-P')
         args.append(gridfile)
@@ -841,10 +824,6 @@ class MHD:
         #GPU flag (if enabled)
         if self.mafot_gpu:
             args.append('-g')
-            #optional GPU netCDF B-field file
-            if self.mafot_bfield_file is not None:
-                args.append('-N')
-                args.append(self.mafot_bfield_file)
 
         args.append(controlfile)
         args.append('-P')
@@ -889,10 +868,6 @@ class MHD:
         # Add GPU flag if enabled
         if self.mafot_gpu:
             args.append('-g')
-            # Add optional netCDF B-field file
-            if self.mafot_bfield_file is not None:
-                args.append('-N')
-                args.append(self.mafot_bfield_file)
 
         # Add standard arguments
         args.append('-P')

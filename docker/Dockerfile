@@ -129,8 +129,6 @@ RUN grep -q '#include <mpi.h>' /root/source/M3DC1/fusion-io/util/write_neo_input
 RUN mkdir -p /root/source/M3DC1/build && /root/source/M3DC1/fusion-io/buildM3DC1
 
 #clone and build MAFOT
-# MAFOT uses the MPI C API (mpi.h), already provided by libopenmpi-dev above;
-# no C++ MPI bindings needed (OpenMPI 5.0 on Ubuntu 26 removed them).
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/hdf5/openmpi
 ARG MAFOT_BRANCH_CACHE_BUST=1
 RUN git clone -b mafot_gpu --single-branch https://github.com/ORNL-Fusion/MAFOT.git /root/source/MAFOT
@@ -217,6 +215,11 @@ RUN export PIP_BREAK_SYSTEM_PACKAGES=1 && \
     python3 -m pip install -r /root/source/HEAT/docker/requirements.txt && \
     python3 -m pip install --ignore-installed scipy && \
     python3 -m pip install -U --ignore-installed matplotlib
+
+# PyFoam 2023.7 vendors six 1.10.0, whose six.moves importer relies on the find_module
+# protocol that Python 3.12 (Ubuntu 24) removed -> "No module named PyFoam.ThirdParty.six.moves".
+# Overlay the pip-installed six (>=1.13, has find_spec) onto PyFoam's vendored copy.
+RUN python3 -c "import six,os,shutil; d=os.path.dirname(six.__file__); shutil.copy(six.__file__, os.path.join(d,'PyFoam','ThirdParty','six.py'))"
 
 
 #make build dirs

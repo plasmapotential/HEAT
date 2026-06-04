@@ -17,8 +17,8 @@ This page describes the following files:
    built with GPU support (``GPU=True`` in ``make.inc`` and compiled with CUDA). To enable GPU
    acceleration in your HEAT simulations, set ``mafot_gpu=True`` in your input CSV file.
    GPU-accelerated laminar mode automatically uses a single MPI rank regardless of the
-   ``NCPUs`` setting. Optionally, you can provide a pre-computed B-field grid in netCDF format
-   via the ``mafot_bfield_file`` parameter (currently GPU mode only).
+   ``NCPUs`` setting. The GPU samples whichever field source MAFOT's control file selects
+   (EFIT, M3D-C1, or a user 3-D field via XPAND/``xpand.dat``), so no extra HEAT input is needed.
 
 
 X_input.csv File Description

@@ -37,7 +37,6 @@ IpMult, 1.0
 BtraceFile, /root/terminal/sparc/trace.csv
 mafot_bbox, True
 mafot_gpu, False
-mafot_bfield_file, None
 #==============================================================
 #                Optical HF Variables
 #==============================================================
@@ -132,4 +131,3 @@ loadHF, False
 loadBasePath, None
 NCPUs, 10
 mafot_gpu, True
-mafot_bfield_file, None

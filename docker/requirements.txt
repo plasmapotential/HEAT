@@ -13,7 +13,7 @@ stl
 scipy
 psutil
 trimesh
-pandas
+pandas<3   # HEAT relies on pandas 2.x behavior (e.g. df[col].values -> numpy array, not the pandas 3.0 StringArray)
 pillow
 matplotlib
 tk
