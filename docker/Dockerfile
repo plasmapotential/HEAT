@@ -204,10 +204,19 @@ RUN     git lfs install && git lfs pull
 WORKDIR /root
 
 # fetch HEAT specific python dependencies
-RUN python3 -m pip install --upgrade pip && \
+# PIP_BREAK_SYSTEM_PACKAGES: Ubuntu 24.04 Python 3.12 marks the env PEP 668
+# "externally managed"; HEAT needs its pip deps in the same site-packages as the
+# apt-installed freecad/paraview, so install system-wide. --ignore-installed on the
+# pip self-upgrade avoids "Cannot uninstall pip ... RECORD file not found".
+# scipy: requirements.txt leaves it unpinned so pip defers to the apt python3-scipy
+# (built for numpy 1.x); but the pip stack pulls numpy 2.x -> ABI break
+# ("numpy.dtype size changed"). Force the pip scipy build so everything is numpy 2.x.
+RUN export PIP_BREAK_SYSTEM_PACKAGES=1 && \
+    python3 -m pip install --upgrade --ignore-installed pip && \
     python3 -m pip install --ignore-installed blinker && \
     python3 -m pip install -r /root/source/HEAT/docker/requirements.txt && \
-    python3 -m pip install -U matplotlib 
+    python3 -m pip install --ignore-installed scipy && \
+    python3 -m pip install -U --ignore-installed matplotlib
 
 
 #make build dirs
