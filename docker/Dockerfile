@@ -128,6 +128,18 @@ RUN grep -q '#include <mpi.h>' /root/source/M3DC1/fusion-io/util/write_neo_input
     sed -i '/#include <netcdf.h>/a#include <mpi.h>' /root/source/M3DC1/fusion-io/util/write_neo_input.cpp
 RUN mkdir -p /root/source/M3DC1/build && /root/source/M3DC1/fusion-io/buildM3DC1
 
+#install CUDA toolkit (nvcc + cudart-dev) so MAFOT can compile GPU support.
+#cudart is linked STATICALLY into the MAFOT binaries (see make.inc.HEAT / makefile),
+#so the runtime stage needs no CUDA packages -- only the host driver, injected by
+#`docker run --gpus`, and only when -g is actually used.
+RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certificates && \
+    wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb -O /tmp/cuda-keyring.deb && \
+    dpkg -i /tmp/cuda-keyring.deb && rm /tmp/cuda-keyring.deb && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends cuda-nvcc-12-6 cuda-cudart-dev-12-6 && \
+    ln -sfn /usr/local/cuda-12.6 /usr/local/cuda && \
+    rm -rf /var/lib/apt/lists/*
+
 #clone and build MAFOT
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/hdf5/openmpi
 ARG MAFOT_BRANCH_CACHE_BUST=1

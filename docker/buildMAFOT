@@ -11,5 +11,9 @@ cd /root/source/MAFOT
 rm make.inc
 ln -s install/make.inc.HEAT make.inc
 ls /
-echo "Building MAFOT..."
-make heat
+echo "Building MAFOT with GPU support (heatstructure + heatlaminar_mpi, -g enables GPU)..."
+# GPU=True compiles CUDA into the single heatstructure / heatlaminar_mpi binaries
+# (cudart linked statically). make.inc.HEAT also sets GPU=True; we pass it here too
+# so the GPU build is explicit and independent of make.inc edits. CUDA_PATH and
+# NVCCFLAGS (sm_89) come from make.inc.HEAT.
+make GPU=True heat

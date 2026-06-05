@@ -860,7 +860,7 @@ class filament:
         psiaxis = ep.g['psiAxis']
         psiedge = ep.g['psiSep']
         deltaPsi = max(float(np.abs(psiedge - psiaxis)), 1e-30)
-        Bp = float(ep.BpFunc(r0, z0))
+        Bp = float(np.asarray(ep.BpFunc.ev(r0, z0)).reshape(-1)[0])
         r0_n = float(np.asarray(r0).reshape(-1)[0])
         # |R|~0: Bp*|R| -> 0 and distPsi = dpsi/xfm blows up. Floor |R| for scaling only.
         r_scale = max(abs(r0_n), 1e-6)

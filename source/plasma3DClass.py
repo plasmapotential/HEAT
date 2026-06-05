@@ -564,7 +564,7 @@ class plasma3D:
 	def isProcessRunning(self):
 		import getpass
 		user = getpass.getuser()
-		lines = subprocess.check_output('ps aux | grep -E "(heatlaminar_gpu|heatlaminar_mpi)" | grep -v grep', shell = True)	# for some reason only works with shell = True
+		lines = subprocess.check_output('ps aux | grep heatlaminar_mpi | grep -v grep', shell = True)	# for some reason only works with shell = True
 		lines = lines.decode('UTF-8').split('\n')
 		for line in lines:
 			if ('mpirun' in line) & (user in line):

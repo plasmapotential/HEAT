@@ -126,8 +126,9 @@ class MHD:
         :BtraceFile: path to file to be used for field line tracing
         :mafot_bbox: boolean (input as True/False text). When True, MAFOT heatstructure uses
           -b (simple R-Z box). When False, uses the g-file wall limiter. Omit for default True.
-        :mafot_gpu: boolean (input as True/False text). When True, uses GPU-accelerated MAFOT
-          field-line tracing (requires GPU-enabled MAFOT binaries: heatstructure_gpu and heatlaminar_gpu).
+        :mafot_gpu: boolean (input as True/False text). When True, appends -g to the MAFOT
+          call so the (GPU-enabled) heatstructure / heatlaminar_mpi binaries run on the GPU;
+          when False they run on the CPU. Requires MAFOT built with GPU support (GPU=True).
           GPU laminar mode uses a single MPI rank (NCPUs is automatically set to 1). Omit for default False.
 
         """
@@ -680,7 +681,7 @@ class MHD:
         #MAFOT now runs a program called heatstructure that is generic for all machines
         args = []
         #MAFOT now runs a program called HEAT that is generic for all machines
-        args.append('heatstructure_gpu' if self.mafot_gpu else 'heatstructure')
+        args.append('heatstructure')
         #step size for output
         args.append('-d')
         args.append(str(dphi))
@@ -756,7 +757,7 @@ class MHD:
         args = []
         #args 0 is MAFOT structure binary call
         #MAFOT now runs a program called HEAT that is generic for all machines
-        args.append('heatstructure_gpu' if self.mafot_gpu else 'heatstructure')
+        args.append('heatstructure')
         #args 1,2 are the number of degrees we want to run the trace for
         args.append('-d')
         args.append(str(dphi))
@@ -815,7 +816,7 @@ class MHD:
         """
         #Create MAFOT shell command
         #MAFOT now runs a program called HEAT that is generic for all machines
-        tool = 'heatlaminar_gpu' if self.mafot_gpu else 'heatlaminar_mpi'
+        tool = 'heatlaminar_mpi'
         # GPU laminar runs on single rank
         gpu_ncpus = 1 if self.mafot_gpu else NCPUs
         cmd = 'mpirun'
@@ -861,7 +862,7 @@ class MHD:
         """
         # GPU laminar must use single rank
         ncpus_to_use = 1 if self.mafot_gpu else ncpus
-        tool = 'heatlaminar_gpu' if self.mafot_gpu else 'heatlaminar_mpi'
+        tool = 'heatlaminar_mpi'
 
         args = ['mpirun', '-n', str(ncpus_to_use), tool]
 
