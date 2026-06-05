@@ -270,8 +270,8 @@ class FEM:
         else:
             hf_data = pd.read_csv(hfFile)
             # Extracting coordinates and heat flux from the CSV file
-            points = hf_data[['# X', 'Y', 'Z']].values
-            values = hf_data['$MW/m^2$'].values        
+            points = hf_data[['# X', 'Y', 'Z']].to_numpy()
+            values = hf_data['$MW/m^2$'].to_numpy()        
             hfOnMesh = griddata(points, values, boundaryPts, method='nearest', fill_value=0.0)
             #hfArray = np.hstack((boundaryPts, hfOnMesh[:,np.newaxis]))
             #nodes = np.array(list(boundary_nodes), dtype=int)
@@ -301,11 +301,11 @@ class FEM:
         """
         hf_data_last = pd.read_csv(hfFile)
         # Extracting coordinates and heat flux from the CSV file
-        xyz = hf_data_last[['# X', 'Y', 'Z']].values
-        qLast = hf_data_last['$MW/m^2$'].values    
+        xyz = hf_data_last[['# X', 'Y', 'Z']].to_numpy()
+        qLast = hf_data_last['$MW/m^2$'].to_numpy()    
 
         hf_data_next = pd.read_csv(hfFileNext)
-        qNext = hf_data_next['$MW/m^2$'].values   
+        qNext = hf_data_next['$MW/m^2$'].to_numpy()   
 
         mult = (t-tLast) / (tNext-tLast)
         q = (qNext - qLast)*mult + qLast

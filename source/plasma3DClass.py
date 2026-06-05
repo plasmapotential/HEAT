@@ -1686,14 +1686,14 @@ def readShadowFile(f, PFC):
 	#f = base + self.tsFmt.format(t) + '/' + PFC.name + '/shadowMask.csv
 	try:
 		df = pd.read_csv(f, names=['X','Y','Z','shadowMask'], skiprows=[0])
-		if len(df['shadowMask'].values) != len(PFC.centers):
+		if len(df['shadowMask'].to_numpy()) != len(PFC.centers):
 			print('shadowMask file mesh is not same length as STL file mesh.')
 			print('Will not assign shadowMask to mismatched mesh')
-			print("File length: {:d}".format(len(df['shadowMask'].values)))
+			print("File length: {:d}".format(len(df['shadowMask'].to_numpy())))
 			print("PFC STL mesh length: {:d}".format(len(PFC.centers)))
 			val = -1
 		else:
-			PFC.shadowed_mask = df['shadowMask'].values
+			PFC.shadowed_mask = df['shadowMask'].to_numpy()
 			print("Loaded Shadow Mask from file: "+f)
 			val = 0
 	except:

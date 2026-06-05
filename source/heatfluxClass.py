@@ -1575,14 +1575,14 @@ class heatFlux:
         f = base + self.tsFmt.format(t) + '/' + PFC.name + '/' + self.qFileTag
         try:
             df = pd.read_csv(f, names=['X','Y','Z','HF'], skiprows=[0])
-            if len(df['HF'].values) != len(PFC.centers):
+            if len(df['HF'].to_numpy()) != len(PFC.centers):
                 print('HF file mesh is not same length as STL file mesh.')
                 print('Will not assign HF to mismatched mesh')
-                print("qFile length: {:d}".format(len(df['HF'].values)))
+                print("qFile length: {:d}".format(len(df['HF'].to_numpy())))
                 print("PFC STL mesh length: {:d}".format(len(PFC.centers)))
                 val = -1
             else:
-                PFC.qDiv = df['HF'].values
+                PFC.qDiv = df['HF'].to_numpy()
                 PFC.powerFrac = self.getDivertorPowerFraction(PFC.DivCode)
                 PFC.qOpticalList.append(PFC.qDiv)
                 print("Loaded heat flux from file: "+f)

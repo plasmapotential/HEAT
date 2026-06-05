@@ -202,7 +202,7 @@ class Runaways:
             df['N_dt'] = df['N_dt'].round(0)
             df['N_dt'] = df['N_dt'].astype(int)
             df['tNew'] = df.apply( lambda x:  np.linspace(x['tMin[s]'],x['tMax[s]'],x['N_dt']+1), axis=1)
-            self.tsFil = df['tNew'].values
+            self.tsFil = df['tNew'].to_numpy()
 
         except:
             print("\n\nError setting up RE time.  Check your RE file\n\n")

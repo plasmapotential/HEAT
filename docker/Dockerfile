@@ -196,6 +196,9 @@ RUN git clone -b master --single-branch https://github.com/ORNL-Fusion/EFIT.git 
 
 #clone HEAT (branch or tag; set via: docker build --build-arg HEAT_REF=v4.2.6 ...)
 ARG HEAT_REF=v4.3
+# Docker caches the git clone; bump HEAT_CACHE_BUST (e.g. --build-arg HEAT_CACHE_BUST=$(date +%s))
+# to force a fresh clone after pushing HEAT changes (e.g. requirements.txt) to the HEAT_REF branch.
+ARG HEAT_CACHE_BUST=1
 RUN git clone -b ${HEAT_REF} --single-branch https://github.com/plasmapotential/HEAT.git /root/source/HEAT
 WORKDIR /root/source/HEAT
 RUN     git lfs install && git lfs pull

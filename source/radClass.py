@@ -129,7 +129,7 @@ class RAD:
         log.info("Reading 2D photon radiation source file: "+file)
         df = pd.read_csv(file, header=0, names=['R','Z','P'])
         df["P"]*=self.Prad_mult
-        self.PC2D = df.values 
+        self.PC2D = df.to_numpy() 
         #self.PC2D /= 1000.0
         return
 

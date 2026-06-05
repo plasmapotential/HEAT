@@ -211,14 +211,14 @@ class CAD:
         Writes ROI as list to CAD object.  Input is timestepMap dataframe
         which is read by function in PFCClass.
         """
-        self.ROI = timestepMap['PFCname'].values
+        self.ROI = timestepMap['PFCname'].to_numpy()
         #self.ROIList = list(set(self.ROI)) #does not preserve order
         self.ROIList = list(self.ROI)
         self.ROIparts = ['None' for i in range(len(self.ROI))]
         self.ROImeshes = ['None' for i in range(len(self.ROI))]
         self.ROIctrs = ['None' for i in range(len(self.ROI))]
         self.ROInorms = ['None' for i in range(len(self.ROI))]
-        res = timestepMap['resolution'].values
+        res = timestepMap['resolution'].to_numpy()
         self.ROIresolutions = []
         for x in res:
             if isinstance(x, (np.floating, float, int, np.integer)):

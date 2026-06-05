@@ -4655,7 +4655,7 @@ class engineObj():
             #get the mesh centers from one of the timesteps
             t = self.MHD.timesteps[0]
             HFcsv = self.MHD.shotPath + self.tsFmt.format(t) + '/' + PFC.name + '/HF_allSources.csv'
-            OFcenters = pd.read_csv(HFcsv).iloc[:,0:3].values
+            OFcenters = pd.read_csv(HFcsv).iloc[:,0:3].to_numpy()
 
             #cycle through timesteps and get HF data from HEAT tree
             for t in OFtimesteps:
@@ -4689,8 +4689,8 @@ class engineObj():
                     print("OF.timestep: {:f} in PFC.timesteps".format(t))
                     log.info("OF.timestep: {:f} in PFC.timesteps".format(t))
                     HFcsv = self.MHD.shotPath + self.tsFmt.format(t) + '/' + PFC.name + '/HF_allSources.csv'
-                    qDiv = pd.read_csv(HFcsv)['$MW/m^2$'].values #this is the HF column header in the CSV file
-                    #OFcenters = pd.read_csv(HFcsv).iloc[:,0:3].values
+                    qDiv = pd.read_csv(HFcsv)['$MW/m^2$'].to_numpy() #this is the HF column header in the CSV file
+                    #OFcenters = pd.read_csv(HFcsv).iloc[:,0:3].to_numpy()
                     #write boundary condition
                     print("Maximum qDiv for this PFC and time: {:f}".format(qDiv.max()))
                     log.info("Maximum qDiv for this PFC and time: {:f}".format(qDiv.max()))

@@ -1918,7 +1918,7 @@ def PFCtable(n_clicks, filename, dataStore, ts, uploadContents,
     #ROIdict.append({'label': "", 'value': ''})
     if tD != [{}]:
         tD = pd.DataFrame.from_dict(tableData)[list (tableData[0].keys())]
-        names = tD.rename(columns=lambda x: x.strip())['PFCname'].values
+        names = tD.rename(columns=lambda x: x.strip())['PFCname'].to_numpy()
         for name in names:
             n = name.replace(' ', '')
             ROIdict.append({'label': n, 'value': n})
@@ -3296,9 +3296,9 @@ def interpolateNsteps(n_clicks, N, data):
     print("GEQDSK Dataframe:")
     print(df)
     print("New timesteps:")
-    print(df['timestep[ms]'].values)
+    print(df['timestep[ms]'].to_numpy())
     #interpolate N steps between each point
-    gui.interpolateNsteps(df['filename'].values, pd.to_numeric(df['timestep[ms]']).values,int(N))
+    gui.interpolateNsteps(df['filename'].to_numpy(), pd.to_numeric(df['timestep[ms]']).to_numpy(),int(N))
     zipFile = gui.tmpDir + 'InterpolatedGfiles.zip'
     return [html.Label("gFiles Interpolated", className="text-success"),
             dcc.send_file(zipFile)]
