@@ -362,231 +362,161 @@ class Runaways:
         from HF.rayTracer.
         """
         pts = self.xyzPts.reshape(self.N_b*self.N_r*self.N_p, 3)
-        print(pts)
         N_pts = len(pts)
         N_ts = len(ts)
-        print(ts)
-        print(self.N_vS)
-
 
         print('Number of target faces: {:f}'.format(self.Nt))
         log.info('Number of target faces: {:f}'.format(self.Nt))
         print('Number of runaway source points: {:f}'.format(N_pts))
         log.info('Number of runaway source points: {:f}'.format(N_pts))
 
-        #setup velocities
+        #setup velocities + output arrays
         self.setupParallelVelocities()
-        #initialize trace step matrix
         self.xyzSteps = np.zeros((self.N_vS, N_pts, N_ts, 3))
-
-        #build intersection mesh
         self.buildIntersectionMesh()
         intersectRecord = np.ones((self.N_vS, N_pts, N_ts))*np.nan
-        #hdotn = np.ones((N_pts))*np.nan
-        #initialize shadowMask matrix
-        shadowMask = np.zeros((N_pts))
-        
-        # setting up MHD times
-        MHDtimes = MHD.timesteps
-        MHDtimes = np.append(MHDtimes, self.tMax)
-        print(MHDtimes)
-        
-      
+
+        #MHD-equilibrium segment boundaries.  The RE flight can cross MHD timesteps; a single MAFOT
+        #trace uses one g-file, so we trace one batched one-shot per segment and carry the end
+        #positions into the next equilibrium (this replaces the old step-by-step equilibrium reload).
+        MHDtimes = np.append(MHD.timesteps, self.tMax)
+        Rctr = np.mean(np.sqrt(pts[:,0]**2 + pts[:,1]**2))
+        dpinit = float(getattr(MHD, 'dpinit', 1.0))
+        ep0, tEQ0 = self.ep, self.tEQ          #source equilibrium (restored per slice and at the end)
 
         for i in range(self.N_vS):
             print("\n---Tracing for velocity slice: {:f} [m/s]---\n".format(self.vSlices[0,i]))
             log.info("\n---Tracing for velocity slice: {:f} [m/s]---\n".format(self.vSlices[0,i]))
-            #update time counting variables
-            tsNext = np.ones((N_pts))*ts[tIdx]
-            t_tot = np.ones((N_pts))*ts[tIdx]
-            tIdxNext = np.zeros((N_pts), dtype=int) + tIdx
-            vec = np.zeros((N_pts, 3))
-            frac = np.zeros((N_pts))
-            use = np.arange(N_pts)
-            
-            i_MHDtNext = 1
 
+            self.xyzSteps[i,:,tIdx,:] = pts
+            v_par = abs(float(self.vSlices[0,i]))          #relativistic parallel speed (sets the time scale)
+            if v_par < 1e-12:
+                continue
+            speed = v_par
+            traceDir = 1.0 if self.vSlices[0,i] > 0 else -1.0
 
-            #save macroparticle coordinates at t0, increment next
-            self.xyzSteps[i,:,tIdxNext,:] = pts
-            tIdxNext += 1
-            tsNext = ts[tIdxNext]
-            
-            launchPt = pts.copy()
-            v_b = self.vSlices[:,i]
-            v_perp = self.vPerps[:,i]
-
-            sumCount = 0
-
-            #check if v_b is positive or negative and trace accordingly
-            if v_b[0] > 0:
-                traceDir = 1.0
+            #--- MAFOT particle mode: MAFOT integrates the relativistic guiding-center drift (CPU and
+            #    GPU).  PHYSICS MAPPING TO VALIDATE against the old Python d_z drift:
+            #      sigma  -> drift sign (electrons move opposite I_dir),
+            #      Ekin   -> slice kinetic energy [keV],
+            #      lambda -> pitch / perp-energy fraction (~ self.pitch**2, self.pitch = v_perp/v_total).
+            if self.drift:
+                MHD.ParticleDirection = -int(np.sign(self.I_dir))
+                MHD.Ekin              = float(self.energySlices[0,i]) / 1000.0
+                MHD.Lambda            = float(self.pitch)**2
+                MHD.Mass              = 1
+                MHD.ParticleCharge    = -1
             else:
-                traceDir = -1.0
+                MHD.ParticleDirection = 0                  #no drift -> pure field line
+            MHD.v_par = 0.0; MHD.v_radial = 0.0; MHD.v_tor = 0.0   #prescribed drifts off
 
-            #walk along field line, correcting for v_r, looking for intersections,
-            #saving coordinates at ts
-            while len(use) > 0:
-                #calculate guiding center path for one step
-                q1, q2 = self.findGuidingCenterPaths(launchPt[use], MHD, traceDir)
-                #correct guiding center path using radial velocity
-                d_b = np.linalg.norm((q2-q1), axis=1) #distance along field
-                t_b = d_b / np.abs(v_b)[use] #time along field for this step
-                # Updating time
-                t_tot[use] += t_b #cumulative time along field
-                d_r = 0 # I think the radial distance will be approx 0 here? t_b * self.v_r #radial distance
-                    
+            launchPt = pts.copy()
+            use = np.arange(N_pts)
+            current_time = ts[tIdx]
+            i_MHDtNext = 1
+            self.ep, self.tEQ = ep0, tEQ0                  #restart each slice at the source equilibrium
 
-                #generate local radial coordinate transformation
-                R = np.sqrt(q2[:,0]**2 + q2[:,1]**2)
-                Z = q2[:,2]
-                
-                # applying drift correction
-                if self.drift:              
-                    Bts = self.ep.BtFunc.ev(R, Z)
-                    gamma = self.gammas[:,i][use]
-                    v_d = -(v_b[use] **2 + v_perp[use]**2/2) * gamma * self.me/self.kg2eV / self.e / Bts / R 
+            #--- walk the MHD-equilibrium segments; each is one batched one-shot trace ---
+            while len(use) > 0 and current_time < self.tMax - 1e-15:
+                seg_end = min(MHDtimes[i_MHDtNext], self.tMax)
+                seg_dur = seg_end - current_time
+                if seg_dur > 1e-15:
+                    nSteps = int(np.ceil(seg_dur * v_par * 180.0 / (np.pi * Rctr) / dpinit * 1.1)) + 2
+                    MHD.ittStruct = float(nSteps)
+                    MHD.writeMAFOTpointfile(launchPt[use], self.gridfileStruct)
+                    MHD.writeControlFile(self.controlfilePath+self.controlfileStruct, self.tEQ, traceDir, mode='struct')
+                    MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, bbox=MHD.mafot_bbox)
+                    full = np.genfromtxt(self.structOutfile, comments='#')
+                    os.remove(self.structOutfile)
+                    if full.ndim == 1:
+                        full = full.reshape(1, -1)
+                    xyzAll = full[:, 0:3]
 
-                    d_z = t_b * v_d
-                    #print(d_z)
-                    #print(q2)
-                    q2[:,2] += d_z
-                    #print(q2)
-                    #x = 5/0
-                    
-                
-                # I think all of this is here so that you can put R in the correct direction
-                phi = np.arctan2(q2[:,1], q2[:,0])
-                rVec = self.fluxSurfNorms(self.ep, R, Z)
-                rX, rY, rZ = tools.cyl2xyz(rVec[:,0], rVec[:,2], phi, degrees=False)
-                rVecXYZ = np.vstack((rX,rY,rZ)).T
-                rMag = np.linalg.norm(rVecXYZ, axis=1)
-                rN = rVecXYZ / rMag[:,None]
-                
-                #magnetic field line trace corrected with radial (psi) velocity component
-                q3 = q2 #+ d_r[:,np.newaxis] * rN
-                # vec is the vector between two points
-                vec[use] = q3-q1
-                frac[use] = (tsNext[use] - t_tot[use] + t_b) / t_b
+                    #split per active marker on the exact launch point (Lc is unreliable on the CPU)
+                    use_pts = launchPt[use]
+                    nUse = len(use)
+                    launchIdx = []
+                    pos = 0
+                    for k in range(nUse):
+                        rel = np.where(np.abs(xyzAll[pos:pos+nSteps+2] - use_pts[k]).max(axis=1) < 1e-7)[0]
+                        if len(rel) == 0:
+                            rel = np.where(np.abs(xyzAll[pos:] - use_pts[k]).max(axis=1) < 1e-7)[0]
+                        if len(rel) == 0:
+                            raise ValueError("RE one-shot: could not locate launch point of active marker {:d}".format(k))
+                        launchIdx.append(pos + int(rel[0])); pos = launchIdx[-1] + 1
+                    if traceDir == 1.0:
+                        bnd = launchIdx + [len(xyzAll)]
+                        trajs = [xyzAll[bnd[k]:bnd[k+1]] for k in range(nUse)]
+                    else:
+                        bnd = [-1] + launchIdx
+                        trajs = [xyzAll[bnd[k]+1:bnd[k+1]+1][::-1] for k in range(nUse)]
 
-                # Updating the points 
-                if len(use) > 0:
-                    launchPt[use] = q3
+                    #batch ray-mesh intersection over every segment of every active marker
+                    q1L, q2L, ownerL = [], [], []
+                    for k in range(nUse):
+                        tm = trajs[k]
+                        if len(tm) >= 2:
+                            q1L.append(tm[:-1]); q2L.append(tm[1:])
+                            ownerL.append(np.full(len(tm)-1, k, dtype=np.int64))
+                    if len(q1L) > 0:
+                        q1 = np.concatenate(q1L); q2 = np.concatenate(q2L); owner = np.concatenate(ownerL)
+                        d = q2 - q1; segMag = np.linalg.norm(d, axis=1)
+                        with np.errstate(invalid='ignore', divide='ignore'):
+                            rNorm = np.where(segMag[:,None] > 0, d/segMag[:,None], 0.0)
+                        if getattr(self, '_re_rt_engine', 'open3d') == 'mitsuba':
+                            prim = np.asarray(self._re_rt.intersect_segments_mitsuba(q1, q2, self._re_rt.scene, mitsubaMode=self._re_mitsuba_mode))
+                            allHit = prim >= 0; allFace = prim.astype(np.int64); allDist = np.zeros(len(prim))
+                        else:
+                            hitMap, distMap = self._re_rt.cast_rays_open3d_segments(q1, rNorm, segMag)
+                            allHit = (hitMap != 4294967295) & (distMap <= segMag + 1e-9)
+                            allFace = hitMap.astype(np.int64); allDist = np.clip(distMap, 0.0, segMag)
+                    else:
+                        owner = np.zeros(0, dtype=np.int64)
 
-                #construct rays
-                rMag = np.linalg.norm(vec[use], axis=1)
-                rNorm = vec[use] / rMag.reshape((-1,1))
+                    #per active marker: record timesteps in this segment, carry the end position
+                    newLaunch = launchPt.copy()
+                    stillActive = np.ones(nUse, dtype=bool)
+                    for k in range(nUse):
+                        m = int(use[k])
+                        tm = trajs[k]
+                        if len(tm) < 2:
+                            stillActive[k] = False             #left the domain immediately
+                            continue
+                        arc = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(tm, axis=0), axis=1))])
+                        tRel = arc / speed                     #time since this segment's start
+                        sel = np.where(owner == k)[0]
+                        face = -1; tHit = tRel[-1]
+                        if len(sel) > 0:
+                            h = np.where(allHit[sel])[0]
+                            if len(h) > 0:
+                                kk = int(h[0]); tHit = (arc[kk] + allDist[sel[kk]]) / speed; face = int(allFace[sel[kk]])
+                        tEndMarker = min(tHit, seg_dur)
+                        #record positions at timesteps falling in (current_time, current_time+tEndMarker]
+                        for j in range(tIdx, N_ts):
+                            rel_t = ts[j] - current_time
+                            if rel_t < 0:
+                                continue
+                            if rel_t > tEndMarker + 1e-12:
+                                break
+                            self.xyzSteps[i, m, j, :] = [np.interp(rel_t, tRel, tm[:,c]) for c in range(3)]
+                        if face >= 0:
+                            jhit = int(np.searchsorted(ts, current_time + tHit))
+                            if jhit < N_ts:
+                                intersectRecord[i, m, jhit] = face
+                            stillActive[k] = False             #hit geometry -> stop tracing
+                        else:
+                            newLaunch[m] = [np.interp(seg_dur, tRel, tm[:,c]) for c in range(3)]   #carry to next equilibrium
+                    launchPt = newLaunch
+                    use = use[stillActive]
 
-                mask = np.ones((len(q3)))
-                if getattr(self, '_re_rt_engine', 'open3d') == 'mitsuba':
-                    prim = self._re_rt.intersect_segments_mitsuba(
-                        q1, q3, self._re_rt.scene, mitsubaMode=self._re_mitsuba_mode)
-                    miss = prim < 0
-                    mask[:] = 0.0
-                    mask[~miss] = 1.0
-                    hitMap = prim.astype(np.uint32)
-                else:
-                    hitMap, distMap = self._re_rt.cast_rays_open3d_segments(q1, rNorm, rMag)
-                    escapes = np.where(hitMap == 4294967295)[0]
-                    mask[escapes] = 0.0
-                    tooLong = np.where(distMap > rMag)[0]
-                    mask[tooLong] = 0.0
-
-                #put hit index in intersectRecord for tIdxNext if we hit
-                if np.sum(mask)>0:
-                    #we found a hit, or multiple
-                    idxHit = np.where(mask==1)[0]
-                    intersectRecord[i, use[idxHit], tIdxNext[use[idxHit]]] = hitMap[idxHit]
-                    #hdotn[i] = np.dot(self.intersectNorms[int(intersectRecord[i])],rNorm[idxHit])
-                    sumCount += np.sum(mask)
-                #else:
-                #    #return nan if we didnt hit anything
-                #    intersectRecord[i, use, tIdxNext[use]] = np.nan
-                #    #hdotn[i] = np.nan
-
-                #particles we need to keep tracing (didnt hit and less than tMax)
-                test1 = np.where(np.isnan(intersectRecord[i, use, tIdxNext[use]]) == True)[0]
-                test2 = np.where(t_tot[use] < MHDtimes[i_MHDtNext])[0] 
-
-                #use = np.where(np.logical_or(test1,test2)==True)[0]
-                #use = np.intersect1d(test1,test2)
-                #use = np.intersect1d(np.intersect1d(test1,test2),use)
-                usecheck = use[np.intersect1d(test1,test2)]
-                
-                
-                # checking if all particles have passed the next MHDtime 
-                if len(usecheck) == 0 and not MHDtimes[i_MHDtNext] == self.tMax:
-                    print("Updating the equilibrium to the next times step")
+                current_time = seg_end
+                if current_time < self.tMax - 1e-15:
                     self.tEQ = MHDtimes[i_MHDtNext]
-                    self.ep = MHD.ep[i_MHDtNext]
-                    print(f'New equilbrium time is {self.tEQ}')
-                    
+                    self.ep  = MHD.ep[i_MHDtNext]
                     i_MHDtNext += 1
-                    use = np.arange(N_pts)
-                    test1 = np.where(np.isnan(intersectRecord[i, use, tIdxNext[use]]) == True)[0]
-                    test2 = np.where(t_tot[use] < MHDtimes[i_MHDtNext])[0]
-                    
-                    print(f'Next equilbrium time we are looking for is {MHDtimes[i_MHDtNext]}')
-                    
-                    '''
-                    print(use)
-                    print(test1)
-                    print(test2)
-                    input()
-                    '''
-                
-                use = use[np.intersect1d(test1,test2)] 
 
-
-                #For testing
-                
-                #print(self.tMax)
-                #print(d_b[0])
-                #print(t_b[0])
-                #print(t_tot)
-                #print(d_r[0])
-                #print(q1[0])
-                #print(q2[0])
-                #print(q3[0])
-                #print(rN[0])
-                #print(d_r.T.shape)
-                #print(rN.shape)
-                #print(tsNext)
-                #print(self.xyzSteps)
-                
-
-                #record particle locations for particles that exceeded timestep
-                use2 = np.where(t_tot > tsNext)[0] #particles that crossed a timestep
-                use3 = np.intersect1d(use,use2) #crossed a timestep and still not crossed tMax, indexed to N_pts
-                use4 = np.where(t_tot[use] > tsNext[use])[0] #crossed a timestep and still not crossed tMax, indexed to use
-                
-                if len(use3) > 0:
-                    '''
-                    print(use)
-                    print(use2)
-                    print(use3)
-                    print(use4)
-                    print(self.xyzSteps)
-                    print(tIdxNext)
-                    print(q1)
-                    print(vec)
-                    print(frac)
-                    print(launchPt[use4] - vec[use4] * (1 -frac[use4, None]))
-
-                    input()
-                    '''
-                    # self.xyzSteps[i,use3,tIdxNext[use3],:] = q1[use4] + vec[use3]*frac[use3,None] # this  is the old version
-                    self.xyzSteps[i,use3,tIdxNext[use3],:] = launchPt[use3] - vec[use3] * (1 -frac[use3, None])
-                    
-                    tIdxNext[use3]+=1
-                    tsNext[use3] = ts[tIdxNext[use3]]
-                    
-
-            #record the final timestep       
-            self.xyzSteps[i,:,-1,:] = launchPt + vec*frac[:,None]
-
-        #record the final intersectRecord
         self.intersectRecord = intersectRecord
+        self.ep, self.tEQ = ep0, tEQ0          #restore the source equilibrium
         return
     
     def setupParallelVelocities(self, pdf = None):
