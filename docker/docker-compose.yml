@@ -8,7 +8,7 @@
 services:
   HEAT:
     #user: ${UID}:${GID}
-    image: "plasmapotential/heat:v4.2.7"
+    image: "plasmapotential/heat:v4.2.8"
     # for terminal (batch) mode, override default args by uncommenting and setting your batchFile path:
     #command: ["--m", "t", "--f", "/root/terminal/batchFile.dat"]
     ports:
