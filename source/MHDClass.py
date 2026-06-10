@@ -598,7 +598,12 @@ class MHD:
 #            f.write('unused=\t0\n')
             f.write('dpinit=\t{:f}\n'.format(self.dpinit)) # This must be entry index 23
             f.write('pi=\t3.141592653589793\n')
-            f.write('2*pi=\t6.283185307179586\n')           
+            f.write('2*pi=\t6.283185307179586\n')
+            # Drift velocities [m/s] appended at the end (vec[26..28]); io_class reads them with a
+            # size guard, so omitting them (older/other-machine files) is safe. 0 -> pure field line.
+            f.write('v_parallel=\t{:f}\n'.format(getattr(self, 'v_par', 0.0)))   # vec[26]
+            f.write('v_radial=\t{:f}\n'.format(getattr(self, 'v_radial', 0.0)))  # vec[27]
+            f.write('v_toroidal=\t{:f}\n'.format(getattr(self, 'v_tor', 0.0)))   # vec[28]
             return
 
     def psi2DfromEQ(self, PFC):

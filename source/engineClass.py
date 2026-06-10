@@ -3121,8 +3121,10 @@ class engineObj():
             #and that the inputs have not changed
             if (repeatIdx == None) or (self.newInputsFlag == True):
                 #---shadowMask calculation
-                PFC.findOpticalShadows(self.MHD,self.CAD,self.HF.rayTracer,batchMode=False) #walk up field line
-                #PFC.findOpticalShadows(self.MHD,self.CAD,self.HF.rayTracer,batchMode=True) #entire trace at once
+                #GPU: trace the whole field line in one MAFOT/CUDA launch (batchMode) to
+                #avoid per-step CPU<->GPU launches. CPU: walk up the field line step-by-step,
+                #which lets us prune traces that already intersect as we go.
+                PFC.findOpticalShadows(self.MHD,self.CAD,self.HF.rayTracer,batchMode=getattr(self.MHD,'mafot_gpu',False))
                 #original HEAT homebrew MT ray-triangle method
                 #PFC.findShadows_structure(self.MHD, self.CAD)
             else:

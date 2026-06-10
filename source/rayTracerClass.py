@@ -548,7 +548,7 @@ class shadowKernels:
 
             if len(q1_blocks) == 0:
                 print("Completed Intersection Check")
-                return
+                return self.shadowed_mask
 
             q1_all = np.concatenate(q1_blocks, axis=0)
             q2_all = np.concatenate(q2_blocks, axis=0)
@@ -572,7 +572,7 @@ class shadowKernels:
             self.shadowed_mask[face_idx_all] += seed_hit[face_idx_all].astype(self.shadowed_mask.dtype)
             self.shadowed_mask[self.shadowed_mask > 0] = 1
         print("Completed Intersection Check")
-        return
+        return self.shadowed_mask
 
     def buildMitsubaScene(self, targets, mitsubaMode='cuda', dedup_tol=1e-9):
         """

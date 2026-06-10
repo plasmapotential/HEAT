@@ -369,128 +369,140 @@ class filament:
         #initialize shadowMask matrix
         shadowMask = np.zeros((N_pts))
 
+        #filament-center major radius (mean over markers), used only to size the one-shot trace length
+        Rctr = np.mean(np.sqrt(pts[:,0]**2 + pts[:,1]**2))
+
         for i in range(self.N_vS):
             print("\n---Tracing for velocity slice: {:f} [m/s]---\n".format(self.vSlices[0,i]))
             log.info("\n---Tracing for velocity slice: {:f} [m/s]---\n".format(self.vSlices[0,i]))
-            #update time counting variables
-            tsNext = np.ones((N_pts))*ts[tIdx]
-            t_tot = np.ones((N_pts))*ts[tIdx]
-            tIdxNext = np.zeros((N_pts), dtype=int) + tIdx
-            vec = np.zeros((N_pts, 3))
-            frac = np.zeros((N_pts))
-            use = np.arange(N_pts)
 
-            #save macroparticle coordinates at t0, increment next
-            self.xyzSteps[i,:,tIdxNext,:] = pts
-            tIdxNext += 1
-            tsNext = ts[tIdxNext]
-            launchPt = pts.copy()
-            v_b = self.vSlices[:,i]
-            sumCount = 0
+            #parallel velocity for this slice.  setupParallelVelocities builds the same velocity
+            #distribution for every macroparticle (common T0 / v_rot_b), so vSlices[:,i] is uniform
+            #across markers -> a single MAFOT trace (one v_par) covers all of them.
+            v_b = float(self.vSlices[0,i])
+            #record the source location at the source timestep for every marker
+            self.xyzSteps[i,:,tIdx,:] = pts
+            if abs(v_b) < 1e-12:
+                continue   #stationary slice: macroparticles do not move
 
-            #check if v_b is positive or negative and trace accordingly
-            if v_b[0] > 0:
-                traceDir = 1.0
+            traceDir = 1.0 if v_b > 0 else -1.0
+            v_par_mag = abs(v_b)
+            #macroparticle speed along the (drifted) trajectory.  Toroidal rotation v_t is already
+            #folded into v_b as v_rot_b, so the trajectory speed is sqrt(v_par^2 + v_r^2).
+            speed = np.sqrt(v_b**2 + self.v_r**2)
+
+            #output points needed to reach tMax.  The toroidal angle advances at
+            #v_par*Bphi/(R*|B|) <= v_par/R, so degSpan = tMax*v_par*180/(pi*Rctr) overestimates the
+            #angle the trajectory must cover.  Each output point spans dphi = nstep*dpinit deg, and
+            #getMultipleFieldPaths(1.0,...) uses nstep=1 (the -d 1.0), so the per-point step is the
+            #control-file dpinit.  Overestimating degSpan/dpinit -> the trajectory always reaches tMax.
+            dpinit = float(getattr(MHD, 'dpinit', 1.0))
+            #trajectories are clocked from the source timestep ts[tIdx]; self.tMax is absolute.
+            tMaxRel = self.tMax - ts[tIdx]
+            degSpan = tMaxRel * v_par_mag * 180.0 / (np.pi * Rctr) * 1.1
+            nSteps = int(np.ceil(degSpan / dpinit)) + 2
+
+            #--- one MAFOT trace; the radial (anomalous) drift is integrated inside MAFOT now ---
+            MHD.v_par    = v_par_mag
+            MHD.v_radial = self.v_r
+            MHD.v_tor    = 0.0   #toroidal rotation already folded into v_b (v_rot_b)
+            MHD.ittStruct = float(nSteps)
+            MHD.writeMAFOTpointfile(pts, self.gridfileStruct)
+            MHD.writeControlFile(self.controlfilePath+self.controlfileStruct, self.tEQ, traceDir, mode='struct')
+            MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, bbox=MHD.mafot_bbox)
+
+            #Trajectories are RAGGED: a marker stops when it leaves the trace boundary, so each has
+            #its own length.  Read the full output (need column 6 = Lc, which resets to 0 at every
+            #marker's start point) and split on those starts.
+            full = np.genfromtxt(self.structOutfile, comments='#')
+            os.remove(self.structOutfile)
+            if full.ndim == 1:
+                full = full.reshape(1, -1)
+            xyzAll = full[:, 0:3]
+            #Per-marker split.  Lc (col 6) is NOT a reliable delimiter: the CPU only accumulates Lc
+            #inside the real g-file wall, so it stays 0 for many steps in the limiter shadow, while
+            #the GPU accumulates every step in bbox mode -> they disagree.  Instead, each marker
+            #block begins (forward) or ends (backward) at its exact trace input pts[m] (echoed to
+            #~1e-9 via %.10f / precision(16)), so locate the launch points in order.  A launch lies
+            #within one block (<= nSteps+1 rows) of pos.
+            launchIdx = []
+            pos = 0
+            for m in range(N_pts):
+                rel = np.where(np.abs(xyzAll[pos:pos+nSteps+2] - pts[m]).max(axis=1) < 1e-7)[0]
+                if len(rel) == 0:   #fallback: search the whole remainder
+                    rel = np.where(np.abs(xyzAll[pos:] - pts[m]).max(axis=1) < 1e-7)[0]
+                if len(rel) == 0:
+                    raise ValueError("Filament one-shot: could not locate the launch point of "
+                                     "marker {:d} in the trace output.".format(m))
+                launchIdx.append(pos + int(rel[0]))
+                pos = launchIdx[-1] + 1
+
+            #trajectories ordered launch -> far
+            trajs = []
+            if traceDir == 1.0:
+                bnd = launchIdx + [len(xyzAll)]                 #forward: pts[m] is block m's first row
+                for m in range(N_pts):
+                    trajs.append(xyzAll[bnd[m]:bnd[m+1]])
             else:
-                traceDir = -1.0
+                bnd = [-1] + launchIdx                          #backward: pts[m] is block m's last row
+                for m in range(N_pts):
+                    trajs.append(xyzAll[bnd[m]+1:bnd[m+1]+1][::-1])
 
-            #walk along field line, correcting for v_r, looking for intersections,
-            #saving coordinates at ts
-            while len(use) > 0:
-                #calculate guiding center path for one step
-                q1, q2 = self.findGuidingCenterPaths(launchPt[use], MHD, traceDir)
-                #correct guiding center path using radial velocity
-                d_b = np.linalg.norm((q2-q1), axis=1) #distance along field
-                t_b = d_b / np.abs(v_b)[use] #time along field for this step
-                t_tot[use] += t_b #cumulative time along field
-                d_r = t_b * self.v_r #radial distance
-
-                #generate local radial coordinate transformation
-                R = np.sqrt(q2[:,0]**2 + q2[:,1]**2)
-                Z = q2[:,2]
-                phi = np.arctan2(q2[:,1], q2[:,0])
-                rVec = self.fluxSurfNorms(self.ep, R, Z)
-                rX, rY, rZ = tools.cyl2xyz(rVec[:,0], rVec[:,2], phi, degrees=False)
-                rVecXYZ = np.vstack((rX,rY,rZ)).T
-                rMag = np.linalg.norm(rVecXYZ, axis=1)
-                rN = rVecXYZ / rMag[:,None]
-                
-                #magnetic field line trace corrected with radial (psi) velocity component
-                q3 = q2 + d_r[:,np.newaxis] * rN
-                vec[use] = q3-q1
-                frac[use] = (tsNext[use] - t_tot[use] + t_b) / t_b
-
-                if len(use) > 0:
-                    launchPt[use] = q3
-
-                #construct rays
-                rMag = np.linalg.norm(vec[use], axis=1)
-                rNorm = vec[use] / rMag.reshape((-1,1))
-
-                #calculate intersections (rayTracerClass.shadowKernels)
-                mask = np.ones((len(q3)))
+            #--- batch ray-mesh intersection over every segment of every marker (single cast) ---
+            q1L, q2L, ownerL = [], [], []
+            for m in range(N_pts):
+                tm = trajs[m]
+                if len(tm) >= 2:
+                    q1L.append(tm[:-1]); q2L.append(tm[1:])
+                    ownerL.append(np.full(len(tm)-1, m, dtype=np.int64))
+            if len(q1L) > 0:
+                q1 = np.concatenate(q1L); q2 = np.concatenate(q2L); owner = np.concatenate(ownerL)
+                d = q2 - q1
+                segMag = np.linalg.norm(d, axis=1)
+                with np.errstate(invalid='ignore', divide='ignore'):
+                    rNorm = np.where(segMag[:,None] > 0, d/segMag[:,None], 0.0)
                 if getattr(self, '_fil_rt_engine', 'open3d') == 'mitsuba':
-                    prim = self._fil_rt.intersect_segments_mitsuba(
-                        q1, q3, self._fil_rt.scene, mitsubaMode=self._fil_mitsuba_mode)
-                    miss = prim < 0
-                    mask[:] = 0.0
-                    mask[~miss] = 1.0
-                    hitMap = prim.astype(np.uint32)
+                    prim = np.asarray(self._fil_rt.intersect_segments_mitsuba(
+                        q1, q2, self._fil_rt.scene, mitsubaMode=self._fil_mitsuba_mode))
+                    allHit  = prim >= 0
+                    allFace = prim.astype(np.int64)
+                    allDist = np.zeros(len(prim))   #mitsuba: no sub-segment t -> hit at segment start
                 else:
-                    hitMap, distMap = self._fil_rt.cast_rays_open3d_segments(q1, rNorm, rMag)
-                    escapes = np.where(hitMap == 4294967295)[0]
-                    mask[escapes] = 0.0
-                    tooLong = np.where(distMap > rMag)[0]
-                    mask[tooLong] = 0.0
+                    hitMap, distMap = self._fil_rt.cast_rays_open3d_segments(q1, rNorm, segMag)
+                    allHit  = (hitMap != 4294967295) & (distMap <= segMag + 1e-9)
+                    allFace = hitMap.astype(np.int64)
+                    allDist = np.clip(distMap, 0.0, segMag)
+            else:
+                owner = np.zeros(0, dtype=np.int64)
 
-                #put hit index in intersectRecord for tIdxNext if we hit
-                if np.sum(mask)>0:
-                    #we found a hit, or multiple
-                    idxHit = np.where(mask==1)[0]
-                    intersectRecord[i, use[idxHit], tIdxNext[use[idxHit]]] = hitMap[idxHit]
-                    #hdotn[i] = np.dot(self.intersectNorms[int(intersectRecord[i])],rNorm[idxHit])
-                    sumCount += np.sum(mask)
-                #else:
-                #    #return nan if we didnt hit anything
-                #    intersectRecord[i, use, tIdxNext[use]] = np.nan
-                #    #hdotn[i] = np.nan
+            #--- per marker: interpolate position at each timestep + record the first intersection ---
+            trel_ts = ts[tIdx:] - ts[tIdx]
+            for m in range(N_pts):
+                tm = trajs[m]
+                if len(tm) < 2:
+                    continue   #marker left the domain immediately (start already recorded above)
+                segLen = np.linalg.norm(np.diff(tm, axis=0), axis=1)
+                arc = np.concatenate([[0.0], np.cumsum(segLen)])
+                tRel = arc / speed                          #time since the source ts at each point
 
-                #particles we need to keep tracing (didnt hit and less than tMax)
-                test1 = np.where(np.isnan(intersectRecord[i, use, tIdxNext[use]]) == True)[0]
-                test2 = np.where(t_tot[use] < self.tMax)[0]
-
-                #use = np.where(np.logical_or(test1,test2)==True)[0]
-                #use = np.intersect1d(test1,test2)
-                #use = np.intersect1d(np.intersect1d(test1,test2),use)
-                use = use[np.intersect1d(test1,test2)]
-
-                #For testing
-                #print(self.tMax)
-                #print(d_b[0])
-                #print(t_b[0])
-                #print(t_tot)
-                #print(d_r[0])
-                #print(q1[0])
-                #print(q2[0])
-                #print(q3[0])
-                #print(rN[0])
-                #print(d_r.T.shape)
-                #print(rN.shape)
-                #print(tsNext)
-                #print(self.xyzSteps)
-                #input()
-
-                #record particle locations for particles that exceeded timestep
-                use2 = np.where(t_tot > tsNext)[0] #particles that crossed a timestep
-                use3 = np.intersect1d(use,use2) #crossed a timestep and still not crossed tMax, indexed to N_pts
-                use4 = np.where(t_tot[use] > tsNext[use])[0] #crossed a timestep and still not crossed tMax, indexed to use
-                if len(use3) > 0:
-                    self.xyzSteps[i,use3,tIdxNext[use3],:] = q1[use4] + vec[use3]*frac[use3,None]
-                    tIdxNext[use3]+=1
-                    tsNext[use3] = ts[tIdxNext[use3]]
-
-            #record the final timestep       
-            self.xyzSteps[i,:,-1,:] = launchPt + vec*frac[:,None]
+                #first intersecting segment for this marker (its segments are contiguous in owner)
+                sel = np.where(owner == m)[0]
+                face = -1; tHit = tRel[-1]
+                if len(sel) > 0:
+                    h = np.where(allHit[sel])[0]
+                    if len(h) > 0:
+                        k = int(h[0])                       #segment index within this marker
+                        tHit = (arc[k] + allDist[sel[k]]) / speed
+                        face = int(allFace[sel[k]])
+                tEnd = min(tHit, tMaxRel)
+                keep = trel_ts <= tEnd + 1e-12
+                for c in range(3):
+                    vals = np.interp(trel_ts, tRel, tm[:,c])
+                    self.xyzSteps[i, m, tIdx:, c] = np.where(keep, vals, 0.0)
+                if face >= 0 and tHit <= tMaxRel:
+                    jhit = int(np.searchsorted(ts, ts[tIdx] + tHit))
+                    if jhit < N_ts:
+                        intersectRecord[i, m, jhit] = face
 
         #record the final intersectRecord
         self.intersectRecord = intersectRecord
