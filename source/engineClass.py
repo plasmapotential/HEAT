@@ -2416,7 +2416,7 @@ class engineObj():
                     self.loadHFParams(infile=self.infile, tIdx=0)
             except Exception as e:
                 log.info('Could not load HF params for filament ray tracer (defaults ok): %s', e)
-            self.FIL.filamentRayTracer = getattr(self.HF, 'rayTracer', None) or 'open3d'
+            self.FIL.filamentRayTracer = self._cpuSafeRayTracer(getattr(self.HF, 'rayTracer', None) or 'open3d')
 
             #build filament meshes
             self.getFilMeshes()
@@ -2439,8 +2439,19 @@ class engineObj():
 
 
 
-            #loop through each filament
-            for idx,ts in enumerate(self.FIL.tsFil):
+            #loop through each filament, or batch groups of velocity/equilibrium-identical
+            #filaments (e.g. one ELM filament cloned to many toroidal angles) into combined
+            #traces.  When nothing is batchable (every group is a singleton) the original
+            #per-filament path below runs unchanged.
+            groups = self._groupFilamentsForBatch(filDict)
+            if any(len(g) > 1 for g in groups):
+                #>=1 batchable group: one MAFOT call per velocity slice for the whole group,
+                #plus a single combined-total HF output per group
+                self.FIL.buildIntersectionMesh()
+                for members in groups:
+                    self._runFilamentGroupCombined(members, filDict, filMergedPFC)
+            else:
+              for idx,ts in enumerate(self.FIL.tsFil):
                 print('\n')
                 print("-"*80)
                 log.info("-"*80)
@@ -2592,7 +2603,7 @@ class engineObj():
                     self.loadHFParams(infile=self.infile, tIdx=0)
             except Exception as e:
                 log.info('Could not load HF params for RE ray tracer (defaults ok): %s', e)
-            self.RE.runawayRayTracer = getattr(self.HF, 'rayTracer', None) or 'open3d'
+            self.RE.runawayRayTracer = self._cpuSafeRayTracer(getattr(self.HF, 'rayTracer', None) or 'open3d')
 
             #build filament meshes
             self.getFilMeshes(filtype = 'RE')
@@ -2826,6 +2837,289 @@ class engineObj():
         return
 
 
+    def _groupFilamentsForBatch(self, filDict):
+        """
+        Groups filaments that can share a single MAFOT guiding-center trace.
+
+        A MAFOT structure trace is launched once per velocity slice with a single scalar
+        parallel velocity (v_par), radial drift (v_radial = v_r) and equilibrium.  Two
+        filaments can therefore be traced together for a given slice only if they share:
+          - the same equilibrium / timeline (tMin, tMax, dt -> same ts -> same epIdx)
+          - the same velocity distribution, i.e. identical vSlices.  vSlices is fully
+            determined by (T0, traceDir, N_vS, v_rot_b), and v_rot_b is a deterministic
+            function of (rCtr, zCtr, v_t, equilibrium) -- so requiring identical
+            (T0, traceDir, N_vS, v_t, rCtr, zCtr) guarantees identical vSlices.
+          - the same radial drift v_r and source-timestep count N_src_t.
+        They may differ in toroidal angle (phiCtr), id, E0 and Gaussian widths -- those
+        only change the launch positions / weighting, which the batched trace handles via
+        per-marker launch points.  The canonical use case is one ELM filament cloned to
+        many toroidal angles for a video.
+
+        Returns a list of lists of filament-row indices, preserving first-seen order.
+        Filaments that match nothing land in their own singleton group.
+        """
+        groups = {}
+        order = []
+        n = len(self.FIL.tsFil)
+        for idx in range(n):
+            key = (
+                round(float(filDict['tMin[s]'][idx]), 12),
+                round(float(filDict['tMax[s]'][idx]), 12),
+                round(float(filDict['dt[s]'][idx]), 15),
+                int(round(float(filDict['N_src_t'][idx]))),
+                round(float(filDict['T0[eV]'][idx]), 6),
+                round(float(filDict['v_t[m/s]'][idx]), 6),
+                round(float(filDict['v_r[m/s]'][idx]), 6),
+                int(round(float(filDict['traceDir'][idx]))),
+                int(round(float(filDict['N_vS'][idx]))),
+                round(float(filDict['rCtr[m]'][idx]), 9),
+                round(float(filDict['zCtr[m]'][idx]), 9),
+            )
+            if key not in groups:
+                groups[key] = []
+                order.append(key)
+            groups[key].append(idx)
+        return [groups[k] for k in order]
+
+
+    def _runFilamentGroupCombined(self, members, filDict, filMergedPFC):
+        """
+        Traces a group of velocity/equilibrium-identical filaments together and writes a
+        single combined-total heat-flux / particle output for the whole group.
+
+        The expensive part -- the MAFOT guiding-center trace -- is batched: for each
+        source timestep and each velocity slice, ONE MAFOT subprocess traces the markers
+        of every group member at once (instead of one subprocess per filament).  The
+        cheap, per-filament work (ray-mesh intersection, temporal interpolation, heat-flux
+        mapping, per-filament trace output) is then done member by member.
+
+        Heat flux is COMBINED: PFC.Edep / ptclDep are zeroed at the start of the group and
+        every member accumulates into them, so the saved HF/Edep files are the sum over all
+        members of the group.  Per-filament source and trace point clouds (which drive a
+        ParaView movie) are still written individually for every member.
+        """
+        FIL = self.FIL
+        MHD = self.MHD
+
+        idx0 = members[0]
+        ts = self.FIL.tsFil[idx0]
+        N_src_t = int(round(float(filDict['N_src_t'][idx0])))
+        ids = [filDict['id'][i] for i in members]
+        #combined output tag for the group (single member -> its own id, preserving filenames)
+        groupId = ids[0] if len(members) == 1 else (str(ids[0]) + '_to_' + str(ids[-1]))
+
+        print('\n')
+        print("-"*80)
+        print("Filament group ({:d} members): ".format(len(members)) + ", ".join(str(x) for x in ids))
+        print("Combined HF output tag: " + groupId)
+        print("-"*80)
+        log.info("-"*80)
+        log.info("Filament group ({:d} members): ".format(len(members)) + ", ".join(str(x) for x in ids))
+        log.info("-"*80)
+
+        #combined-total HF: isolate THIS group's deposition (zero the shared tallies)
+        for PFC in self.PFCs:
+            PFC.Edep[:] = 0.0
+            PFC.ptclDep[:] = 0.0
+        if filMergedPFC is not None:
+            filMergedPFC.Edep[:] = 0.0
+            filMergedPFC.ptclDep[:] = 0.0
+
+        #equilibrium index (shared across the group, since ts is shared)
+        both = np.intersect1d(ts, self.MHD.timesteps)
+        epIdx = np.where(np.min(both) == self.MHD.timesteps)[0][0]
+
+        groupE0 = float(np.sum([float(filDict['E0[J]'][i]) for i in members]))
+        EtotAll = 0.0
+        pTotAll = 0.0
+        BtraceCache = {}
+        dpinit = float(getattr(MHD, 'dpinit', 1.0))
+
+        #loop through source timesteps for the group (members share ts / N_src_t)
+        for tIdx, t in enumerate(ts):
+            if tIdx >= N_src_t:
+                print("No more source timesteps to trace.  Breaking loop.")
+                log.info("No more source timesteps to trace.  Breaking loop.")
+                break
+
+            print('\n')
+            print("-"*30)
+            print("Filament Timestep: "+self.tsFmt.format(t))
+            log.info("\nFilament Timestep: "+self.tsFmt.format(t))
+
+            #set up file directory structure (shared by the whole group at this timestep)
+            timeDir = self.MHD.shotPath + self.tsFmt.format(t) + '/'
+            self.FIL = self.MHD.setupMAFOTdirectory(timeDir, self.FIL)
+            FIL = self.FIL
+            FIL.tEQ = ts[0]
+
+            # ---- Phase 1: build the source + velocity distribution for every member ----
+            perMember = []
+            for idx in members:
+                id = filDict['id'][idx]
+                FIL.initializeFilamentFromDict(filDict, idx, self.MHD.ep[epIdx])
+                FIL.ts = ts
+                FIL.tEQ = ts[0]
+                if tIdx == 0:
+                    BtraceCache[idx] = FIL.filamentCtrBtrace(MHD, t)
+                Btrace = BtraceCache[idx]
+                self.getFilamentSource(t, id, Btrace, tIdx)   #sets FIL.xyzPts, FIL.density; writes source file
+                FIL.setupParallelVelocities()
+                N_pts = FIL.N_b*FIL.N_r*FIL.N_p
+                perMember.append({
+                    'idx': idx, 'id': id,
+                    'pts': FIL.xyzPts.reshape(N_pts, 3).copy(),
+                    'xyzPts': FIL.xyzPts.copy(),
+                    'density': FIL.density.copy(),
+                    'vSlices': FIL.vSlices,            #freshly allocated per member -> safe to keep by ref
+                    'energyFracs': FIL.energyFracs,
+                    'velocityFracs': FIL.velocityFracs,
+                    'E0': float(FIL.E0),
+                    'N_b': FIL.N_b, 'N_r': FIL.N_r, 'N_p': FIL.N_p, 'N_vS': FIL.N_vS,
+                    'N_pts': N_pts,
+                    'v_r': float(FIL.v_r), 'traceDir': float(FIL.traceDir),
+                    'tMin': float(FIL.tMin), 'tMax': float(FIL.tMax), 'dt': float(FIL.dt),
+                })
+
+            # ---- Phase 2: ONE MAFOT trace per velocity slice over every member's markers ----
+            N_vS = perMember[0]['N_vS']
+            v_r = perMember[0]['v_r']
+            tMax = perMember[0]['tMax']
+            tMaxRel = tMax - ts[tIdx]
+            #vSlices row 0 holds the per-slice v_par (identical across markers and group members)
+            vSlicesRep = perMember[0]['vSlices']
+
+            ptsCat = np.concatenate([m['pts'] for m in perMember], axis=0)
+            counts = [m['N_pts'] for m in perMember]
+            offs = np.concatenate([[0], np.cumsum(counts)]).astype(int)
+            #smallest major radius -> most integration steps -> long enough trace for every member
+            minRctr = min(float(np.mean(np.sqrt(m['pts'][:,0]**2 + m['pts'][:,1]**2))) for m in perMember)
+
+            print('Number of group source points (all members): {:d}'.format(int(offs[-1])))
+            log.info('Number of group source points (all members): {:d}'.format(int(offs[-1])))
+
+            #trajsByMember[k][i] = ragged per-marker trajectories for member k, velocity slice i
+            trajsByMember = [[None]*N_vS for _ in members]
+            for i in range(N_vS):
+                v_b = float(vSlicesRep[0, i])
+                print("\n---Tracing group for velocity slice: {:f} [m/s]---\n".format(v_b))
+                log.info("\n---Tracing group for velocity slice: {:f} [m/s]---\n".format(v_b))
+                if abs(v_b) < 1e-12:
+                    continue   #stationary slice: macroparticles do not move
+                traceDir = 1.0 if v_b > 0 else -1.0
+                v_par_mag = abs(v_b)
+                trajsCat = FIL._traceSliceGeom(MHD, ptsCat, traceDir, v_par_mag, v_r,
+                                               tMaxRel, minRctr, dpinit)
+                for k in range(len(members)):
+                    trajsByMember[k][i] = trajsCat[offs[k]:offs[k+1]]
+
+            # ---- Phase 3: per member -> interpolate, map HF (combined), write outputs ----
+            N_ts = len(ts)
+            for k, m in enumerate(perMember):
+                #restore FIL state for this member so the existing HF / output code sees its data
+                FIL.density = m['density']
+                FIL.xyzPts = m['xyzPts']
+                FIL.E0 = m['E0']
+                FIL.N_b = m['N_b']; FIL.N_r = m['N_r']; FIL.N_p = m['N_p']; FIL.N_vS = m['N_vS']
+                FIL.vSlices = m['vSlices']
+                FIL.energyFracs = m['energyFracs']
+                FIL.velocityFracs = m['velocityFracs']
+                FIL.v_r = m['v_r']; FIL.traceDir = m['traceDir']
+                FIL.tMin = m['tMin']; FIL.tMax = m['tMax']; FIL.dt = m['dt']
+                id = m['id']
+
+                N_pts = m['N_pts']
+                xyzSteps = np.zeros((N_vS, N_pts, N_ts, 3))
+                intersectRecord = np.ones((N_vS, N_pts, N_ts))*np.nan
+                for i in range(N_vS):
+                    v_b = float(vSlicesRep[0, i])
+                    xyzSteps[i, :, tIdx, :] = m['pts']     #source location at the source timestep
+                    if abs(v_b) < 1e-12:
+                        continue
+                    speed = np.sqrt(v_b**2 + v_r**2)
+                    FIL._raycastInterpSlice(i, trajsByMember[k][i], ts, tIdx, speed,
+                                            tMaxRel, xyzSteps, intersectRecord)
+                FIL.xyzSteps = xyzSteps
+                FIL.intersectRecord = intersectRecord
+
+                #--- map heat flux / particles to targets (accumulate -> combined group total) ---
+                if filMergedPFC is not None:
+                    if any(t in PFC.timesteps for PFC in self.PFCs):
+                        print("*"*20)
+                        print('mergedPFCs filament HF, timestep: '+self.tsFmt.format(t))
+                        log.info("*"*20)
+                        log.info('mergedPFCs filament HF, timestep: '+self.tsFmt.format(t))
+                        pfcDir = self.MHD.shotPath + self.tsFmt.format(t) +'/'+filMergedPFC.name+'/'
+                        tools.makeDir(pfcDir, clobberFlag=False)
+                        self.HF.filamentHeatFlux(self.FIL, filMergedPFC, ts, tIdx)
+                        self.HF.filamentParticleFlux(self.FIL, filMergedPFC, ts, tIdx)
+                        print("Scattering filament HF back to PFC objects")
+                        log.info("Scattering filament HF back to PFC objects")
+                        filMergedPFC.scatter_back('hfFil', self.IO, self.MHD.shotPath)
+                else:
+                    for PFC in self.PFCs:
+                        if t not in PFC.timesteps:
+                            pass
+                        else:
+                            print("*"*20)
+                            print('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+                            log.info("*"*20)
+                            log.info('PFC Name: '+ PFC.name+', timestep: '+self.tsFmt.format(t))
+                            pfcDir = self.MHD.shotPath + self.tsFmt.format(t) +'/'+PFC.name+'/'
+                            tools.makeDir(pfcDir, clobberFlag=False)
+                            self.HF.filamentHeatFlux(self.FIL, PFC, ts, tIdx)
+                            self.HF.filamentParticleFlux(self.FIL, PFC, ts, tIdx)
+
+                #energy balance for this member's source timestep
+                energy, particles = self.filDepositedEnergyParticles(tIdx)
+                EtotAll += energy
+                pTotAll += particles
+
+                #per-filament trace output (one cloud per member -> drives the movie)
+                print("Generating trace output for "+id)
+                log.info("Generating trace output for "+id)
+                self.filamentTraceOutput(id, t, tIdx)
+
+        #combined deposited totals for the group (PFC tallies now hold the group sum)
+        EtotROI = float(np.sum([np.sum(PFC.Edep) for PFC in self.PFCs]))
+        pTotROI = float(np.sum([np.sum(PFC.ptclDep) for PFC in self.PFCs]))
+
+        print("\n\nGroup Energy Deposited on ROI PFCs: {:f}".format(EtotROI))
+        print("Group Energy Deposited on All PFCs: {:f}".format(EtotAll))
+        print("Theoretical group energy: {:f}".format(groupE0))
+        if groupE0 > 0:
+            print("Energy balance: {:0.3f}%".format(EtotAll / groupE0 * 100.0))
+        log.info("\n\nGroup Energy Deposited on ROI PFCs: {:f}".format(EtotROI))
+        log.info("Group Energy Deposited on All PFCs: {:f}".format(EtotAll))
+        log.info("Theoretical group energy: {:f}".format(groupE0))
+        if groupE0 > 0:
+            log.info("Energy balance: {:0.3f}%".format(EtotAll / groupE0 * 100.0))
+
+        #save ONE combined HF / particle output for the whole group
+        print("Copying combined group HF to PV movieDir")
+        log.info("Copying combined group HF to PV movieDir")
+        self.saveFilamentHFOutput(ts, groupId)
+        self.saveFilamentParticleOutput(ts, groupId)
+        return
+
+
+    def _cpuSafeRayTracer(self, rt):
+        """
+        Returns a ray-tracer engine string safe for the current run mode.
+
+        A 'mitsuba_gpu' / 'mitsuba_cuda' request needs the cuda_ad_rgb Mitsuba
+        variant, which requires a CUDA-capable GPU at variant-set time.  On a CPU
+        run (mafot_gpu False) that variant can't be set and Mitsuba hard-crashes,
+        so downgrade to 'mitsuba_cpu' (the llvm_ad_rgb CPU variant), keeping engine
+        parity with GPU runs.  Open3D / mitsuba_cpu requests pass through unchanged.
+        """
+        if not getattr(self.MHD, 'mafot_gpu', False) and str(rt).strip().lower() in ('mitsuba_gpu', 'mitsuba_cuda'):
+            log.info("CPU run: downgrading rayTracer '%s' -> 'mitsuba_cpu' (llvm)", rt)
+            print("CPU run: downgrading rayTracer '{}' -> 'mitsuba_cpu' (llvm)".format(rt))
+            return 'mitsuba_cpu'
+        return rt
+
+
     def filamentSourceOutput(self,id: str, t: float, tIdx: int, filtype = 'fil'):
         """
         saves filament source profile
@@ -2854,30 +3148,50 @@ class engineObj():
         """
         saves filament traces in CSV or VTP format
 
-        """ 
+        Consolidated output: one file per output timestep containing every velocity
+        slice (instead of one file per (velocity slice, timestep)).  A 'velSlice' and
+        'velocity' point-data array let ParaView recover the per-slice view.  Points
+        are stacked slice-major: rows [i*N_pts : (i+1)*N_pts] belong to velocity slice i.
+        """
         if filtype == 'RE':
             obj = self.RE
         else:
             obj = self.FIL
-        
+
         N_ts = int((obj.tMax - obj.tMin) / obj.dt)+1
         ts = np.linspace(obj.tMin, obj.tMax, N_ts)
-        path = self.MHD.shotPath 
-        for i in range(obj.N_vS):
-            for j,t in enumerate(ts):
-                #save filament trajectory data to file
-                tag = self.tsFmt.format(t)
-                prefix = 'filamentTrace_'+id+'_vS{:03d}_tsSrc'.format(i)+self.tsFmt.format(t_source)
-                label = 'Filament Trace'
-                xyzData = obj.xyzSteps[i,:,j,:].reshape(obj.N_b*obj.N_r*obj.N_p, 3)
-                if colorbar == True:
-                    scalarData = obj.density[:,:,:,tIdx].reshape(obj.N_b*obj.N_r*obj.N_p) * obj.energyFracs[:,i]
-                else:
-                    scalarData = np.ones((obj.N_b*obj.N_r*obj.N_p))
-                if self.IO.csvMask == True:
-                    self.IO.writePointCloudCSV(xyzData,scalarData,path,label,tag,prefix)
-                if self.IO.vtpPCMask == True:
-                    self.IO.writePointCloudVTP(xyzData,scalarData,label,prefix,path,tag, PClabel=False)
+        path = self.MHD.shotPath
+        N_pts = obj.N_b*obj.N_r*obj.N_p
+        N_vS = obj.N_vS
+        label = 'Filament Trace'
+
+        #per-slice density weighting (constant across timesteps); density flat at source tIdx
+        densFlat = obj.density[:,:,:,tIdx].reshape(N_pts)
+        if colorbar == True:
+            #scalar[slice i, pt p] = densFlat[p] * energyFracs[p, i], stacked slice-major
+            scalarAll = (densFlat[None,:] * obj.energyFracs[:, :].T).reshape(N_vS*N_pts)
+        else:
+            scalarAll = np.ones(N_vS*N_pts)
+
+        #slice metadata (constant across timesteps) so ParaView can threshold by slice/velocity
+        extraArrays = {
+            'velSlice': np.repeat(np.arange(N_vS), N_pts).astype(np.float32),
+            'velocity': np.repeat(obj.vSlices[0,:], N_pts).astype(np.float32),
+        }
+
+        #ensure the paraview output dir exists once (writer also guards, but avoid re-deriving)
+        tools.makeDir(path + 'paraview/', clobberFlag=False, mode=self.IO.chmod, UID=self.IO.UID, GID=self.IO.GID)
+
+        for j,t in enumerate(ts):
+            #one consolidated file per output timestep across all velocity slices
+            tag = self.tsFmt.format(t)
+            prefix = 'filamentTrace_'+id+'_tsSrc'+self.tsFmt.format(t_source)
+            xyzData = obj.xyzSteps[:, :, j, :].reshape(N_vS*N_pts, 3)
+            if self.IO.csvMask == True:
+                self.IO.writePointCloudCSV(xyzData,scalarAll,path,label,tag,prefix)
+            if self.IO.vtpPCMask == True:
+                self.IO.writePointCloudVTP(xyzData,scalarAll,label,prefix,path,tag,
+                                           PClabel=False, extraArrays=extraArrays)
 
         return
 

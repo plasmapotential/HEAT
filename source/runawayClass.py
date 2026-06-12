@@ -336,15 +336,23 @@ class Runaways:
         raw = getattr(self, 'runawayRayTracer', None) or 'open3d'
         raw = str(raw).strip().lower()
         self._re_rt = shadowKernels()
-        if raw in ('mitsuba_gpu', 'mitsuba_cuda'):
-            self._re_rt.buildMitsubaScene(tri, mitsubaMode='cuda')
-            self._re_rt_engine = 'mitsuba'
-            self._re_mitsuba_mode = 'cuda'
-        elif raw == 'mitsuba_cpu':
-            self._re_rt.buildMitsubaScene(tri, mitsubaMode='cpu')
-            self._re_rt_engine = 'mitsuba'
-            self._re_mitsuba_mode = 'cpu'
-        else:
+        try:
+            if raw in ('mitsuba_gpu', 'mitsuba_cuda'):
+                self._re_rt.buildMitsubaScene(tri, mitsubaMode='cuda')
+                self._re_rt_engine = 'mitsuba'
+                self._re_mitsuba_mode = 'cuda'
+            elif raw == 'mitsuba_cpu':
+                self._re_rt.buildMitsubaScene(tri, mitsubaMode='cpu')
+                self._re_rt_engine = 'mitsuba'
+                self._re_mitsuba_mode = 'cpu'
+            else:
+                self._re_rt.buildOpen3Dscene(tri.astype(np.float32))
+                self._re_rt_engine = 'open3d'
+        except Exception as e:
+            #e.g. requested Mitsuba variant not available in this environment
+            log.warning("RE Mitsuba scene build failed (%s); falling back to open3d", e)
+            print("RE Mitsuba scene build failed ({}); falling back to open3d".format(e))
+            self._re_rt = shadowKernels()
             self._re_rt.buildOpen3Dscene(tri.astype(np.float32))
             self._re_rt_engine = 'open3d'
         self.scene = getattr(self._re_rt, 'scene', None)
