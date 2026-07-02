@@ -8,12 +8,9 @@
 services:
   HEAT:
     #user: ${UID}:${GID}
-    image: "plasmapotential/heat:v4.2.8"
+    image: "plasmapotential/heat:v4.3"
     # for terminal (batch) mode, override default args by uncommenting and setting your batchFile path:
     #command: ["--m", "t", "--f", "/root/terminal/batchFile.dat"]
-    #command: ["--m", "t", "--f", "/root/source/HEAT/tests/integrationTests/nstxuTestCase/batchFile_filament.dat"]
-    #command: ["--m", "t", "--f", "/root/source/HEAT/tests/integrationTests/nstxuTestCase/batchFile_rad.dat"]
-    command: ["--m", "t", "--f", "/root/terminal/batchFile.dat"]
     ports:
       - "8050:8050"
     volumes:
@@ -24,9 +21,9 @@ services:
       # HEAT data directory on this machine (need to replace with absolute path on Windows)
       - ${HOME}/HEAT:/root/HEAT
 #      # HEAT source code from github
-      - /home/tlooby/source/HEAT/github:/root/source/HEAT
+#      - /home/tlooby/source/HEAT/github:/root/source/HEAT
 #      # Batch mode directory
-      - /home/tlooby/HEATruns/SPARC/filament_OOLIM:/root/terminal
+#      - /home/tlooby/HEATruns/SPARC/filament_OOLIM:/root/terminal
     stdin_open: true # docker run -i
     tty: true        # docker run -t
     #if you want to set env vars, do it here:
@@ -53,4 +50,4 @@ services:
 # Interactive shell (override entrypoint so we get bash, not launchHEAT.py):
 #   docker compose run --entrypoint "" HEAT /bin/bash
 # From inside a shell you can still run: python3 ./source/HEAT/source/launchHEAT.py --m t --f /root/terminal/batchFile.dat
-# To change image tag: docker tag plasmapotential/heat:v4.2.8
+# To change image tag: docker tag plasmapotential/heat:v4.3
