@@ -130,4 +130,3 @@ neProfileData, None
 loadHF, False
 loadBasePath, None
 NCPUs, 10
-mafot_gpu, False
