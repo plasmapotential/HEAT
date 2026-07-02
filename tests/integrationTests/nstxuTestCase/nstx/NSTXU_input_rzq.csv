@@ -102,6 +102,7 @@ meshFEMmaxRes, 20.0
 elmerDir, /root/source/HEAT/tests/integrationTests/nstxuTestCase/nstx/elmer/
 elmerFile, elmerFile.csv
 elmerHEATlib, HEATLibrary.so
+numberpartitions, 0
 #=============================================================
 #                3D Plasma Variables
 #=============================================================

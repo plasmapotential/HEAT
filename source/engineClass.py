@@ -4746,6 +4746,8 @@ class engineObj():
                 for PFC in self.PFCs:
                     if t in self.MHD.timesteps:
                         tMHD = t
+                    else:
+                        tMHD = self.MHD.timesteps[0]
                     tMin = np.min(self.MHD.timesteps)
                     tMax = np.max(self.MHD.timesteps)
                     if t < tMin:
@@ -4759,6 +4761,9 @@ class engineObj():
                         #interpolated to the Elmer timestep
                         idx = np.where(tMHD == self.MHD.timesteps)[0][0]
                         tNext = self.MHD.timesteps[idx+1]
+                        tprev = self.MHD.timesteps[idx]
+                        pfcDir = self.MHD.shotPath + self.tsFmt.format(tprev) +'/'+PFC.name+'/'
+                        hfFile = pfcDir + "HF_allSources.csv"
                         pfcDirNext = self.MHD.shotPath + self.tsFmt.format(tNext) +'/'+PFC.name+'/'
                         hfFileNext= pfcDirNext + "HF_allSources.csv"
                         hfFileNew = self.FEM.interpolateHFinTime(hfFile, hfFileNext, tMHD, tNext, t)
@@ -4774,6 +4779,8 @@ class engineObj():
         for PFC in self.PFCs:
             #parameters from elmerFile
             params = self.FEM.elmerData[PFC.name]
+            #copy the ReX init file
+            self.FEM.copyReXinit(PFC)
             #solve the Elmer system
             self.FEM.runElmerSolve(params['SIF'], PFC.name)
 
