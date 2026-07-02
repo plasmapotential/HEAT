@@ -1,0 +1,12 @@
+{
+  "case": "nstxu_radExample_hfRad",
+  "batch_file": "tests/integrationTests/nstxuTestCase/batchFile_rad.dat",
+  "notes": "Mitsuba CPU photon path with mergedPFCs (NSTXU_input.csv). Update values when inputs or physics intentionally change; keep rtol modest for CI portability.",
+  "rtol": 5e-5,
+  "atol": 0.0,
+  "expected": {
+    "summation_radiated_power_to_pfc": 0.0008657469,
+    "peak_qrad": 0.0440281835,
+    "final_tally_pfc_prad_sum": 0.000866
+  }
+}

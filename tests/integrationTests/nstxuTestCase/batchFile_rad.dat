@@ -91,4 +91,5 @@
 #
 MachFlag, Tag, Shot, TimeStep, EQ, CAD, PFC, Input, Output
 #example for radiated power (HF only)
+#nstx,radExample, 204118, 0.2, g204118.00200, testCaseIBDH_v3.0.0.step, PFCs.csv, NSTXU_input_GPU.csv, hfRad
 nstx,radExample, 204118, 0.2, g204118.00200, testCaseIBDH_v3.0.0.step, PFCs.csv, NSTXU_input.csv, hfRad

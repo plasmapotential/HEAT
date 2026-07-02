@@ -31,6 +31,12 @@ tmin, 0
 tmax, 15000
 traceLength, 10
 dpinit, 0.25
+psiMult, 1.0
+BtMult, 1.0
+IpMult, 1.0
+BtraceFile, /root/terminal/sparc/trace.csv
+mafot_bbox, True
+mafot_gpu, False
 #==============================================================
 #                Optical HF Variables
 #==============================================================

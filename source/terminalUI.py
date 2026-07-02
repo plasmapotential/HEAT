@@ -178,7 +178,7 @@ class TUI():
         data = pd.read_csv(batchFile, sep=',', comment='#', skipinitialspace=True)
 
         #determine simulation schedule
-        machines = np.unique(data['MachFlag'].values)
+        machines = np.unique(data['MachFlag'].to_numpy())
         for mach in machines:
             if mach not in self.machineList:
                 print("\n\nMachFlag was not properly set in batchFile!")
@@ -230,31 +230,31 @@ class TUI():
                 #get file paths associated with this tag from batchFile
                 try:
 
-                    shots = tagData['Shot'].values #only 1 shot per tag allowed
-                    timesteps = tagData['TimeStep'].values
+                    shots = tagData['Shot'].to_numpy() #only 1 shot per tag allowed
+                    timesteps = tagData['TimeStep'].to_numpy()
 
                     #this conditional allows for various EQ formats
                     if 'GEQDSK' in tagData.keys():
-                        eqFileNames = tagData['GEQDSK'].values
+                        eqFileNames = tagData['GEQDSK'].to_numpy()
                     else:
-                        eqFileNames = tagData['EQ'].values
+                        eqFileNames = tagData['EQ'].to_numpy()
                     
                     eqFilePaths = machInDir + eqFileNames
 
                     #if user is bringing their own meshes then the CAD file can be set to None
                     #NEED TO FIX THIS SO THAT THERE CAN BE NONE AND strings in same batchFile
-                    if True in pd.isna(tagData['CAD'].values):
+                    if True in pd.isna(tagData['CAD'].to_numpy()):
                         print("No CAD file provided, assuming you are providing STLs")
                         log.info("No CAD file provided, assuming you are providing STLs")
-                        CADfiles = tagData['CAD'].values
+                        CADfiles = tagData['CAD'].to_numpy()
                     #normal cases, user supplies CAD file of some kind
                     else:
-                        CADfiles = machInDir + tagData['CAD'].values
+                        CADfiles = machInDir + tagData['CAD'].to_numpy()
                     
-                    #CADfiles = machInDir + tagData['CAD'].values
-                    PFCfiles = machInDir + tagData['PFC'].values
-                    inputFiles = machInDir + tagData['Input'].values
-                    runList = [x.strip().split(":") for x in tagData['Output'].values]
+                    #CADfiles = machInDir + tagData['CAD'].to_numpy()
+                    PFCfiles = machInDir + tagData['PFC'].to_numpy()
+                    inputFiles = machInDir + tagData['Input'].to_numpy()
+                    runList = [x.strip().split(":") for x in tagData['Output'].to_numpy()]
                     runList = np.unique([x for y in runList for x in y])
                 except Exception as e:
                     print("\n\nSomething is wrong with your batchFile!  Error Trace:\n")

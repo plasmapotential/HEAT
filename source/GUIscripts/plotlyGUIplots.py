@@ -38,8 +38,8 @@ def plotlyOpenFOAMplot(data,names):
         df = data[pfcIdx]
         for i,field in enumerate(fields):
             mask = df['field'] == field
-            t = df[mask].sort_values('# Time')['# Time'].values
-            varMax = df[mask].sort_values('# Time')['max'].values
+            t = df[mask].sort_values('# Time')['# Time'].to_numpy()
+            varMax = df[mask].sort_values('# Time')['max'].to_numpy()
             lineName = field+" "+name
             fig.add_trace(go.Scatter(x=t, y=varMax, name=lineName),
                             secondary_y=y2[i],

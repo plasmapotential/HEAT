@@ -21,8 +21,10 @@
 # times out on ubuntu-latest, increase timeout-minutes (max 360 on hosted runners)
 # or use a larger/self-hosted runner.
 
-name: Publish HEAT Docker image
+name: Build and publish HEAT Docker image
 
+# Runs only when you click "Run workflow" on the Actions tab. Not triggered by
+# push, pull_request, merge to main, or schedule.
 on:
   workflow_dispatch:
     inputs:

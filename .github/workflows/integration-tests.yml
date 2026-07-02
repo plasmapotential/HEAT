@@ -10,7 +10,7 @@ on:
 
 # Single place to update when cutting a new release (image tag on Docker Hub)
 env:
-  HEAT_IMAGE_TAG: v4.2.6
+  HEAT_IMAGE_TAG: v4.3
 
 jobs:
   check-final-image:
@@ -46,8 +46,9 @@ jobs:
       run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:${{ env.HEAT_IMAGE_TAG }} --m t --f /root/source/HEAT/tests/integrationTests/nstxuTestCase/batchFile_optical_elmer.dat
     - name: NSTX-U Gyro-orbit HEAT Calculation
       run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:${{ env.HEAT_IMAGE_TAG }} --m t --f /root/source/HEAT/tests/integrationTests/nstxuTestCase/batchFile_gyro.dat
-    - name: NSTX-U Photon Radiation HEAT Calculation
-      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:${{ env.HEAT_IMAGE_TAG }} --m t --f /root/source/HEAT/tests/integrationTests/nstxuTestCase/batchFile_rad.dat
+    # Runs batchFile_rad.dat in Docker and asserts stdout metrics (see nstxu_hf_rad_goldens.json).
+    - name: NSTX-U Photon Radiation HEAT + hfRad golden checks
+      run: python3 ${{ github.workspace }}/tests/integrationTests/verify_nstxu_hf_rad_goldens.py --workspace ${{ github.workspace }} --docker-image plasmapotential/heat:${{ env.HEAT_IMAGE_TAG }}
     - name: NSTX-U RZQ File HEAT Calculation
       run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:${{ env.HEAT_IMAGE_TAG }} --m t --f /root/source/HEAT/tests/integrationTests/nstxuTestCase/batchFile_rzq.dat
     - name: NSTX-U BYOM HEAT calculation

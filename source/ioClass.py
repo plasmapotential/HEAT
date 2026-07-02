@@ -157,7 +157,7 @@ class IO_HEAT:
         VTKops.writeMeshVTP(f)
         return
 
-    def writePointCloudVTP(self, ctrs, scalar, label, prefix, path, tag=None, PClabel=True):
+    def writePointCloudVTP(self, ctrs, scalar, label, prefix, path, tag=None, PClabel=True, extraArrays=None):
         """
         writes a vtk point cloud file
         output file contains the PFC mesh centers, and an array of heat flux values,
@@ -181,7 +181,7 @@ class IO_HEAT:
                 fName = prefix + '_' + tag + '.vtp'
 
         VTKops = vtkOpsClass.VTKops()
-        VTKops.initializePointCloudScalar(ctrs*1000.0, scalar, label) #scale to mm
+        VTKops.initializePointCloudScalar(ctrs*1000.0, scalar, label, extraArrays=extraArrays) #scale to mm
 
         if 'paraview' not in path:
             PVdir = path + "paraview/"
