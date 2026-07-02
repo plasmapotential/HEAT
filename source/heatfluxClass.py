@@ -572,10 +572,9 @@ class heatFlux:
 
         R = rzq_data['R(m)'].to_numpy()
         Z = rzq_data['Z(m)'].to_numpy()
-        Q = rzq_data['q(W/m2)'].to_numpy()
         # make Q positive. Sometimes, the q values from SOLPS is negative to indicate direction.
-        negs = np.where(Q<0.0)[0]
-        Q[negs] *= -1.0
+        # np.abs returns a fresh writable array (to_numpy() may return a read-only view)
+        Q = np.abs(rzq_data['q(W/m2)'].to_numpy())
         psi_rzq = PFC.ep.psiFunc.ev(R,Z) #convert (r,z) coordinate to psi
         psi_rzq_omp = self.map_R_psi(psi_rzq, PFC) #map the psi_rzq to OMP
 
