@@ -1273,7 +1273,7 @@ class heatflux3D:
 		radius = 0.05 + np.sqrt((Rxpt - self.ep.g['RmAxis'])**2 + (Zxpt - self.ep.g['ZmAxis'])**2)
 		dth = 1e-4/radius
 	
-		f = lambda x: np.float64(self.ep.psiFunc.ev(radius*np.cos(x) + self.ep.g['RmAxis'],radius*np.sin(x) + self.ep.g['ZmAxis'])) - 1
+		f = lambda x: self.ep.psiFunc.ev(radius*np.cos(x) + self.ep.g['RmAxis'],radius*np.sin(x) + self.ep.g['ZmAxis']).item() - 1  #.item(): scalar float for bisect (NumPy 2.0)
 			
 		if 'L' in DivCode:
 			if 'I' in DivCode:

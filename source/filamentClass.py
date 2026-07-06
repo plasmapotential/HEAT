@@ -1243,9 +1243,10 @@ class filament:
         self.r_pts = r_pts
 
         #project user defined toroidal rotation velocity along the field line at center point
-        Br = self.ep.BRFunc.ev(self.rCtr,self.zCtr)
-        Bz = self.ep.BZFunc.ev(self.rCtr,self.zCtr)
-        Bt = self.ep.BtFunc.ev(self.rCtr,self.zCtr)
+        #.item(): scalar (rCtr,zCtr) -> length-1 array from .ev; collapse to float (NumPy 2.0)
+        Br = self.ep.BRFunc.ev(self.rCtr,self.zCtr).item()
+        Bz = self.ep.BZFunc.ev(self.rCtr,self.zCtr).item()
+        Bt = self.ep.BtFunc.ev(self.rCtr,self.zCtr).item()
         Bp = np.sqrt(Br**2+Bz**2)
         Bmag = np.sqrt(Bt**2 + Bp**2)
         self.v_rot_b = self.v_t * Bmag / Bt
