@@ -161,6 +161,8 @@ The subdirectory contains three key files:
 
 A FEM mesh file is not mandatory to provide, but is recommended to incorporate FEM boundary conditions, which must be predefined during mesh generation: the FEM mesh generator incorporated into HEAT provides a generic mesh based on the provided .stp file and PFCname without dedicated boundary conditions. The ELMER output is stored in a data format compatible with HEAT and ParaView for post-processing.
 
+To initiate the combined recrystallization and stress calculations in ELMER as an extension of the elmer flag in the batchfile, additional input information must be provided in the .sif input file. The lines of code required to run these calculations can be found in the example .sif file called "caseTempStressReX.sif" under the path source/elmer/. Of importance are the lines containing the solver 3,4,5 and equation 1. An example of the material properties required for this combined calculations including the object-specific JMAK coefficients can be found for Material 3. 
+
 Running a 3D Plasma heat flux simulation using M3D-C1 output
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 This module enables the use of 3D magnetic field configurations, like error fields or applied perturbation fields, in a HEAT simulation. To keep the code machine agnostic, we use use the output of the MHD code M3D-C1 instead of an EFIT g-file for the 3D plasma equilibrium. HEAT calculates the shadow mask the same way as in the axisymmetric case, but then calls the MAFOT code to calculate the field line penetration depth. Using the Layer model HEAT then assigns heat flux to the penetration depth and smoothes the result. 

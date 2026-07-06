@@ -80,7 +80,8 @@ class FEM:
                              'meshFEMmaxRes',
                              'elmerDir',
                              'elmerFile',
-                             'elmerHEATlib'
+                             'elmerHEATlib',
+                             'numberpartitions'
                              ]
         return
 
@@ -89,7 +90,7 @@ class FEM:
         Set variable types for the stuff that isnt a string from the input file
 
         """
-        integers = [
+        integers = ['numberpartitions'
                     ]
         floats = [
             'meshFEMminRes',
@@ -213,12 +214,24 @@ class FEM:
         dst = self.elmerOutDir + self.elmerHEATlib
         shutil.copyfile(src, dst)
 
-
-        args = ['ElmerSolver', SIFfile]
-        current_env = os.environ.copy()
-        #run Elmer Solver
-        from subprocess import run
-        run(args, env=current_env, cwd=self.elmerOutDir)
+        if self.numberpartitions > 0:
+            args_mesh = ['ElmerGrid', '2', '2', name, '-metis', str(self.numberpartitions)]
+            args = ['mpirun', '-np', str(self.numberpartitions), 'ElmerSolver', SIFfile]
+            current_env = os.environ.copy()
+		    #run Elmer Solver
+            from subprocess import run
+            run(args_mesh, env=current_env, cwd=self.elmerOutDir)		
+            run(args, env=current_env, cwd=self.elmerOutDir)
+            try:
+                self.merge_Rex(name, SIFfile)
+            except:
+                print('no ReX calcs were done')
+        else:
+            args = ['ElmerSolver', SIFfile]
+            current_env = os.environ.copy()
+            #run Elmer Solver
+            from subprocess import run
+            run(args, env=current_env, cwd=self.elmerOutDir)
         return
     
     def interpolateHFtoMesh(self, PFC, t, tMin, hfFile=None):
@@ -291,7 +304,53 @@ class FEM:
         tools.savetxt(self.elmerOutDir + name, nodeArray, fmt="% .9E", delimiter=',')
 
         return
-    
+
+    def copyReXinit(self, PFC):
+        """
+        Takes a PFC object, interpolates the qDiv result onto the surface node of
+        a corresponding volume mesh, then saves a .csv file with columns nodeId, MW/m2.
+
+        SIFfile must contain a Variable, nodalHFprefix, in BC section.  
+        t is the timestep.        
+        """
+        #get the prefix
+        src = self.elmerDir + PFC.SIFfile
+        with open(src, 'r') as f:
+            for line in f:
+                if "nodalReXprefix" in line:
+                    prefix = line.split("String ")[-1].strip()
+        try:
+            ReXfile = prefix + '.dat'
+            #copy Rex init from elmerDir to elmerOutDir
+            src = self.elmerDir + ReXfile
+            dst = self.elmerOutDir + ReXfile
+            shutil.copyfile(src, dst)
+        except:
+            print('no Rex init file provided')
+        return
+
+    def merge_Rex(self, name, SIFfile):
+       import glob
+	   # 1. Find all partition files created by your Fortran module and merge them to one
+       #get the output name from the .sif file
+       src = self.elmerDir + SIFfile
+       with open(src, 'r') as f:
+            for line in f:
+                if "Filename" in line:
+                    prefix = line.split("= ")[-1].strip().strip('"')
+       search_pattern = self.elmerOutDir + prefix + '.p*'
+       files = glob.glob(search_pattern)
+       data_list = []
+       for f in files:
+          # Load each file (assuming they are comma-separated as we programmed)
+          data_list.append(np.loadtxt(f, delimiter=','))
+       merged_data = np.vstack(data_list)
+       # This ensures your final file is perfectly ordered from Node 1 to Node N
+       sorted_data = merged_data[merged_data[:, 0].argsort()]
+       # 4. Save to a single, clean .dat file
+       np.savetxt(self.elmerOutDir+prefix, sorted_data, delimiter=',', fmt=['%d', '%15.9E'])
+       return
+        
     def interpolateHFinTime(self, hfFile, hfFileNext, tLast, tNext, t):
         """
         given a heat flux file from last timestep, hfFile, and a heat flux
