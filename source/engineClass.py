@@ -5157,8 +5157,14 @@ class engineObj():
         #only assign HF values if we ran a heat flux calculation,
         #otherwise we assume the (node, HF) .dat files are already in the ElmerDir
         if len(set(HFvars).intersection(self.runList)) > 0:
+            n_elmer_ts = len(self.FEM.ts)
+            n_pfcs = len(self.PFCs)
+            n_maps = n_elmer_ts * n_pfcs
+            self.FEM.begin_elmer_hf_mapping(n_elmer_ts, n_pfcs)
+            map_step = 0
             for tIdx,t in enumerate(self.FEM.ts):
                 for PFC in self.PFCs:
+                    map_step += 1
                     if t in self.MHD.timesteps:
                         tMHD = t
                     else:
@@ -5167,9 +5173,13 @@ class engineObj():
                     tMax = np.max(self.MHD.timesteps)
                     if t < tMin:
                         #timesteps outside of PFC domain are assigned 0 HF on surface
+                        self.FEM.log_hf_mapping_progress(
+                            map_step, n_maps, t, PFC, 'zero HF (before MHD window)')
                         self.FEM.interpolateHFtoMesh(PFC, t, tMin, hfFile=None)
                     elif t > tMax:
                         #timesteps outside of PFC domain are assigned 0 HF on surface
+                        self.FEM.log_hf_mapping_progress(
+                            map_step, n_maps, t, PFC, 'zero HF (after MHD window)')
                         self.FEM.interpolateHFtoMesh(PFC, t, tMin, hfFile=None)
                     elif t not in PFC.timesteps:
                         #timesteps within the MHD domain but not an MHD timestep get linear
@@ -5181,13 +5191,20 @@ class engineObj():
                         hfFile = pfcDir + "HF_allSources.csv"
                         pfcDirNext = self.MHD.shotPath + self.tsFmt.format(tNext) +'/'+PFC.name+'/'
                         hfFileNext= pfcDirNext + "HF_allSources.csv"
-                        hfFileNew = self.FEM.interpolateHFinTime(hfFile, hfFileNext, tMHD, tNext, t)
-                        self.FEM.interpolateHFtoMesh(PFC, t, tMin, hfFileNew) 
+                        self.FEM.log_hf_mapping_progress(
+                            map_step, n_maps, t, PFC,
+                            'interpolate HF in time between MHD steps')
+                        hf_interp = self.FEM.interpolateHFinTime(hfFile, hfFileNext, tMHD, tNext, t)
+                        self.FEM.interpolateHFtoMesh(
+                            PFC, t, tMin, hf_interp, tree_key=hfFile)
                     else:
                         #Elmer timesteps align with MHD timesteps
                         pfcDir = self.MHD.shotPath + self.tsFmt.format(tMHD) +'/'+PFC.name+'/'
                         hfFile = pfcDir + "HF_allSources.csv"
+                        self.FEM.log_hf_mapping_progress(
+                            map_step, n_maps, t, PFC, 'map HF_allSources.csv')
                         self.FEM.interpolateHFtoMesh(PFC, t, tMin, hfFile)
+            self.FEM.end_elmer_hf_mapping(n_maps)
    
 
         #loop through PFCs, running Elmer Solvers
