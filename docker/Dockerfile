@@ -38,7 +38,7 @@
 #1st build stage.  build all necessary packages from source
 #======================================================================
 # start from base
-FROM ubuntu:22.04 AS heatbuilder
+FROM ubuntu:24.04 AS heatbuilder
 SHELL ["/bin/bash", "-c"] 
 
 LABEL maintainer="tlooby@cfs.energy"
@@ -55,8 +55,7 @@ RUN apt-get -yqq update
 #python layer
 RUN apt-get -yqq install python3 && \
     apt-get -yqq install python3-pip && \
-    apt-get -yqq install python3-pkg-resources && \
-    apt-get -yqq install python3-distutils
+    apt-get -yqq install python3-pkg-resources
 #RUN apt-get -yqq install mdsplus-python
 
 # Create venv for PEP 668 (ubuntu 24.04+)
@@ -81,21 +80,6 @@ RUN ln -s /usr/lib/x86_64-linux-gnu/libunwind.so /usr/lib/x86_64-linux-gnu/libun
 #RUN git clone https://github.com/ORNL-Fusion/EFIT.git /root/source/EFIT
 
 WORKDIR /root
-
-#clone and build M3DC1 fusion-io libs (buildM3DC1 uses make -k; doc/latex errors are harmless)
-RUN git clone https://github.com/nferraro/fusion-io.git /root/source/M3DC1/fusion-io
-COPY docker/buildM3DC1 /root/source/M3DC1/fusion-io/buildM3DC1
-COPY docker/make.inc.ubuntu_x86 /root/source/M3DC1/fusion-io/install/make.inc.ubuntu_x86
-RUN mkdir -p /root/source/M3DC1/build && /root/source/M3DC1/fusion-io/buildM3DC1
-
-#clone and build MAFOT
-ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/hdf5/openmpi
-#note branch here can be changed 
-RUN git clone -b master --single-branch https://github.com/ORNL-Fusion/MAFOT.git /root/source/MAFOT
-COPY docker/buildMAFOT /root/source/MAFOT/buildMAFOT
-RUN mkdir -p /root/source/MAFOT/build/bin && \
-    mkdir -p /root/source/MAFOT/build/lib && \
-    /root/source/MAFOT/buildMAFOT
 
 #clone openfoam, third party libs
 #OpenFOAM version defined by user
@@ -131,6 +115,40 @@ RUN source /root/source/openfoam/OpenFOAM-v${OFversion}/etc/bashrc && \
     hg update develop && \
     ./AllwmakeAll
 
+#clone and build M3DC1 fusion-io libs (buildM3DC1 uses make -k; doc/latex errors are harmless)
+RUN git clone https://github.com/nferraro/fusion-io.git /root/source/M3DC1/fusion-io
+COPY docker/buildM3DC1 /root/source/M3DC1/fusion-io/buildM3DC1
+COPY docker/make.inc.ubuntu_x86 /root/source/M3DC1/fusion-io/install/make.inc.ubuntu_x86
+# Upstream util/makefile forces Intel mpiicpc / -qopenmp; Ubuntu image uses GCC + Open MPI only.
+# we create a custom makefile that uses GCC + Open MPI.
+COPY docker/fusion-io-util-makefile /root/source/M3DC1/fusion-io/util/makefile
+# write_neo_input.cpp calls MPI but omits <mpi.h>; mpiicpc often still compiles, Open MPI mpic++ does not.
+#this needs to be fixed in fusion-io upstream, but for now we can add the include here.
+RUN grep -q '#include <mpi.h>' /root/source/M3DC1/fusion-io/util/write_neo_input.cpp || \
+    sed -i '/#include <netcdf.h>/a#include <mpi.h>' /root/source/M3DC1/fusion-io/util/write_neo_input.cpp
+RUN mkdir -p /root/source/M3DC1/build && /root/source/M3DC1/fusion-io/buildM3DC1
+
+#install CUDA toolkit (nvcc + cudart-dev) so MAFOT can compile GPU support.
+#cudart is linked STATICALLY into the MAFOT binaries (see make.inc.HEAT / makefile),
+#so the runtime stage needs no CUDA packages -- only the host driver, injected by
+#`docker run --gpus`, and only when -g is actually used.
+RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certificates && \
+    wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb -O /tmp/cuda-keyring.deb && \
+    dpkg -i /tmp/cuda-keyring.deb && rm /tmp/cuda-keyring.deb && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends cuda-nvcc-12-6 cuda-cudart-dev-12-6 && \
+    ln -sfn /usr/local/cuda-12.6 /usr/local/cuda && \
+    rm -rf /var/lib/apt/lists/*
+
+#clone and build MAFOT
+ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/hdf5/openmpi
+ARG MAFOT_BRANCH_CACHE_BUST=1
+RUN git clone -b mafot_gpu --single-branch https://github.com/ORNL-Fusion/MAFOT.git /root/source/MAFOT
+COPY docker/buildMAFOT /root/source/MAFOT/buildMAFOT
+RUN mkdir -p /root/source/MAFOT/build/bin && \
+    mkdir -p /root/source/MAFOT/build/lib && \
+    /root/source/MAFOT/buildMAFOT
+
 #clean up
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -142,7 +160,7 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 #dockerhub using the following command (need to comment out first stage too):
 #FROM plasmapotential/HEATbuilder:<tag> as HEATbuilder
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 LABEL maintainer="tlooby@cfs.energy"
 ARG DEBIAN_FRONTEND=noninteractive
 ENV runMode docker
@@ -154,7 +172,6 @@ RUN apt-get -yqq update && apt-get -yqq upgrade
 RUN apt-get -yqq install python3 && \
     apt-get -yqq install python3-pip && \
     apt-get -yqq install python3-pkg-resources && \
-    apt-get -yqq install python3-distutils && \
     apt-get -yqq install python3-paraview
 
 #RUN apt-get -yqq install mdsplus-python
@@ -191,16 +208,37 @@ RUN git clone -b master --single-branch https://github.com/ORNL-Fusion/EFIT.git 
 
 #clone HEAT (branch or tag; set via: docker build --build-arg HEAT_REF=v4.2.6 ...)
 ARG HEAT_REF=v4.3
+# Docker caches the git clone; bump HEAT_CACHE_BUST (e.g. --build-arg HEAT_CACHE_BUST=$(date +%s))
+# to force a fresh clone after pushing HEAT changes (e.g. requirements.txt) to the HEAT_REF branch.
+ARG HEAT_CACHE_BUST=1
 RUN git clone -b ${HEAT_REF} --single-branch https://github.com/plasmapotential/HEAT.git /root/source/HEAT
 WORKDIR /root/source/HEAT
 RUN     git lfs install && git lfs pull
 WORKDIR /root
 
 # fetch HEAT specific python dependencies
-RUN python3 -m pip install --upgrade pip && \
-    python3 -m pip install --ignore-installed blinker && \
+# PIP_BREAK_SYSTEM_PACKAGES: Ubuntu 24.04 Python 3.12 marks the env PEP 668
+# "externally managed"; HEAT needs its pip deps in the same site-packages as the
+# apt-installed freecad/paraview, so install system-wide. --ignore-installed on the
+# pip self-upgrade avoids "Cannot uninstall pip ... RECORD file not found".
+# scipy: requirements.txt leaves it unpinned so pip defers to the apt python3-scipy
+# (built for numpy 1.x); but the pip stack pulls numpy 2.x -> ABI break
+# ("numpy.dtype size changed"). Force the pip scipy build so everything is numpy 2.x.
+# blinker/pyjwt: apt-installed with no pip RECORD file, so when requirements.txt pulls
+# a newer version (pyjwt is a transitive dep of mcp) pip errors with
+# "Cannot uninstall ... no RECORD file". Pre-install with --ignore-installed so a
+# pip-managed copy (with RECORD) satisfies the resolution and the apt one is left alone.
+RUN export PIP_BREAK_SYSTEM_PACKAGES=1 && \
+    python3 -m pip install --upgrade --ignore-installed pip && \
+    python3 -m pip install --ignore-installed blinker pyjwt && \
     python3 -m pip install -r /root/source/HEAT/docker/requirements.txt && \
-    python3 -m pip install -U matplotlib 
+    python3 -m pip install --ignore-installed scipy && \
+    python3 -m pip install -U --ignore-installed matplotlib
+
+# PyFoam 2023.7 vendors six 1.10.0, whose six.moves importer relies on the find_module
+# protocol that Python 3.12 (Ubuntu 24) removed -> "No module named PyFoam.ThirdParty.six.moves".
+# Overlay the pip-installed six (>=1.13, has find_spec) onto PyFoam's vendored copy.
+RUN python3 -c "import six,os,shutil; d=os.path.dirname(six.__file__); shutil.copy(six.__file__, os.path.join(d,'PyFoam','ThirdParty','six.py'))"
 
 
 #make build dirs

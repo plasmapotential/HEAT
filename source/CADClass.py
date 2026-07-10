@@ -44,6 +44,32 @@ log = logging.getLogger(__name__)
 import open3d as o3d
 
 
+def _is_meshable_cad_object(obj):
+    """
+    FreeCAD document objects HEAT can mesh (have Shape + placement).
+
+    STEP/BREP solids are Part.Feature. Part workbench primitives (cylinder,
+    box, sphere, …) are often FeaturePython objects whose Python type is
+    PrimitivePy in newer FreeCAD—they are not Part.Feature but still mesh
+    the same way. App::Part assembly containers are skipped so nested
+    solids are not duplicated in self.CADparts.
+    """
+    tid = getattr(obj, "TypeId", "")
+    if tid == "App::Part":
+        return False
+    if type(obj) == Part.Feature:
+        return True
+    if type(obj).__name__ == "PrimitivePy":
+        return hasattr(obj, "Shape") and obj.Shape and not obj.Shape.isNull()
+    # Fallback for FC builds where primitive TypeId is Part::* but Python type differs
+    if tid.startswith("Part::") and hasattr(obj, "Shape") and obj.Shape and not obj.Shape.isNull():
+        try:
+            if len(obj.Shape.Solids) > 0:
+                return True
+        except (AttributeError, TypeError):
+            pass
+    return False
+
 
 class CAD:
     """
@@ -185,14 +211,14 @@ class CAD:
         Writes ROI as list to CAD object.  Input is timestepMap dataframe
         which is read by function in PFCClass.
         """
-        self.ROI = timestepMap['PFCname'].values
+        self.ROI = timestepMap['PFCname'].to_numpy()
         #self.ROIList = list(set(self.ROI)) #does not preserve order
         self.ROIList = list(self.ROI)
         self.ROIparts = ['None' for i in range(len(self.ROI))]
         self.ROImeshes = ['None' for i in range(len(self.ROI))]
         self.ROIctrs = ['None' for i in range(len(self.ROI))]
         self.ROInorms = ['None' for i in range(len(self.ROI))]
-        res = timestepMap['resolution'].values
+        res = timestepMap['resolution'].to_numpy()
         self.ROIresolutions = []
         for x in res:
             if isinstance(x, (np.floating, float, int, np.integer)):
@@ -511,10 +537,10 @@ class CAD:
         self.CADobjs = self.CADdoc.Objects
         self.CADparts = []
         for obj in self.CADobjs:
-            if type(obj) == Part.Feature:
+            if _is_meshable_cad_object(obj):
                 self.CADparts.append(obj)
             else:
-                print("Part "+obj.Label+" not Part.Feature.  Type is "+str(type(obj)))
+                print("Part "+obj.Label+" not a meshable CAD solid.  Type is "+str(type(obj)))
 
         print("Loaded STEP file: " + self.STPfile)
         log.info("Loaded STEP file: " + self.STPfile)
@@ -555,7 +581,7 @@ class CAD:
         self.CADobjs = self.CADdoc.Objects
         self.CADparts = []
         for obj in self.CADobjs:
-            if type(obj) == Part.Feature:
+            if _is_meshable_cad_object(obj):
                 self.CADparts.append(obj)
 
         print("Loaded BREP file: " + self.BREPfile)
@@ -601,7 +627,7 @@ class CAD:
         """
         rot = FreeCAD.Placement( FreeCAD.Vector(0,0,0), FreeCAD.Rotation(0,0,90) )
         for obj in FreeCAD.ActiveDocument.Objects:
-            if type(obj) == Part.Feature:
+            if _is_meshable_cad_object(obj):
                 obj.Placement = rot.multiply(obj.Placement)
         print("CAD Permutation Complete")
         log.info("CAD Permutation Complete")
@@ -1111,8 +1137,8 @@ class CAD:
         STPfile is the output file defined in input file to HEAT, and is included
         in self variable.  rawSTP is the input CAD file that we want to strip.
 
-        If partsOnly is True then we only copy parts (not assemblies), which
-        technically means only objects with type=Part.Feature
+        If partsOnly is True then we only copy meshable solids (not assemblies),
+        using the same criteria as loadSTEP (Part.Feature, Part primitives, etc.)
         """
         print('Stripping STP file')
         t0 = time.time()
@@ -1138,7 +1164,7 @@ class CAD:
                 # specific string (like "_ASM") in Label that CAD engineer uses
                 # for assemblies
                 if partsOnly==True:
-                    if type(obj)==Part.Feature:
+                    if _is_meshable_cad_object(obj):
                         count+=1
                         newobj.append(obj)
                         newobj[-1].Placement = obj.getGlobalPlacement()
