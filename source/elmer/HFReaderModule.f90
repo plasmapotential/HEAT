@@ -59,7 +59,6 @@ MODULE HFReaderCore
     
     INTEGER :: numLines = 0                      
     REAL(KIND=dp) :: tLastRead = -1.0_dp         
-    REAL(KIND=dp) :: cached_q_flow = 0.0_dp      
     LOGICAL :: FirstVisit = .TRUE.               
     LOGICAL :: MapInitialized = .FALSE.          
     CHARACTER(LEN=100) :: nodalPrefix            
@@ -131,26 +130,36 @@ FUNCTION heatFluxOnNodes(Model, n, t) RESULT(hf)
     
     TYPE(Model_t) :: Model
     INTEGER :: n, i, globalNode, low, high, mid
-    REAL(KIND=dp) :: t, hf
+    REAL(KIND=dp) :: t, hf, q_flow
     LOGICAL :: GotIt
     TYPE(ValueList_t), POINTER :: BC
+    TYPE(Element_t), POINTER :: Element
     CHARACTER(LEN=255) :: f
-    CHARACTER(LEN=100) :: timeString
+    CHARACTER(LEN=100) :: timeString, prefixNow
     
-    !Get the Boundary Condition section from the .sif file
-    BC => GetBC()
-    IF (.NOT. ASSOCIATED(BC)) CALL FATAL('heatFluxOnNodes','No BC found')
-    
-    !Grab the file prefix and base constant flux from the .sif file on the first run
-    IF (FirstVisit) THEN
-        nodalPrefix = GetString(BC, 'nodalHFprefix', GotIt)
-        IF(.NOT. GotIt) CALL Fatal('heatFluxOnNodes', 'Keyword nodalHFprefix missing')
-        
-        cached_q_flow = GetConstReal(BC, 'q_flow', GotIt)
-        IF (.NOT. GotIt) cached_q_flow = 0.0_dp
-        
-        FirstVisit = .FALSE.
+    ! Resolve BC from the current boundary element so each Target Boundary
+    ! gets its own q_flow (-1350 / -3375 / 0), not a value cached from BC #1.
+    Element => Model % CurrentElement
+    IF (ASSOCIATED(Element)) THEN
+        BC => GetBC(Element)
+    ELSE
+        BC => GetBC()
     END IF
+    IF (.NOT. ASSOCIATED(BC)) CALL FATAL('heatFluxOnNodes','No BC found')
+
+    ! Always read per-call: multiple HFreader BCs share this procedure/module.
+    prefixNow = GetString(BC, 'nodalHFprefix', GotIt)
+    IF (.NOT. GotIt) CALL Fatal('heatFluxOnNodes', 'Keyword nodalHFprefix missing')
+    IF (FirstVisit .OR. TRIM(prefixNow) /= TRIM(nodalPrefix)) THEN
+        nodalPrefix = prefixNow
+        FirstVisit = .FALSE.
+        ! Prefix change invalidates CSV cache
+        tLastRead = -1.0_dp
+        MapInitialized = .FALSE.
+    END IF
+
+    q_flow = GetConstReal(BC, 'q_flow', GotIt)
+    IF (.NOT. GotIt) q_flow = 0.0_dp
     
     !Only read the file if the simulation time has proceed
     IF (ABS(t - tLastRead) > 1.0e-9_dp) THEN
@@ -198,12 +207,14 @@ FUNCTION heatFluxOnNodes(Model, n, t) RESULT(hf)
     hf = 0.0_dp
     
     !If this node was found in the CSV (LocalMap > 0), grab its flux value
-    IF (LocalMap(n) > 0) hf = CSV_Fluxes(LocalMap(n))
+    IF (n >= 1 .AND. n <= Model % Mesh % NumberOfNodes) THEN
+        IF (LocalMap(n) > 0) hf = CSV_Fluxes(LocalMap(n))
+    END IF
     
-    !Clamp negative fluxes to zero
+    !Clamp negative plasma fluxes to zero (cooling is applied via q_flow below)
     IF (hf < 0.0_dp) hf = 0.0_dp
     
-    !Add the constant background flux imported from the .sif file
-    hf = hf + cached_q_flow
+    !Add this BC's constant cooling / background flux from the .sif
+    hf = hf + q_flow
     
 END FUNCTION heatFluxOnNodes

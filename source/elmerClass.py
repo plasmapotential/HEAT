@@ -343,7 +343,7 @@ class FEM:
         dst = self.elmerOutDir + self.elmerHEATlib
         shutil.copyfile(src, dst)
 
-        if self.numberpartitions > 0:
+        if self.numberpartitions is not None and self.numberpartitions > 0:
             args_mesh = ['ElmerGrid', '2', '2', name, '-metis', str(self.numberpartitions)]
             args = ['mpirun', '-np', str(self.numberpartitions), 'ElmerSolver', SIFfile]
             current_env = os.environ.copy()
