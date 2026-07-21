@@ -24,7 +24,7 @@ Use this script to cut a new HEAT release (Docker image tag) with less manual ed
    - `v4.3` = branch (or tag) to clone inside the Dockerfile (`HEAT_REF`).
    - `--build` = run the Docker build after updating files (optional).
 3. If you didn’t use `--build`, run the printed `docker build` command yourself.
-4. Push the image: `docker push plasmapotential/heat:v4.2.6`
+4. Push the image: `docker push plasmapotential/heat:v4.3`
 5. Commit the updated CI and compose files, push your branch, open a PR to `main`. CI will use the new image tag.
 
 **Examples:**

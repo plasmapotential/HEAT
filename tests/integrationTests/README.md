@@ -40,7 +40,7 @@ From the **repository root**, with Docker installed:
 
 ```bash
 docker run --rm -v "$(pwd):/root/source/HEAT" --entrypoint "" \
-  plasmapotential/heat:v4.2.7 \
+  plasmapotential/heat:v4.3 \
   python3 /root/source/HEAT/tests/integrationTests/ciTest.py
 ```
 
@@ -48,7 +48,7 @@ docker run --rm -v "$(pwd):/root/source/HEAT" --entrypoint "" \
 
 ```bash
 docker run --rm -v "$(pwd):/root/source/HEAT" \
-  plasmapotential/heat:v4.2.7 \
+  plasmapotential/heat:v4.3 \
   --m t --f /root/source/HEAT/tests/integrationTests/nstxuTestCase/batchFile_optical.dat
 ```
 
@@ -57,7 +57,7 @@ docker run --rm -v "$(pwd):/root/source/HEAT" \
 ```bash
 python3 tests/integrationTests/verify_nstxu_hf_rad_goldens.py \
   --workspace "$(pwd)" \
-  --docker-image plasmapotential/heat:v4.2.7
+  --docker-image plasmapotential/heat:v4.3
 ```
 
 Optional: `--log-file /tmp/hf_rad.log` saves full HEAT output. Override the image with env `HEAT_DOCKER_IMAGE` if you omit `--docker-image`.

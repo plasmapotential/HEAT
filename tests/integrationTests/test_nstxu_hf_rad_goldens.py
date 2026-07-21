@@ -1,7 +1,7 @@
 """
 Pytest wrapper for NSTX-U hfRad stdout goldens (same checks as CI).
 
-Requires Docker and the HEAT image (HEAT_DOCKER_IMAGE, default plasmapotential/heat:v4.2.7).
+Requires Docker and the HEAT image (HEAT_DOCKER_IMAGE, default plasmapotential/heat:v4.3).
 
 Run from repo root:
   pytest tests/integrationTests/test_nstxu_hf_rad_goldens.py -v
@@ -20,7 +20,7 @@ VERIFY_SCRIPT = Path(__file__).resolve().parent / "verify_nstxu_hf_rad_goldens.p
 def test_nstxu_hf_rad_stdout_goldens():
     assert VERIFY_SCRIPT.is_file(), "Missing {}".format(VERIFY_SCRIPT)
     env = os.environ.copy()
-    env.setdefault("HEAT_DOCKER_IMAGE", "plasmapotential/heat:v4.2.7")
+    env.setdefault("HEAT_DOCKER_IMAGE", "plasmapotential/heat:v4.3")
     subprocess.run(
         [
             sys.executable,

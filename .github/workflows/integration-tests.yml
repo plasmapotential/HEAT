@@ -16,6 +16,15 @@ jobs:
   check-final-image:
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/checkout@v4
+    # Fail fast if the tag here drifts from the compose/.env defaults
+    # (scripts/release.sh updates all three; see its self-check).
+    - name: Check image tag matches compose and .env.example defaults
+      run: |
+        grep -q "HEAT_IMAGE_TAG:-${{ env.HEAT_IMAGE_TAG }}" docker/docker-compose.yml || \
+          { echo "::error ::docker-compose.yml default tag != ${{ env.HEAT_IMAGE_TAG }}"; exit 1; }
+        grep -q "^HEAT_IMAGE_TAG=${{ env.HEAT_IMAGE_TAG }}$" docker/.env.example || \
+          { echo "::error ::.env.example HEAT_IMAGE_TAG != ${{ env.HEAT_IMAGE_TAG }}"; exit 1; }
     - name: Check if final Docker image exists on Docker Hub
       id: check-final-image
       run: |

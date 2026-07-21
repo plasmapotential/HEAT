@@ -1,5 +1,7 @@
 *.pyc
 docker/docker-compose_local.yml
 docker/docker-compose_tokens.yml
+docker/.env
+docker/docker-compose.override.yml
 docs/build/
 *.ipynb
