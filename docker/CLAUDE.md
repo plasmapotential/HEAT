@@ -69,9 +69,12 @@ work; the container will fail on /root permissions.
 
 The `HEAT-gpu` service (profile `gpu`) carries the NVIDIA device reservation,
 which errors on hosts without the nvidia runtime (macOS, CI). `run.sh` selects
-it when `HEAT_GPU=1` **and** `docker info` reports an nvidia runtime; raw
-compose users run `docker compose --profile gpu up HEAT-gpu`. Keep `HEAT-gpu`
-as `extends: HEAT` so the services can't drift apart.
+it when `HEAT_GPU=1`; if `HEAT_GPU=1` but `docker info` reports no nvidia
+runtime, it refuses to start (a silent CPU fallback would waste a long run),
+and conversely it warns when an nvidia runtime is present but `HEAT_GPU` is
+unset (GPU left idle). Raw compose users run
+`docker compose --profile gpu up HEAT-gpu`. Keep `HEAT-gpu` as
+`extends: HEAT` so the services can't drift apart.
 
 ## Where the image tag lives
 

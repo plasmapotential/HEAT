@@ -159,19 +159,37 @@ ensure_owner_env() {
   fi
 }
 
-# Select the compose service: HEAT-gpu (NVIDIA reservation) when HEAT_GPU=1
-# and the nvidia runtime is available, otherwise plain HEAT. No --profile flag
-# is needed: compose auto-enables a service's profiles when it is named
-# explicitly, and every call site below names $HEAT_SERVICE.
+# Select the compose service: HEAT-gpu (NVIDIA reservation) when HEAT_GPU=1,
+# plain HEAT otherwise. A GPU that was requested but is unavailable is an
+# error (a silent CPU fallback would waste a long run); a GPU that is
+# available but unrequested gets a warning so it isn't left idle unnoticed.
+# No --profile flag is needed: compose auto-enables a service's profiles when
+# it is named explicitly, and every call site below names $HEAT_SERVICE.
 select_service() {
   HEAT_SERVICE="HEAT"
-  if [ "$(resolve_env HEAT_GPU)" = "1" ]; then
-    if docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q nvidia; then
+  local gpu_requested runtimes
+  gpu_requested="$(resolve_env HEAT_GPU)"
+  runtimes=$(docker info --format '{{json .Runtimes}}' 2>/dev/null)
+  if [ -z "$runtimes" ]; then
+    # docker info unavailable (daemon down?); skip the runtime check and let
+    # compose report the real problem.
+    [ "$gpu_requested" = "1" ] && HEAT_SERVICE="HEAT-gpu"
+    return 0
+  fi
+  if [ "$gpu_requested" = "1" ]; then
+    if printf '%s' "$runtimes" | grep -q nvidia; then
       HEAT_SERVICE="HEAT-gpu"
     else
-      warn "HEAT_GPU=1 but no nvidia runtime found in 'docker info'; running without GPU."
+      warn "Error: HEAT_GPU=1 but 'docker info' reports no nvidia runtime."
+      warn "Install the NVIDIA container toolkit, or unset HEAT_GPU (in docker/.env"
+      warn "or the environment) to run without a GPU."
+      return 1
     fi
+  elif printf '%s' "$runtimes" | grep -q nvidia; then
+    warn "Note: an NVIDIA runtime is available but HEAT_GPU is not enabled; running WITHOUT the GPU."
+    warn "Set HEAT_GPU=1 (in docker/.env or the environment) to use it."
   fi
+  return 0
 }
 
 # Stop and remove orphaned/stopped containers left over from this project.
@@ -278,7 +296,7 @@ run_heat() {
 
   ensure_data_dir || return 1
   ensure_owner_env
-  select_service
+  select_service || return 1
 
   case "$command" in
     gui)
