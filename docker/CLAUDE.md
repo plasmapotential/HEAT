@@ -34,11 +34,13 @@ The image defines `ENTRYPOINT launchHEAT.py` and `CMD --a 0.0.0.0 --p 8050 --m g
 ## Env var precedence (the subtle one)
 
 Compose resolves a variable as: exported shell environment > `.env` > the
-`:-` default in the compose file. `run.sh`'s `resolve_env()` mirrors exactly
-that, and deliberately uses `printenv` rather than `$VAR`: bash sets `UID` as
-an unexported shell variable, so `$UID` is not what compose (a child process)
-sees. Any new validation in `run.sh` must go through `resolve_env()` or it
-will disagree with what compose actually does.
+`:-` default in the compose file. `run.sh`'s `resolve_env()` mirrors the
+first two levels only — compose-file `:-` defaults are not visible to it, so
+it returns empty for a variable set nowhere else and callers supply their own
+fallback (e.g. `${port:-8050}`). It deliberately uses `printenv` rather than
+`$VAR`: bash sets `UID` as an unexported shell variable, so `$UID` is not
+what compose (a child process) sees. Any new validation in `run.sh` must go
+through `resolve_env()` or it will disagree with what compose actually does.
 
 ## The dockerUID/dockerGID contract
 
@@ -76,11 +78,14 @@ as `extends: HEAT` so the services can't drift apart.
 `scripts/release.sh <tag>` rewrites every location and ends with a self-check
 grep for stale `plasmapotential/heat:vX.Y` strings. Locations: CI
 `HEAT_IMAGE_TAG` (`.github/workflows/integration-tests.yml`, which also has a
-guard step asserting it matches the compose/.env.example defaults), the
-`:-` default in `docker-compose.yml`, `.env.example`, test defaults in
-`tests/integrationTests/{verify,test}_nstxu_hf_rad_goldens.py`, and doc
-examples. If you add a new file with a concrete tag, add it to the
-`TAG_DOC_FILES` list in `release.sh`.
+guard step asserting it matches the compose default, `.env.example`, and the
+test-file defaults), the `:-` default in `docker-compose.yml`, `.env.example`,
+test defaults in `tests/integrationTests/{verify,test}_nstxu_hf_rad_goldens.py`,
+and the runnable examples in `tests/integrationTests/README.md` and `CLAUDE.md`.
+If you add a new file with a concrete tag, add it to the `TAG_DOC_FILES` list
+in `release.sh` — unless its example pairs the tag with another version string
+(like `HEAT_REF=`): those examples use `<ref>`/`<tag>` placeholders instead,
+because a blanket tag sed would rewrite one half of the pair and corrupt them.
 
 ## CI does not use run.sh or .env
 

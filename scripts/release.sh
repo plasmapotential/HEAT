@@ -64,16 +64,16 @@ for TAGFILE in docker/docker-compose.yml docker/.env.example; do
 done
 
 # 3) Update every other tracked file carrying a concrete image tag (test
-# defaults, docs, examples). Only vX.Y-style tags are rewritten; <tag>,
-# latest, and $VAR references are left alone.
+# defaults and runnable doc examples). Only vX.Y-style tags are rewritten;
+# <tag>, latest, and $VAR references are left alone. Do NOT add files whose
+# examples pair the tag with another version string (e.g. HEAT_REF=<ref>):
+# a blanket tag sed would rewrite one half of the pair and corrupt the
+# example -- those files use <ref>/<tag> placeholders instead.
 TAG_DOC_FILES="
 tests/integrationTests/verify_nstxu_hf_rad_goldens.py
 tests/integrationTests/test_nstxu_hf_rad_goldens.py
 tests/integrationTests/README.md
 CLAUDE.md
-docker/README.md
-docker/Dockerfile
-scripts/README.md
 "
 for F in $TAG_DOC_FILES; do
   if [ -f "$F" ] && grep -qE 'plasmapotential/heat:v[0-9]' "$F"; then

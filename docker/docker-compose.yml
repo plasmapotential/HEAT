@@ -33,8 +33,6 @@ services:
       # terminalUI.py); 0 matches the plain 'docker run' root behavior.
       - dockerUID=${dockerUID:-0}
       - dockerGID=${dockerGID:-0}
-      - UID=${dockerUID:-0}
-      - GID=${dockerGID:-0}
       - OMPI_ALLOW_RUN_AS_ROOT=1
       - OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
 

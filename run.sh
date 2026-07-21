@@ -123,8 +123,13 @@ check_environment() {
     warn "Run 'docker/setup.sh' to regenerate docker/.env."
     return 1
   fi
-  # Data dir: compose bind-mounts it at /root/HEAT; create it if missing so
-  # docker does not create it root-owned.
+  return 0
+}
+
+# Data dir: compose bind-mounts it at /root/HEAT; create it if missing so
+# docker does not create it root-owned. Called only for commands that launch
+# a container (not for maintenance commands or invalid input).
+ensure_data_dir() {
   local data_dir
   data_dir=$(resolve_env HEAT_DATA_DIR)
   data_dir="${data_dir:-$HOME/HEAT}"
@@ -155,15 +160,14 @@ ensure_owner_env() {
 }
 
 # Select the compose service: HEAT-gpu (NVIDIA reservation) when HEAT_GPU=1
-# and the nvidia runtime is available, otherwise plain HEAT. Sets
-# HEAT_SERVICE and HEAT_PROFILE_ARGS (word-split on purpose where used).
+# and the nvidia runtime is available, otherwise plain HEAT. No --profile flag
+# is needed: compose auto-enables a service's profiles when it is named
+# explicitly, and every call site below names $HEAT_SERVICE.
 select_service() {
   HEAT_SERVICE="HEAT"
-  HEAT_PROFILE_ARGS=""
   if [ "$(resolve_env HEAT_GPU)" = "1" ]; then
     if docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q nvidia; then
       HEAT_SERVICE="HEAT-gpu"
-      HEAT_PROFILE_ARGS="--profile gpu"
     else
       warn "HEAT_GPU=1 but no nvidia runtime found in 'docker info'; running without GPU."
     fi
@@ -234,6 +238,7 @@ run_heat() {
     warn "'runDockerComposeDetached' is deprecated; use './run.sh shell' (interactive)"
     warn "or './run.sh gui -d' (detached GUI) instead."
     check_environment || return 1
+    ensure_data_dir || return 1
     ensure_owner_env
     notice "Starting a detached shell container (old runDockerComposeDetached behavior)..."
     heat_compose run -d --entrypoint /bin/bash HEAT -c "sleep infinity"
@@ -271,6 +276,7 @@ run_heat() {
     return 1
   fi
 
+  ensure_data_dir || return 1
   ensure_owner_env
   select_service
 
@@ -285,9 +291,14 @@ run_heat() {
       fi
       local port
       port=$(resolve_env HEAT_PORT)
-      notice "Starting the HEAT GUI (Ctrl-C to stop). Open http://localhost:${port:-8050}"
+      if [ -n "$detach" ]; then
+        notice "Starting the HEAT GUI detached. Open http://localhost:${port:-8050}"
+        notice "Stop it with './run.sh cleanup' (or 'docker compose down' from docker/)."
+      else
+        notice "Starting the HEAT GUI (Ctrl-C to stop). Open http://localhost:${port:-8050}"
+      fi
       # shellcheck disable=SC2086
-      heat_compose $HEAT_PROFILE_ARGS up $detach "$HEAT_SERVICE"
+      heat_compose up $detach "$HEAT_SERVICE"
       ;;
     tui)
       local batch="$1"
@@ -302,13 +313,11 @@ run_heat() {
       # referenced with /root/terminal/... paths sit alongside the batch file.
       export BATCH_DIR="$batch_dir"
       notice "Running HEAT in terminal mode on ${batch_dir}/${base}"
-      # shellcheck disable=SC2086
-      heat_compose $HEAT_PROFILE_ARGS run --rm "$HEAT_SERVICE" --m t --f "/root/terminal/${base}"
+      heat_compose run --rm "$HEAT_SERVICE" --m t --f "/root/terminal/${base}"
       ;;
     shell)
       # Override the launchHEAT.py entrypoint so we get bash
-      # shellcheck disable=SC2086
-      heat_compose $HEAT_PROFILE_ARGS run --rm --entrypoint "" "$HEAT_SERVICE" /bin/bash
+      heat_compose run --rm --entrypoint "" "$HEAT_SERVICE" /bin/bash
       ;;
     test)
       local name="${1:-optical}"
@@ -323,8 +332,7 @@ run_heat() {
       fi
       # Mount this checkout as the HEAT source, mirroring CI (integration-tests.yml)
       notice "Running integration test '${name}' with ${HEAT_REPO_ROOT} mounted as /root/source/HEAT"
-      # shellcheck disable=SC2086
-      heat_compose $HEAT_PROFILE_ARGS run --rm -v "${HEAT_REPO_ROOT}:/root/source/HEAT" "$HEAT_SERVICE" \
+      heat_compose run --rm -v "${HEAT_REPO_ROOT}:/root/source/HEAT" "$HEAT_SERVICE" \
         --m t --f "/root/source/HEAT/tests/integrationTests/nstxuTestCase/batchFile_${name}.dat"
       ;;
     fix_permissions)

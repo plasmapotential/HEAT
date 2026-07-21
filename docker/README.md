@@ -16,7 +16,7 @@ The Dockerfile is ordered so that **changing the HEAT branch/tag (`HEAT_REF`) do
 Build from the **repository root**:
 
 ```bash
-docker build -f docker/Dockerfile --build-arg HEAT_REF=v4.3 -t plasmapotential/heat:v4.3 .
+docker build -f docker/Dockerfile --build-arg HEAT_REF=<ref> -t plasmapotential/heat:<tag> .
 ```
 
 ## Using a pre-built heatbuilder (skip stage 1)

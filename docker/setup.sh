@@ -18,18 +18,16 @@ if [ ! -f .env ]; then
   echo "Created .env from .env.example"
 fi
 
-# Replace key's value in .env, appending the key if absent.
+# Replace key's value in .env in place, appending the key if absent. Uses awk
+# with ENVIRON (not sed) so values containing sed/awk metacharacters (&, |, \)
+# pass through literally -- HEAT_DATA_DIR is an arbitrary host path.
 set_kv() {
-  local key="$1" value="$2"
-  if grep -q "^${key}=" .env; then
-    if sed --version 2>/dev/null | grep -q GNU; then
-      sed -i "s|^${key}=.*|${key}=${value}|" .env
-    else
-      sed -i.bak "s|^${key}=.*|${key}=${value}|" .env && rm -f .env.bak
-    fi
-  else
-    echo "${key}=${value}" >> .env
-  fi
+  KV_KEY="$1" KV_VALUE="$2" awk '
+    BEGIN { k = ENVIRON["KV_KEY"]; v = ENVIRON["KV_VALUE"] }
+    index($0, k "=") == 1 { print k "=" v; found = 1; next }
+    { print }
+    END { if (!found) print k "=" v }
+  ' .env > .env.tmp && mv .env.tmp .env
 }
 
 # UID for chown of HEAT output (see dockerUID/dockerGID in docker-compose.yml).
