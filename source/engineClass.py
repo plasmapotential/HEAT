@@ -2653,7 +2653,7 @@ class engineObj():
                 epIdx = np.where( np.min(both)==self.MHD.timesteps )[0][0]
 
 
-                print(REDict)
+                #print(REDict)
                 self.RE.initializeREdistFromDict(REDict, idx, self.MHD.ep[epIdx])
                 self.RE.ts = ts
 

@@ -216,7 +216,7 @@ class Runaways:
 
         dictionary is originally a pandas dataframe, so each row in the runaway.csv
         HEAT file is a new id # in the dict.  each row can therefore be accessed by:
-        filDict['<parameter>'][<row#>]
+        REDict['<parameter>'][<row#>]
         ep is equilParams object
         """
         #initialize this RE
@@ -369,7 +369,9 @@ class Runaways:
         Ray–mesh tests use rayTracerClass.shadowKernels; engine sets runawayRayTracer
         from HF.rayTracer.
         """
-        pts = self.xyzPts.reshape(self.N_b*self.N_r*self.N_p, 3)
+        if len(self.xyzPts.shape) > 2:
+            pts = self.xyzPts.reshape(self.N_b*self.N_r*self.N_p, 3)
+        print(pts)
         N_pts = len(pts)
         N_ts = len(ts)
 
@@ -601,11 +603,30 @@ class Runaways:
         Btrace is magnetic field line trace from MAFOT for RE ctr
 
         """
-        self.gridPsiThetaDistAtCtr(self.rCtr, self.zCtr, multR=10.0, multZ = 10.0)
-        #discretize filament into macroparticle sources along field line
-        # Using gaussian function for macroparticle energy TODO: update with more accurate density function
-        self.discretizeRunaways(self.N_r,self.N_p,self.N_b, Btrace, self.N_sig_r, self.N_sig_p, self.N_sig_b)
-        self.gaussianAtPts(self.ctrPts, self.xyzPts, t-self.tMin, self.v_r)
+        if self.N_r > 0:
+            self.gridPsiThetaDistAtCtr(self.rCtr, self.zCtr, multR=10.0, multZ = 10.0)
+            #discretize filament into macroparticle sources along field line
+            # Using gaussian function for macroparticle energy TODO: update with more accurate density function
+            self.discretizeRunaways(self.N_r,self.N_p,self.N_b, Btrace, self.N_sig_r, self.N_sig_p, self.N_sig_b)
+            self.gaussianAtPts(self.ctrPts, self.xyzPts, t-self.tMin, self.v_r)
+
+        else:
+            # Using the input file and giving uniform densities
+            n_pts = self.starts_from_file.shape[0]
+            self.N_b = 1
+            self.N_r = 1
+            self.N_p = n_pts
+            xyzPts = np.ones((self.N_b, self.N_r, self.N_p,3))
+            denspts = np.ones((self.N_b, self.N_r, self.N_p, 1)) * 1/n_pts 
+            print(1/n_pts)
+            xs, ys, zs = tools.cyl2xyz(self.starts_from_file[:,0], self.starts_from_file[:,1], self.starts_from_file[:,2], degrees = False)
+            xyzPts[0,0,:, 0] = xs
+            xyzPts[0,0,:, 1] = ys
+            xyzPts[0,0,:, 2] = zs
+            self.density = denspts
+            self.xyzPts = xyzPts
+            self.tSrc = self.ts[:self.N_src_t]
+
         return
                
             
@@ -920,12 +941,18 @@ class Runaways:
             if Z < zMid:
                 theta*=-1.0 
         else:
+            Z = np.atleast_1d(Z)
             if (Z < zMid).any():
                 idx = np.where(Z < zMid)[0]
                 theta[idx] *= -1.0
         return theta
     
-    
+    def read_in_starts(self, path):
+        startfile = path + "start_pts.csv"
+        self.starts_from_file = np.loadtxt(startfile, delimiter=',', skiprows=1)
+        print(self.starts_from_file)
+
+
     def discretizeRunaways(self, N_r: int, N_p: int, N_b: int, Btrace: np.ndarray, 
                            N_sig_r: int, N_sig_p: int, N_sig_b: int):
         """
@@ -940,6 +967,7 @@ class Runaways:
         
         stolen from filament class
         """
+
         d_b = self.distance(Btrace)
         #find index of RE center
         ctr = np.array([self.xCtr, self.yCtr, self.zCtr])
@@ -997,6 +1025,7 @@ class Runaways:
         self.b_pts = b_pts
         self.p_pts = p_pts
         self.r_pts = r_pts
+
 
         #project user defined toroidal rotation velocity along the field line at center point
         
