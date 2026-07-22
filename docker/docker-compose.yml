@@ -17,6 +17,10 @@
 services:
   HEAT:
     image: "${HEAT_IMAGE:-plasmapotential/heat}:${HEAT_IMAGE_TAG:-v4.3}"
+    # The published image is amd64-only; request that platform explicitly so
+    # pulls work on arm64 hosts with emulation (e.g. Apple silicon + Rosetta)
+    # instead of failing with "no matching manifest for linux/arm64/v8".
+    platform: "${HEAT_PLATFORM:-linux/amd64}"
     ports:
       - "${HEAT_PORT:-8050}:8050"
     volumes:
