@@ -81,119 +81,143 @@ HEAT from the docker container:
         </div>
 
 
-Permissions in Docker on Linux
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-When a user launches an application in a docker container, that application is run as root inside the container.
-This can be problematic if the container writes files to the host OS, as the user id (UID) and group id (GID)
-inside the container may not match up with the UID and GID of the user on the host.  Newer versions of docker
-intelligently pass the UID and GID into the container, but older versions do not.  The HEAT source code contains
-a bash script, runDockerCompose, that can pass the UID and GID into the container so that all files written during
-the HEAT run will be saved with the user's UID/GID.  This happens in the following code:
+One-time setup: docker/.env
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The docker compose recipe (docker/docker-compose.yml) is parameterized via an
+environment file, docker/.env.  Every variable has a sensible default, so this
+step is optional, but running it once is recommended::
 
-.. code-block:: bash
+    ./docker/setup.sh
 
-    #check for docker group and load into ${dockerGID}
-    if [ $(getent group docker) ]; then
-      echo "docker group exists. setting dockerGID env var..."
-      export dockerGID="$(getent group docker | cut -d: -f3)"
-    else
-      echo "'docker' group does not exist."
-      echo "If you continue HEAT files will be saved under root group!"
-      echo "It is recommended (but not required) that you create group"
-      echo "'docker' and add yourself to it before running HEAT."
-    fi
-    #get user id
-    if [ $(getent group docker) ]; then
-      echo "copying UID for user into docker container"
-      export dockerUID="$(echo $UID)"
-    else
-      echo "could not copy user ID into docker."
-      echo "files will be saved as root:root !"
-    fi
+This generates docker/.env from docker/.env.example and records:
 
+ - ``dockerUID`` / ``dockerGID`` — your user/group IDs, passed into the
+   container so files HEAT writes are owned by you (see Permissions below)
+ - ``HEAT_DATA_DIR`` — the host directory mounted at /root/HEAT for HEAT
+   output (default ``~/HEAT``)
+ - ``HEAT_IMAGE_TAG`` — the HEAT image version to run
+ - ``HEAT_PORT`` — the host port for the GUI (default 8050)
+ - ``HEAT_GPU`` — set to 1 to enable the NVIDIA GPU reservation (requires the
+   nvidia container runtime)
+ - ``HEAT_RUNS_DIR`` — optional (left empty by setup.sh): a host directory
+   mounted at /root/HEAT_runs in every container, so input files can reference
+   shared inputs by absolute ``/root/HEAT_runs/...`` paths (see the TUI mode
+   section below)
 
-If your docker configuration has UID/GID mapping enabled, then you can comment out those
-aforementioned lines in runDockerCompose.
+Edit docker/.env at any time to change these.  A variable exported in your
+shell overrides .env for one-off runs, e.g.
+``HEAT_IMAGE_TAG=v4.2.7 ./run.sh gui``.
 
+Developers: ``./docker/setup.sh --dev`` additionally writes
+docker/docker-compose.override.yml, which mounts your HEAT checkout over the
+source baked into the image, so local code changes run without rebuilding.
+Delete that file to revert to the image's built-in source.
 
-It is also possible to pass environment variables from your local session into the docker container
-using the docker compose recipe file, docker-compose.yml .  To achieve this, you would first need
-to determine your UID / GID and then uncomment the relevant lines in docker-compose.yml:
+Running HEAT: the run.sh wrapper
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+A wrapper script at the repository root, run.sh, is the recommended way to
+launch every HEAT mode.  It validates your configuration before starting a
+container and prints actionable errors::
 
-.. code-block:: yaml
-
-       #environment:
-       - dockerUID=$dockerUID
-       - dockerGID=$dockerGID
-       - UID=$dockerUID
-       - GID=$dockerGID
-
-For the latest version of docker, the UID and GID are passed into the container
-automatically.  More information on this can be found here:  https://docs.docker.com/engine/security/userns-remap/
-
-If you are unsure if your version of docker will do UID mapping, its best to just run a test.  First, get the UID
-on the host (echo $UID), and then launch the docker container directly into bash mode and perform the same test
-(override entrypoint so you get a shell; the image uses ENTRYPOINT to run HEAT by default)::
-
-.. code-block:: bash
-
-      docker compose run --entrypoint "" HEAT /bin/bash
-
-
+    ./run.sh gui                     # GUI on http://localhost:8050 (Ctrl-C to stop)
+    ./run.sh gui -d                  # same, detached
+    ./run.sh tui path/to/batchFile.dat   # terminal (batch) mode
+    ./run.sh shell                   # interactive bash shell in the container
+    ./run.sh test optical            # run an integration test case (mirrors CI)
+    ./run.sh fix_permissions         # chown the HEAT data dir back to your user
+    ./run.sh cleanup                 # remove orphaned/stopped containers
+    ./run.sh rm_docker               # remove all project images/containers/volumes
+    ./run.sh help                    # full command list
 
 Start HEAT in GUI mode
 ^^^^^^^^^^^^^^^^^^^^^^
-The image uses ENTRYPOINT + CMD so that ``docker compose up`` starts the HEAT GUI by default.  To start HEAT in GUI mode:
+The image uses ENTRYPOINT + CMD so the GUI is the default mode::
 
-  1) Navigate to the HEAT source code docker directory, <sourcePath>/docker
-  2) Ensure runDockerCompose launches the stack (e.g. the last line is ``docker compose up``).  No need to edit the script for GUI mode.
-  3) Run from the docker directory::
+    ./run.sh gui
 
-.. code-block:: bash
+or, with raw compose from the docker directory::
 
-      ./runDockerCompose
+    docker compose up
 
-  or directly::
-
-.. code-block:: bash
-
-      docker compose up
+Then open http://localhost:8050 in a browser.
 
 Start HEAT in TUI mode
 ^^^^^^^^^^^^^^^^^^^^^^
-You can run HEAT in terminal (batch) mode in either of two ways.
+Point run.sh at your batchFile::
 
-**Option A — Override command in docker-compose (recommended):** No interactive shell needed.  The image CMD is overridden so HEAT runs in TUI mode when you bring the stack up.
+    ./run.sh tui <batchModePath>/batchFile.dat
 
-  1) Navigate to the HEAT source code docker directory, <sourcePath>/docker.
-  2) Edit docker-compose.yml:
-     - Under **volumes**, uncomment and set the batch directory mount, e.g. ``- <batchModePath>:/root/terminal``.
-     - Uncomment the **command** line and set the path to your batchFile, e.g.::
-         command: ["--m", "t", "--f", "/root/terminal/batchFile.dat"]
-  3) Run from the docker directory::
+HEAT runs in terminal mode and the container is removed when the run finishes.
+No editing of docker-compose.yml is required.
 
-     .. code-block:: bash
+Alternatively, get an interactive shell and run HEAT manually.  Because the
+image uses ENTRYPOINT to run HEAT, the entrypoint must be overridden to get a
+shell (``./run.sh shell`` does this for you)::
 
-        ./runDockerCompose
+    docker compose run --rm --entrypoint "" HEAT /bin/bash
 
-     or ``docker compose up``.  HEAT will run in TUI mode and exit when the run finishes.
+then, inside the container::
 
-**Option B — Interactive shell:** Get a bash shell inside the container, then run HEAT manually (same as in older HEAT versions).
+    cd /root/source/HEAT/
+    python3 ./source/launchHEAT.py --m t --f /root/terminal/batchFile.dat
 
-  1) Navigate to the HEAT source code docker directory, <sourcePath>/docker.
-  2) Edit docker-compose.yml volumes as above (uncomment batch directory mount).
-  3) Start an interactive shell.  Because the image uses ENTRYPOINT to run HEAT, you must override it to get a shell::
+How file paths resolve in TUI mode
+""""""""""""""""""""""""""""""""""
+The **parent directory of the batchFile** is bind-mounted at /root/terminal
+inside the container for that run.  The files named in the batchFile columns
+(GEQDSK, CAD, PFC, Input) are written as bare filenames; HEAT resolves them
+inside the ``<MachFlag>/`` subdirectory of that folder, where MachFlag is the
+batchFile's first column — so they must live at
+``<batchFile folder>/<MachFlag>/<file>``.
 
-     .. code-block:: bash
+Paths written *inside* an input file (for example ``radFile``) are
+different: HEAT opens them verbatim inside the container, so they must be
+written as container paths.  Two styles work:
 
-        docker compose run --entrypoint "" HEAT /bin/bash
+ - ``/root/terminal/...`` — resolves inside the batchFile's own folder via
+   the per-run mount above.  No configuration needed, but the referenced
+   file must travel with the run folder.
+ - ``/root/HEAT_runs/...`` — resolves inside the stable mount configured by
+   ``HEAT_RUNS_DIR`` in docker/.env.  This mount is identical for every run,
+   so it suits inputs shared between run folders; if ``HEAT_RUNS_DIR`` is
+   not set, the fallback mount is an empty volume, so such paths fail with
+   file-not-found.
 
-  4) Inside the container, go to the HEAT source directory and run HEAT with your batchFile::
+Example: a machine named myTokamak, whose batchFile rows therefore use
+``MachFlag = myTokamak`` (the subdirectory must be named exactly after the
+MachFlag, which in a real run is one of the supported machine flags —
+``sparc``, ``arc``, ``d3d``, ``nstx``, ...).  With
+``HEAT_RUNS_DIR=/home/me/HEAT_runs`` in docker/.env and this layout on the
+host::
 
-     .. code-block:: bash
+    /home/me/HEAT_runs/myRun/batchFile.dat
+    /home/me/HEAT_runs/myRun/myTokamak/run_input.csv
+    /home/me/HEAT_runs/myRun/myTokamak/radsource.csv
 
-        cd /root/source/HEAT/
-        python3 ./source/launchHEAT.py --m t --f /root/terminal/batchFile.dat
+``./run.sh tui /home/me/HEAT_runs/myRun/batchFile.dat`` mounts
+``/home/me/HEAT_runs/myRun`` at /root/terminal.  The batchFile's Input
+column holds the bare name ``run_input.csv`` (resolved to
+``/root/terminal/myTokamak/run_input.csv``), and run_input.csv may reference
+the radiation file as either ``/root/terminal/myTokamak/radsource.csv`` or
+``/root/HEAT_runs/myRun/myTokamak/radsource.csv`` — both name the same host
+file.
 
-     Convenience scripts (e.g. ``./runTerminalMode``) can also be used from that directory.
+These path conventions apply to TUI mode only.  In GUI mode every input
+(including the radiation source file) is uploaded through the browser, so
+container paths written inside an input file are not used; the mounts are
+still present in the GUI container but the GUI does not read from them.
+
+Permissions in Docker on Linux
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Applications in a docker container run as root, so files HEAT writes to the
+mounted data directory would be owned by root on the host.  To avoid this,
+HEAT chowns its output to the IDs given by the ``dockerUID`` / ``dockerGID``
+environment variables.  ``./docker/setup.sh`` records your IDs in docker/.env
+(preferring the ``docker`` group's GID when it exists); run.sh also fills them
+in automatically at launch when they are not set anywhere.
+
+If you end up with root-owned files anyway (e.g. from a raw ``docker run``
+without these variables), reclaim them with::
+
+    ./run.sh fix_permissions
 

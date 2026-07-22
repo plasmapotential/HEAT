@@ -16,6 +16,21 @@ jobs:
   check-final-image:
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/checkout@v4
+    # Fail fast if the tag here drifts from the other places it lives
+    # (scripts/release.sh updates all of them; see its self-check).
+    # grep -F: match the tag literally so dots can't hide a near-miss.
+    - name: Check image tag matches compose, .env.example, and test defaults
+      run: |
+        grep -qF "HEAT_IMAGE_TAG:-${{ env.HEAT_IMAGE_TAG }}}" docker/docker-compose.yml || \
+          { echo "::error ::docker-compose.yml default tag != ${{ env.HEAT_IMAGE_TAG }}"; exit 1; }
+        grep -qxF "HEAT_IMAGE_TAG=${{ env.HEAT_IMAGE_TAG }}" docker/.env.example || \
+          { echo "::error ::.env.example HEAT_IMAGE_TAG != ${{ env.HEAT_IMAGE_TAG }}"; exit 1; }
+        for f in tests/integrationTests/verify_nstxu_hf_rad_goldens.py \
+                 tests/integrationTests/test_nstxu_hf_rad_goldens.py; do
+          grep -qF "plasmapotential/heat:${{ env.HEAT_IMAGE_TAG }}" "$f" || \
+            { echo "::error ::$f default image tag != ${{ env.HEAT_IMAGE_TAG }}"; exit 1; }
+        done
     - name: Check if final Docker image exists on Docker Hub
       id: check-final-image
       run: |

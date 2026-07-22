@@ -2146,6 +2146,11 @@ class engineObj():
                     try:
                         self.loadHFParams(infile=self.inputFileList[tIdx], tIdx=tIdx)
                     except Exception as e:
+                        #GUI (inputFileList is None) loads HF settings separately
+                        if self.inputFileList is not None:
+                            print("Could not load HF parameters from input file:")
+                            print(e)
+                            raise
                         print("Could not load HF parameters.  Expected for GUI.  Check error message:")
                         print(e)
                     
@@ -2187,6 +2192,11 @@ class engineObj():
                     try:
                         self.loadRADParams(infile=self.inputFileList[tIdx])
                     except Exception as e:
+                        #GUI (inputFileList is None) loads RAD settings via upload
+                        if self.inputFileList is not None:
+                            print("Could not load RAD parameters from input file:")
+                            print(e)
+                            raise
                         print("Could not load RAD parameters.  Expected for GUI.  Check error message:")
                         print(e)
                     #location where we will save a memmap if necessary

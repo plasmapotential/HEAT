@@ -8,41 +8,43 @@ The **Heat flux Engineering Analysis Toolkit (HEAT)** is a Python suite for pred
 
 ## Running HEAT
 
-HEAT runs inside Docker. The published image is `plasmapotential/heat:<tag>` (current tag set in `.github/workflows/integration-tests.yml` → `HEAT_IMAGE_TAG`).
+HEAT runs inside Docker. The published image is `plasmapotential/heat:<tag>`; the tag lives in `docker/.env` (default in `docker/docker-compose.yml` / `docker/.env.example`) and `.github/workflows/integration-tests.yml` → `HEAT_IMAGE_TAG`, kept in sync by `scripts/release.sh`.
 
-**Start the GUI (web app on localhost:8050):**
+`./run.sh` at the repo root is the preferred entrypoint for every mode (see `docker/CLAUDE.md` for the invariants behind it):
+
 ```bash
-cd docker && docker compose up
+./docker/setup.sh          # once: generate docker/.env (UID/GID, data dir, tag)
+./docker/setup.sh --dev    # dev: also mount this checkout over the image's HEAT source
+./run.sh gui               # GUI web app on localhost:8050 (-d for detached)
+./run.sh tui path/to/batchFile.dat   # TUI/batch mode (mounts the file's dir at /root/terminal)
+./run.sh shell             # interactive bash in the container
+./run.sh test optical      # run an integration test case (mirrors CI)
 ```
 
-**TUI/batch mode (inside container or from compose):**
-```bash
-docker run --rm -v "$(pwd):/root/source/HEAT" plasmapotential/heat:v4.2.7 \
-  --m t --f /root/source/HEAT/tests/integrationTests/nstxuTestCase/batchFile_optical.dat
-```
+Raw equivalents: `cd docker && docker compose up` (GUI); `docker compose run --rm --entrypoint "" HEAT /bin/bash` (shell). One-off overrides via exported env vars, e.g. `HEAT_IMAGE_TAG=v4.2.7 ./run.sh gui`, `HEAT_GPU=1 ./run.sh gui` (NVIDIA runtime required).
 
-**Interactive shell in container:**
-```bash
-docker compose run --entrypoint "" HEAT /bin/bash
-```
-
-The `docker/docker-compose.yml` already mounts `~/HEAT` for data and the local repo source into the container, so local code changes are picked up immediately without rebuilding the image.
+Local code changes are picked up without rebuilding the image only after `./docker/setup.sh --dev` (writes the gitignored `docker/docker-compose.override.yml` mounting this checkout at `/root/source/HEAT`); `./run.sh test` always mounts the checkout.
 
 ## Running Tests
 
 All tests run inside the Docker container against the published image (they rely on the full compiled environment: FreeCAD, OpenFOAM, Open3D, Mitsuba).
 
+**Integration test case via the wrapper (mounts this checkout as the HEAT source, mirrors CI):**
+```bash
+./run.sh test optical      # any batchFile_<name>.dat under tests/integrationTests/nstxuTestCase/
+```
+
 **Smoke test (sanity check the mount):**
 ```bash
 docker run --rm -v "$(pwd):/root/source/HEAT" --entrypoint "" \
-  plasmapotential/heat:v4.2.7 \
+  plasmapotential/heat:v4.3 \
   python3 /root/source/HEAT/tests/integrationTests/ciTest.py
 ```
 
-**Single integration test case (e.g. optical):**
+**Single integration test case, raw docker (what CI runs):**
 ```bash
 docker run --rm -v "$(pwd):/root/source/HEAT" \
-  plasmapotential/heat:v4.2.7 \
+  plasmapotential/heat:v4.3 \
   --m t --f /root/source/HEAT/tests/integrationTests/nstxuTestCase/batchFile_optical.dat
 ```
 
@@ -57,7 +59,7 @@ Available batch files in `tests/integrationTests/nstxuTestCase/`:
 **Photon radiation golden checks:**
 ```bash
 python3 tests/integrationTests/verify_nstxu_hf_rad_goldens.py \
-  --workspace "$(pwd)" --docker-image plasmapotential/heat:v4.2.7
+  --workspace "$(pwd)" --docker-image plasmapotential/heat:v4.3
 
 # or via pytest:
 pytest tests/integrationTests/test_nstxu_hf_rad_goldens.py -v
@@ -75,7 +77,7 @@ CI runs all of the above automatically on push/PR to `main` (`.github/workflows/
 ./scripts/release.sh v4.2.8 v4.3 --build
 ```
 
-This updates `HEAT_IMAGE_TAG` in CI and the docker-compose image tags, optionally builds the image, then prompts you to push and open a PR to `main`.
+This updates the image tag everywhere it lives (CI `HEAT_IMAGE_TAG`, the compose/`.env.example` defaults, test-script defaults, and doc examples), runs a self-check grep for stale tags, optionally builds the image, then prompts you to push and open a PR to `main`.
 
 ## Architecture
 

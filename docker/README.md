@@ -1,5 +1,10 @@
 # HEAT Docker
 
+**Running HEAT:** use `../run.sh` (repo root) — `./run.sh gui|tui|shell|test`.
+One-time setup: `./setup.sh` generates `.env` (see `.env.example` for the
+variables; `setup.sh --dev` also mounts your checkout over the image's HEAT
+source). Maintainer invariants live in `CLAUDE.md` here.
+
 ## Build order and caching
 
 The Dockerfile is ordered so that **changing the HEAT branch/tag (`HEAT_REF`) does not force a full rebuild** of OpenFOAM and swak4Foam:
@@ -11,7 +16,7 @@ The Dockerfile is ordered so that **changing the HEAT branch/tag (`HEAT_REF`) do
 Build from the **repository root**:
 
 ```bash
-docker build -f docker/Dockerfile --build-arg HEAT_REF=v4.3 -t plasmapotential/heat:v4.2.6 .
+docker build -f docker/Dockerfile --build-arg HEAT_REF=<ref> -t plasmapotential/heat:<tag> .
 ```
 
 ## Using a pre-built heatbuilder (skip stage 1)

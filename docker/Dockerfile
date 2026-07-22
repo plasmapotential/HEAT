@@ -17,7 +17,7 @@
 # Build from the repository root (parent of docker/), so COPY paths are correct:
 #   docker build -f docker/Dockerfile -t plasmapotential/heat .
 # With a specific HEAT branch/tag for the image:
-#   docker build -f docker/Dockerfile --build-arg HEAT_REF=v4.2.6 -t plasmapotential/heat:v4.2.6 .
+#   docker build -f docker/Dockerfile --build-arg HEAT_REF=<ref> -t plasmapotential/heat:<tag> .
 #
 # Cross platform build (e.g. apple silicon):
 #   docker buildx build --platform linux/amd64,linux/arm64 -f docker/Dockerfile -t plasmapotential/heat . --push

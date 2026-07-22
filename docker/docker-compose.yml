@@ -1,42 +1,56 @@
 #docker-compose.yml
 #Engineer:  T. Looby
 #Date: 20240321
-#Description: Docker recipe for development.  Generates environment.
-#             requires user to have the volumes below locally on host
-#             if not, comment out the line for the dir you don't have
-#             if so, change paths to match your machine
+#Description: Docker recipe for running HEAT. All values are parameterized via
+#             docker/.env (run ./setup.sh to generate it); every variable has a
+#             fallback default here, so the stack also works with no .env.
+#             Prefer the ./run.sh wrapper at the repo root over raw compose.
+#
+#Run modes (image uses ENTRYPOINT launchHEAT.py + CMD, so 'command:'/args select the mode):
+#  GUI (default):      ./run.sh gui        (or: docker compose up HEAT)
+#  TUI/batch:          ./run.sh tui <batchFile>
+#  Interactive shell:  ./run.sh shell      (or: docker compose run --rm --entrypoint "" HEAT /bin/bash)
+#  With NVIDIA GPU:    HEAT_GPU=1 ./run.sh gui   (or: docker compose --profile gpu up HEAT-gpu)
+#
+#Local dev: 'setup.sh --dev' writes docker-compose.override.yml, which mounts
+#your checkout over the image's HEAT clone at /root/source/HEAT.
 services:
   HEAT:
-    #user: ${UID}:${GID}
-    image: "plasmapotential/heat:v4.3"
-    # for terminal (batch) mode, override default args by uncommenting and setting your batchFile path:
-    #command: ["--m", "t", "--f", "/root/terminal/batchFile.dat"]
+    image: "${HEAT_IMAGE:-plasmapotential/heat}:${HEAT_IMAGE_TAG:-v4.3}"
+    # The published image is amd64-only; request that platform explicitly so
+    # pulls work on arm64 hosts with emulation (e.g. Apple silicon + Rosetta)
+    # instead of failing with "no matching manifest for linux/arm64/v8".
+    platform: "${HEAT_PLATFORM:-linux/amd64}"
     ports:
-      - "8050:8050"
+      - "${HEAT_PORT:-8050}:8050"
     volumes:
-      #change volumes below to match your development (host) machine
-      #format is: /host/path:/container/path
-      #user should not edit container paths
-      #
-      # HEAT data directory on this machine (need to replace with absolute path on Windows)
-      - ${HOME}/HEAT:/root/HEAT
-#      # HEAT source code from github
-#      - /home/tlooby/source/HEAT/github:/root/source/HEAT
-#      # Batch mode directory
-#      - /home/tlooby/HEATruns/SPARC/filament_OOLIM:/root/terminal
+      # HEAT data/output directory (host side set via HEAT_DATA_DIR in .env)
+      - "${HEAT_DATA_DIR:-${HOME}/HEAT}:/root/HEAT"
+      # Batch file directory; set per-invocation by './run.sh tui <batchFile>'
+      - "${BATCH_DIR:-/tmp}:/root/terminal"
+      # Optional stable mount for shared run inputs referenced by absolute
+      # /root/HEAT_runs/... paths (host side set via HEAT_RUNS_DIR in .env;
+      # unset falls back to the empty named volume below, so stray paths
+      # fail loudly instead of resolving against a host directory)
+      - "${HEAT_RUNS_DIR:-heat_runs}:/root/HEAT_runs"
     stdin_open: true # docker run -i
     tty: true        # docker run -t
-    #if you want to set env vars, do it here:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics 
-      - dockerUID=$dockerUID
-      - dockerGID=$dockerGID
-      - UID=$dockerUID
-      - GID=$dockerGID
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
+      # HEAT chowns its output to dockerUID:dockerGID (see dashGUI.py /
+      # terminalUI.py); 0 matches the plain 'docker run' root behavior.
+      - dockerUID=${dockerUID:-0}
+      - dockerGID=${dockerGID:-0}
       - OMPI_ALLOW_RUN_AS_ROOT=1
       - OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
-    #for NVIDIA GPUs
+
+  # Same service with the NVIDIA GPU reservation; requires the nvidia container
+  # runtime, so it is opt-in via the 'gpu' profile (HEAT_GPU=1 with run.sh).
+  HEAT-gpu:
+    extends:
+      service: HEAT
+    profiles: ["gpu"]
     deploy:
       resources:
         reservations:
@@ -44,10 +58,7 @@ services:
             - driver: nvidia
               count: all         # or 1
               capabilities: [gpu]
-#NOTES (image uses ENTRYPOINT + CMD so you can override mode via 'command:' or get a shell via --entrypoint):
-# GUI (default): docker compose up
-# TUI/batch: uncomment the 'command:' line above (set path to your batchFile), bind mount /root/terminal, then docker compose up
-# Interactive shell (override entrypoint so we get bash, not launchHEAT.py):
-#   docker compose run --entrypoint "" HEAT /bin/bash
-# From inside a shell you can still run: python3 ./source/HEAT/source/launchHEAT.py --m t --f /root/terminal/batchFile.dat
-# To change image tag: docker tag plasmapotential/heat:v4.3
+
+# Empty fallback for the HEAT_RUNS_DIR mount when the variable is unset.
+volumes:
+  heat_runs:

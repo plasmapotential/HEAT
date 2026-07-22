@@ -71,7 +71,9 @@ This repository uses **Git LFS** for large data files (e.g. the 3D fields test c
     git lfs install
     git lfs pull
 
-before running the 3D fields test case (e.g. ``./runTerminalModeTest3Dfields``).
+then mount this checkout into the container with ``./docker/setup.sh --dev`` (the image's
+built-in clone does not include LFS data) and run the 3D fields test case
+(e.g. ``./runTerminalModeTest3Dfields``) from a container shell (``./run.sh shell``).
 
 
 Developer and license

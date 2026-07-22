@@ -113,8 +113,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument(
         "--docker-image",
-        default=os.environ.get("HEAT_DOCKER_IMAGE", "plasmapotential/heat:v4.2.7"),
-        help="Docker image for HEAT (default: env HEAT_DOCKER_IMAGE or plasmapotential/heat:v4.2.7).",
+        default=os.environ.get("HEAT_DOCKER_IMAGE", "plasmapotential/heat:v4.3"),
+        help="Docker image for HEAT (default: env HEAT_DOCKER_IMAGE or plasmapotential/heat:v4.3).",
     )
     p.add_argument(
         "--goldens",

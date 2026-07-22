@@ -49,7 +49,9 @@ This repository uses Git LFS for large data files (specifically for the 3D field
 To run the 3D fields test case, please run:
     git lfs install
     git lfs pull
-before running the command ./runTerminalModeTest3Dfields
+then mount this checkout into the container (./docker/setup.sh --dev) so the LFS data is
+visible at /root/source/HEAT, and run ./runTerminalModeTest3Dfields from a container
+shell (./run.sh shell) — the image's built-in clone does not include LFS data.
 ---
 The developer is Tom Looby, a Scientist at Commonwealth Fusion Systems.
 

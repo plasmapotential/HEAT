@@ -6,12 +6,16 @@ Use this script to cut a new HEAT release (Docker image tag) with less manual ed
 
 **What it does:**
 
-1. Updates the Docker image tag in one place so you don’t edit multiple files by hand:
+1. Updates the Docker image tag everywhere it lives so you don’t edit multiple files by hand:
    - `.github/workflows/integration-tests.yml` (env `HEAT_IMAGE_TAG`)
-   - `docker/docker-compose.yml`
-   - `docker/docker-compose_local.yml`
-   - `docker/docker-compose_tokens.yml`
-2. Optionally runs `docker build` with the correct `HEAT_REF` (no editing the Dockerfile).
+   - `docker/docker-compose.yml` (the `${HEAT_IMAGE_TAG:-...}` fallback default)
+   - `docker/.env.example`
+   - the test defaults in `tests/integrationTests/verify_nstxu_hf_rad_goldens.py` and
+     `test_nstxu_hf_rad_goldens.py`, plus the runnable examples in
+     `tests/integrationTests/README.md` and `CLAUDE.md`
+2. Self-checks: greps tracked files for any stale `plasmapotential/heat:vX.Y` tag and
+   reports leftovers.
+3. Optionally runs `docker build` with the correct `HEAT_REF` (no editing the Dockerfile).
 
 **Typical workflow:**
 
@@ -24,8 +28,8 @@ Use this script to cut a new HEAT release (Docker image tag) with less manual ed
    - `v4.3` = branch (or tag) to clone inside the Dockerfile (`HEAT_REF`).
    - `--build` = run the Docker build after updating files (optional).
 3. If you didn’t use `--build`, run the printed `docker build` command yourself.
-4. Push the image: `docker push plasmapotential/heat:v4.2.6`
-5. Commit the updated CI and compose files, push your branch, open a PR to `main`. CI will use the new image tag.
+4. Push the image: `docker push plasmapotential/heat:<IMAGE_TAG>` (the exact command is printed by the script).
+5. Commit the updated files, push your branch, open a PR to `main`. CI will use the new image tag.
 
 **Examples:**
 
