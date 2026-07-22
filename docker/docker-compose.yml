@@ -24,6 +24,11 @@ services:
       - "${HEAT_DATA_DIR:-${HOME}/HEAT}:/root/HEAT"
       # Batch file directory; set per-invocation by './run.sh tui <batchFile>'
       - "${BATCH_DIR:-/tmp}:/root/terminal"
+      # Optional stable mount for shared run inputs referenced by absolute
+      # /root/HEAT_runs/... paths (host side set via HEAT_RUNS_DIR in .env;
+      # unset falls back to the empty named volume below, so stray paths
+      # fail loudly instead of resolving against a host directory)
+      - "${HEAT_RUNS_DIR:-heat_runs}:/root/HEAT_runs"
     stdin_open: true # docker run -i
     tty: true        # docker run -t
     environment:
@@ -49,3 +54,7 @@ services:
             - driver: nvidia
               count: all         # or 1
               capabilities: [gpu]
+
+# Empty fallback for the HEAT_RUNS_DIR mount when the variable is unset.
+volumes:
+  heat_runs:

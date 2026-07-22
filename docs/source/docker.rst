@@ -99,6 +99,10 @@ This generates docker/.env from docker/.env.example and records:
  - ``HEAT_PORT`` — the host port for the GUI (default 8050)
  - ``HEAT_GPU`` — set to 1 to enable the NVIDIA GPU reservation (requires the
    nvidia container runtime)
+ - ``HEAT_RUNS_DIR`` — optional (left empty by setup.sh): a host directory
+   mounted at /root/HEAT_runs in every container, so input files can reference
+   shared inputs by absolute ``/root/HEAT_runs/...`` paths (see the TUI mode
+   section below)
 
 Edit docker/.env at any time to change these.  A variable exported in your
 shell overrides .env for one-off runs, e.g.
@@ -139,9 +143,7 @@ Then open http://localhost:8050 in a browser.
 
 Start HEAT in TUI mode
 ^^^^^^^^^^^^^^^^^^^^^^
-Point run.sh at your batchFile; the folder containing it is mounted at
-/root/terminal inside the container, so input files referenced with
-``/root/terminal/...`` paths should sit alongside the batchFile::
+Point run.sh at your batchFile::
 
     ./run.sh tui <batchModePath>/batchFile.dat
 
@@ -158,6 +160,52 @@ then, inside the container::
 
     cd /root/source/HEAT/
     python3 ./source/launchHEAT.py --m t --f /root/terminal/batchFile.dat
+
+How file paths resolve in TUI mode
+""""""""""""""""""""""""""""""""""
+The **parent directory of the batchFile** is bind-mounted at /root/terminal
+inside the container for that run.  The files named in the batchFile columns
+(GEQDSK, CAD, PFC, Input) are written as bare filenames; HEAT resolves them
+inside the ``<MachFlag>/`` subdirectory of that folder, where MachFlag is the
+batchFile's first column — so they must live at
+``<batchFile folder>/<MachFlag>/<file>``.
+
+Paths written *inside* an input file (for example ``radFile``) are
+different: HEAT opens them verbatim inside the container, so they must be
+written as container paths.  Two styles work:
+
+ - ``/root/terminal/...`` — resolves inside the batchFile's own folder via
+   the per-run mount above.  No configuration needed, but the referenced
+   file must travel with the run folder.
+ - ``/root/HEAT_runs/...`` — resolves inside the stable mount configured by
+   ``HEAT_RUNS_DIR`` in docker/.env.  This mount is identical for every run,
+   so it suits inputs shared between run folders; if ``HEAT_RUNS_DIR`` is
+   not set, the fallback mount is an empty volume, so such paths fail with
+   file-not-found.
+
+Example: a machine named myTokamak, whose batchFile rows therefore use
+``MachFlag = myTokamak`` (the subdirectory must be named exactly after the
+MachFlag, which in a real run is one of the supported machine flags —
+``sparc``, ``arc``, ``d3d``, ``nstx``, ...).  With
+``HEAT_RUNS_DIR=/home/me/HEAT_runs`` in docker/.env and this layout on the
+host::
+
+    /home/me/HEAT_runs/myRun/batchFile.dat
+    /home/me/HEAT_runs/myRun/myTokamak/run_input.csv
+    /home/me/HEAT_runs/myRun/myTokamak/radsource.csv
+
+``./run.sh tui /home/me/HEAT_runs/myRun/batchFile.dat`` mounts
+``/home/me/HEAT_runs/myRun`` at /root/terminal.  The batchFile's Input
+column holds the bare name ``run_input.csv`` (resolved to
+``/root/terminal/myTokamak/run_input.csv``), and run_input.csv may reference
+the radiation file as either ``/root/terminal/myTokamak/radsource.csv`` or
+``/root/HEAT_runs/myRun/myTokamak/radsource.csv`` — both name the same host
+file.
+
+These path conventions apply to TUI mode only.  In GUI mode every input
+(including the radiation source file) is uploaded through the browser, so
+container paths written inside an input file are not used; the mounts are
+still present in the GUI container but the GUI does not read from them.
 
 Permissions in Docker on Linux
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

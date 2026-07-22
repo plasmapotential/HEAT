@@ -78,7 +78,9 @@ run_heat_help() {
   echo "  gui [-d]         Start the HEAT GUI (Dash web app on http://localhost:8050)."
   echo "                   -d runs it detached."
   echo "  tui <batchFile>  Run HEAT in terminal/batch mode. The batch file's folder is"
-  echo "                   mounted at /root/terminal inside the container."
+  echo "                   mounted at /root/terminal inside the container. Set"
+  echo "                   HEAT_RUNS_DIR in docker/.env to also mount a shared runs"
+  echo "                   folder at /root/HEAT_runs (for absolute input paths)."
   echo "  shell            Interactive shell in the container (bash, not launchHEAT)."
   echo "  test [name]      Run an integration test case with this checkout mounted as"
   echo "                   the HEAT source (mirrors CI). Default: optical."
@@ -136,6 +138,18 @@ ensure_data_dir() {
   if [ ! -d "$data_dir" ]; then
     notice "Creating HEAT data directory: ${data_dir}"
     mkdir -p "$data_dir" || { warn "Error: could not create ${data_dir}."; return 1; }
+  fi
+  return 0
+}
+
+# Same treatment for the optional HEAT_RUNS_DIR mount (/root/HEAT_runs).
+# Empty means the compose fallback (an empty named volume) — nothing to create.
+ensure_runs_dir() {
+  local runs_dir
+  runs_dir=$(resolve_env HEAT_RUNS_DIR)
+  if [ -n "$runs_dir" ] && [ ! -d "$runs_dir" ]; then
+    notice "Creating HEAT runs directory: ${runs_dir}"
+    mkdir -p "$runs_dir" || { warn "Error: could not create ${runs_dir}."; return 1; }
   fi
   return 0
 }
@@ -257,6 +271,7 @@ run_heat() {
     warn "or './run.sh gui -d' (detached GUI) instead."
     check_environment || return 1
     ensure_data_dir || return 1
+    ensure_runs_dir || return 1
     ensure_owner_env
     notice "Starting a detached shell container (old runDockerComposeDetached behavior)..."
     heat_compose run -d --entrypoint /bin/bash HEAT -c "sleep infinity"
@@ -295,6 +310,7 @@ run_heat() {
   fi
 
   ensure_data_dir || return 1
+  ensure_runs_dir || return 1
   ensure_owner_env
   select_service || return 1
 

@@ -36,12 +36,20 @@ standard mounts are configured there rather than by editing the recipe:
  - **batchFile directory** — set automatically per-invocation by
    ``./run.sh tui <batchModePath>/batchFile.dat``: the folder containing your
    batchFile is mounted at ``/root/terminal``.
+ - **shared runs directory (optional)** — ``HEAT_RUNS_DIR`` in docker/.env is
+   mounted at ``/root/HEAT_runs`` in every container: a stable location for
+   inputs shared between run folders, referenced by absolute
+   ``/root/HEAT_runs/...`` paths inside input files.
  - **HEAT source code** — run ``./docker/setup.sh --dev`` to mount your local
    HEAT checkout over the image's built-in copy at ``/root/source/HEAT``
    (local code changes then run without rebuilding the image).
 
 Additional custom mounts can still be added under the ``volumes`` section of
 docker-compose.yml in ``<hostPath>:<containerPath>`` format.
+
+See *How file paths resolve in TUI mode* on the :doc:`docker <docker>` page
+for a worked example of referencing input files via ``/root/terminal/...``
+versus ``/root/HEAT_runs/...`` paths.
 
 
 

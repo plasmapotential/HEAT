@@ -60,7 +60,9 @@ Escape hatch for root-owned files: `./run.sh fix_permissions`.
 ## The container is root — everything lives under /root
 
 `/root/source/HEAT` (source), `/root/HEAT` (data, `heatdata` env var),
-`/root/terminal` (batch files). A full non-root port (`user: ${UID}:${GID}`)
+`/root/terminal` (batch files), `/root/HEAT_runs` (optional stable mount,
+`HEAT_RUNS_DIR`, for absolute input paths shared across runs). Don't mount
+anything at `/root` itself — it would shadow all of these. A full non-root port (`user: ${UID}:${GID}`)
 was evaluated and deferred: it requires relocating those paths in the
 Dockerfile and Python. Don't add a `user:` line to compose without doing that
 work; the container will fail on /root permissions.
