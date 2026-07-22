@@ -9,6 +9,7 @@ Class for filament tracing.  Used for ELMs and other filamentary structures
 
 import os
 import sys
+import subprocess
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
@@ -16,7 +17,6 @@ import scipy.interpolate as interp
 from scipy.interpolate import interp1d
 import scipy.integrate as integrate
 import pandas as pd
-import open3d as o3d
 import time
 import shutil
 
@@ -26,6 +26,7 @@ import toolsClass
 tools = toolsClass.tools()
 import ioClass
 IO = ioClass.IO_HEAT()
+from rayTracerClass import shadowKernels
 
 import logging
 log = logging.getLogger(__name__)
@@ -130,7 +131,7 @@ class filament:
             df['N_dt'] = df['N_dt'].round(0)
             df['N_dt'] = df['N_dt'].astype(int)
             df['tNew'] = df.apply( lambda x:  np.linspace(x['tMin[s]'],x['tMax[s]'],x['N_dt']+1), axis=1)
-            self.tsFil = df['tNew'].values
+            self.tsFil = df['tNew'].to_numpy()
 
         except:
             print("\n\nError setting up filament time.  Check your filament file\n\n")
@@ -282,7 +283,8 @@ class filament:
         MHD.ittStruct = 360.0 #360 degree trace
         MHD.writeMAFOTpointfile(xyz,self.gridfileStruct)
         MHD.writeControlFile(self.controlfilePath+self.controlfileStruct, t, 0, mode='struct') #0 for both directions
-        MHD.getFieldpath(dphi, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, paraview_mask=False, tag=None)
+        dpinit = getattr(MHD, 'dpinit', None) or 1.0
+        MHD.getFieldpath(dphi, dpinit, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, paraview_mask=False, tag=None, bbox=MHD.mafot_bbox)
         Btrace = tools.readStructOutput(self.structOutfile) 
         os.remove(self.structOutfile)
         return Btrace
@@ -302,7 +304,7 @@ class filament:
         MHD.writeMAFOTpointfile(pts,self.gridfileStruct)
         MHD.writeControlFile(self.controlfilePath+self.controlfileStruct, self.tEQ, traceDir, mode='struct') #0 for both directions
         MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath,
-                                self.controlfileStruct)
+                                self.controlfileStruct, bbox=MHD.mafot_bbox)
 
         structData = tools.readStructOutput(self.structOutfile)
         os.remove(self.structOutfile) #clean up
@@ -318,26 +320,48 @@ class filament:
 
     def buildIntersectionMesh(self):
         """
-        builds intersection mesh for open3d ray tracing
+        Builds ray–mesh scene via rayTracerClass.shadowKernels (Open3D or Mitsuba).
+
+        Engine sets filamentRayTracer from HF.rayTracer (e.g. open3d, mitsuba_gpu, mitsuba_cpu).
         """
-        Nt = len(self.t1)
-        targets = np.hstack([self.t1, self.t2, self.t3]).reshape(Nt*3,3)
-        #cast variables to 32bit for C
-        vertices = np.array(targets.reshape(Nt*3,3), dtype=np.float32)
-        triangles = np.array(np.arange(Nt*3).reshape(Nt,3), dtype=np.uint32)
-        #build intersection mesh and tensors for open3d
-        self.mesh = o3d.t.geometry.TriangleMesh()
-        self.scene = o3d.t.geometry.RaycastingScene()
-        self.mesh_id = self.scene.add_triangles(vertices, triangles)
+        tri = np.stack([self.t1, self.t2, self.t3], axis=1)
+        raw = getattr(self, 'filamentRayTracer', None) or 'open3d'
+        raw = str(raw).strip().lower()
+        self._fil_rt = shadowKernels()
+        try:
+            if raw in ('mitsuba_gpu', 'mitsuba_cuda'):
+                self._fil_rt.buildMitsubaScene(tri, mitsubaMode='cuda')
+                self._fil_rt_engine = 'mitsuba'
+                self._fil_mitsuba_mode = 'cuda'
+            elif raw == 'mitsuba_cpu':
+                self._fil_rt.buildMitsubaScene(tri, mitsubaMode='cpu')
+                self._fil_rt_engine = 'mitsuba'
+                self._fil_mitsuba_mode = 'cpu'
+            else:
+                self._fil_rt.buildOpen3Dscene(tri.astype(np.float32))
+                self._fil_rt_engine = 'open3d'
+        except Exception as e:
+            #e.g. requested Mitsuba variant not available in this environment
+            log.warning("filament Mitsuba scene build failed (%s); falling back to open3d", e)
+            print("filament Mitsuba scene build failed ({}); falling back to open3d".format(e))
+            self._fil_rt = shadowKernels()
+            self._fil_rt.buildOpen3Dscene(tri.astype(np.float32))
+            self._fil_rt_engine = 'open3d'
+        self.scene = getattr(self._fil_rt, 'scene', None)
         return
 
     def traceFilamentParticles(self, MHD: object, ts:np.ndarray , tIdx:int):
         """
         Traces filament macro-particles
 
-        Uses Open3D to accelerate the calculation:
-        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
-        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
+        Ray–mesh tests use rayTracerClass.shadowKernels; engine sets filamentRayTracer
+        from HF.rayTracer (open3d, mitsuba_gpu / mitsuba_cuda, mitsuba_cpu).
+
+        This is the single-filament entry point.  The per-velocity-slice work is split
+        into _traceSliceGeom (the MAFOT trace, which can be batched across many filaments
+        by the engine) and _raycastInterpSlice (the ray-mesh + temporal interpolation,
+        which is done per filament).  Tracing one filament here is exactly equivalent to
+        the engine's batched group path with a single member.
         """
         pts = self.xyzPts.reshape(self.N_b*self.N_r*self.N_p, 3)
         N_pts = len(pts)
@@ -356,134 +380,275 @@ class filament:
         #build intersection mesh
         self.buildIntersectionMesh()
         intersectRecord = np.ones((self.N_vS, N_pts, N_ts))*np.nan
-        #hdotn = np.ones((N_pts))*np.nan
-        #initialize shadowMask matrix
-        shadowMask = np.zeros((N_pts))
+
+        #filament-center major radius (mean over markers), used only to size the one-shot trace length
+        Rctr = np.mean(np.sqrt(pts[:,0]**2 + pts[:,1]**2))
+        dpinit = float(getattr(MHD, 'dpinit', 1.0))
 
         for i in range(self.N_vS):
             print("\n---Tracing for velocity slice: {:f} [m/s]---\n".format(self.vSlices[0,i]))
             log.info("\n---Tracing for velocity slice: {:f} [m/s]---\n".format(self.vSlices[0,i]))
-            #update time counting variables
-            tsNext = np.ones((N_pts))*ts[tIdx]
-            t_tot = np.ones((N_pts))*ts[tIdx]
-            tIdxNext = np.zeros((N_pts), dtype=int) + tIdx
-            vec = np.zeros((N_pts, 3))
-            frac = np.zeros((N_pts))
-            use = np.arange(N_pts)
 
-            #save macroparticle coordinates at t0, increment next
-            self.xyzSteps[i,:,tIdxNext,:] = pts
-            tIdxNext += 1
-            tsNext = ts[tIdxNext]
-            launchPt = pts.copy()
-            v_b = self.vSlices[:,i]
-            sumCount = 0
+            #parallel velocity for this slice.  setupParallelVelocities builds the same velocity
+            #distribution for every macroparticle (common T0 / v_rot_b), so vSlices[:,i] is uniform
+            #across markers -> a single MAFOT trace (one v_par) covers all of them.
+            v_b = float(self.vSlices[0,i])
+            #record the source location at the source timestep for every marker
+            self.xyzSteps[i,:,tIdx,:] = pts
+            if abs(v_b) < 1e-12:
+                continue   #stationary slice: macroparticles do not move
 
-            #check if v_b is positive or negative and trace accordingly
-            if v_b[0] > 0:
-                traceDir = 1.0
-            else:
-                traceDir = -1.0
+            traceDir = 1.0 if v_b > 0 else -1.0
+            v_par_mag = abs(v_b)
+            #macroparticle speed along the (drifted) trajectory.  Toroidal rotation v_t is already
+            #folded into v_b as v_rot_b, so the trajectory speed is sqrt(v_par^2 + v_r^2).
+            speed = np.sqrt(v_b**2 + self.v_r**2)
+            #trajectories are clocked from the source timestep ts[tIdx]; self.tMax is absolute.
+            tMaxRel = self.tMax - ts[tIdx]
 
-            #walk along field line, correcting for v_r, looking for intersections,
-            #saving coordinates at ts
-            while len(use) > 0:
-                #calculate guiding center path for one step
-                q1, q2 = self.findGuidingCenterPaths(launchPt[use], MHD, traceDir)
-                #correct guiding center path using radial velocity
-                d_b = np.linalg.norm((q2-q1), axis=1) #distance along field
-                t_b = d_b / np.abs(v_b)[use] #time along field for this step
-                t_tot[use] += t_b #cumulative time along field
-                d_r = t_b * self.v_r #radial distance
-
-                #generate local radial coordinate transformation
-                R = np.sqrt(q2[:,0]**2 + q2[:,1]**2)
-                Z = q2[:,2]
-                phi = np.arctan2(q2[:,1], q2[:,0])
-                rVec = self.fluxSurfNorms(self.ep, R, Z)
-                rX, rY, rZ = tools.cyl2xyz(rVec[:,0], rVec[:,2], phi, degrees=False)
-                rVecXYZ = np.vstack((rX,rY,rZ)).T
-                rMag = np.linalg.norm(rVecXYZ, axis=1)
-                rN = rVecXYZ / rMag[:,None]
-                
-                #magnetic field line trace corrected with radial (psi) velocity component
-                q3 = q2 + d_r[:,np.newaxis] * rN
-                vec[use] = q3-q1
-                frac[use] = (tsNext[use] - t_tot[use] + t_b) / t_b
-
-                if len(use) > 0:
-                    launchPt[use] = q3
-
-                #construct rays
-                rMag = np.linalg.norm(vec[use], axis=1)
-                rNorm = vec[use] / rMag.reshape((-1,1))
-
-                #calculate intersections
-                mask = np.ones((len(q3)))
-                rays = o3d.core.Tensor([np.hstack([np.float32(q1),np.float32(rNorm)])],dtype=o3d.core.Dtype.Float32)
-                hits = self.scene.cast_rays(rays)
-                #convert open3d CPU tensors back to numpy
-                hitMap = hits['primitive_ids'][0].numpy()
-                distMap = hits['t_hit'][0].numpy()
-
-                #escapes occur where we have 32 bits all set: 0xFFFFFFFF = 4294967295 base10
-                escapes = np.where(hitMap == 4294967295)[0]
-                mask[escapes] = 0.0
-                #when distances to target exceed the trace step, we exclude any hits
-                tooLong = np.where(distMap > rMag)[0]
-                mask[tooLong] = 0.0
-
-                #put hit index in intersectRecord for tIdxNext if we hit
-                if np.sum(mask)>0:
-                    #we found a hit, or multiple
-                    idxHit = np.where(mask==1)[0]
-                    intersectRecord[i, use[idxHit], tIdxNext[use[idxHit]]] = hitMap[idxHit]
-                    #hdotn[i] = np.dot(self.intersectNorms[int(intersectRecord[i])],rNorm[idxHit])
-                    sumCount += np.sum(mask)
-                #else:
-                #    #return nan if we didnt hit anything
-                #    intersectRecord[i, use, tIdxNext[use]] = np.nan
-                #    #hdotn[i] = np.nan
-
-                #particles we need to keep tracing (didnt hit and less than tMax)
-                test1 = np.where(np.isnan(intersectRecord[i, use, tIdxNext[use]]) == True)[0]
-                test2 = np.where(t_tot[use] < self.tMax)[0]
-
-                #use = np.where(np.logical_or(test1,test2)==True)[0]
-                #use = np.intersect1d(test1,test2)
-                #use = np.intersect1d(np.intersect1d(test1,test2),use)
-                use = use[np.intersect1d(test1,test2)]
-
-                #For testing
-                #print(self.tMax)
-                #print(d_b[0])
-                #print(t_b[0])
-                #print(t_tot)
-                #print(d_r[0])
-                #print(q1[0])
-                #print(q2[0])
-                #print(q3[0])
-                #print(rN[0])
-                #print(d_r.T.shape)
-                #print(rN.shape)
-                #print(tsNext)
-                #print(self.xyzSteps)
-                #input()
-
-                #record particle locations for particles that exceeded timestep
-                use2 = np.where(t_tot > tsNext)[0] #particles that crossed a timestep
-                use3 = np.intersect1d(use,use2) #crossed a timestep and still not crossed tMax, indexed to N_pts
-                use4 = np.where(t_tot[use] > tsNext[use])[0] #crossed a timestep and still not crossed tMax, indexed to use
-                if len(use3) > 0:
-                    self.xyzSteps[i,use3,tIdxNext[use3],:] = q1[use4] + vec[use3]*frac[use3,None]
-                    tIdxNext[use3]+=1
-                    tsNext[use3] = ts[tIdxNext[use3]]
-
-            #record the final timestep       
-            self.xyzSteps[i,:,-1,:] = launchPt + vec*frac[:,None]
+            #--- one MAFOT trace; the radial (anomalous) drift is integrated inside MAFOT now ---
+            trajs = self._traceSliceGeom(MHD, pts, traceDir, v_par_mag, self.v_r,
+                                         tMaxRel, Rctr, dpinit)
+            #--- ray-mesh intersection + temporal interpolation for this slice ---
+            self._raycastInterpSlice(i, trajs, ts, tIdx, speed, tMaxRel,
+                                     self.xyzSteps, intersectRecord)
 
         #record the final intersectRecord
         self.intersectRecord = intersectRecord
+        return
+
+    def _gpuFreeBytes(self):
+        """
+        Free GPU memory in bytes (minimum over visible GPUs) via nvidia-smi, cached for the
+        run.  Returns None if nvidia-smi is unavailable so the caller can fall back to a fixed
+        budget.  Used only to size the per-trace launch-point batch so the structure kernel's
+        device buffers fit in memory.
+        """
+        if getattr(self, '_gpuFreeBytesCached', 'unset') != 'unset':
+            return self._gpuFreeBytesCached
+        free = None
+        try:
+            out = subprocess.check_output(
+                ['nvidia-smi', '--query-gpu=memory.free', '--format=csv,noheader,nounits'],
+                stderr=subprocess.DEVNULL).decode()
+            vals = [int(x) for x in out.split('\n') if x.strip()]
+            if vals:
+                free = min(vals) * 1024 * 1024   #MiB -> bytes
+        except Exception:
+            free = None
+        self._gpuFreeBytesCached = free
+        return free
+
+    def _traceSliceGeom(self, MHD: object, pts:np.ndarray, traceDir:float,
+                        v_par_mag:float, v_r:float, tMaxRel:float, Rctr:float,
+                        dpinit:float):
+        """
+        Runs ONE MAFOT guiding-center trace for a single velocity slice and returns the
+        per-marker (ragged) geometric trajectories.
+
+        This is the only part of the filament trace that launches a MAFOT subprocess, so
+        the engine batches it across many filaments by passing a concatenated ``pts``
+        array (markers of every filament that share this slice's v_par and v_radial).
+        The trace is stateless per launch point, so the concatenated result is identical
+        to tracing each filament separately; the caller splits ``trajs`` back per filament
+        using the marker offsets.
+
+        Returns
+        -------
+        trajs : list of (n_i, 3) arrays, one per marker, ordered launch -> far.
+        """
+        N_pts = len(pts)
+
+        #output points needed to reach tMax.  The toroidal angle advances at
+        #v_par*Bphi/(R*|B|) <= v_par/R, so degSpan = tMax*v_par*180/(pi*Rctr) overestimates the
+        #angle the trajectory must cover.  Each output point spans dphi = nstep*dpinit deg, and
+        #getMultipleFieldPaths(1.0,...) uses nstep=1 (the -d 1.0), so the per-point step is the
+        #control-file dpinit.  Overestimating degSpan/dpinit -> the trajectory always reaches tMax.
+        #When batched, Rctr is the SMALLEST major radius in the group, which maximizes nSteps and
+        #therefore keeps every member's trajectory long enough.
+        degSpan = tMaxRel * v_par_mag * 180.0 / (np.pi * Rctr) * 1.1
+        nSteps = int(np.ceil(degSpan / dpinit)) + 2
+
+        #GPU memory guard.  The MAFOT structure kernel allocates two dense device buffers
+        #(forward + backward), each N * nSteps * sizeof(StructureStep) bytes (56 B/step), so a
+        #single trace needs ~2 * N * nSteps * 56 bytes of GPU memory.  Batching many filaments
+        #makes N large, and a big batch (or a high-|v_par| slice with large nSteps) can exceed
+        #GPU memory -> cudaMalloc "out of memory" and an empty output file.  On the GPU, cap the
+        #launch points per MAFOT call so the buffers fit a byte budget (MHD.gpuTraceMaxBytes,
+        #default 0.5 GB); since the per-marker trace is independent, chunking is exact.  The CPU
+        #path has no such limit and traces every point in one call.
+        maxPts = N_pts
+        if getattr(MHD, 'mafot_gpu', False):
+            #explicit override wins; otherwise size the budget from free GPU memory
+            budget = getattr(MHD, 'gpuTraceMaxBytes', None)
+            if budget is None or float(budget) <= 0:
+                free = self._gpuFreeBytes()
+                #fraction of free memory; leaves headroom for the field grid + fragmentation.
+                #fall back to a conservative fixed budget if nvidia-smi is unavailable.
+                budget = 0.6 * free if free else 0.2e9
+            budget = float(budget)
+            bytesPerLine = 2.0 * nSteps * 56.0   #fwd+bwd device buffers, sizeof(StructureStep)=56
+            maxPts = max(1, int(budget / bytesPerLine))
+
+        if N_pts <= maxPts:
+            return self._runStructTrace(MHD, pts, traceDir, v_par_mag, v_r, nSteps)
+
+        #batch too large for one GPU trace -> split into memory-sized chunks (trace is exact
+        #per launch point, so concatenating the chunked trajectories is identical to one call)
+        nChunks = int(np.ceil(N_pts / float(maxPts)))
+        print("GPU memory guard: tracing {:d} points in {:d} chunk(s) of <= {:d} "
+              "(nSteps={:d}) ...".format(N_pts, nChunks, maxPts, nSteps))
+        log.info("GPU memory guard: tracing {:d} points in {:d} chunk(s) of <= {:d} "
+                 "(nSteps={:d}) ...".format(N_pts, nChunks, maxPts, nSteps))
+        trajs = []
+        for s in range(0, N_pts, maxPts):
+            trajs.extend(self._runStructTrace(MHD, pts[s:s+maxPts], traceDir,
+                                              v_par_mag, v_r, nSteps))
+        return trajs
+
+    def _runStructTrace(self, MHD: object, pts:np.ndarray, traceDir:float,
+                        v_par_mag:float, v_r:float, nSteps:int):
+        """
+        Launches ONE MAFOT structure subprocess for the given launch points and returns the
+        per-marker (ragged) geometric trajectories (launch -> far).  Split out from
+        _traceSliceGeom so the GPU path can chunk a large batch across several calls without
+        changing the trace result.
+        """
+        N_pts = len(pts)
+
+        MHD.v_par    = v_par_mag
+        MHD.v_radial = v_r
+        MHD.v_tor    = 0.0   #toroidal rotation already folded into v_b (v_rot_b)
+        MHD.ittStruct = float(nSteps)
+        MHD.writeMAFOTpointfile(pts, self.gridfileStruct)
+        MHD.writeControlFile(self.controlfilePath+self.controlfileStruct, self.tEQ, traceDir, mode='struct')
+        MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, bbox=MHD.mafot_bbox)
+
+        #A missing/empty output means MAFOT failed (on the GPU this is almost always CUDA
+        #out-of-memory).  Fail loudly with a fix, instead of letting genfromtxt return an empty
+        #array that later breaks the per-marker split with an opaque broadcast error.
+        if (not os.path.exists(self.structOutfile)) or os.path.getsize(self.structOutfile) == 0:
+            if os.path.exists(self.structOutfile):
+                os.remove(self.structOutfile)
+            override = getattr(MHD, 'gpuTraceMaxBytes', None)
+            budgetStr = ("{:g} bytes (explicit)".format(float(override))
+                         if override else "auto-sized from free GPU memory")
+            raise RuntimeError(
+                "MAFOT produced no output tracing {:d} points (nSteps={:d}).  On the GPU this "
+                "is almost always CUDA out-of-memory.  The per-trace batch budget is {:s}; set "
+                "MHD.gpuTraceMaxBytes to a smaller byte value to force smaller batches, free GPU "
+                "memory (e.g. a CPU ray tracer), or reduce the filament marker count / number of "
+                "grouped filaments.".format(N_pts, nSteps, budgetStr))
+
+        #Trajectories are RAGGED: a marker stops when it leaves the trace boundary, so each has
+        #its own length.  Read the full output (need column 6 = Lc, which resets to 0 at every
+        #marker's start point) and split on those starts.
+        full = np.genfromtxt(self.structOutfile, comments='#')
+        os.remove(self.structOutfile)
+        if full.ndim == 1:
+            full = full.reshape(1, -1)
+        xyzAll = full[:, 0:3]
+        #Per-marker split.  Lc (col 6) is NOT a reliable delimiter: the CPU only accumulates Lc
+        #inside the real g-file wall, so it stays 0 for many steps in the limiter shadow, while
+        #the GPU accumulates every step in bbox mode -> they disagree.  Instead, each marker
+        #block begins (forward) or ends (backward) at its exact trace input pts[m] (echoed to
+        #~1e-9 via %.10f / precision(16)), so locate the launch points in order.  A launch lies
+        #within one block (<= nSteps+1 rows) of pos.
+        launchIdx = []
+        pos = 0
+        for m in range(N_pts):
+            rel = np.where(np.abs(xyzAll[pos:pos+nSteps+2] - pts[m]).max(axis=1) < 1e-7)[0]
+            if len(rel) == 0:   #fallback: search the whole remainder
+                rel = np.where(np.abs(xyzAll[pos:] - pts[m]).max(axis=1) < 1e-7)[0]
+            if len(rel) == 0:
+                raise ValueError("Filament one-shot: could not locate the launch point of "
+                                 "marker {:d} in the trace output.".format(m))
+            launchIdx.append(pos + int(rel[0]))
+            pos = launchIdx[-1] + 1
+
+        #trajectories ordered launch -> far
+        trajs = []
+        if traceDir == 1.0:
+            bnd = launchIdx + [len(xyzAll)]                 #forward: pts[m] is block m's first row
+            for m in range(N_pts):
+                trajs.append(xyzAll[bnd[m]:bnd[m+1]])
+        else:
+            bnd = [-1] + launchIdx                          #backward: pts[m] is block m's last row
+            for m in range(N_pts):
+                trajs.append(xyzAll[bnd[m]+1:bnd[m+1]+1][::-1])
+
+        return trajs
+
+    def _raycastInterpSlice(self, i:int, trajs:list, ts:np.ndarray, tIdx:int,
+                            speed:float, tMaxRel:float, xyzSteps:np.ndarray,
+                            intersectRecord:np.ndarray):
+        """
+        For one velocity slice ``i`` and one filament's marker trajectories ``trajs``:
+        batch ray-mesh intersect every trajectory segment, then interpolate each marker's
+        position onto the output timesteps and record its first wall intersection.
+
+        Writes in place into ``xyzSteps[i, :, tIdx:, :]`` and ``intersectRecord[i, :, :]``
+        (arrays owned by the caller, sized for this one filament).  Requires the shared
+        ray-tracer scene (self._fil_rt) to already be built via buildIntersectionMesh.
+        """
+        N_pts = len(trajs)
+        N_ts = len(ts)
+
+        #--- batch ray-mesh intersection over every segment of every marker (single cast) ---
+        q1L, q2L, ownerL = [], [], []
+        for m in range(N_pts):
+            tm = trajs[m]
+            if len(tm) >= 2:
+                q1L.append(tm[:-1]); q2L.append(tm[1:])
+                ownerL.append(np.full(len(tm)-1, m, dtype=np.int64))
+        if len(q1L) > 0:
+            q1 = np.concatenate(q1L); q2 = np.concatenate(q2L); owner = np.concatenate(ownerL)
+            d = q2 - q1
+            segMag = np.linalg.norm(d, axis=1)
+            with np.errstate(invalid='ignore', divide='ignore'):
+                rNorm = np.where(segMag[:,None] > 0, d/segMag[:,None], 0.0)
+            if getattr(self, '_fil_rt_engine', 'open3d') == 'mitsuba':
+                prim = np.asarray(self._fil_rt.intersect_segments_mitsuba(
+                    q1, q2, self._fil_rt.scene, mitsubaMode=self._fil_mitsuba_mode))
+                allHit  = prim >= 0
+                allFace = prim.astype(np.int64)
+                allDist = np.zeros(len(prim))   #mitsuba: no sub-segment t -> hit at segment start
+            else:
+                hitMap, distMap = self._fil_rt.cast_rays_open3d_segments(q1, rNorm, segMag)
+                allHit  = (hitMap != 4294967295) & (distMap <= segMag + 1e-9)
+                allFace = hitMap.astype(np.int64)
+                allDist = np.clip(distMap, 0.0, segMag)
+        else:
+            owner = np.zeros(0, dtype=np.int64)
+
+        #--- per marker: interpolate position at each timestep + record the first intersection ---
+        trel_ts = ts[tIdx:] - ts[tIdx]
+        for m in range(N_pts):
+            tm = trajs[m]
+            if len(tm) < 2:
+                continue   #marker left the domain immediately (start already recorded above)
+            segLen = np.linalg.norm(np.diff(tm, axis=0), axis=1)
+            arc = np.concatenate([[0.0], np.cumsum(segLen)])
+            tRel = arc / speed                          #time since the source ts at each point
+
+            #first intersecting segment for this marker (its segments are contiguous in owner)
+            sel = np.where(owner == m)[0]
+            face = -1; tHit = tRel[-1]
+            if len(sel) > 0:
+                h = np.where(allHit[sel])[0]
+                if len(h) > 0:
+                    k = int(h[0])                       #segment index within this marker
+                    tHit = (arc[k] + allDist[sel[k]]) / speed
+                    face = int(allFace[sel[k]])
+            tEnd = min(tHit, tMaxRel)
+            keep = trel_ts <= tEnd + 1e-12
+            for c in range(3):
+                vals = np.interp(trel_ts, tRel, tm[:,c])
+                xyzSteps[i, m, tIdx:, c] = np.where(keep, vals, 0.0)
+            if face >= 0 and tHit <= tMaxRel:
+                jhit = int(np.searchsorted(ts, ts[tIdx] + tHit))
+                if jhit < N_ts:
+                    intersectRecord[i, m, jhit] = face
         return
 
     def setupParallelVelocities(self):
@@ -579,66 +744,6 @@ class filament:
             
         return
 
-    def intersectTestOpen3D(self,
-                            q1:np.ndarray,
-                            q2:np.ndarray,
-                            targets:np.ndarray,
-                            targetNorms:np.ndarray,
-                            ):
-        """
-        checks if any of the lines (field line traces) generated by MAFOT
-        struct program intersect any of the target mesh faces.
-
-        Uses Open3D to accelerate the calculation:
-        Zhou, Qian-Yi, Jaesik Park, and Vladlen Koltun. "Open3D: A modern
-        library for 3D data processing." arXiv preprint arXiv:1801.09847 (2018).
-        """
-        t0 = time.time()
-        N = len(q2)
-        Nt = len(targets)
-        print('{:d} Source Faces and {:d} Target Faces in PFC object'.format(N,Nt))
-
-        mask = np.ones((N))
-
-        #construct rays
-        r = q2-q1
-        rMag = np.linalg.norm(r, axis=1)
-        rNorm = r / rMag.reshape((-1,1))
-
-        #cast variables to 32bit for C
-        vertices = np.array(targets.reshape(Nt*3,3), dtype=np.float32)
-        triangles = np.array(np.arange(Nt*3).reshape(Nt,3), dtype=np.uint32)
-
-        #build intersection mesh and tensors for open3d
-        mesh = o3d.t.geometry.TriangleMesh()
-        scene = o3d.t.geometry.RaycastingScene()
-        mesh_id = scene.add_triangles(vertices, triangles)
-
-        #calculate size of potential arrays in RAM
-        #availableRAM = psutil.virtual_memory().available #bytes
-
-        #calculate intersections
-        rays = o3d.core.Tensor([np.hstack([np.float32(q1),np.float32(rNorm)])],dtype=o3d.core.Dtype.Float32)
-        hits = scene.cast_rays(rays)
-        #convert open3d CPU tensors back to numpy
-        hitMap = hits['primitive_ids'][0].numpy()
-        distMap = hits['t_hit'][0].numpy()
-
-        #escapes occur where we have 32 bits all set: 0xFFFFFFFF = 4294967295 base10
-        escapes = np.where(hitMap == 4294967295)[0]
-        mask[escapes] = 0.0
-
-        #when distances to target exceed the trace step, we exclude any hits
-        tooLong = np.where(distMap > rMag)[0]
-        mask[tooLong] = 0.0
-
-        print('Found {:f} shadowed faces'.format(np.sum(mask)))
-        log.info('Found {:f} shadowed faces'.format(np.sum(mask)))
-        print('Time elapsed: {:f}'.format(time.time() - t0))
-        log.info('Time elapsed: {:f}'.format(time.time() - t0))
-
-        return mask
-
     def createSource(self, t:float, Btrace:np.ndarray):
         """
         creates a filament at time t
@@ -663,10 +768,8 @@ class filament:
 
         phiNorm is returned as 0
         """       
-        if np.isscalar(R):                   
-            R = np.array([R])
-        if np.isscalar(Z):                   
-            Z = np.array([Z])
+        R = np.atleast_1d(np.asarray(R))
+        Z = np.atleast_1d(np.asarray(Z))
 
         Br = ep.BRFunc.ev(R,Z)
         Bz = ep.BZFunc.ev(R,Z)
@@ -705,12 +808,8 @@ class filament:
 
         phiNorm is returned as 0
         """
-
-        if np.isscalar(R):                   
-            R = np.array([R])
-        if np.isscalar(Z):                   
-            Z = np.array([Z])
-
+        R = np.atleast_1d(np.asarray(R))
+        Z = np.atleast_1d(np.asarray(Z))
 
         Br = ep.BRFunc.ev(R,Z)
         Bz = ep.BZFunc.ev(R,Z)
@@ -740,13 +839,25 @@ class filament:
         """
         #calculate distance along wall
         dist = self.distance(traceData)
-        
+        span = float(dist[-1] - dist[0])
+        if traceData.shape[0] < 2 or (not np.isfinite(span)) or span <= 0.0:
+            raise ValueError(
+                'Filament interpolateTrace: field-line segment has zero or invalid arc length '
+                '(span={!r} m over {:d} point(s)). MAFOT may have stopped immediately, or '
+                'discretizeFilament selected too few points inside N_sig_b*sig_b along B. '
+                .format(span, int(traceData.shape[0]))
+            )
         # Resolution we need given the inputs
-        resolution = (dist[-1] - dist[0])/float(N)
+        resolution = span / float(N)
         print("Resolution: {:f} m".format(resolution))
+        if (not np.isfinite(resolution)) or resolution <= 0.0:
+            raise ValueError(
+                'Filament interpolateTrace: resolution is invalid ({!r} m). '
+                'Increase parallel extent of Btrace or reduce N_b.'.format(resolution)
+            )
         # Calculate how many total grid points we need based upon resolution and
         # total distance around curve/wall
-        numpoints = int(np.ceil((dist[-1] - dist[0])/resolution))
+        numpoints = int(np.ceil(span / resolution))
         # Spline Interpolation (linear) - Make higher resolution wall.
         interpolator = interp.interp1d(dist, traceData, kind='slinear', axis=0)
         alpha = np.linspace(dist[0], dist[-1], numpoints+2)[1:-1]
@@ -903,9 +1014,18 @@ class filament:
         #Find coordinate transformation at ctr
         psiaxis = ep.g['psiAxis']
         psiedge = ep.g['psiSep']
-        deltaPsi = np.abs(psiedge - psiaxis)
-        Bp = ep.BpFunc(r0,z0)
-        gradPsi = Bp*r0
+        deltaPsi = max(float(np.abs(psiedge - psiaxis)), 1e-30)
+        Bp = float(np.asarray(ep.BpFunc.ev(r0, z0)).reshape(-1)[0])
+        r0_n = float(np.asarray(r0).reshape(-1)[0])
+        # |R|~0: Bp*|R| -> 0 and distPsi = dpsi/xfm blows up. Floor |R| for scaling only.
+        r_scale = max(abs(r0_n), 1e-6)
+        if abs(r0_n) < 1e-6:
+            log.warning(
+                'fluxCoordDistance: filament rCtr=%g is very small; using |R|=%g m '
+                'only for psi-distance scaling (distPsi). Place the source at finite major radius if possible.',
+                r0_n, r_scale,
+            )
+        gradPsi = max(abs(Bp) * r_scale, 1e-30)
         xfm = gradPsi / deltaPsi
         #convert distance in psi to euclidean coordinates
         psiRZ = ep.psiFunc.ev(R,Z)
@@ -1040,14 +1160,9 @@ class filament:
         R_hat = np.array([1.0, 0.0])
         theta = np.arccos(np.dot(r_hat, R_hat))
         zMid = ep.g['ZmAxis']
-        if type(Z) != np.ndarray:
-            if Z < zMid:
-                theta*=-1.0 
-        else:
-            Z = np.atleast_1d(Z)
-            if (Z < zMid).any():
-                idx = np.where(Z < zMid)[0]
-                theta[idx] *= -1.0
+        # Broadcast-safe sign (0-d Z from xyz2cyl; NumPy 2 disallows np.where(Z<zMid)[0] on 0-d)
+        Zb = np.atleast_1d(np.asarray(Z))
+        theta = np.where(Zb < zMid, -theta, theta)
 
         return theta
 
@@ -1069,6 +1184,12 @@ class filament:
         idx = np.argmin(np.sum(np.abs(Btrace-ctr), axis=1))      
         d_b = d_b - d_b[idx]
         use = np.where(np.abs(d_b) < N_sig_b*self.sig_b)[0]
+        if use.size < 2:
+            raise ValueError(
+                'Filament discretizeFilament: fewer than 2 Btrace points fall inside the parallel '
+                'window (got {:d} point(s), {:d} in full trace). '
+                .format(float(N_sig_b * self.sig_b), int(use.size), int(Btrace.shape[0]))
+            )
 
         #calculate center coordinates along field line
         self.ctrPts, alpha = self.interpolateTrace(Btrace[use], N_b, addRawData=False)
@@ -1122,9 +1243,10 @@ class filament:
         self.r_pts = r_pts
 
         #project user defined toroidal rotation velocity along the field line at center point
-        Br = self.ep.BRFunc.ev(self.rCtr,self.zCtr)
-        Bz = self.ep.BZFunc.ev(self.rCtr,self.zCtr)
-        Bt = self.ep.BtFunc.ev(self.rCtr,self.zCtr)
+        #.item(): scalar (rCtr,zCtr) -> length-1 array from .ev; collapse to float (NumPy 2.0)
+        Br = self.ep.BRFunc.ev(self.rCtr,self.zCtr).item()
+        Bz = self.ep.BZFunc.ev(self.rCtr,self.zCtr).item()
+        Bt = self.ep.BtFunc.ev(self.rCtr,self.zCtr).item()
         Bp = np.sqrt(Br**2+Bz**2)
         Bmag = np.sqrt(Bt**2 + Bp**2)
         self.v_rot_b = self.v_t * Bmag / Bt

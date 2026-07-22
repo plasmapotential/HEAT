@@ -17,7 +17,7 @@ import os
 import pandas as pd
 import numpy as np
 import shutil
-from scipy.interpolate import griddata
+from scipy.spatial import cKDTree
 import gmsh
 
 
@@ -44,6 +44,11 @@ class FEM:
         self.chmod = chmod
         self.GID = GID
         self.UID = UID
+        self._hf_mapping_active = False
+        self._pfc_boundary_cache = {}
+        self._hf_csv_cache = {}
+        self._hf_kdtree_cache = {}
+        self._nodal_hf_prefix_cache = {}
         return
     
     def setupNumberFormats(self, tsSigFigs=6, shotSigFigs=6):
@@ -80,7 +85,8 @@ class FEM:
                              'meshFEMmaxRes',
                              'elmerDir',
                              'elmerFile',
-                             'elmerHEATlib'
+                             'elmerHEATlib',
+                             'numberpartitions'
                              ]
         return
 
@@ -89,7 +95,7 @@ class FEM:
         Set variable types for the stuff that isnt a string from the input file
 
         """
-        integers = [
+        integers = ['numberpartitions'
                     ]
         floats = [
             'meshFEMminRes',
@@ -171,6 +177,130 @@ class FEM:
             log.info("Could not read elmerFile!")
         return
     
+    def begin_elmer_hf_mapping(self, n_timesteps=None, n_pfcs=None):
+        """
+        Start HEAT -> Elmer nodal HF mapping: one GMSH session and per-run caches.
+        """
+        self._pfc_boundary_cache = {}
+        self._hf_csv_cache = {}
+        self._hf_kdtree_cache = {}
+        self._nodal_hf_prefix_cache = {}
+        if not self._hf_mapping_active:
+            gmsh.initialize()
+            self._hf_mapping_active = True
+        if n_timesteps is not None and n_pfcs is not None:
+            total = int(n_timesteps) * int(n_pfcs)
+            msg = (
+                "Starting Elmer HF mapping: {} Elmer timesteps x {} PFCs "
+                "({} nodal HF maps)".format(n_timesteps, n_pfcs, total)
+            )
+            print(msg)
+            log.info(msg)
+
+    def log_hf_mapping_progress(self, step, total, t, PFC, mode):
+        """Progress line for one PFC/timestep nodal HF map."""
+        msg = "Elmer HF mapping [{}/{}]: t={} s, {}, {}".format(
+            step, total, self.tsFmt.format(t), PFC.name, mode)
+        print(msg)
+        log.info(msg)
+
+    def end_elmer_hf_mapping(self, n_maps=None):
+        """Release GMSH and mapping caches after nodal HF files are written."""
+        if self._hf_mapping_active:
+            gmsh.finalize()
+            self._hf_mapping_active = False
+        self._pfc_boundary_cache = {}
+        self._hf_csv_cache = {}
+        self._hf_kdtree_cache = {}
+        self._nodal_hf_prefix_cache = {}
+        if n_maps is not None:
+            msg = "Elmer HF mapping complete ({} nodal HF files written)".format(n_maps)
+            print(msg)
+            log.info(msg)
+
+    def _read_nodal_hf_prefix(self, siffile):
+        """Read nodalHFprefix from a SIF (cached by SIF path)."""
+        if siffile in self._nodal_hf_prefix_cache:
+            return self._nodal_hf_prefix_cache[siffile]
+        src = self.elmerDir + siffile
+        prefix = None
+        with open(src, 'r') as f:
+            for line in f:
+                if "nodalHFprefix" in line:
+                    prefix = line.split("String ")[-1].strip()
+                    break
+        if prefix is None:
+            raise ValueError("nodalHFprefix not found in SIF: " + src)
+        self._nodal_hf_prefix_cache[siffile] = prefix
+        return prefix
+
+    def _load_hf_csv(self, hfFile):
+        """
+        Load HEAT HF_allSources CSV as (xyz, q_MW_m2).
+
+        hfFile may be a filesystem path or an in-memory (xyz, q) tuple from
+        temporal interpolation.
+        """
+        if isinstance(hfFile, tuple):
+            return hfFile
+        if hfFile not in self._hf_csv_cache:
+            hf_data = pd.read_csv(hfFile)
+            xyz = hf_data[['# X', 'Y', 'Z']].to_numpy()
+            q = hf_data['$MW/m^2$'].to_numpy()
+            self._hf_csv_cache[hfFile] = (xyz, q)
+        return self._hf_csv_cache[hfFile]
+
+    def _get_pfc_boundary_cache(self, PFC):
+        """
+        Boundary nodes and coordinates for a PFC volume mesh (cached per meshFile).
+        """
+        key = PFC.meshFile
+        if key in self._pfc_boundary_cache:
+            return self._pfc_boundary_cache[key]
+
+        if not self._hf_mapping_active:
+            gmsh.initialize()
+            self._hf_mapping_active = True
+
+        gmsh.open(PFC.meshFile)
+        node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
+        node_tags = np.asarray(node_tags, dtype=np.int64)
+        node_coords = np.asarray(node_coords, dtype=np.float64).reshape(-1, 3)
+        tag_to_idx = {int(tag): i for i, tag in enumerate(node_tags)}
+
+        boundary_nodes = set()
+        for dim, tag in gmsh.model.getEntities(2):
+            _, _, surface_node_tags = gmsh.model.mesh.getElements(dim, tag)
+            for node_tag_array in surface_node_tags:
+                for node_tag in node_tag_array:
+                    boundary_nodes.add(int(node_tag))
+
+        boundary_nodes_arr = np.array(sorted(boundary_nodes), dtype=np.int64)
+        boundary_indices = np.array([tag_to_idx[int(t)] for t in boundary_nodes_arr])
+        boundaryPts = node_coords[boundary_indices]
+        prefix = self._read_nodal_hf_prefix(PFC.SIFfile)
+
+        self._pfc_boundary_cache[key] = {
+            'boundary_nodes': boundary_nodes_arr,
+            'boundaryPts': boundaryPts,
+            'nodalHFprefix': prefix,
+        }
+        print("Cached Elmer boundary mesh for {} ({} nodes)".format(
+            PFC.name, len(boundary_nodes_arr)))
+        log.info("Cached Elmer boundary mesh for {} ({} nodes)".format(
+            PFC.name, len(boundary_nodes_arr)))
+        return self._pfc_boundary_cache[key]
+
+    def _hf_on_boundary(self, boundaryPts, hfFile, tree_key=None):
+        """Nearest-neighbor map of HEAT HF onto Elmer boundary nodes (cKDTree)."""
+        xyz, values = self._load_hf_csv(hfFile)
+        if tree_key is None:
+            tree_key = hfFile if isinstance(hfFile, str) else ('inline', id(xyz))
+        if tree_key not in self._hf_kdtree_cache:
+            self._hf_kdtree_cache[tree_key] = cKDTree(xyz)
+        idx = self._hf_kdtree_cache[tree_key].query(boundaryPts, k=1)[1]
+        return values[idx]
+    
     def buildElmerMesh(self, meshDir, meshFile):
         """
         builds an Elmer FEM mesh
@@ -213,15 +343,59 @@ class FEM:
         dst = self.elmerOutDir + self.elmerHEATlib
         shutil.copyfile(src, dst)
 
-
-        args = ['ElmerSolver', SIFfile]
-        current_env = os.environ.copy()
-        #run Elmer Solver
-        from subprocess import run
-        run(args, env=current_env, cwd=self.elmerOutDir)
+        if self.numberpartitions > 0:
+            args_mesh = ['ElmerGrid', '2', '2', name, '-metis', str(self.numberpartitions)]
+            args = ['mpirun', '-np', str(self.numberpartitions), 'ElmerSolver', SIFfile]
+            current_env = os.environ.copy()
+		    #run Elmer Solver
+            from subprocess import run
+            run(args_mesh, env=current_env, cwd=self.elmerOutDir)		
+            run(args, env=current_env, cwd=self.elmerOutDir)
+            try:
+                self.merge_Rex(name, SIFfile)
+            except:
+                print('no ReX calcs were done')
+        else:
+            args = ['ElmerSolver', SIFfile]
+            current_env = os.environ.copy()
+            #run Elmer Solver
+            from subprocess import run
+            run(args, env=current_env, cwd=self.elmerOutDir)
         return
     
-    def interpolateHFtoMesh(self, PFC, t, tMin, hfFile=None):
+    def interpolateHFtoMesh(self, PFC, t, tMin, hfFile=None, tree_key=None):
+        """
+        Takes a PFC object, interpolates the qDiv result onto the surface node of
+        a corresponding volume mesh, then saves a .csv file with columns nodeId, MW/m2.
+
+        SIFfile must contain a Variable, nodalHFprefix, in BC section.  
+        t is the timestep.
+
+        hfFile may be None, a path to HF_allSources.csv, or an in-memory (xyz, q) tuple.
+        tree_key reuses the cKDTree built for a prior MHD CSV when xyz is unchanged.
+        """
+        cache = self._get_pfc_boundary_cache(PFC)
+        boundary_nodes = cache['boundary_nodes']
+        boundaryPts = cache['boundaryPts']
+        prefix = cache['nodalHFprefix']
+
+        if hfFile is None:
+            hfOnMesh = np.zeros(len(boundaryPts), dtype=np.float64)
+        else:
+            hfOnMesh = self._hf_on_boundary(boundaryPts, hfFile, tree_key=tree_key)
+
+        hfOnMesh = np.nan_to_num(hfOnMesh, nan=0.0, posinf=0.0, neginf=0.0)
+
+        #convert HF to Watts
+        nodeArray = np.column_stack([boundary_nodes, hfOnMesh * 1e6])
+
+        name = prefix + '_' + self.tsFmt.format(t) + '.dat'
+        out_path = self.elmerOutDir + name
+        tools.savetxt(out_path, nodeArray, fmt="% .9E", delimiter=',')
+
+        return
+
+    def copyReXinit(self, PFC):
         """
         Takes a PFC object, interpolates the qDiv result onto the surface node of
         a corresponding volume mesh, then saves a .csv file with columns nodeId, MW/m2.
@@ -233,89 +407,56 @@ class FEM:
         src = self.elmerDir + PFC.SIFfile
         with open(src, 'r') as f:
             for line in f:
-                if "nodalHFprefix" in line:
+                if "nodalReXprefix" in line:
                     prefix = line.split("String ")[-1].strip()
-
-        #TO DO:  
-        #add flag to tell us if we have already loaded a mesh for this
-        #PFC object, and if so dont do it every time.  instead save
-        #node data to self
-        gmsh.initialize()
-        gmsh.open(PFC.meshFile)
-        node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
-        node_tags = np.array(node_tags)
-        node_coords = np.array(node_coords).reshape(-1, 3)
-        boundary_nodes = set()
-
-        # Get the entities of the dimension you are interested in
-        entities = gmsh.model.getEntities(2)  # 2 for surfaces
-
-        for entity in entities:
-            dim, tag = entity
-            # Get the nodes of this surface entity
-            _, _, surface_node_tags = gmsh.model.mesh.getElements(dim, tag)
-            for node_tag_array in surface_node_tags:
-                for node_tag in node_tag_array:
-                    boundary_nodes.add(node_tag)  # Use add() for single elements
-
-        # Extract the coordinates of boundary nodes
-        boundaryPts = np.array([node_coords[np.where(node_tags == node_tag)[0][0]] for node_tag in boundary_nodes])
-
-        # Perform the interpolation
-        print("Interpolating HF to mesh surface...")
-        #if None, then we assign zeros to the surface
-        if hfFile == None:
-            hfOnMesh = np.zeros((len(boundaryPts)))
-        #if there is a hfFile, then we assign that HF to the surface
-        else:
-            hf_data = pd.read_csv(hfFile)
-            # Extracting coordinates and heat flux from the CSV file
-            points = hf_data[['# X', 'Y', 'Z']].values
-            values = hf_data['$MW/m^2$'].values        
-            hfOnMesh = griddata(points, values, boundaryPts, method='nearest', fill_value=0.0)
-            #hfArray = np.hstack((boundaryPts, hfOnMesh[:,np.newaxis]))
-            #nodes = np.array(list(boundary_nodes), dtype=int)
-
-        isNan = np.where(np.isnan(hfOnMesh))[0]
-        hfOnMesh[isNan] = 0.0
-        isInf = np.where(np.isinf(hfOnMesh))[0]
-        hfOnMesh[isInf] = 0.0
-
-        #convert HF to Watts
-        nodeArray = np.vstack([np.array(list(boundary_nodes), dtype=int), hfOnMesh*1e6]).T
-
-
-
-        #for saving nodeId,HF
-        name = prefix + '_' + self.tsFmt.format(t) + '.dat'
-        np.savetxt(self.elmerOutDir + name, nodeArray, fmt="% .9E", delimiter=',')
-
+        try:
+            ReXfile = prefix + '.dat'
+            #copy Rex init from elmerDir to elmerOutDir
+            src = self.elmerDir + ReXfile
+            dst = self.elmerOutDir + ReXfile
+            shutil.copyfile(src, dst)
+        except:
+            print('no Rex init file provided')
         return
-    
+
+    def merge_Rex(self, name, SIFfile):
+       import glob
+	   # 1. Find all partition files created by your Fortran module and merge them to one
+       #get the output name from the .sif file
+       src = self.elmerDir + SIFfile
+       with open(src, 'r') as f:
+            for line in f:
+                if "Filename" in line:
+                    prefix = line.split("= ")[-1].strip().strip('"')
+       search_pattern = self.elmerOutDir + prefix + '.p*'
+       files = glob.glob(search_pattern)
+       data_list = []
+       for f in files:
+          # Load each file (assuming they are comma-separated as we programmed)
+          data_list.append(np.loadtxt(f, delimiter=','))
+       merged_data = np.vstack(data_list)
+       # This ensures your final file is perfectly ordered from Node 1 to Node N
+       sorted_data = merged_data[merged_data[:, 0].argsort()]
+       # 4. Save to a single, clean .dat file
+       np.savetxt(self.elmerOutDir+prefix, sorted_data, delimiter=',', fmt=['%d', '%15.9E'])
+       return
+        
     def interpolateHFinTime(self, hfFile, hfFileNext, tLast, tNext, t):
         """
         given a heat flux file from last timestep, hfFile, and a heat flux
         file for the next timestep, hfFileNext, along with the times of
         the last timestep, next timestep, and current timestep, t,
-        interpolate the heat flux at each xyz position in the hfFiles
+        interpolate the heat flux at each xyz position in the hfFiles.
+
+        Returns (xyz, q_MW_m2) for in-memory use (no HFtmp.csv disk write).
         """
-        hf_data_last = pd.read_csv(hfFile)
-        # Extracting coordinates and heat flux from the CSV file
-        xyz = hf_data_last[['# X', 'Y', 'Z']].values
-        qLast = hf_data_last['$MW/m^2$'].values    
+        xyz, qLast = self._load_hf_csv(hfFile)
+        _, qNext = self._load_hf_csv(hfFileNext)
 
-        hf_data_next = pd.read_csv(hfFileNext)
-        qNext = hf_data_next['$MW/m^2$'].values   
+        mult = (t - tLast) / (tNext - tLast)
+        q = (qNext - qLast) * mult + qLast
 
-        mult = (t-tLast) / (tNext-tLast)
-        q = (qNext - qLast)*mult + qLast
-
-        hfArray = np.hstack((xyz, q[:,np.newaxis]))
-        newFile = self.elmerOutDir + 'HFtmp.csv'
-        head = "X,Y,Z,$MW/m^2$"
-        np.savetxt(newFile, hfArray, fmt="% .9E", delimiter=',', header=head)
-
-        return newFile
+        return (xyz, q)
 
     def buildTimesteps(self,SIFfile):
         """

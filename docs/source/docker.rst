@@ -132,91 +132,68 @@ For the latest version of docker, the UID and GID are passed into the container
 automatically.  More information on this can be found here:  https://docs.docker.com/engine/security/userns-remap/
 
 If you are unsure if your version of docker will do UID mapping, its best to just run a test.  First, get the UID
-on the host (echo $UID), and then launch the docker container directly into bash mode and perform the same test:
+on the host (echo $UID), and then launch the docker container directly into bash mode and perform the same test
+(override entrypoint so you get a shell; the image uses ENTRYPOINT to run HEAT by default)::
 
 .. code-block:: bash
 
-      docker-compose run HEAT /bin/bash
+      docker compose run --entrypoint "" HEAT /bin/bash
 
 
 
 Start HEAT in GUI mode
 ^^^^^^^^^^^^^^^^^^^^^^
-To start HEAT using the graphical user interface, perform the following steps:
+The image uses ENTRYPOINT + CMD so that ``docker compose up`` starts the HEAT GUI by default.  To start HEAT in GUI mode:
 
   1) Navigate to the HEAT source code docker directory, <sourcePath>/docker
-  2) Once in the docker directory, make sure the last 4 lines of runDockerCompose appear as follows::
-
-.. code-block:: yaml
-
-      #run docker compose
-      docker-compose up
-      #run docker compose interactively (for terminal mode)
-      #docker-compose run HEAT /bin/bash
-
-
-  3) Run docker compose from within the docker directory:
+  2) Ensure runDockerCompose launches the stack (e.g. the last line is ``docker compose up``).  No need to edit the script for GUI mode.
+  3) Run from the docker directory::
 
 .. code-block:: bash
 
-      docker-compose up
+      ./runDockerCompose
+
+  or directly::
+
+.. code-block:: bash
+
+      docker compose up
 
 Start HEAT in TUI mode
 ^^^^^^^^^^^^^^^^^^^^^^
-To start HEAT using the terminal user interface, perform the following steps:
+You can run HEAT in terminal (batch) mode in either of two ways.
 
-  1) Navigate to the HEAT source code docker directory, <sourcePath>/docker
-  2) Edit the docker-compose.yml recipe file.  Under the volumes section,
-     the user can bind directories on their local host machine into the docker
-     container.  For each of these lines, the host path and container path are
-     in the following format:
+**Option A — Override command in docker-compose (recommended):** No interactive shell needed.  The image CMD is overridden so HEAT runs in TUI mode when you bring the stack up.
 
-        <hostPath>:<containerPath>
-     You should not need to edit the <containerPath>, but you will need to edit
-     the <hostPath>.  For example, to bind the HEAT source code that you
-     downloaded from github at the path <sourcePath> into the container, you
-     would have the following line under volumes in the recipe::
+  1) Navigate to the HEAT source code docker directory, <sourcePath>/docker.
+  2) Edit docker-compose.yml:
+     - Under **volumes**, uncomment and set the batch directory mount, e.g. ``- <batchModePath>:/root/terminal``.
+     - Uncomment the **command** line and set the path to your batchFile, e.g.::
+         command: ["--m", "t", "--f", "/root/terminal/batchFile.dat"]
+  3) Run from the docker directory::
 
-          - <sourcePath>:/root/source/HEAT
-     You should uncomment the lines that correspond to the local packages that
-     you have installed.  The HEAT data directory should always be uncommented
-     and binded::
+     .. code-block:: bash
 
-          - ${HOME}/HEAT:/root/HEAT
-     For running in terminal mode, you will need to uncomment the line that
-     binds your local batchMode directory into the container::
+        ./runDockerCompose
 
-          - <batchModePath>:/root/terminal
-     where <batchModePath> is the directory where your batchFile lives.
+     or ``docker compose up``.  HEAT will run in TUI mode and exit when the run finishes.
 
-  3) In the docker directory, make sure the last line of runDockerCompose appears as follows:
+**Option B — Interactive shell:** Get a bash shell inside the container, then run HEAT manually (same as in older HEAT versions).
 
-  .. code-block:: yaml
+  1) Navigate to the HEAT source code docker directory, <sourcePath>/docker.
+  2) Edit docker-compose.yml volumes as above (uncomment batch directory mount).
+  3) Start an interactive shell.  Because the image uses ENTRYPOINT to run HEAT, you must override it to get a shell::
 
-    #run docker compose
-    #docker-compose up
-    #run docker compose interactively (for terminal mode)
-    docker-compose run HEAT /bin/bash
+     .. code-block:: bash
 
+        docker compose run --entrypoint "" HEAT /bin/bash
 
-  4) Run docker compose from within the docker directory:
+  4) Inside the container, go to the HEAT source directory and run HEAT with your batchFile::
 
-  .. code-block:: bash
+     .. code-block:: bash
 
-    ./runDockerCompose
+        cd /root/source/HEAT/
+        python3 ./source/launchHEAT.py --m t --f /root/terminal/batchFile.dat
 
-
-  5) Running docker-compose in terminal mode launches a bash terminal inside the
-     container.  Once inside the container, navigate to the HEAT source code
-     directory::
-
-      cd /root/source/HEAT/
-  6) Once in the source directory, launch HEAT using the batchFile.dat that
-     was binded into the container in step 2)::
-
-      python3 launchHEAT.py --m t --f /root/terminal/batchFile.dat
-    
-     There are also convenience bash scripts that run this command for you::
-
-      ./runTerminalMode
+     Convenience scripts (e.g. ``./runTerminalMode``) can also be used from that directory.
 

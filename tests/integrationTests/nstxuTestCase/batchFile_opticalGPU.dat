@@ -1,0 +1,97 @@
+#HEAT batchFile
+#For use when running HEAT in terminal / batch mode.  Each line is a new entry.
+#
+# The fist line of every batchFile should be (uncommented):
+# MachFlag, Tag, Shot, TimeStep, GEQDSK, CAD, PFC, Input, Output
+#
+#===Column variables are defined as follows
+# MachFlag: machine specific flag.
+#           can be 'd3d','nstx','st40','step','sparc','west','kstar', 'aug', 'other'
+#
+# Tag:  user specified tag to label the simulation by.  Tags represent
+#       independent HEAT runs.  For time varying discharges with multiple
+#       GEQDSK files, tag should be repeated on multiple lines with the 
+#       TimeStep column changing.
+#
+# Shot:  pulse number to use for saving HEAT output (MachFlag_Shot).  Default is to
+#        allow for 6 sig figs of shot numbers.  SigFigs can be changed in engineClass
+#        object initialization function call.
+#
+# TimeStep: Timestep that the equilibrium defined in "GEQDSK" column corresponds
+#           to.  GEQDSKs can be named in multiple formats, but the TimeStep in 
+#           this row is what is used by HEAT.  For time varying discharges, tag 
+#           should be repeated on multiple lines with the TimeStep column changing.
+#           Timestep units are [s].  Default is to allow for 9 SigFigs after the
+#           radix, which corresponds to nanosecond resolution (defined in engineClass
+#           initialization function call)
+#
+# EQ:  magnetic equilibrium file 
+#          can be in GEQDSK format or in a JSON following the IMAS schema
+#          Psi should be in units of Wb/rad (divide by 2pi) and the Bt0, Fpol, Psi
+#          and Ip values should reflect COCOS and match machine helicity
+#
+# CAD: CAD file for the tag.  Note that HEAT will use the first CAD file provided
+#      in for each tag.  Subsequent lines in that tag are ignored.  In other words,
+#      there can only be one CAD file per tag.  Can be STEP, IGES, or FCStd formats.
+#      User can also supply a mesh (.STL) file and set this value to None.  In that
+#      case, the mesh file should be listed in the PFC CSV file for each ROI or
+#      intersection part
+#
+# PFC: PFC file for the tag.  Note that HEAT will use the first PFC file provided
+#      in for each tag.  Subsequent lines in that tag are ignored.  In other words,
+#      there can only be one PFC file per tag.
+#
+# INPUT: Input file for the tag.  Input files can be time varying, but only the
+#        HF Variables will be read at each timestep.
+#
+# Output: Defines what output HEAT should calculate.  Options are:
+#         -hfOpt   optical heat flux 
+#         -hfGyro  gyro orbit heat flux 
+#         -hfFil   filament heat flux 
+#         -hfRE    runaway electron heat flux
+#         -hfRad   radiated power heat 
+#         -B       magnetic field glyphs
+#         -psiN    normalized poloidal flux 
+#         -pwrDir  powerDir point 
+#         -bdotn   bdotn point
+#         -norm    normal vector glyphs
+#         -T       temperature calculation using openFOAM
+#         -elmer   runs an Elmer FEM simulation
+#
+#       for multiple outputs, separate options with : (ie hfOpt:psi:T).  Note
+#       that HEAT will use the first options list provided for each tag.
+#       Subsequent lines in that tag are ignored.  In other words, there can
+#       only be one set of options per tag.
+#
+#
+# Once you have a batchFile, you need to save all input files in the following
+# directory structure, where <path> is wherever the batchFile is and <MachFlag>
+# is the machine name (ie nstx):
+# <path>/batchFile.dat
+# <path>/<MachFlag>/GEQDSK
+# <path>/<MachFlag>/CAD
+# <path>/<MachFlag>/PFC
+# <path>/<MachFlag>/Input
+#
+#  Example line for an NSTX-U run for pulse 204118 timestep 4ms:
+#MachFlag, Tag, Shot, TimeStep, EQ, CAD, PFC, Input, Output
+#nstx,run1, 204118, 0.004, geqdsk.00004, IBDH_2tiles.step, PFCs_run1.csv, NSTXU_input.csv, B:hfOpt
+#  Example line for an NSTX-U run for pulse 204118 using JSON and user supplied mesh
+#nstx,run2, 204118, 0.004, nstx_eq_204118.json, None, PFCs_run2.csv, NSTXU_input.csv, B:hfOpt
+#
+# And the directory structure would look like this
+# <path>/batchFile.dat
+# <path>/nstx/g204118.00004
+# <path>/nstx/IBDH_2tiles.step
+# <path>/nstx/PFCs_run1.csv
+# <path>/nstx/NSTXU_input.csv
+#
+#
+#
+#
+MachFlag, Tag, Shot, TimeStep, EQ, CAD, PFC, Input, Output
+#example for optical approximation
+#nstx,opticalExample, 204118, 0.004, g204118.00004, testCaseIBDH_v3.0.0.step, PFCs.csv, NSTXU_input.csv, hfOpt
+#example for optical approximation temperature calculation (HF + T) 
+nstx,opticalExample, 204118, 0.004, g204118.00004, testCaseIBDH_v3.0.0.step, PFCs.csv, NSTXU_input_GPU.csv, hfOpt:psiN:bdotn:pwrDir:norm:T
+nstx,opticalExample, 204118, 0.050, g204118.00050, testCaseIBDH_v3.0.0.step, PFCs.csv, NSTXU_input_GPU.csv, hfOpt:psiN:bdotn:pwrDir:norm:T

@@ -16,13 +16,13 @@ import toolsClass
 tools = toolsClass.tools()
 import logging
 log = logging.getLogger(__name__)
+import logConfig
 import multiprocessing
 import time
 
 
 #get relevant environment variables.  Needed for containers
 try:
-    logFile = os.environ["logFile"]
     rootDir = os.environ["rootDir"]
     dataPath = os.environ["dataPath"]
     OFbashrc = os.environ["OFbashrc"]
@@ -57,7 +57,7 @@ class TUI():
         """
         intialize terminal user interface (TUI) object
         """
-        self.ENG = engineClass.engineObj(logFile, rootDir, dataPath, OFbashrc, chmod, UID, GID)
+        self.ENG = engineClass.engineObj(rootDir, dataPath, OFbashrc, chmod, UID, GID)
         self.ENG.NCPUs = multiprocessing.cpu_count() - 2 #reserve 2 cores for overhead
         self.chmod = chmod
         self.GID = GID
@@ -136,6 +136,7 @@ class TUI():
                  -norm    normal vector glyphs
                  -T       temperature calculation using openFOAM
                  -elmer   runs an Elmer FEM simulation
+                 -Btrace  Bfield tracing from a trace csv file
 
           for multiple outputs, separate options with : (ie hfOpt:psi:T).  Note
           that HEAT will use the first options list provided for each tag.
@@ -177,7 +178,7 @@ class TUI():
         data = pd.read_csv(batchFile, sep=',', comment='#', skipinitialspace=True)
 
         #determine simulation schedule
-        machines = np.unique(data['MachFlag'].values)
+        machines = np.unique(data['MachFlag'].to_numpy())
         for mach in machines:
             if mach not in self.machineList:
                 print("\n\nMachFlag was not properly set in batchFile!")
@@ -229,31 +230,31 @@ class TUI():
                 #get file paths associated with this tag from batchFile
                 try:
 
-                    shots = tagData['Shot'].values #only 1 shot per tag allowed
-                    timesteps = tagData['TimeStep'].values
+                    shots = tagData['Shot'].to_numpy() #only 1 shot per tag allowed
+                    timesteps = tagData['TimeStep'].to_numpy()
 
                     #this conditional allows for various EQ formats
                     if 'GEQDSK' in tagData.keys():
-                        eqFileNames = tagData['GEQDSK'].values
+                        eqFileNames = tagData['GEQDSK'].to_numpy()
                     else:
-                        eqFileNames = tagData['EQ'].values
+                        eqFileNames = tagData['EQ'].to_numpy()
                     
                     eqFilePaths = machInDir + eqFileNames
 
                     #if user is bringing their own meshes then the CAD file can be set to None
                     #NEED TO FIX THIS SO THAT THERE CAN BE NONE AND strings in same batchFile
-                    if True in pd.isna(tagData['CAD'].values):
+                    if True in pd.isna(tagData['CAD'].to_numpy()):
                         print("No CAD file provided, assuming you are providing STLs")
                         log.info("No CAD file provided, assuming you are providing STLs")
-                        CADfiles = tagData['CAD'].values
+                        CADfiles = tagData['CAD'].to_numpy()
                     #normal cases, user supplies CAD file of some kind
                     else:
-                        CADfiles = machInDir + tagData['CAD'].values
+                        CADfiles = machInDir + tagData['CAD'].to_numpy()
                     
-                    #CADfiles = machInDir + tagData['CAD'].values
-                    PFCfiles = machInDir + tagData['PFC'].values
-                    inputFiles = machInDir + tagData['Input'].values
-                    runList = [x.strip().split(":") for x in tagData['Output'].values]
+                    #CADfiles = machInDir + tagData['CAD'].to_numpy()
+                    PFCfiles = machInDir + tagData['PFC'].to_numpy()
+                    inputFiles = machInDir + tagData['Input'].to_numpy()
+                    runList = [x.strip().split(":") for x in tagData['Output'].to_numpy()]
                     runList = np.unique([x for y in runList for x in y])
                 except Exception as e:
                     print("\n\nSomething is wrong with your batchFile!  Error Trace:\n")
@@ -278,15 +279,19 @@ class TUI():
                 #read GEQDSK and load into MHD object
                 self.loadMHD(machInDir, eqFileNames, timesteps)
 
-                #read CAD and initialize CAD objects
-                #note: current version of HEAT only supports single CAD file
-                #per tag
-                self.loadCAD(CADfiles[0], machInDir)
+                #if we are only running a Bfield trace, no need to load CAD
+                if 'Btrace' in runList and len(runList) == 1:
+                    pass
+                else:
+                    #read CAD and initialize CAD objects
+                    #note: current version of HEAT only supports single CAD file
+                    #per tag
+                    self.loadCAD(CADfiles[0], machInDir)
 
-                #read PFC file and initialize PFC objects
-                #note: current version of HEAT only supports single CAD file
-                #per tag
-                self.loadPFCs(PFCfiles[0])
+                    #read PFC file and initialize PFC objects
+                    #note: current version of HEAT only supports single CAD file
+                    #per tag
+                    self.loadPFCs(PFCfiles[0])
 
                 #note that we load HF settings (optical, gyro, rad) dynamically
                 #from input file in the self.ENG.runHEAT loop
@@ -350,14 +355,10 @@ class TUI():
         #make tree branch for this shot
         tools.makeDir(self.shotPath, clobberFlag=False, mode=self.chmod, UID=self.UID, GID=self.GID)
 
-        #make unique logfile for this tag
+        #make unique logfile for this tag and flush the log cache to this file
         logFile = self.shotPath + 'HEATlog.txt'
         self.ENG.logFile = logFile
-        from logConfig import setup_logging
-        log.info("Changing log file to new path for batchMode:")
-        log.info(logFile)
-        setup_logging(logfile_path=logFile)
-
+        logConfig.setup_logging(logfile_path=logFile)
         return
 
     def loadFilaments(self, runList, path):
@@ -419,6 +420,7 @@ class TUI():
         """
         self.ENG.CAD.rootDir = rootDir #set HEAT rootDir
         self.ENG.CAD.machInDir = machInDir #HEATrun directory
+        self.ENG.getCADinputs()
         self.ENG.getCADfromTUI(CADfile)
         return
 

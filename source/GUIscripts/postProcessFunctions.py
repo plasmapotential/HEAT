@@ -92,7 +92,7 @@ import pandas as pd
 data1 = pd.read_csv('qDiv_E-ED1408-284.csv')
 data2 = pd.read_csv('qDiv_E-ED1408-573.csv')
 data3 = pd.read_csv('qDiv_SOLID844.csv')
-hfs = [data1['HeatFlux'].values, data2['HeatFlux'].values, data3['HeatFlux'].values]
+hfs = [data1['HeatFlux'].to_numpy(), data2['HeatFlux'].to_numpy(), data3['HeatFlux'].to_numpy()]
 nombres = ['E-ED1408-284','E-ED1408-573','SOLID844']
 import plotlyGUIplots as pgp
 fig = pgp.plotlyqDivPlot(hfs,nombres,logPlot=True)
@@ -135,8 +135,8 @@ for pfcIdx,name in enumerate(names):
     df = data[pfcIdx]
     for i,field in enumerate(fields):
         mask = df['field'] == field
-        t = df[mask].sort_values('# Time')['# Time'].values
-        varMax = df[mask].sort_values('# Time')['max'].values
+        t = df[mask].sort_values('# Time')['# Time'].to_numpy()
+        varMax = df[mask].sort_values('# Time')['max'].to_numpy()
         lineName = field+" "+name
         fig.add_trace(go.Scatter(x=t, y=varMax, name=lineName),
                         secondary_y=y2[i],
@@ -192,8 +192,8 @@ for idx,name in enumerate(nombres):
     df = data[idx]
     for i,field in enumerate(fields):
         mask = df['field'] == field
-        t = df[mask].sort_values('# Time')['# Time'].values
-        varMax = df[mask].sort_values('# Time')['max'].values
+        t = df[mask].sort_values('# Time')['# Time'].to_numpy()
+        varMax = df[mask].sort_values('# Time')['max'].to_numpy()
         fig.add_trace(go.Scatter(x=t, y=varMax, name=name, mode=modes[idx], marker_size=markerSize[idx],
                                  marker_symbol=markerType[idx],
                                  line=dict(width=width[idx], dash=dashes[idx],

@@ -52,6 +52,7 @@ class plasma3D:
 		self.NCPUs = 10
 		self.loadHF = False
 		self.loadBasePath = None
+		self.MHD = None  # Reference to MHD instance (set in setBoundaryBox)
 		
 		
 	def allowed_class_vars(self):
@@ -98,6 +99,7 @@ class plasma3D:
 		integers = ['itt','response','selectField','useIcoil','sigma','charge','Mass','NCPUs']
 		floats = ['Ekin','Lambda']
 		bools = ['plasma3Dmask','loadHF']
+		setAllTypes(self, integers, floats, bools)     # this is not a typo, but the correct syntax for this call
 		setAllTypes(self, integers, floats, bools)     # this is not a typo, but the correct syntax for this call
 
 
@@ -211,6 +213,10 @@ class plasma3D:
 
 
 	def setBoundaryBox(self, MHD, CAD):
+		"""
+		Set boundary box limits and store MHD reference for use in MAFOT commands
+		"""
+		self.MHD = MHD  # Store reference to MHD instance for command building
 		self.bbRmin = np.min([CAD.Rmin, MHD.ep[0].g['wall'][:,0].min()])
 		self.bbRmax = np.max([CAD.Rmax, MHD.ep[0].g['wall'][:,0].max()])
 		self.bbZmin = np.min([CAD.Zmin, MHD.ep[0].g['wall'][:,1].min()])
@@ -335,14 +341,42 @@ class plasma3D:
 		self.tag = tag
 		print('Launching 3D plasma field line tracing on ' + str(self.NCPUs) + ' cores')
 		log.info('Launching 3D plasma field line tracing ' + str(self.NCPUs) + ' cores')
-		
+
 		bbLimits = str(self.bbRmin) + ',' + str(self.bbRmax) + ',' + str(self.bbZmin) + ',' + str(self.bbZmax)
-		args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points3DHF.dat','-B',bbLimits,'_lamCTL.dat',tag]
+
+		# Build laminar command using MHDClass method (centralizes MAFOT logic)
+		args = self.MHD.buildLaminarCommand(self.NCPUs, 'points3DHF.dat', '_lamCTL.dat', tag, bbLimits=bbLimits)
 		current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
-		if verbose == False:
-			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
-		else:
-			subprocess.run(args, env=current_env, cwd=self.cwd) #dont suppress error messages
+		
+		try:
+			if verbose:
+				proc = subprocess.Popen(args, env=current_env, cwd=self.cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,)
+				for line in proc.stdout:
+					sys.stdout.write(line)
+				returncode = proc.wait()
+				if returncode != 0:
+					raise subprocess.CalledProcessError(returncode, args)
+			else:
+				result = subprocess.run(args, env=current_env, cwd=self.cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False,)
+				if result.returncode != 0:
+					log.error("Laminar run failed with code %s", result.returncode)
+					log.error("Laminar output:\n%s", result.stdout)
+					print.error("Laminar run failed with code %s", result.returncode)
+					print.error("Laminar output:\n%s", result.stdout)
+					raise subprocess.CalledProcessError(
+                    	result.returncode, args, output=result.stdout
+                		)
+		except Exception as e:
+			print("Error: laminar run failed")
+			print(e.output)
+			log.info("Error: laminar run failed")
+			log.info(e.output)
+
+		
+		#if verbose == False:
+		#	subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
+		#else:
+		#	subprocess.run(args, env=current_env, cwd=self.cwd) #dont suppress error messages
 		#print('mpirun -n ' + str(self.NCPUs) + ' heatlaminar_mpi' + ' -P points3DHF.dat' + ' _lamCTL.dat' + ' ' + tag)
 		
 		#self.wait2finish(self.NCPUs, tag)
@@ -389,13 +423,13 @@ class plasma3D:
 		src = path + '/' + '_lamCTL.dat'
 		dst = self.cwd + '/' + '_lamCTL.dat'
 		if os.path.isfile(src): 
-			shutil.copy(src, dst)
+			shutil.copyfile(src, dst)
 
 		#self.writeM3DC1supFile()
 		src = path + '/' + 'm3dc1sup.in'
 		dst = self.cwd + '/' + 'm3dc1sup.in'
 		if os.path.isfile(src): 
-			shutil.copy(src, dst)
+			shutil.copyfile(src, dst)
 
 		#self.writeCoilsupFile()
 
@@ -404,13 +438,13 @@ class plasma3D:
 			src = path + '/../' + 'lam_' + tag + '.dat'
 			dst = self.cwd + '/../' + 'lam_' + tag + '.dat'
 			if (not os.path.isfile(dst)) & os.path.isfile(src): 
-				shutil.copy(src, dst)
+				shutil.copyfile(src, dst)
 		
 		# main data
 		src = path + '/' + 'lam_' + tag + '.dat'
 		dst = self.cwd + '/' + 'lam_' + tag + '.dat'
 		if os.path.isfile(src): 
-			shutil.copy(src, dst)
+			shutil.copyfile(src, dst)
 		else:
 			print('MAFOT output file: ' + src + ' not found!')
 			log.info('MAFOT output file: ' + src + ' not found!')
@@ -504,11 +538,12 @@ class plasma3D:
 			
 		if not self.isComplete():
 			print('MAFOT run ended prematurely. Attempt restart...')
-			subprocess.call(['mpirun','-n',str(NCPUs),'heatlaminar_mpi','-P','points.dat','_lamCTL.dat',tag])
+			args = self.MHD.buildLaminarCommand(NCPUs, 'points.dat', '_lamCTL.dat', tag)
+			subprocess.call(args)
 			self.wait2finish(NCPUs, tag)
 		else: return
-	
-	
+
+
 	def isComplete(self, logsPath = None):
 		if logsPath is None: 
 			logsPath = self.cwd
@@ -529,7 +564,7 @@ class plasma3D:
 	def isProcessRunning(self):
 		import getpass
 		user = getpass.getuser()
-		lines = subprocess.check_output('ps aux | grep heatlaminar_mpi', shell = True)	# for some reason only works with shell = True
+		lines = subprocess.check_output('ps aux | grep heatlaminar_mpi | grep -v grep', shell = True)	# for some reason only works with shell = True
 		lines = lines.decode('UTF-8').split('\n')
 		for line in lines:
 			if ('mpirun' in line) & (user in line):
@@ -791,6 +826,8 @@ class heatflux3D:
 		zeroes out invalid points
 		updates self.q
 		sets self.q0 this first time its called
+
+		TO DO: make this function compatible with PFC divFracs as a mesh quantity
 		"""
 		print('3D Heat flux model type: ' + self.model)
 		log.info('3D Heat flux model type: ' + self.model)
@@ -910,9 +947,9 @@ class heatflux3D:
 			with open(self.cwd + '/' + 'points_' + tag + '.dat','w') as f:
 				for i in range(len(R)):
 					f.write(str(R[i]) + '\t' + str(0.0) + '\t' + str(Z[i]) + '\n')
-					
+
 			#nproc = 10
-			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
+			args = self.MHD.buildLaminarCommand(self.NCPUs, 'points_' + tag + '.dat', '_lamCTL.dat', tag)
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
 			if verbose == False:
 				subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
@@ -923,7 +960,8 @@ class heatflux3D:
 			src = self.cwd + '/' + 'lam_' + tag + '.dat'
 			dst = self.cwd + '/../' + 'lam_' + tag + '.dat'
 			if os.path.isfile(src): 
-				shutil.move(src, dst)
+				shutil.copyfile(src, dst)
+				os.remove(src)
 		
 		if os.path.isfile(file): 
 			lamdata = np.genfromtxt(file,comments='#')
@@ -1107,9 +1145,9 @@ class heatflux3D:
 			bbZmin = min([Z.min()-0.1, self.ep.g['wall'][:,1].min()-0.1])
 			bbZmax = max([Z.max()+0.1, self.ep.g['wall'][:,1].max()+0.1])
 			bbLimits = str(bbRmin) + ',' + str(bbRmax) + ',' + str(bbZmin) + ',' + str(bbZmax)
-			
+
 			# call MAFOT
-			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','-B',bbLimits,'_lamCTL.dat',tag]
+			args = self.MHD.buildLaminarCommand(self.NCPUs, 'points_' + tag + '.dat', '_lamCTL.dat', tag, bbLimits=bbLimits)
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
 			if verbose == False:
 				subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
@@ -1121,8 +1159,9 @@ class heatflux3D:
 			src = self.cwd + '/' + 'lam_' + tag + '.dat'
 			dst = self.cwd + '/../' + 'lam_' + tag + '.dat'
 			if os.path.isfile(src): 
-				shutil.move(src, dst)
-		
+				shutil.copyfile(src, dst)
+				os.remove(src)
+	
 		# Read MAFOT data
 		if os.path.isfile(file): 
 			lamdata = np.genfromtxt(file,comments='#')
@@ -1234,7 +1273,7 @@ class heatflux3D:
 		radius = 0.05 + np.sqrt((Rxpt - self.ep.g['RmAxis'])**2 + (Zxpt - self.ep.g['ZmAxis'])**2)
 		dth = 1e-4/radius
 	
-		f = lambda x: np.float64(self.ep.psiFunc.ev(radius*np.cos(x) + self.ep.g['RmAxis'],radius*np.sin(x) + self.ep.g['ZmAxis'])) - 1
+		f = lambda x: self.ep.psiFunc.ev(radius*np.cos(x) + self.ep.g['RmAxis'],radius*np.sin(x) + self.ep.g['ZmAxis']).item() - 1  #.item(): scalar float for bisect (NumPy 2.0)
 			
 		if 'L' in DivCode:
 			if 'I' in DivCode:
@@ -1274,9 +1313,9 @@ class heatflux3D:
 			bbZmin = min([Z.min()-0.1, self.ep.g['wall'][:,1].min()-0.1])
 			bbZmax = max([Z.max()+0.1, self.ep.g['wall'][:,1].max()+0.1])
 			bbLimits = str(bbRmin) + ',' + str(bbRmax) + ',' + str(bbZmin) + ',' + str(bbZmax)
-			
+
 			# call MAFOT
-			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','-B',bbLimits,'_lamCTL.dat',tag]
+			args = self.MHD.buildLaminarCommand(self.NCPUs, 'points_' + tag + '.dat', '_lamCTL.dat', tag, bbLimits=bbLimits)
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
 			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
 			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
@@ -1285,8 +1324,9 @@ class heatflux3D:
 			src = self.cwd + '/' + 'lam_' + tag + '.dat'
 			dst = self.cwd + '/../' + 'lam_' + tag + '.dat'
 			if os.path.isfile(src): 
-				shutil.move(src, dst)
-		
+				shutil.copyfile(src, dst)
+				os.remove(src)
+	
 		# Read MAFOT data
 		if os.path.isfile(file): 
 			lamdata = np.genfromtxt(file,comments='#')
@@ -1384,7 +1424,7 @@ class heatflux3D:
 						f.write(str(R[i]) + '\t' + str(phi) + '\t' + str(Z[i]) + '\n')
 			
 			#nproc = 10
-			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
+			args = self.MHD.buildLaminarCommand(self.NCPUs, 'points_' + tag + '.dat', '_lamCTL.dat', tag)
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
 			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
 			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
@@ -1392,8 +1432,9 @@ class heatflux3D:
 			src = self.cwd + '/' + 'lam_' + tag + '.dat'
 			dst = self.cwd + '/../' + 'lam_' + tag + '.dat'
 			if os.path.isfile(src): 
-				shutil.move(src, dst)
-		
+				shutil.copyfile(src, dst)
+				os.remove(src)
+	
 		if os.path.isfile(file): 
 			lamdata = np.genfromtxt(file,comments='#')
 			psimin = lamdata[:,4]
@@ -1464,7 +1505,7 @@ class heatflux3D:
 					f.write(str(R[i]) + '\t' + str(0.0) + '\t' + str(Z[i]) + '\n')
 			
 			#nproc = 10
-			args = ['mpirun','-n',str(self.NCPUs),'heatlaminar_mpi','-P','points_' + tag + '.dat','_lamCTL.dat',tag]
+			args = self.MHD.buildLaminarCommand(self.NCPUs, 'points_' + tag + '.dat', '_lamCTL.dat', tag)
 			current_env = os.environ.copy()        #Copy the current environment (important when in appImage mode)
 			subprocess.run(args, env=current_env, cwd=self.cwd, stderr=DEVNULL)
 			for f in glob.glob(self.cwd + '/' + 'log*'): os.remove(f)		#cleanup
@@ -1472,7 +1513,8 @@ class heatflux3D:
 			src = self.cwd + '/' + 'lam_' + tag + '.dat'
 			dst = self.cwd + '/../' + 'lam_' + tag + '.dat'
 			if os.path.isfile(src): 
-				shutil.move(src, dst)
+				shutil.copyfile(src, dst)
+				os.remove(src)
 		
 		if os.path.isfile(file): 
 			lamdata = np.genfromtxt(file,comments='#')
@@ -1644,14 +1686,14 @@ def readShadowFile(f, PFC):
 	#f = base + self.tsFmt.format(t) + '/' + PFC.name + '/shadowMask.csv
 	try:
 		df = pd.read_csv(f, names=['X','Y','Z','shadowMask'], skiprows=[0])
-		if len(df['shadowMask'].values) != len(PFC.centers):
+		if len(df['shadowMask'].to_numpy()) != len(PFC.centers):
 			print('shadowMask file mesh is not same length as STL file mesh.')
 			print('Will not assign shadowMask to mismatched mesh')
-			print("File length: {:d}".format(len(df['shadowMask'].values)))
+			print("File length: {:d}".format(len(df['shadowMask'].to_numpy())))
 			print("PFC STL mesh length: {:d}".format(len(PFC.centers)))
 			val = -1
 		else:
-			PFC.shadowed_mask = df['shadowMask'].values
+			PFC.shadowed_mask = df['shadowMask'].to_numpy()
 			print("Loaded Shadow Mask from file: "+f)
 			val = 0
 	except:

@@ -1,0 +1,83 @@
+# Manual build and push of plasmapotential/heat to Docker Hub.
+#
+# Setup (one-time):
+# 1. Repository secrets: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN (Docker Hub access token).
+# 2. Repository → Settings → Environments → create environment named "dockerhub-publish"
+#    (must match `environment.name` below). Add protection rules:
+#    - "Required reviewers": designate HEAT repo admins (or a small release team).
+#    - Optionally "Wait timer" / deployment branch rules as needed.
+#    Until protection is configured, any user who can run Actions may trigger this
+#    workflow; GitHub does not offer a native "repository admins only" flag for
+#    workflow_dispatch.
+#
+# Build: equivalent to `docker build -f docker/Dockerfile --build-arg HEAT_REF=... -t ... .`
+# from this repository (context = repo root). That uses your committed docker/Dockerfile
+# in full. HEAT application source inside the image still comes from `git clone` in the
+# Dockerfile at HEAT_REF (branch or tag on GitHub), not from the Actions checkout.
+# By default HEAT_REF matches the Docker image tag; override with input heat_ref
+# if the git ref should differ from the Hub tag.
+#
+# Note: A cold build (full OpenFOAM + swak4Foam) can take many hours. If the job
+# times out on ubuntu-latest, increase timeout-minutes (max 360 on hosted runners)
+# or use a larger/self-hosted runner.
+
+name: Build and publish HEAT Docker image
+
+# Runs only when you click "Run workflow" on the Actions tab. Not triggered by
+# push, pull_request, merge to main, or schedule.
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Docker Hub image tag (e.g. v4.2.7)'
+        required: true
+        type: string
+      heat_ref:
+        description: 'Git branch or tag for Dockerfile HEAT_REF (leave empty to use image_tag)'
+        required: false
+        type: string
+        default: ''
+      docker_repository:
+        description: 'Docker Hub repository as owner/name (no tag)'
+        required: false
+        default: 'plasmapotential/heat'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-publish-${{ inputs.image_tag }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment:
+      name: dockerhub-publish
+    env:
+      HEAT_REF: ${{ inputs.heat_ref != '' && inputs.heat_ref || inputs.image_tag }}
+
+    steps:
+      - name: Checkout repo (Dockerfile + context; HEAT source in image = clone per HEAT_REF)
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: ${{ inputs.docker_repository }}:${{ inputs.image_tag }}
+          build-args: |
+            HEAT_REF=${{ env.HEAT_REF }}

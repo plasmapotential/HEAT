@@ -3,7 +3,7 @@
 #Engineer:      T Looby
 #Date:          20221108
 import vtk
-from vtk.util.numpy_support import vtk_to_numpy as vtk2np
+from vtk.util.numpy_support import numpy_to_vtk, numpy_to_vtkIdTypeArray
 import sys
 import numpy as np
 
@@ -29,7 +29,7 @@ class VTKops:
         self.label = label
         return
 
-    def initializePointCloudScalar(self, ctrs, scalar, label):
+    def initializePointCloudScalar(self, ctrs, scalar, label, extraArrays=None):
         """
         initializes a HEAT vtp point cloud object which requires a
         freecad mesh object and a scalar numpy array defined on the mesh
@@ -37,11 +37,15 @@ class VTKops:
         scalar should be the length of mesh triangles in the mesh
 
         label is the name of the scalar that will be in the colorbar in paraview
+
+        extraArrays (optional) is a dict {name: 1D-array} of additional point-data
+        arrays to attach (e.g. a velocity-slice id), each the same length as scalar.
         """
         self.ctrs = ctrs
         self.scalar = scalar
         self.Npts = len(scalar)
         self.label = label
+        self.extraArrays = extraArrays
         return
 
     def initializeVectorField(self, ctrs, vecs, label):
@@ -59,92 +63,126 @@ class VTKops:
         self.label = label
         return
 
-    def writeMeshVTP(self, outFile):
+    def writeMeshVTP(self, outFile, binary=True, compress=False):
         """
         writes a .vtp file that contains the mesh triangle data, and has the
         scalar field data stored in the Colors object.
         """
-        # setup colors
-        Colors = vtk.vtkFloatArray()
-        #Colors.SetNumberOfComponents(3)
-        Colors.SetNumberOfTuples(self.Npts)
-        Colors.SetName(self.label) #can change to any string
+        facets = self.mesh.Facets
+        ntri = len(facets)
+        if ntri == 0:
+            poly = vtk.vtkPolyData()
+            writer = vtk.vtkXMLPolyDataWriter()
+            writer.SetFileName(outFile)
+            writer.SetInputData(poly)
+            if binary: writer.SetDataModeToBinary()
+            if not compress: writer.SetCompressorTypeToNone()
+            writer.Write()
+            return
 
-        #points
-        vtkPts = vtk.vtkPoints()
+        pts = np.empty((ntri * 3, 3), dtype=np.float32)
+        for i, f in enumerate(facets):
+            pts[3*i:3*i+3, :] = np.asarray(f.Points, dtype=np.float32)
 
-        #build points and colors
-        for i,facet in enumerate(self.mesh.Facets):
-            for j in range(3):
-                x = facet.Points[j][0]
-                y = facet.Points[j][1]
-                z = facet.Points[j][2]
-                vtkPts.InsertNextPoint(x,y,z)
-                #        Colors.InsertTuple( i*3+j, (arr[i],arr[i],arr[i]) )
-                Colors.InsertTuple( i*3+j, [self.scalar[i]] )
+        conn = np.arange(ntri * 3, dtype=np.int64)
 
-        #build vtp triangular mesh
-        Triangles = vtk.vtkCellArray()
-        for i in range(self.Npts):
-            Triangle = vtk.vtkTriangle()
-            Triangle.GetPointIds().SetId(0, i*3+0)
-            Triangle.GetPointIds().SetId(1, i*3+1)
-            Triangle.GetPointIds().SetId(2, i*3+2)
-            Triangles.InsertNextCell(Triangle)
+        cells = vtk.vtkCellArray()
+        if vtk.VTK_MAJOR_VERSION >= 9:
+            offsets = np.arange(0, ntri * 3, 3, dtype=np.int64)
+            cells.SetData(
+                numpy_to_vtkIdTypeArray(offsets, deep=False),
+                numpy_to_vtkIdTypeArray(conn,   deep=False)
+            )
+        else:
+            ids = np.empty(ntri * 4, dtype=np.int64)
+            ids[0::4] = 3
+            ids[1::4] = conn[0::3]
+            ids[2::4] = conn[1::3]
+            ids[3::4] = conn[2::3]
+            cells.SetCells(ntri, numpy_to_vtkIdTypeArray(ids, deep=False))
 
-        #build final vtp object for writing
-        polydata = vtk.vtkPolyData()
-        polydata.SetPoints(vtkPts)
-        polydata.SetPolys(Triangles)
-        polydata.GetPointData().SetScalars(Colors)
-        polydata.Modified()
+        vtk_points = vtk.vtkPoints()
+        vtk_points.SetData(numpy_to_vtk(pts, deep=False))
+
+        # --- scalar per triangle (cell data) ---
+        cell_scal = numpy_to_vtk(np.asarray(self.scalar, dtype=np.float32), deep=False)
+        cell_scal.SetName(self.label)
+
+        poly = vtk.vtkPolyData()
+        poly.SetPoints(vtk_points)
+        poly.SetPolys(cells)
+        poly.GetCellData().SetScalars(cell_scal)   # <— key change (CellData)
+        poly.Modified()
+        # -------- Write (binary + no compression = fastest) -------
         writer = vtk.vtkXMLPolyDataWriter()
         writer.SetFileName(outFile)
-        writer.SetInputData(polydata)
-        #writer.SetDataModeToBinary()
+        writer.SetInputData(poly)
+        if binary:
+            writer.SetDataModeToBinary()
+        if not compress:
+            writer.SetCompressorTypeToNone()
         writer.Write()
 
-        return
 
-    def writePointCloudVTP(self, outFile):
+    def writePointCloudVTP(self, outFile, binary=True, compress=False):
         """
         writes a point cloud vtk object.
 
         point cloud has scalar array defined as the color
         point cloud is defined on a set of x,y,z coordinates (ctrs)
+
+        Vectorized (numpy_to_vtk) + binary, mirroring writeMeshVTP.  Avoids the
+        per-point Python loop and VTK debug logging that made this pathologically
+        slow when called once per (velocity slice, timestep).
         """
-        #points
-        vtkPts = vtk.vtkPoints()
+        Npts = int(self.Npts)
+
+        #points (deep copy: numpy temporaries go out of scope after this call)
+        pts = np.ascontiguousarray(self.ctrs, dtype=np.float32)
+        vtk_points = vtk.vtkPoints()
+        vtk_points.SetData(numpy_to_vtk(pts, deep=True))
+
+        #vertex cells (one vertex per point)
         cells = vtk.vtkCellArray()
+        conn = np.arange(Npts, dtype=np.int64)
+        if vtk.VTK_MAJOR_VERSION >= 9:
+            offsets = np.arange(0, Npts + 1, dtype=np.int64)
+            cells.SetData(
+                numpy_to_vtkIdTypeArray(offsets, deep=True),
+                numpy_to_vtkIdTypeArray(conn,    deep=True)
+            )
+        else:
+            ids = np.empty(Npts * 2, dtype=np.int64)
+            ids[0::2] = 1
+            ids[1::2] = conn
+            cells.SetCells(Npts, numpy_to_vtkIdTypeArray(ids, deep=True))
 
-        # setup colors
-        Colors = vtk.vtkFloatArray()
-        #Colors.SetNumberOfComponents(3)
-        Colors.SetNumberOfTuples(self.Npts)
-        Colors.SetName(self.label) #can change to any string
+        #primary scalar (point data)
+        scal = numpy_to_vtk(np.ascontiguousarray(self.scalar, dtype=np.float32), deep=True)
+        scal.SetName(self.label)
 
-        for i in range(self.Npts):
-            x = self.ctrs[i,0]
-            y = self.ctrs[i,1]
-            z = self.ctrs[i,2]
-            id = vtkPts.InsertNextPoint(x,y,z)
-            cells.InsertNextCell(1)
-            cells.InsertCellPoint(id)
-            Colors.InsertTuple( i, [self.scalar[i]] )
-
-
-        #build final vtp object for writing
         polydata = vtk.vtkPolyData()
-        polydata.SetPoints(vtkPts)
+        polydata.SetPoints(vtk_points)
         polydata.SetVerts(cells)
-        polydata.GetPointData().SetScalars(Colors)
+        polydata.GetPointData().SetScalars(scal)
+
+        #optional extra point-data arrays (e.g. velocity-slice id)
+        extra = getattr(self, 'extraArrays', None)
+        if extra:
+            for name, arr in extra.items():
+                a = numpy_to_vtk(np.ascontiguousarray(arr, dtype=np.float32), deep=True)
+                a.SetName(name)
+                polydata.GetPointData().AddArray(a)
+
         polydata.Modified()
 
         writer = vtk.vtkXMLPolyDataWriter()
-        writer.DebugOn()
         writer.SetFileName(outFile)
         writer.SetInputData(polydata)
-        #writer.SetDataModeToBinary()
+        if binary:
+            writer.SetDataModeToBinary()
+        if not compress:
+            writer.SetCompressorTypeToNone()
         writer.Write()
 
         return

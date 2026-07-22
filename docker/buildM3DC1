@@ -1,12 +1,17 @@
 #!/bin/bash
-#builds M3DC1 Fusion-io libs inside the container
+# Builds M3DC1 Fusion-io libs inside the container.
+# The fusion-io top-level Makefile has a 'doc' target that requires LaTeX; we skip
+# making that a hard failure by using make -k (keep going). The doc error is harmless
+# for HEAT. If libm3dc1.so is missing after install (e.g. "cannot stat 'libm3dc1.so'"),
+# only the static lib may be present; 3D M3DC1 workflows may need the shared lib (upstream
+# fusion-io build would need to be fixed to produce it).
 echo "Building M3DC1 fusion-io..."
-#sets up environment and builds fusion-io libs
 export FIO_ROOT=/root/source/M3DC1/fusion-io
 export FIO_ARCH="ubuntu_x86"
 export FIO_INSTALL_DIR=/root/source/M3DC1/build
 export PYTHON=python3
 
 cd /root/source/M3DC1/fusion-io
-make
+# -k: keep going after doc target fails (doc needs LaTeX, not installed)
+make -k
 make install

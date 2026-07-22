@@ -1,0 +1,55 @@
+#PFC CSV FILE
+#
+#This is a HEAT input file responsible for:
+# 1) Defining the PFCs in the Region of Interest (ROI)
+# 2) Defining the heat flux calculation mesh resolution for each PFC in ROI
+# 3) Defining the intersection PFCs that the ROI PFCs could be shadowed by
+# 4) Defining the timesteps we run HEAT for, w.r.t. each PFC
+# 5) Defining which divertor each PFC is in
+# 6) Defining any PFCs we want to exclude from the intersection calculation
+#
+#The first line in this file should always be:
+#timesteps, PFCname, DivCode, intersectName, excludeName
+#
+#Each new row under this header line represents a new PFC in the ROI.
+#Definitions of each column (comma separated variable) from this header line:
+#  timesteps: timesteps we include the PFC in during the HEAT calculation
+#  PFCname: the name of the CAD object as it appears in the CAD file.  If the 
+#            user Brings Your Own Mesh (BYOM), then the PFC name should be the
+#            name of the mesh (.stl) file.
+#  resolution: heat flux resolution on PFCname.
+#  DivCode:  divertor code.  This can be: LO, LI, UO, UI, which correspond to:
+#            Lower Outer, Lower Inner, Upper Outer, Upper Inner.  These codes
+#            are how each PFC in the ROI get flagged as belonging to a specific
+#            divertor, and will affect their power later (Psol * powerFrac)
+#  intersectName:  name of the PFCs that may cast a magnetic shadow upon the PFC
+#                  we are calculating power on.  If we launch field lines from the
+#                  PFCname part and follow them up the SOL, we may hit one of these
+#                  intersectName PFCs.  If the user is unsure of this value, "all"
+#                  can be specified to check against all parts in the CAD.
+#                  Multiple PFCs can be specified by using ":" between part names.
+#  excludeName:  name of PFCs to exclude in the intersection check.  This can be
+#                useful when we use the "all" switch for intersectName and want
+#                to exclude some obvious PFCs.
+#
+#Example to calculate heat loads on PFC001, a PFC in the Lower Outer divertor,
+# at 5.0 mm heat flux mesh resolution, for the first 100ms of the discharge,
+# checking for shadows (intersections) with PFC001 (self), PFC002 and PFC003:
+# timesteps, PFCname, resolution, DivCode, intersectName, excludeName
+# 0:100, PFC001, 5.0, LO, PFC001:PFC002:PFC003, none
+#
+#Example to calculate heat loads on PFC001, a PFC in the Upper Inner divertor,
+# at 1.0 mm heat flux mesh resolution, for timesteps 100:200ms of the discharge,
+# checking for shadows (intersections), with all PFCs in the CAD file:
+# timesteps, PFCname, resolution, DivCode, intersectName, excludeName
+# 100:200, PFC001, 1.0, UI, all, none
+#
+#
+#
+timesteps, PFCname, resolution, DivCode, intersectName, excludeName
+#Example for optical calculations and rad power calculations
+#0:5000, SOLID843, 5.0, LO, all, gyroSourcePlane
+#
+#Example for gyro-orbit calculations
+0:5000, SOLID843, 5.0, LO, all, gyroSourcePlane
+0:5000, gyroSourcePlane, 5.0, LO, all, none

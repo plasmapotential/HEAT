@@ -8,7 +8,7 @@ provides entry point to the Heat flux Engineering Analysis Toolkit (HEAT)
 user runs this command from terminal to launch HEAT's graphical user
 interface (GUI) or terminal user interface (TUI)
 
-Sets up environment, depending upon user runMode: local, appImage, docker
+Sets up environment, depending upon user runMode: local, docker
 """
 #========= VARIABLES THAT ARE SYSTEM DEPENDENT =================================
 import os
@@ -16,6 +16,7 @@ import sys
 import subprocess
 import argparse
 import logging
+import logConfig
 from pathlib import Path
 
 def loadEnviron():
@@ -32,11 +33,12 @@ def loadEnviron():
     try:
         homeDir = os.path.expanduser("~")
     except:
-        print("HOME env var not set.  Set before running HEAT!")
+        print("HOME env var not set.  Set before running HEAT or set 'dataPath' environment variable!")
         print("Example:  export HOME=/home/tom")
         sys.exit()
 
-    dataPath = homeDir + '/HEAT/data'
+    #default HEAT data output directory
+    dataPath = os.getenv('heatdata', homeDir + '/HEAT/data')
     OFversion = os.environ['OFversion']
 
     #=== Set up paths and environment vars
@@ -120,14 +122,12 @@ def loadEnviron():
         ### Open3D
         O3Dpath = '/opt/open3d/Open3D/build/lib/python_package/open3d'
 
-
-
-    #default logfile location
-    logFile = dataPath + '/HEATlog.txt'
+    # set up logs to bugger in RAM before writing to disk
+    # start the MemoryHandler
+    logConfig.setup_logging(logfile_path=None) 
 
     #Now set the relevant environment variables
     os.environ["homeDir"] = homeDir
-    os.environ["logFile"] = logFile
     os.environ["rootDir"] = rootDir
     os.environ["dataPath"] = dataPath
     os.environ["OFbashrc"] = OFbashrc
@@ -179,7 +179,7 @@ def launchHEAT(args):
     runMode = os.environ["runMode"]
 
     #list of tokamak flags that are options in HEAT (if adding new tokamak add flag to list)
-    machineList = ['sparc', 'arc', 'cmod', 'd3d','nstx','st40','step', 'west','kstar', 'aug', 'tcv' 'other']
+    machineList = ['sparc', 'arc', 'cmod', 'd3d','nstx','st40','step', 'west','kstar', 'aug', 'tcv', 'other']
     log = logging.getLogger(__name__)
     
     #run HEAT in terminal mode
@@ -210,8 +210,7 @@ def launchHEAT(args):
     else:
         from logConfig import setup_logging
         from pathlib import Path
-        Path(os.environ["logFile"]).touch()
-        setup_logging(logfile_path=os.environ["logFile"])
+        setup_logging(logfile_path=str(Path(os.environ["dataPath"]) / 'HEATlog.txt'))
         print('\nRunning HEAT via Graphical User Interface (GUI)...\n')
         log.info('\nRunning HEAT via Graphical User Interface (GUI)...\n')
         import dashGUI as dashGUI

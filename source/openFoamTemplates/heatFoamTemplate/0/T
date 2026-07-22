@@ -41,7 +41,7 @@ boundaryField
             //Note that we also need DT scaled by 1000000 [mm^2 => m^2]
             variables       "HF@STLpatch=HF;thermCond@STLpatch=thermCond;mm2m=1000;";
             gradientExpression "HF/(thermCond*mm2m)";
-
+            fixesValue      no;
 //            value           $internalField;
     }
 }

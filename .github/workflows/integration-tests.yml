@@ -1,0 +1,57 @@
+name: Integration tests
+
+# Runs on: push to main, PRs targeting main (merge path), and when manually triggered.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Manual: Actions → Integration tests → Run workflow → choose branch → Run
+
+# Single place to update when cutting a new release (image tag on Docker Hub)
+env:
+  HEAT_IMAGE_TAG: v4.3
+
+jobs:
+  check-final-image:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check if final Docker image exists on Docker Hub
+      id: check-final-image
+      run: |
+        if docker pull plasmapotential/heat:${{ env.HEAT_IMAGE_TAG }}; then
+          echo "Image exists on Docker Hub."
+        else
+          echo "::error ::Final HEAT Docker image ${{ env.HEAT_IMAGE_TAG }} does not exist."
+          exit 1 
+        fi
+
+  tests:
+    needs: check-final-image
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Pull Docker image
+      run: docker pull plasmapotential/heat:${{ env.HEAT_IMAGE_TAG }}
+
+    # ciTest.py is a standalone script; override entrypoint to run it
+    - name: Run simple CI configuration test 
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT --entrypoint "" plasmapotential/heat:${{ env.HEAT_IMAGE_TAG }} python3 /root/source/HEAT/tests/integrationTests/ciTest.py
+
+    # Pass launchHEAT.py args directly (same as runTerminalModeTest* scripts)
+    - name: NSTX-U Optical HEAT Calculation
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:${{ env.HEAT_IMAGE_TAG }} --m t --f /root/source/HEAT/tests/integrationTests/nstxuTestCase/batchFile_optical.dat
+    - name: NSTX-U Optical Elmer FEM HEAT Calculation
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:${{ env.HEAT_IMAGE_TAG }} --m t --f /root/source/HEAT/tests/integrationTests/nstxuTestCase/batchFile_optical_elmer.dat
+    - name: NSTX-U Gyro-orbit HEAT Calculation
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:${{ env.HEAT_IMAGE_TAG }} --m t --f /root/source/HEAT/tests/integrationTests/nstxuTestCase/batchFile_gyro.dat
+    # Runs batchFile_rad.dat in Docker and asserts stdout metrics (see nstxu_hf_rad_goldens.json).
+    - name: NSTX-U Photon Radiation HEAT + hfRad golden checks
+      run: python3 ${{ github.workspace }}/tests/integrationTests/verify_nstxu_hf_rad_goldens.py --workspace ${{ github.workspace }} --docker-image plasmapotential/heat:${{ env.HEAT_IMAGE_TAG }}
+    - name: NSTX-U RZQ File HEAT Calculation
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:${{ env.HEAT_IMAGE_TAG }} --m t --f /root/source/HEAT/tests/integrationTests/nstxuTestCase/batchFile_rzq.dat
+    - name: NSTX-U BYOM HEAT calculation
+      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:${{ env.HEAT_IMAGE_TAG }} --m t --f /root/source/HEAT/tests/integrationTests/nstxuTestCase/batchFile_optical_BYOM.dat
+#    - name: DIII-D 3D Fields HEAT calculation
+#      run: docker run -v ${{ github.workspace }}:/root/source/HEAT plasmapotential/heat:${{ env.HEAT_IMAGE_TAG }} --m t --f /root/source/HEAT/tests/integrationTests/D3DTestCase/batchFile.dat

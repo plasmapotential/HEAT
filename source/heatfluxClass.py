@@ -116,6 +116,9 @@ class heatFlux:
           HEAT runs photon radiation data, tag would be HF_rad and HEAT would read files
           named HF_rad.csv.  Set to None when no file should be read.
         :rzqFile: Path for the rzqprofile that contains a csv file with columns R(m),Z(m),q||(W/m2)
+        :rayTracer: defines which render engine to use for ray tracing.  Options are {mitsuba_gpu, 
+          mitsuba_cpu, open3d, heat}.  'mitsuba_gpu' requires cuda installation.  'heat' is legacy and
+          slow.
 
         """
 
@@ -147,6 +150,7 @@ class heatFlux:
                             'qFilePath',
                             'qFileTag',
                             'rzqFile',
+                            'rayTracer',
                             ]
         return
 
@@ -253,8 +257,11 @@ class heatFlux:
 
         # Evaluate Bp at outboard midplane
         Z_omp_sol = 0.0
-        Bp = abs(ep.BpFunc.ev(Rmax,Z_omp_sol))
-        Bt = abs(ep.BtFunc.ev(ep.g['RmAxis'],ep.g['ZmAxis']))
+        #.item() collapses the length-1 array RectBivariateSpline.ev returns for
+        #scalar (R,Z) to a Python float; NumPy 2.0 errors when such an array later
+        #hits a format string (e.g. "{:f}".format(self.lqEich)).
+        Bp = abs(ep.BpFunc.ev(Rmax,Z_omp_sol).item())
+        Bt = abs(ep.BtFunc.ev(ep.g['RmAxis'],ep.g['ZmAxis']).item())
         #Evaluate lq
         self.lqEich = C * self.Psol**Cp * Rgeo**Cr * Bp**Cb * aspect**Ca # in mm
         if verbose==True:
@@ -291,7 +298,7 @@ class heatFlux:
         # Evaluate Bt at axis [T]
         Zaxis = ep.g['ZmAxis']
         Raxis = ep.g['RmAxis']
-        Bt = abs(ep.BtFunc.ev(Raxis,Zaxis))
+        Bt = abs(ep.BtFunc.ev(Raxis,Zaxis).item())  #.item(): scalar float, not length-1 array (NumPy 2.0)
         #assuming plasma is centered in machine here
         zMin = ep.g['ZmAxis'] - 0.25
         zMax = ep.g['ZmAxis'] + 0.25
@@ -406,7 +413,7 @@ class heatFlux:
         psiedge = PFC.ep.g['psiSep']
         deltaPsi = np.abs(psiedge - psiaxis)
         R_omp_sol = PFC.ep.g['lcfs'][:,0].max()
-        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,PFC.ep.g['ZmAxis'])
+        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,PFC.ep.g['ZmAxis']).item()  #scalar float (NumPy 2.0)
         s_hat = psiN - PFC.psiMinLCFS
         #s_hat = psiN - psiedge
         # Gradient
@@ -568,10 +575,9 @@ class heatFlux:
 
         R = rzq_data['R(m)'].to_numpy()
         Z = rzq_data['Z(m)'].to_numpy()
-        Q = rzq_data['q(W/m2)'].to_numpy()
         # make Q positive. Sometimes, the q values from SOLPS is negative to indicate direction.
-        negs = np.where(Q<0.0)[0]
-        Q[negs] *= -1.0
+        # np.abs returns a fresh writable array (to_numpy() may return a read-only view)
+        Q = np.abs(rzq_data['q(W/m2)'].to_numpy())
         psi_rzq = PFC.ep.psiFunc.ev(R,Z) #convert (r,z) coordinate to psi
         psi_rzq_omp = self.map_R_psi(psi_rzq, PFC) #map the psi_rzq to OMP
 
@@ -611,7 +617,7 @@ class heatFlux:
         #Calculate flux at midplane using gfile
         psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
         psi = psiN * (PFC.ep.g['psiSep']-PFC.ep.g['psiAxis']) + PFC.ep.g['psiAxis']
-        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
+        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0).item()  #scalar float (NumPy 2.0)
         s_hat = psiN - PFC.psiMinLCFS
         # Evaluate B at outboard midplane
         Bp_omp = PFC.ep.BpFunc.ev(R_omp,Z_omp)
@@ -644,8 +650,8 @@ class heatFlux:
         print("Eich q0 = {:f}[MW/m^2]".format(q0))
         log.info("Eich q0 = {:f}[MW/m^2]".format(q0))
 
-        BpOmpLCFS = PFC.ep.BpFunc.ev(R_omp_sol,PFC.ep.g['ZmAxis'])
-        BtOmpLCFS = PFC.ep.BtFunc.ev(R_omp_sol, PFC.ep.g['ZmAxis'])
+        BpOmpLCFS = PFC.ep.BpFunc.ev(R_omp_sol,PFC.ep.g['ZmAxis']).item()  #scalar float (NumPy 2.0)
+        BtOmpLCFS = PFC.ep.BtFunc.ev(R_omp_sol, PFC.ep.g['ZmAxis']).item()  #scalar float (NumPy 2.0)
         BOmpLCFS = np.sqrt(BpOmpLCFS**2 + BtOmpLCFS**2)
         q0_simple = P / (2*np.pi*R_omp_sol*lqEich*1e-3) * BOmpLCFS / BpOmpLCFS
         print("Simple q0 = {:f}[MW/m^2]".format(q0_simple))
@@ -698,7 +704,7 @@ class heatFlux:
         #Calculate flux at midplane using gfile
         psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
         psi = psiN*(psiedge - psiaxis) + psiaxis
-        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
+        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0).item()  #scalar float (NumPy 2.0)
         s_hat = psiN - PFC.psiMinLCFS
 
         #find locations in Private vs Common flux regions
@@ -797,7 +803,7 @@ class heatFlux:
         #Calculate flux at midplane using gfile
         psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
         psi = psiN*(psiedge - psiaxis) + psiaxis
-        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,PFC.ep.g['ZmAxis'])
+        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,PFC.ep.g['ZmAxis']).item()  #scalar float (NumPy 2.0)
         s_hat = psiN - PFC.psiMinLCFS
 
 
@@ -872,7 +878,7 @@ class heatFlux:
         #Calculate flux at midplane using gfile
         psiN = PFC.ep.psiFunc.ev(R_omp,Z_omp)
         psi = psiN*(psiedge - psiaxis) + psiaxis
-        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0)
+        PFC.psiMinLCFS = PFC.ep.psiFunc.ev(R_omp_sol,0.0).item()  #scalar float (NumPy 2.0)
         s_hat = psiN - PFC.psiMinLCFS
 
         q_hat = self.tophat_profile_fluxspace(PFC,lq_mm,R_omp,Bp_omp,psiN)
@@ -914,6 +920,7 @@ class heatFlux:
             frac = 1.0
         return frac
 
+
 #===============================================================================
 #                   Heat flux functions and helper functions
 #===============================================================================
@@ -936,7 +943,7 @@ class heatFlux:
         f = scinter.UnivariateSpline(p, R, s = 0, ext = 'const')	# psi outside of spline domain return the boundary value
         return f(psi)
 
-    def getHFprofile(self, PFC, mafotPsi=False):
+    def getHFprofile(self, PFC, mafotPsi=False, mergePFC=False):
         """
         Calculates heat flux profile from psi.  Default is an Eich profile.
 
@@ -1034,12 +1041,12 @@ class heatFlux:
             log.info("S: {} [mm]".format(self.S))
 
 
-        #Scale by fraction of power going to this PFC's divertor
-        PFC.powerFrac = self.getDivertorPowerFraction(PFC.DivCode)
-        q *= PFC.powerFrac
-        print("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
-        log.info("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
+        #legacy method.  can be deleted after HEAT v4.5.  this now happens for each mesh element in PFCclass.py
+        #PFC.powerFrac = self.getDivertorPowerFraction(PFC.DivCode)
+        #print("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
+        #log.info("PFC "+PFC.name+" has {:.2f}% of the total power".format(PFC.powerFrac*100.0))
 
+        q *= PFC.divFracs
         return q
 
 
@@ -1257,6 +1264,21 @@ class heatFlux:
         GYRO.gyroPowMatrix += Pgyro
         GYRO.gyroNanPower += PNaN
         return
+
+    def _filamentTargetIndices(self, obj, PFC):
+        """
+        Global target-mesh indices for this PFC (or mergedPFCs) consistent with
+        engineClass.getFilMeshes / radClass.preparePowerTransfer ordering.
+
+        Function generated with Cursor
+        """
+        names = np.array(obj.CADtargetNames)
+        if getattr(PFC, 'mergedPFCs', False):
+            blocks = [np.where(names == ch.name)[0] for ch in PFC.PFClist]
+            if not blocks:
+                return np.array([], dtype=int)
+            return np.concatenate(blocks)
+        return np.where(names == PFC.name)[0]
     
     def filamentHeatFlux(self, FIL, PFC, ts, tIdx):
         """
@@ -1271,8 +1293,8 @@ class heatFlux:
         ptclSum = 0
         Esum = 0
 
-        #this PFC indexes in target mesh
-        idx1 = np.where(np.array(FIL.CADtargetNames) == PFC.name)[0]
+        #this PFC indexes in target mesh (child name rows, PFClist order for mergedPFCs)
+        idx1 = self._filamentTargetIndices(FIL, PFC)
 
         # Create an array with shape (len(ts), FIL.N_vS, FIL.intersectRecord.shape[1]) and ensure it is of integer type
         multi_ts_use = np.array([[np.where(np.isin(FIL.intersectRecord[j, :, i], idx1))[0].astype(int) for j in range(FIL.N_vS)] for i in range(len(ts))], dtype=object)
@@ -1368,8 +1390,8 @@ class heatFlux:
         density = FIL.density[:,:,:,tIdx].reshape(FIL.N_b*FIL.N_r*FIL.N_p) * FIL.E0
         ptclSum = 0
 
-        #this PFC indexes in target mesh
-        idx1 = np.where(np.array(FIL.CADtargetNames) == PFC.name)[0]
+        #this PFC indexes in target mesh (child name rows, PFClist order for mergedPFCs)
+        idx1 = self._filamentTargetIndices(FIL, PFC)
 
         # Create an array with shape (len(ts), FIL.N_vS, FIL.intersectRecord.shape[1]) and ensure it is of integer type
         multi_ts_use = np.array([[np.where(np.isin(FIL.intersectRecord[j, :, i], idx1))[0].astype(int) for j in range(FIL.N_vS)] for i in range(len(ts))], dtype=object)
@@ -1427,8 +1449,8 @@ class heatFlux:
         ptclSum = 0
         Esum = 0
 
-        #this PFC indexes in target mesh
-        idx1 = np.where(np.array(RE.CADtargetNames) == PFC.name)[0]
+        #this PFC indexes in target mesh (child name rows, PFClist order for mergedPFCs)
+        idx1 = self._filamentTargetIndices(RE, PFC)
 
         # Create an array with shape (len(ts), RE.N_vS, RE.intersectRecord.shape[1]) and ensure it is of integer type
         multi_ts_use = np.array([[np.where(np.isin(RE.intersectRecord[j, :, i], idx1))[0].astype(int) for j in range(RE.N_vS)] for i in range(len(ts))], dtype=object)
@@ -1488,8 +1510,8 @@ class heatFlux:
         density = RE.density[:,:,:,tIdx].reshape(RE.N_b*RE.N_r*RE.N_p) * RE.E0
         ptclSum = 0
 
-        #this PFC indexes in target mesh
-        idx1 = np.where(np.array(RE.CADtargetNames) == PFC.name)[0]
+        #this PFC indexes in target mesh (child name rows, PFClist order for mergedPFCs)
+        idx1 = self._filamentTargetIndices(RE, PFC)
 
         # Create an array with shape (len(ts), RE.N_vS, RE.intersectRecord.shape[1]) and ensure it is of integer type
         multi_ts_use = np.array([[np.where(np.isin(RE.intersectRecord[j, :, i], idx1))[0].astype(int) for j in range(RE.N_vS)] for i in range(len(ts))], dtype=object)
@@ -1555,14 +1577,14 @@ class heatFlux:
         f = base + self.tsFmt.format(t) + '/' + PFC.name + '/' + self.qFileTag
         try:
             df = pd.read_csv(f, names=['X','Y','Z','HF'], skiprows=[0])
-            if len(df['HF'].values) != len(PFC.centers):
+            if len(df['HF'].to_numpy()) != len(PFC.centers):
                 print('HF file mesh is not same length as STL file mesh.')
                 print('Will not assign HF to mismatched mesh')
-                print("qFile length: {:d}".format(len(df['HF'].values)))
+                print("qFile length: {:d}".format(len(df['HF'].to_numpy())))
                 print("PFC STL mesh length: {:d}".format(len(PFC.centers)))
                 val = -1
             else:
-                PFC.qDiv = df['HF'].values
+                PFC.qDiv = df['HF'].to_numpy()
                 PFC.powerFrac = self.getDivertorPowerFraction(PFC.DivCode)
                 PFC.qOpticalList.append(PFC.qDiv)
                 print("Loaded heat flux from file: "+f)
@@ -1705,7 +1727,7 @@ class heatFlux:
         pc[:,1] = xyz[::2,1]*1000
         pc[:,2] = xyz[::2,2]*1000
         head = """X,Y,Z"""
-        np.savetxt(file, pc, delimiter=',',fmt='%.10f', header=head)
+        tools.savetxt(file, pc, delimiter=',',fmt='%.10f', header=head)
         return
 
 

@@ -8,57 +8,88 @@ Contents
    :maxdepth: 1
 
    install
+   docker
    GUItutorial
    TUItutorial
    inputFile
 
 
-
 General Information
 -------------------
 The Heat flux Engineering Analysis Toolkit (HEAT) is a suite of tools for predicting the heat flux
-incident upon PFCs in tokamaks, and the associated PFC state (ie temperature, stress, etc).
+incident upon PFCs in tokamaks, and the associated PFC state (e.g. temperature).
 The toolkit connects CAD, FVM, FEM, MHD, ray tracing, plasma physics, and more, in one streamlined package.
-The objective is to enable engineers and physicists to quickly calculate heat loads given specific magnetic
-configurations and geometric configurations.
+The objective is to enable engineers and physicists to quickly ascertain heat loads given specific magnetic
+and geometric configurations. HEAT has been used to design the SPARC PFCs and continues to be developed for control room use as SPARC begins operations.
 
 Some examples of what HEAT can predict:
  * 3D heat loads from 2D and 3D plasmas for limited and diverted discharges
  * Heat fluxes from the optical approximation, ion gyro orbit approximation, and photon flux
- * Heat and particle fluxes from filaments
+ * Heat and particle fluxes from filaments and runaway electrons
  * 3D heat flux profiles from RMPs and Error Fields
- * Temperature, Stress, Recrystallization Kinetics
- * Time varying heat fluxes and thermal state
+ * Time varying heat loads and temperature profiles
  * Magnetic field line traces
  * Many other quantities
 
+The latest release of HEAT is **v4.2**, which includes notable additions such as:
+ * Mitsuba3 for photon tracing
+ * Ability to read STLs directly instead of STEPs (Bring Your Own Mesh)
+ * A Runaway Electron module (A. Feyrer, MIT)
+ * Ability to read arbitrary R,Z,qPar profiles from CSV (E. Tinacba, ORNL)
 
-The latest release of HEAT is v4.2.3.
+Full installation instructions and tutorials (including Docker) are in the **Install** and **Docker** sections below and on Read the Docs: https://heat-flux-engineering-analysis-toolkit-heat.readthedocs.io/en/latest/
 
-To cite HEAT, you can use a paper published by the journal Fusion Science and Technology under open access.  The paper can be found here: https://doi.org/10.1080/15361055.2021.1951532
 
-Other recent HEAT related publications:
- * 3D ion gyro-orbit heat load predictions for NSTX-U, Looby et al, https://iopscience.iop.org/article/10.1088/1741-4326/ac8a05
- * 3D PFC Power Exhaust Predictions for the SPARC Tokamak, Looby et al, https://meetings.aps.org/Meeting/DPP22/Session/NO03.11
- * Measurements of multiple heat flux components at the divertor target by using surface eroding thermocouples (invited), Ren et al, https://aip.scitation.org/doi/full/10.1063/5.0101719
+Citing HEAT
+-----------
+To cite HEAT, use the open-access paper in Fusion Science and Technology:
+https://doi.org/10.1080/15361055.2021.1951532
 
-For users who want to run HEAT, you will need to download the HEAT docker container from dockerhub.
-Dockerhub repo:  https://hub.docker.com/r/plasmapotential/heat
-There is a companion repo to this one, which provides some HEAT pre/post processing functions:
-https://github.com/plasmapotential/HEATtools.git
+Other HEAT-related publications (recent first):
+ * `The Experimental Validation of HEAT on the ASDEX Upgrade Tokamak <https://doi.org/10.1080/15361055.2025.2478720>`_, A. Redl et al. 2025
+ * `3D modeling of n = 1 RMP driven heat fluxes on the SPARC tokamak PFCs using HEAT <https://iopscience.iop.org/article/10.1088/1741-4326/adf760/meta>`_, M. D'Abusco et al. 2025
+ * `Development and validation of non-axisymmetric heat flux simulations with 3D fields using the HEAT code <https://iopscience.iop.org/article/10.1088/1741-4326/adeff1>`_, A. Wingen et al. 2025
+ * `Shadow masks predictions in SPARC tokamak plasma-facing components using HEAT code and machine learning methods <https://doi.org/10.1016/j.fusengdes.2025.115010>`_, D. Corona et al. 2025
+ * `HEAT simulation and IR data comparison for ST40 plasma-facing components <https://doi.org/10.1016/j.nme.2024.101791>`_, E. Tinacba et al. 2024
+ * SPARC power exhaust workflows using open source tools (APS DPP Tutorial), `presentation <https://docs.google.com/presentation/d/1QsxlfUS6zo_vAwRgFoKKztvUsIzq238u2JmYD6xtum4/edit?usp=sharing>`_
+ * 3D ion gyro-orbit heat load predictions for NSTX-U, Looby et al., https://iopscience.iop.org/article/10.1088/1741-4326/ac8a05
+ * 3D PFC Power Exhaust Predictions for the SPARC Tokamak, Looby et al., https://meetings.aps.org/Meeting/DPP22/Session/NO03.11
+ * Measurements of multiple heat flux components at the divertor target by using surface eroding thermocouples (invited), Ren et al., https://aip.scitation.org/doi/full/10.1063/5.0101719
+ * SHEFT (HEAT predecessor), A. Wingen 2019, https://info.fusion.ciemat.es/OCS/EPS2019PAP/pdf/P2.1040.pdf
+ * The MAFOT code (A. Wingen) is documented at https://github.com/ORNL-Fusion/MAFOT/tree/master/doc
 
-The developer is Tom Looby, Senior Scientist at Commonwealth Fusion Systems.
 
-This project is open source under the MIT license.
+Running HEAT
+------------
+To run HEAT, download the HEAT Docker container from Docker Hub (tested on Linux, macOS, and Windows). See the **Install** and **Docker** pages for details.
 
-Tom's email:  tlooby@cfs.energy
+ * Docker Hub: https://hub.docker.com/r/plasmapotential/heat
+ * HEATtools (pre/post processing): https://github.com/plasmapotential/HEATtools
 
-To visualize HEAT results, the user will need an installation of ParaVIEW.
-There has been some work to include paraview into the HEAT html interface using
-paraviewweb, but this is NOT included in the releases.  More information on
-ParaVIEW can be found at `<https://www.paraview.org/>`_ and ParaVIEW can be
-downloaded here `<https://www.paraview.org/download/>`_.  Download version
-for your operating system and follow instructions to run.
+This repository uses **Git LFS** for large data files (e.g. the 3D fields test case). After cloning, run::
+
+    git lfs install
+    git lfs pull
+
+before running the 3D fields test case (e.g. ``./runTerminalModeTest3Dfields``).
+
+
+Developer and license
+---------------------
+The developer is Tom Looby, Scientist at Commonwealth Fusion Systems.
+Contact: tlooby@cfs.energy
+
+This project is open source under the **MIT license**. Contributions are welcome (documentation, code, issues); see the GitHub repository for more.
+
+
+Visualization (ParaVIEW)
+------------------------
+To visualize HEAT results you need ParaView. HEAT can produce time-varying 3D heat fluxes and visualizations that work with ParaView.
+
+ * ParaView: https://www.paraview.org/
+ * Download: https://www.paraview.org/download/
+
+Note: Work has been done to integrate ParaviewWeb into the HEAT HTML interface; this is **not** included in the current releases.
 
 
 .. toctree::

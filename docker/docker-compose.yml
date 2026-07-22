@@ -5,12 +5,12 @@
 #             requires user to have the volumes below locally on host
 #             if not, comment out the line for the dir you don't have
 #             if so, change paths to match your machine
-version: "3.0"
-
 services:
   HEAT:
     #user: ${UID}:${GID}
-    image: "plasmapotential/heat:v4.2.3"
+    image: "plasmapotential/heat:v4.3"
+    # for terminal (batch) mode, override default args by uncommenting and setting your batchFile path:
+    #command: ["--m", "t", "--f", "/root/terminal/batchFile.dat"]
     ports:
       - "8050:8050"
     volumes:
@@ -23,25 +23,31 @@ services:
 #      # HEAT source code from github
 #      - /home/tlooby/source/HEAT/github:/root/source/HEAT
 #      # Batch mode directory
-#      - /home/tlooby/HEATruns/SPARC/oscillation_fixedSP:/root/terminal
+#      - /home/tlooby/HEATruns/SPARC/filament_OOLIM:/root/terminal
     stdin_open: true # docker run -i
     tty: true        # docker run -t
     #if you want to set env vars, do it here:
     environment:
-    - dockerUID=$dockerUID
-    - dockerGID=$dockerGID
-    - UID=$dockerUID
-    - GID=$dockerGID
-    - OMPI_ALLOW_RUN_AS_ROOT=1
-    - OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
-
-#NOTES:
-#to run HEAT in batch mode, first bind mount the /root/terminal directory to your
-#local directory with the batchFile, then run:
-# python3 launchHEAT.py --m t --f /root/terminal/batchFile.dat
-#
-#to run an interactive shell use this command:
-# docker-compose run HEAT /bin/bash
-#
-# to change image tag name:
-# docker tag plasmapotential/heat:latest plasmapotential/heat:<tag>
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics 
+      - dockerUID=$dockerUID
+      - dockerGID=$dockerGID
+      - UID=$dockerUID
+      - GID=$dockerGID
+      - OMPI_ALLOW_RUN_AS_ROOT=1
+      - OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+    #for NVIDIA GPUs
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all         # or 1
+              capabilities: [gpu]
+#NOTES (image uses ENTRYPOINT + CMD so you can override mode via 'command:' or get a shell via --entrypoint):
+# GUI (default): docker compose up
+# TUI/batch: uncomment the 'command:' line above (set path to your batchFile), bind mount /root/terminal, then docker compose up
+# Interactive shell (override entrypoint so we get bash, not launchHEAT.py):
+#   docker compose run --entrypoint "" HEAT /bin/bash
+# From inside a shell you can still run: python3 ./source/HEAT/source/launchHEAT.py --m t --f /root/terminal/batchFile.dat
+# To change image tag: docker tag plasmapotential/heat:v4.3

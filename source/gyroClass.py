@@ -457,7 +457,7 @@ class GYRO:
         else:
             name = 'helixTrace_'+tag
 
-        np.savetxt(controlfilePath+name+'.csv', helixTrace, delimiter=',', header=head)
+        tools.savetxt(controlfilePath+name+'.csv', helixTrace, delimiter=',', header=head)
         #save data to vtk format
         tools.createVTKOutput(controlfilePath+name+'.csv', 'trace', name)
 
@@ -684,7 +684,7 @@ class GYRO:
                     #print("Saving Index data to CSV and VTK formats")
                     #save data to csv format
                     head = 'X[mm],Y[mm],Z[mm]'
-                    np.savetxt(self.controlfilePath+'helix{:d}.csv'.format(self.N_GCdeg), helix_rot*1000.0, delimiter=',', header=head)
+                    tools.savetxt(self.controlfilePath+'helix{:d}.csv'.format(self.N_GCdeg), helix_rot*1000.0, delimiter=',', header=head)
                     #save data to vtk format
                     tools.createVTKOutput(self.controlfilePath+'helix{:d}.csv'.format(self.N_GCdeg),
                                         'trace', 'traceHelix{:d}'.format(self.N_GCdeg),verbose=False)
@@ -821,7 +821,7 @@ class GYRO:
                     #print("Saving Index data to CSV and VTK formats")
                     #save data to csv format
                     head = 'X[mm],Y[mm],Z[mm]'
-                    np.savetxt(self.controlfilePath+'helix{:d}.csv'.format(i), helix[i]*1000.0, delimiter=',', header=head)
+                    tools.savetxt(self.controlfilePath+'helix{:d}.csv'.format(i), helix[i]*1000.0, delimiter=',', header=head)
                     #save data to vtk format
                     tools.createVTKOutput(self.controlfilePath+'helix{:d}.csv'.format(i),
                                         'trace', 'traceHelix{:d}'.format(i),verbose=False)
@@ -1087,7 +1087,7 @@ class GYRO:
                 #print("Saving Index data to CSV and VTK formats")
                 #save data to csv format
                 head = 'X[mm],Y[mm],Z[mm]'
-                np.savetxt(self.controlfilePath+'helix{:d}.csv'.format(self.N_GCdeg), helix_rot*1000.0, delimiter=',', header=head)
+                tools.savetxt(self.controlfilePath+'helix{:d}.csv'.format(self.N_GCdeg), helix_rot*1000.0, delimiter=',', header=head)
                 #save data to vtk format
                 tools.createVTKOutput(self.controlfilePath+'helix{:d}.csv'.format(self.N_GCdeg),
                                         'trace', 'traceHelix{:d}'.format(self.N_GCdeg),verbose=False)

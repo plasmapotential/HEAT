@@ -5,6 +5,7 @@
 import os
 import numpy as np
 import GUIscripts.vtkOpsClass as vtkOpsClass
+import pandas as pd
 try:
     import GUIscripts.meshOpsClass as meshOpsClass
 except:
@@ -156,7 +157,7 @@ class IO_HEAT:
         VTKops.writeMeshVTP(f)
         return
 
-    def writePointCloudVTP(self, ctrs, scalar, label, prefix, path, tag=None, PClabel=True):
+    def writePointCloudVTP(self, ctrs, scalar, label, prefix, path, tag=None, PClabel=True, extraArrays=None):
         """
         writes a vtk point cloud file
         output file contains the PFC mesh centers, and an array of heat flux values,
@@ -180,7 +181,7 @@ class IO_HEAT:
                 fName = prefix + '_' + tag + '.vtp'
 
         VTKops = vtkOpsClass.VTKops()
-        VTKops.initializePointCloudScalar(ctrs*1000.0, scalar, label) #scale to mm
+        VTKops.initializePointCloudScalar(ctrs*1000.0, scalar, label, extraArrays=extraArrays) #scale to mm
 
         if 'paraview' not in path:
             PVdir = path + "paraview/"
@@ -236,6 +237,10 @@ class IO_HEAT:
 
         xyz = np.genfromtxt(csvfile, comments='#', delimiter=',')
 
+        #if another scalar field was saved along with xyz (ie distance), discard it
+        if xyz.shape[-1] > 3:
+            xyz = xyz[:,:3]
+
         fName = tag+ '.vtp'
         PVdir = path + "paraview/"
         f = PVdir+fName
@@ -245,10 +250,25 @@ class IO_HEAT:
         VTKops.writeTraceVTP(xyz, f)
         return
 
+    def writePointCloudCSV_pd(self, centers, scalar, dataPath, label, tag=None, prefix='Undefined'):
+        print(f"Writing point cloud CSV for {prefix}")
+        if tag is None:
+            pcfile = f"{dataPath}{prefix}.csv"
+        else:
+            pcfile = f"{dataPath}{prefix}_{tag}.csv"
+
+        # Build DataFrame directly
+        df = pd.DataFrame({
+            "X": centers[:,0] * 1000.0,
+            "Y": centers[:,1] * 1000.0,
+            "Z": centers[:,2] * 1000.0,
+            label: scalar
+        })
+        df.to_csv(pcfile, index=False, float_format="%.6f")
 
     def writePointCloudCSV(self,centers,Scalar,dataPath,label,tag=None,prefix='Undefined'):
         """
-        writes a point cloud CSV file
+        writes a point cloud CSV file using np
         """
         print("Writing point cloud CSV for "+prefix)
         log.info("Writing point cloud CSV for "+prefix)
@@ -262,7 +282,7 @@ class IO_HEAT:
         pc[:,2] = centers[:,2]*1000.0
         pc[:,3] = Scalar
         head = "X,Y,Z,"+label
-        np.savetxt(pcfile, pc, delimiter=',',fmt='%.10f', header=head)
+        tools.savetxt(pcfile, pc, delimiter=',',fmt='%.10f', header=head)
         return
 
     def writeGlyphCSV(self,centers,vecs,path,prefix,head,tag=None):
@@ -286,7 +306,7 @@ class IO_HEAT:
         data[:,3] = vecs[:,0]
         data[:,4] = vecs[:,1]
         data[:,5] = vecs[:,2]
-        np.savetxt(pcfile, data, delimiter=',',fmt='%.10f', header=head)
+        tools.savetxt(pcfile, data, delimiter=',',fmt='%.10f', header=head)
         return
 
     def readJSON(self, filename):

@@ -36,7 +36,7 @@ fi
 
 #run docker compose
 #docker compose up
-#run docker compose interactively (for terminal mode)
-#docker compose run HEAT /bin/bash
-#run docker compose detached
-docker compose run -d HEAT /bin/bash
+#run docker compose interactively (for terminal mode) — must override entrypoint (image uses ENTRYPOINT for HEAT)
+#docker compose run --entrypoint "" HEAT /bin/bash
+#run docker compose detached (shell; override entrypoint so we get bash, not launchHEAT.py)
+docker compose run -d --entrypoint /bin/bash HEAT -c "sleep infinity"

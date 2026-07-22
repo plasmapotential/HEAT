@@ -52,7 +52,6 @@ import logging
 log = logging.getLogger(__name__)
 
 #get relevant environment variables
-logFile = os.environ["logFile"]
 rootDir = os.environ["rootDir"]
 dataPath = os.environ["dataPath"]
 OFbashrc = os.environ["OFbashrc"]
@@ -98,7 +97,7 @@ else:
 #Eventually need to fix this so that we are not using a global variable
 #dash can acces Flask Cache so we should cache data by userID or something
 #for R&D this works
-gui = engineObj(logFile, rootDir, dataPath, OFbashrc, chmod, UID, GID)
+gui = engineObj(rootDir, dataPath, OFbashrc, chmod, UID, GID)
 gui.UImode = 'g' #graphical mode
 
 """
@@ -930,7 +929,7 @@ def loadRes(n_clicks, gridRes, gTx, gTy, gTz, MachFlag):
         raise PreventUpdate
     if MachFlag is None:
         return [dbc.Label("Select a machine", style={'color':'#fc0313'})]
-    gui.getCADResInputs(gridRes, gTx, gTy, gTz)
+    gui.getCADinputs(gridRes, gTx, gTy, gTz, mode='gui')
 
     CADdata = {
         'Intersect Max Edge Length [mm]':gridRes
@@ -1919,7 +1918,7 @@ def PFCtable(n_clicks, filename, dataStore, ts, uploadContents,
     #ROIdict.append({'label': "", 'value': ''})
     if tD != [{}]:
         tD = pd.DataFrame.from_dict(tableData)[list (tableData[0].keys())]
-        names = tD.rename(columns=lambda x: x.strip())['PFCname'].values
+        names = tD.rename(columns=lambda x: x.strip())['PFCname'].to_numpy()
         for name in names:
             n = name.replace(' ', '')
             ROIdict.append({'label': n, 'value': n})
@@ -2943,7 +2942,7 @@ def runHEAT(n_clicks,runList,Btrace,OFtrace,gyrotrace,
     if 'Btrace' in Btrace:
         print("Tracing magnetic field lines...")
         log.info("Tracing magnetic field lines...")
-        gui.BtraceMultiple(BtraceTableData, t)
+        gui.BtraceMultiple(t, BtraceTableData)
 
     #gyro orbit trace
     if 'gyrotrace' in gyrotrace:
@@ -3297,9 +3296,9 @@ def interpolateNsteps(n_clicks, N, data):
     print("GEQDSK Dataframe:")
     print(df)
     print("New timesteps:")
-    print(df['timestep[ms]'].values)
+    print(df['timestep[ms]'].to_numpy())
     #interpolate N steps between each point
-    gui.interpolateNsteps(df['filename'].values, pd.to_numeric(df['timestep[ms]']).values,int(N))
+    gui.interpolateNsteps(df['filename'].to_numpy(), pd.to_numeric(df['timestep[ms]']).to_numpy(),int(N))
     zipFile = gui.tmpDir + 'InterpolatedGfiles.zip'
     return [html.Label("gFiles Interpolated", className="text-success"),
             dcc.send_file(zipFile)]

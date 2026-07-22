@@ -110,7 +110,7 @@ class MHD:
         """
         .. Writes a list of recognized class variables to HEAT object
         .. Used for error checking input files and for initialization
-        
+
         MHD EQ Variables:
         -----------------
 
@@ -120,8 +120,16 @@ class MHD:
         :traceLength: number of steps to trace along magnetic field lines looking for
           intersections
         :dpinit: toroidal length of each trace step up magnetic field line [degrees]
-
-        
+        :psiMult: multiplier to apply to all psi quantities (psiSep, psiAxis, psiRZ) for normalization (ie the dreaded 2pi) in EQ
+        :BtMult: multiplier to apply to toroidal field quantities (Bt0, Fpol) in EQ
+        :IpMult: multiplier to apply to plasma current, Ip in EQ
+        :BtraceFile: path to file to be used for field line tracing
+        :mafot_bbox: boolean (input as True/False text). When True, MAFOT heatstructure uses
+          -b (simple R-Z box). When False, uses the g-file wall limiter. Omit for default True.
+        :mafot_gpu: boolean (input as True/False text). When True, appends -g to the MAFOT
+          call so the (GPU-enabled) heatstructure / heatlaminar_mpi binaries run on the GPU;
+          when False they run on the CPU. Requires MAFOT built with GPU support (GPU=True).
+          GPU laminar mode uses a single MPI rank (NCPUs is automatically set to 1). Omit for default False.
 
         """
         self.allowed_vars = [
@@ -133,6 +141,9 @@ class MHD:
                             'psiMult',
                             'BtMult',
                             'IpMult',
+                            'BtraceFile',
+                            'mafot_bbox',
+                            'mafot_gpu',
                             ]
 
         return
@@ -171,6 +182,21 @@ class MHD:
                     except:
                         print("Error with input file var "+var+".  Perhaps you have invalid input values?")
                         log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
+
+        bools = ['mafot_bbox', 'mafot_gpu']
+        for var in bools:
+            if getattr(self, var, None) is not None:
+                try:
+                    setattr(self, var, tools.makeBool(getattr(self, var)))
+                except Exception as e:
+                    print("Error with input file var "+var+".  Perhaps you have invalid input values?")
+                    log.info("Error with input file var "+var+".  Perhaps you have invalid input values?")
+                    print(e)
+            else:
+                if var == 'mafot_bbox':
+                    self.mafot_bbox = True
+                elif var == 'mafot_gpu':
+                    self.mafot_gpu = False
 
         return
 
@@ -488,7 +514,7 @@ class MHD:
             pc[:,2] = centers[:,2]*1000.0
             pc[:,3] = arrays[i]
             head = "X,Y,Z,"+prefix
-            np.savetxt(pcfile, pc, delimiter=',',fmt='%.10f', header=head)
+            tools.savetxt(pcfile, pc, delimiter=',',fmt='%.10f', header=head)
 
             #Now save a vtk file for paraviewweb
             if tag is None:
@@ -569,9 +595,15 @@ class MHD:
             #f.write('useECcoil(0=no,1=yes)=\t{:d}\n'.format(self.useECcoil))
             f.write('unused=\t0\n')
             f.write('unused=\t0\n')
+#            f.write('unused=\t0\n')
             f.write('dpinit=\t{:f}\n'.format(self.dpinit)) # This must be entry index 23
             f.write('pi=\t3.141592653589793\n')
-            f.write('2*pi=\t6.283185307179586\n')           
+            f.write('2*pi=\t6.283185307179586\n')
+            # Drift velocities [m/s] appended at the end (vec[26..28]); io_class reads them with a
+            # size guard, so omitting them (older/other-machine files) is safe. 0 -> pure field line.
+            f.write('v_parallel=\t{:f}\n'.format(getattr(self, 'v_par', 0.0)))   # vec[26]
+            f.write('v_radial=\t{:f}\n'.format(getattr(self, 'v_radial', 0.0)))  # vec[27]
+            f.write('v_toroidal=\t{:f}\n'.format(getattr(self, 'v_tor', 0.0)))   # vec[28]
             return
 
     def psi2DfromEQ(self, PFC):
@@ -613,13 +645,20 @@ class MHD:
         phi = np.degrees(phi)
         #Save R,phi,Z into a special initial condition grid file for MAFOT
         array = np.column_stack((R,phi,Z))
-        np.savetxt(gridfile, array, delimiter='\t',fmt='%.10f')
+        tools.savetxt(gridfile, array, delimiter='\t',fmt='%.10f')
         return
 
 
+    def distance(self, traceData:np.ndarray):
+        """
+        Calculate distance along
+        """
+        distance = np.cumsum(np.sqrt(np.sum(np.diff(traceData,axis=0)**2,axis=1)))
+        distance = np.insert(distance, 0, 0)
+        return distance
 
-    def getFieldpath(self, dphi, gridfile, controlfilePath,
-                    controlfile, paraview_mask=False, tag=None):
+    def getFieldpath(self, dphi, dpinit, gridfile, controlfilePath,
+                    controlfile, paraview_mask=False, tag=None, bbox=True, distance_mask=True):
         """
         Uses MAFOT's structure script to get the full magnetic field line
         starting from a user defined R,Z,phi location.  Integrates back up
@@ -648,20 +687,30 @@ class MHD:
         args = []
         #MAFOT now runs a program called HEAT that is generic for all machines
         args.append('heatstructure')
-        #args 1,2 are the number of degrees we want to run the trace for
+        #step size for output
         args.append('-d')
         args.append(str(dphi))
-
-        #args 3,4 are the points that we launch traces from
+        #integrator step size
+        args.append('-i')
+        args.append(str(dpinit))
+        #GPU flag (if enabled)
+        if self.mafot_gpu:
+            args.append('-g')
+        #the points that we launch traces from
         args.append('-P')
         args.append(gridfile)
-        #args 5 is the MAFOT control file
+        #now use simple boundary instead of g-file wall as limiter
+	    #This must be used with MAFOT version 5.7 or newer for the Shadow Mask calculation
+        if bbox == True:
+            args.append('-b')
+	    #args 6 is the MAFOT control file
         args.append(controlfile)
         #args 6 is the tag, if not None
         if tag is not None: args.append(tag)
         #Copy the current environment (important when in appImage mode)
         current_env = os.environ.copy()
         #run MAFOT structure for points in gridfile
+        print(args)
         from subprocess import run
         run(args, env=current_env, cwd=controlfilePath)
         try:
@@ -687,7 +736,7 @@ class MHD:
             xyz[:,2] = structdata[:,2]
             xyz*=1000 #Scale for ParaVIEW
             xyz = xyz[~(np.abs(xyz[:,:2])<1e-50).any(axis=1)]
-            head = 'X[mm],Y[mm],Z[mm]'
+            head = 'X[mm],Y[mm],Z[mm],distance[mm]'
             #head = 'X[m],Y[m],Z[m],R[m],phi[rad]'
             if tag == None:
                 outfile = controlfilePath+'struct.csv'
@@ -695,13 +744,15 @@ class MHD:
             else:
                 outfile = controlfilePath+'struct_'+tag+'.csv'
                 vtkName = 'Field_trace_'+tag
-            np.savetxt(outfile, xyz, delimiter=',', header=head)
+
+            d = self.distance(xyz)
+            xyzd = np.hstack((xyz, d.reshape(-1,1)))
+            tools.savetxt(outfile, xyzd, delimiter=',', header=head)
             
             #Now save a vtk file for paraviewweb
             #old method (new method happens in engineClass using ioClass)
             #delete this comment after v5.0
             #tools.createVTKOutput(outfile, 'trace', vtkName)
-           
 
         return
 
@@ -715,6 +766,9 @@ class MHD:
         #args 1,2 are the number of degrees we want to run the trace for
         args.append('-d')
         args.append(str(dphi))
+        #GPU flag (if enabled)
+        if self.mafot_gpu:
+            args.append('-g')
         #args 3,4 are the points that we launch traces from
         args.append('-P')
         args.append(gridfile)
@@ -731,16 +785,55 @@ class MHD:
         run(args, env=current_env, cwd=controlfilePath)
         return
 
+
+    def readBtraceFile(self):
+        """
+        .. Reads a Btrace file (file for tracing magnetic field lines from)
+        .. first row file should be formatted like this, which defines the columns:
+        .. x[mm], y[mm], z[mm], traceDirection, Length[deg], stepSize[deg]
+        .. every new row represents a new trace that will be run in HEAT
+        
+        Columns in the file:
+        --------------------
+
+        :x: x coordinate of field line trace start locations in [mm]
+        :y: y coordinate of field line trace start locations in [mm]
+        :z: z coordinate of field line trace start locations in [mm]
+        :traceDirection: can be 1 (forward toroidal angle), -1 (reverse toroidal angle), or 0 (both directions) to trace from point
+        :Length[deg]: distance in degrees to trace from the point
+        :stepSize[deg]: step size for magnetic field line integration steps in degrees
+                
+        """
+
+        #read file
+        data = pd.read_csv(self.BtraceFile, delimiter=",")
+        data = data.astype({"x[mm]": float, "y[mm]": float, "z[mm]": float, "traceDirection": int, "Length[deg]":float, "stepSize[deg]":float})
+        return data
+
+
     def runMAFOTlaminar(self,gridfile,controlfilePath,controlfile,NCPUs):
         """
         Runs MAFOT laminar program to trace field lines and return connection
         length, psi, penetration depth, etc.
+
+        Note: GPU laminar mode runs on a single MPI rank. If mafot_gpu is True,
+        NCPUs is automatically overridden to 1.
         """
         #Create MAFOT shell command
         #MAFOT now runs a program called HEAT that is generic for all machines
         tool = 'heatlaminar_mpi'
+        # GPU laminar runs on single rank
+        gpu_ncpus = 1 if self.mafot_gpu else NCPUs
         cmd = 'mpirun'
-        args = [cmd,'-n','{:d}'.format(NCPUs),tool,controlfile,'-P',gridfile]
+        args = [cmd,'-n','{:d}'.format(gpu_ncpus),tool]
+
+        #GPU flag (if enabled)
+        if self.mafot_gpu:
+            args.append('-g')
+
+        args.append(controlfile)
+        args.append('-P')
+        args.append(gridfile)
         #Copy the current environment (important when in appImage mode)
         current_env = os.environ.copy()
         #run MAFOT structure for points in gridfile
@@ -756,6 +849,42 @@ class MHD:
         #os.remove(controlfilePath+'log_*') #clean up
 
         return
+
+    def buildLaminarCommand(self, ncpus, points_file, control_file, tag, bbLimits=None):
+        """
+        Build laminar MPI command arguments with GPU support if enabled.
+        This is the central method for constructing laminar commands across all of HEAT.
+
+        Parameters:
+            ncpus: number of CPUs (will be overridden to 1 if GPU is enabled)
+            points_file: path to points file
+            control_file: path to control file
+            tag: output tag
+            bbLimits: optional boundary box limits string (Rmin,Rmax,Zmin,Zmax)
+
+        Returns:
+            list of arguments for subprocess.call() or subprocess.run()
+        """
+        # GPU laminar must use single rank
+        ncpus_to_use = 1 if self.mafot_gpu else ncpus
+        tool = 'heatlaminar_mpi'
+
+        args = ['mpirun', '-n', str(ncpus_to_use), tool]
+
+        # Add GPU flag if enabled
+        if self.mafot_gpu:
+            args.append('-g')
+
+        # Add standard arguments
+        args.append('-P')
+        args.append(points_file)
+        if bbLimits is not None:
+            args.append('-B')
+            args.append(bbLimits)
+        args.append(control_file)
+        args.append(tag)
+
+        return args
 
     def renormalizeLCFS(self, ep, rNew=None, zNew=None, psiSep=None):
         """
@@ -1465,8 +1594,11 @@ class MHD:
                 write_array(g['wall'].flatten(), f)
                 f.write(str(KVTOR) + ' ' + format(RVTOR, ' .9E') + ' ' + str(NMASS) + '\n')
                 write_array(RHOVN, f)
-        os.chown(file, self.UID, self.GID)
-        os.chmod(file, self.chmod)
+        try:
+            os.chown(file, self.UID, self.GID)
+            os.chmod(file, self.chmod)
+        except OSError:
+            pass
         return time
 
     def copyGfile2tree(self,gFileName,shot,time,clobberflag=True):

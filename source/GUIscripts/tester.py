@@ -44,7 +44,7 @@ import pandas as pd
 data1 = pd.read_csv('qDiv_E-ED1408-284.csv')
 data2 = pd.read_csv('qDiv_E-ED1408-573.csv')
 data3 = pd.read_csv('qDiv_SOLID844.csv')
-hfs = [data1['HeatFlux'].values, data2['HeatFlux'].values, data3['HeatFlux'].values]
+hfs = [data1['HeatFlux'].to_numpy(), data2['HeatFlux'].to_numpy(), data3['HeatFlux'].to_numpy()]
 nombres = ['E-ED1408-284','E-ED1408-573','SOLID844']
 import plotlyGUIplots as pgp
 fig = pgp.plotlyqDivPlot(hfs,nombres,logPlot=True)
