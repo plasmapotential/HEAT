@@ -78,6 +78,10 @@ class FEM:
         :elmerHEATlib: Fortan shared object (.so) file that is called from the SIF.  This
           file should be located in the elmerDir.  We allow this file to be dynamically 
           loaded by the user so that they can employ any Elmer User Defined Function.
+        :numberpartitions: integer MPI rank count for parallel Elmer.  When > 0, ElmerGrid
+          splits the mesh with Metis (-metis N 3) and ElmerSolver is launched via
+          mpirun -np N.  If partitioning fails, falls back to serial ElmerSolver.
+          Omit or set <= 0 for serial ElmerSolver.
                 
         """
         self.allowed_vars = [
@@ -344,17 +348,29 @@ class FEM:
         shutil.copyfile(src, dst)
 
         if self.numberpartitions is not None and self.numberpartitions > 0:
-            args_mesh = ['ElmerGrid', '2', '2', name, '-metis', str(self.numberpartitions)]
-            args = ['mpirun', '-np', str(self.numberpartitions), 'ElmerSolver', SIFfile]
+            # Second -metis arg (3) is required for reliable partitioning on large tet meshes
+            npart = str(self.numberpartitions)
+            args_mesh = ['ElmerGrid', '2', '2', name, '-metis', npart, '3']
+            args = ['mpirun', '-np', npart, 'ElmerSolver', SIFfile]
             current_env = os.environ.copy()
-		    #run Elmer Solver
             from subprocess import run
-            run(args_mesh, env=current_env, cwd=self.elmerOutDir)		
+            print("Partitioning mesh '{}' into {} Metis parts...".format(name, npart))
+            log.info("Partitioning mesh '{}' into {} Metis parts...".format(name, npart))
+            result = run(args_mesh, env=current_env, cwd=self.elmerOutDir)
+            part_dir = self.elmerOutDir + name + '/partitioning.' + npart
+            if result.returncode != 0 or not os.path.isdir(part_dir):
+                msg = ("No partitioned mesh for '{}': expected '{}'. "
+                       "Falling back to serial ElmerSolver.".format(name, part_dir))
+                print(msg)
+                log.info(msg)
+                args = ['ElmerSolver', SIFfile]
             run(args, env=current_env, cwd=self.elmerOutDir)
-            try:
-                self.merge_Rex(name, SIFfile)
-            except:
-                print('no ReX calcs were done')
+            # ReX merge only applies to parallel partition outputs (*.p*)
+            if args[0] == 'mpirun':
+                try:
+                    self.merge_Rex(name, SIFfile)
+                except:
+                    print('no ReX calcs were done')
         else:
             args = ['ElmerSolver', SIFfile]
             current_env = os.environ.copy()
