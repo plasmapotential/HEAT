@@ -143,7 +143,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certifi
 #clone and build MAFOT
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/hdf5/openmpi
 ARG MAFOT_BRANCH_CACHE_BUST=1
-RUN git clone -b mafot_gpu --single-branch https://github.com/ORNL-Fusion/MAFOT.git /root/source/MAFOT
+RUN git clone -b master --single-branch https://github.com/ORNL-Fusion/MAFOT.git /root/source/MAFOT
 COPY docker/buildMAFOT /root/source/MAFOT/buildMAFOT
 RUN mkdir -p /root/source/MAFOT/build/bin && \
     mkdir -p /root/source/MAFOT/build/lib && \
