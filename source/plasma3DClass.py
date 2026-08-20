@@ -508,12 +508,17 @@ class plasma3D:
 			f.write('2*pi=\t6.283185307179586\n')
 
 
-	def writeM3DC1supFile(self):
+	def writeM3DC1supFile(self, path=None):
 		"""
 		Write M3D-C1 supplemental input file
 		Overwrites any existing one.
+
+		path: directory to write into (default self.cwd).  C1Files are already
+		resolved to absolute paths by readM3DC1supFile, so this is safe to call
+		for any MAFOT working directory, not just self.cwd.
 		"""
-		with open(self.cwd + '/' + 'm3dc1sup.in', 'w') as f:
+		if path is None: path = self.cwd
+		with open(path + '/' + 'm3dc1sup.in', 'w') as f:
 			for i in range(len(self.C1Files)):
 				f.write(self.C1Files[i] + '\t' + str(self.C1scales[i]) + '\t' + str(self.C1phases[i]) + '\n')
 

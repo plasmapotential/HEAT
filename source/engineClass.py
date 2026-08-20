@@ -2084,6 +2084,11 @@ class engineObj():
                 self.hf3D.initializeHF3D(self.MHD.tmpDir[0:-1])     # this no longer reads the input file. This is now done by self.loadInputs
                 self.plasma3D.print_settings()
                 self.hf3D.print_settings()
+                #MHD.Field/PlasmaResponse drive the MAFOT structure-tracing path (RE, filaments,
+                #Btrace) via MHD.writeControlFile. That path is separate from plasma3D's own
+                #laminar control file, so it never picks up M3D-C1 unless we sync it here.
+                self.MHD.PlasmaResponse = self.plasma3D.response
+                self.MHD.Field = self.plasma3D.selectField
 
             #build list of PFCs for this timestep
             PFClist = []
@@ -2667,8 +2672,13 @@ class engineObj():
                     log.info("\nFilament Timestep: "+self.tsFmt.format(t))
 
                     #set up file directory structure
-                    timeDir = self.MHD.shotPath + self.tsFmt.format(t) + '/'  
+                    timeDir = self.MHD.shotPath + self.tsFmt.format(t) + '/'
                     self.RE = self.MHD.setupMAFOTdirectory(timeDir, self.RE)
+                    #RE's MAFOT working directory is separate from plasma3D.cwd (used by the
+                    #laminar/optical path), so it needs its own m3dc1sup.in or MAFOT's
+                    #heatstructure binary has no M3D-C1 source to open when Field selects M3D-C1.
+                    if self.plasma3D.plasma3Dmask:
+                        self.plasma3D.writeM3DC1supFile(path=self.RE.controlfilePath[0:-1])
 
                     if tIdx == 0:                       
                         #trace magnetic field at filament center at t0

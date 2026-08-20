@@ -436,7 +436,9 @@ class Runaways:
                     MHD.writeMAFOTpointfile(launchPt[use], self.gridfileStruct)
                     MHD.writeControlFile(self.controlfilePath+self.controlfileStruct, self.tEQ, traceDir, mode='struct')
                     MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, bbox=MHD.mafot_bbox)
-                    full = np.genfromtxt(self.structOutfile, comments='#')
+                    #genfromtxt's row-by-row Python parsing balloons memory (multi-GB transient
+                    #spikes) on large struct.dat files; pandas' C parser is far leaner.
+                    full = pd.read_csv(self.structOutfile, comment='#', sep=r'\s+', header=None).values
                     os.remove(self.structOutfile)
                     if full.ndim == 1:
                         full = full.reshape(1, -1)

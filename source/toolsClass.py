@@ -1084,7 +1084,9 @@ class tools:
         """
         Reads output file from MAFOT structure program
         """
-        structdata = np.genfromtxt(file,comments='#')
+        #genfromtxt's row-by-row Python parsing balloons memory (multi-GB transient spikes)
+        #on the large struct.dat files RE tracing produces; pandas' C parser is far leaner.
+        structdata = pd.read_csv(file, comment='#', sep=r'\s+', header=None).values
         xyz = np.zeros((len(structdata),3))
         xyz[:,0] = structdata[:,0]
         xyz[:,1] = structdata[:,1]
