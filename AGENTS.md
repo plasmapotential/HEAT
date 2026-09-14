@@ -83,6 +83,8 @@ CI runs all of the above automatically on push/PR to `main` (`.github/workflows/
 
 This updates `HEAT_IMAGE_TAG` in CI and the docker-compose image tags, optionally builds the image, then prompts you to push and open a PR to `main`.
 
+To build and push the image in CI instead of locally: Actions → "Build and publish HEAT Docker image" → Run workflow. Pick the release branch in "Use workflow from" and set `image_tag` (e.g. `v4.3.3`). The Dockerfile comes from that branch and, by default, so does the HEAT source cloned into the container (`heat_ref`); set `heat_ref` only when they should differ. Publish before merging to `main`: CI pulls `HEAT_IMAGE_TAG` and fails until the image exists on Docker Hub.
+
 ## Architecture
 
 ### Entry point and modes
