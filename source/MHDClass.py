@@ -707,12 +707,11 @@ class MHD:
         args.append(controlfile)
         #args 6 is the tag, if not None
         if tag is not None: args.append(tag)
-        #Copy the current environment (important when in appImage mode)
-        current_env = os.environ.copy()
         #run MAFOT structure for points in gridfile
         print(args)
+        self.runMAFOT(args, controlfilePath)
         from subprocess import run
-        run(args, env=current_env, cwd=controlfilePath)
+        current_env = os.environ.copy()
         try:
             print("Removing MAFOT logs")
             log.info("Removing MAFOT logs")
@@ -778,11 +777,30 @@ class MHD:
             args.append('-b')
 	    #args 6 is the MAFOT control file
         args.append(controlfile)
+        #run MAFOT structure for points in gridfile
+        self.runMAFOT(args, controlfilePath)
+        return
+
+    def runMAFOT(self, args, cwd):
+        """
+        Runs one MAFOT command and fails loudly if it did not finish.
+
+        MAFOT writes its output file incrementally, so a run that aborts (no GPU,
+        a GPU the binary has no kernel image for, a missing input) leaves a file
+        that is present but empty. Left unchecked, that surfaces much later as an
+        obscure indexing error when the file is read; here it is a RuntimeError
+        naming the command, next to MAFOT's own error text in the log.
+        """
+        from subprocess import run
         #Copy the current environment (important when in appImage mode)
         current_env = os.environ.copy()
-        #run MAFOT structure for points in gridfile
-        from subprocess import run
-        run(args, env=current_env, cwd=controlfilePath)
+        result = run(args, env=current_env, cwd=cwd)
+        if result.returncode != 0:
+            msg = "MAFOT exited with code {:d}: {:s}  (see the MAFOT output above for the cause)".format(
+                result.returncode, ' '.join(str(a) for a in args))
+            print(msg)
+            log.error(msg)
+            raise RuntimeError(msg)
         return
 
 
@@ -834,11 +852,8 @@ class MHD:
         args.append(controlfile)
         args.append('-P')
         args.append(gridfile)
-        #Copy the current environment (important when in appImage mode)
-        current_env = os.environ.copy()
-        #run MAFOT structure for points in gridfile
-        from subprocess import run
-        run(args, env=current_env, cwd=controlfilePath)
+        #run MAFOT laminar for points in gridfile
+        self.runMAFOT(args, controlfilePath)
 
         #you rewrote with the above subprocess.run method but never tested
         #this is what it was before:

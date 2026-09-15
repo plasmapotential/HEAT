@@ -15,5 +15,7 @@ echo "Building MAFOT with GPU support (heatstructure + heatlaminar_mpi, -g enabl
 # GPU=True compiles CUDA into the single heatstructure / heatlaminar_mpi binaries
 # (cudart linked statically). make.inc.HEAT also sets GPU=True; we pass it here too
 # so the GPU build is explicit and independent of make.inc edits. CUDA_PATH and
-# NVCCFLAGS (sm_89) come from make.inc.HEAT.
+# NVCCFLAGS come from make.inc.HEAT. NVCCFLAGS must list a -gencode for EVERY GPU
+# architecture the image will run on (sm_86 A10G, sm_89 L4/L40S/RTX Ada, ...): the
+# binary has no kernel for an unlisted older GPU and heatstructure -g fails on it.
 make GPU=True heat

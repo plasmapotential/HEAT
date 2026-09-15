@@ -100,7 +100,7 @@ RUN mkdir -p applications/solvers/custom && \
     ./Allwmake -j -s -q -l
 
 # clone HEAT and build only heatFoam (this is the only layer that depends on HEAT_REF; OpenFOAM already built above)
-ARG HEAT_REF=v4.3
+ARG HEAT_REF=v4.4
 RUN git clone -b ${HEAT_REF} --single-branch https://github.com/plasmapotential/HEAT.git /root/source/HEAT && \
     cp -au /root/source/HEAT/source/heatFoam /root/source/openfoam/OpenFOAM-v${OFversion}/applications/solvers/custom/heatFoam && \
     source /root/source/openfoam/OpenFOAM-v${OFversion}/etc/bashrc && \
@@ -143,7 +143,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certifi
 #clone and build MAFOT
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/hdf5/openmpi
 ARG MAFOT_BRANCH_CACHE_BUST=1
-RUN git clone -b master --single-branch https://github.com/ORNL-Fusion/MAFOT.git /root/source/MAFOT
+RUN git clone -b multiple_gpu_kernels --single-branch https://github.com/ORNL-Fusion/MAFOT.git /root/source/MAFOT
 COPY docker/buildMAFOT /root/source/MAFOT/buildMAFOT
 RUN mkdir -p /root/source/MAFOT/build/bin && \
     mkdir -p /root/source/MAFOT/build/lib && \
@@ -207,7 +207,7 @@ RUN ln -s /usr/lib/x86_64-linux-gnu/libunwind.so /usr/lib/x86_64-linux-gnu/libun
 RUN git clone -b master --single-branch https://github.com/ORNL-Fusion/EFIT.git /root/source/EFIT
 
 #clone HEAT (branch or tag; set via: docker build --build-arg HEAT_REF=v4.2.6 ...)
-ARG HEAT_REF=v4.3
+ARG HEAT_REF=v4.4
 # Docker caches the git clone; bump HEAT_CACHE_BUST (e.g. --build-arg HEAT_CACHE_BUST=$(date +%s))
 # to force a fresh clone after pushing HEAT changes (e.g. requirements.txt) to the HEAT_REF branch.
 ARG HEAT_CACHE_BUST=1

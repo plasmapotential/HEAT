@@ -1085,6 +1085,14 @@ class tools:
         Reads output file from MAFOT structure program
         """
         structdata = np.genfromtxt(file,comments='#')
+        if structdata.size == 0:
+            #MAFOT wrote its header and nothing else: the trace aborted (see MAFOT's error text
+            #in the log). Failing here names the cause; indexing on would raise an obscure IndexError.
+            msg = "MAFOT structure output {:s} has no data: the field line trace did not run".format(file)
+            print(msg)
+            log.error(msg)
+            raise RuntimeError(msg)
+        structdata = np.atleast_2d(structdata)
         xyz = np.zeros((len(structdata),3))
         xyz[:,0] = structdata[:,0]
         xyz[:,1] = structdata[:,1]
