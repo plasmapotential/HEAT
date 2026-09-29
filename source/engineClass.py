@@ -2695,6 +2695,8 @@ class engineObj():
                     #If N_src_t = 1 this only runs the one time, this is where all of your particles are created and followed
                     if tIdx < self.RE.N_src_t:
                         self.RE.tEQ = ts[0]
+                        #heatstructure chunks run in parallel on this many cores
+                        self.RE.NCPUs = self.NCPUs
                         self.RE.traceREParticles(self.MHD, ts, tIdx)
                         #loop thru ROI PFCs, mapping power to targets
                         if reMergedPFC is not None:

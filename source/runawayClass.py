@@ -433,91 +433,114 @@ class Runaways:
                 if seg_dur > 1e-15:
                     nSteps = int(np.ceil(seg_dur * v_par * 180.0 / (np.pi * Rctr) / dpinit * 1.1)) + 2
                     MHD.ittStruct = float(nSteps)
-                    MHD.writeMAFOTpointfile(launchPt[use], self.gridfileStruct)
                     MHD.writeControlFile(self.controlfilePath+self.controlfileStruct, self.tEQ, traceDir, mode='struct')
-                    MHD.getMultipleFieldPaths(1.0, self.gridfileStruct, self.controlfilePath, self.controlfileStruct, bbox=MHD.mafot_bbox)
-                    #genfromtxt's row-by-row Python parsing balloons memory (multi-GB transient
-                    #spikes) on large struct.dat files; pandas' C parser is far leaner.
-                    full = pd.read_csv(self.structOutfile, comment='#', sep=r'\s+', header=None).values
-                    os.remove(self.structOutfile)
-                    if full.ndim == 1:
-                        full = full.reshape(1, -1)
-                    xyzAll = full[:, 0:3]
 
-                    #split per active marker on the exact launch point (Lc is unreliable on the CPU)
-                    use_pts = launchPt[use]
+                    #MAFOT's heatstructure is serial: split the active markers into chunks, each traced
+                    #by its own heatstructure process (up to NCPUs at once), then post-process one
+                    #chunk at a time so peak memory scales with the chunk size rather than with
+                    #(total markers x trace length).  Chunks are contiguous and in order, so results
+                    #are identical to a single serial trace.
                     nUse = len(use)
-                    launchIdx = []
-                    pos = 0
-                    for k in range(nUse):
-                        rel = np.where(np.abs(xyzAll[pos:pos+nSteps+2] - use_pts[k]).max(axis=1) < 1e-7)[0]
-                        if len(rel) == 0:
-                            rel = np.where(np.abs(xyzAll[pos:] - use_pts[k]).max(axis=1) < 1e-7)[0]
-                        if len(rel) == 0:
-                            raise ValueError("RE one-shot: could not locate launch point of active marker {:d}".format(k))
-                        launchIdx.append(pos + int(rel[0])); pos = launchIdx[-1] + 1
-                    if traceDir == 1.0:
-                        bnd = launchIdx + [len(xyzAll)]
-                        trajs = [xyzAll[bnd[k]:bnd[k+1]] for k in range(nUse)]
-                    else:
-                        bnd = [-1] + launchIdx
-                        trajs = [xyzAll[bnd[k]+1:bnd[k+1]+1][::-1] for k in range(nUse)]
+                    NCPUs = max(1, int(getattr(self, 'NCPUs', 1) or 1))
+                    maxChunk = int(getattr(self, 'maxPtsPerMAFOTchunk', 250))
+                    chunkSize = max(1, min(int(np.ceil(nUse / NCPUs)), maxChunk))
+                    chunks = [np.arange(s, min(s+chunkSize, nUse)) for s in range(0, nUse, chunkSize)]
+                    tags = ['REchunk{:04d}'.format(c) for c in range(len(chunks))]
+                    gridfiles = [self.controlfilePath + 'struct_grid_' + tag + '.dat' for tag in tags]
+                    for kIdx, gridfile in zip(chunks, gridfiles):
+                        MHD.writeMAFOTpointfile(launchPt[use[kIdx]], gridfile)
+                    MHD.getMultipleFieldPathsParallel(1.0, gridfiles, tags, self.controlfilePath,
+                                                      self.controlfileStruct, NCPUs, bbox=MHD.mafot_bbox)
 
-                    #batch ray-mesh intersection over every segment of every active marker
-                    q1L, q2L, ownerL = [], [], []
-                    for k in range(nUse):
-                        tm = trajs[k]
-                        if len(tm) >= 2:
-                            q1L.append(tm[:-1]); q2L.append(tm[1:])
-                            ownerL.append(np.full(len(tm)-1, k, dtype=np.int64))
-                    if len(q1L) > 0:
-                        q1 = np.concatenate(q1L); q2 = np.concatenate(q2L); owner = np.concatenate(ownerL)
-                        d = q2 - q1; segMag = np.linalg.norm(d, axis=1)
-                        with np.errstate(invalid='ignore', divide='ignore'):
-                            rNorm = np.where(segMag[:,None] > 0, d/segMag[:,None], 0.0)
-                        if getattr(self, '_re_rt_engine', 'open3d') == 'mitsuba':
-                            prim = np.asarray(self._re_rt.intersect_segments_mitsuba(q1, q2, self._re_rt.scene, mitsubaMode=self._re_mitsuba_mode))
-                            allHit = prim >= 0; allFace = prim.astype(np.int64); allDist = np.zeros(len(prim))
-                        else:
-                            hitMap, distMap = self._re_rt.cast_rays_open3d_segments(q1, rNorm, segMag)
-                            allHit = (hitMap != 4294967295) & (distMap <= segMag + 1e-9)
-                            allFace = hitMap.astype(np.int64); allDist = np.clip(distMap, 0.0, segMag)
-                    else:
-                        owner = np.zeros(0, dtype=np.int64)
-
-                    #per active marker: record timesteps in this segment, carry the end position
                     newLaunch = launchPt.copy()
                     stillActive = np.ones(nUse, dtype=bool)
-                    for k in range(nUse):
-                        m = int(use[k])
-                        tm = trajs[k]
-                        if len(tm) < 2:
-                            stillActive[k] = False             #left the domain immediately
-                            continue
-                        arc = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(tm, axis=0), axis=1))])
-                        tRel = arc / speed                     #time since this segment's start
-                        sel = np.where(owner == k)[0]
-                        face = -1; tHit = tRel[-1]
-                        if len(sel) > 0:
-                            h = np.where(allHit[sel])[0]
-                            if len(h) > 0:
-                                kk = int(h[0]); tHit = (arc[kk] + allDist[sel[kk]]) / speed; face = int(allFace[sel[kk]])
-                        tEndMarker = min(tHit, seg_dur)
-                        #record positions at timesteps falling in (current_time, current_time+tEndMarker]
-                        for j in range(tIdx, N_ts):
-                            rel_t = ts[j] - current_time
-                            if rel_t < 0:
-                                continue
-                            if rel_t > tEndMarker + 1e-12:
-                                break
-                            self.xyzSteps[i, m, j, :] = [np.interp(rel_t, tRel, tm[:,c]) for c in range(3)]
-                        if face >= 0:
-                            jhit = int(np.searchsorted(ts, current_time + tHit))
-                            if jhit < N_ts:
-                                intersectRecord[i, m, jhit] = face
-                            stillActive[k] = False             #hit geometry -> stop tracing
+                    for kIdx, gridfile, tag in zip(chunks, gridfiles, tags):
+                        structfile = self.controlfilePath + 'struct_' + tag + '.dat'
+                        #genfromtxt's row-by-row Python parsing balloons memory (multi-GB transient
+                        #spikes) on large struct.dat files; pandas' C parser is far leaner.
+                        #Only X,Y,Z are used.
+                        xyzAll = pd.read_csv(structfile, comment='#', sep=r'\s+', header=None,
+                                             usecols=[0, 1, 2]).values
+                        os.remove(structfile)
+                        os.remove(gridfile)
+
+                        #split per active marker on the exact launch point (Lc is unreliable on the CPU)
+                        use_pts = launchPt[use[kIdx]]
+                        nC = len(kIdx)
+                        launchIdx = []
+                        pos = 0
+                        for kl in range(nC):
+                            rel = np.where(np.abs(xyzAll[pos:pos+nSteps+2] - use_pts[kl]).max(axis=1) < 1e-7)[0]
+                            if len(rel) == 0:
+                                rel = np.where(np.abs(xyzAll[pos:] - use_pts[kl]).max(axis=1) < 1e-7)[0]
+                            if len(rel) == 0:
+                                raise ValueError("RE one-shot: could not locate launch point of active marker {:d}".format(int(kIdx[kl])))
+                            launchIdx.append(pos + int(rel[0])); pos = launchIdx[-1] + 1
+                        if traceDir == 1.0:
+                            bnd = launchIdx + [len(xyzAll)]
+                            trajs = [xyzAll[bnd[kl]:bnd[kl+1]] for kl in range(nC)]
                         else:
-                            newLaunch[m] = [np.interp(seg_dur, tRel, tm[:,c]) for c in range(3)]   #carry to next equilibrium
+                            bnd = [-1] + launchIdx
+                            trajs = [xyzAll[bnd[kl]+1:bnd[kl+1]+1][::-1] for kl in range(nC)]
+
+                        #batch ray-mesh intersection over every segment of every marker in this chunk
+                        q1L, q2L, ownerL = [], [], []
+                        for kl in range(nC):
+                            tm = trajs[kl]
+                            if len(tm) >= 2:
+                                q1L.append(tm[:-1]); q2L.append(tm[1:])
+                                ownerL.append(np.full(len(tm)-1, kl, dtype=np.int64))
+                        if len(q1L) > 0:
+                            q1 = np.concatenate(q1L); q2 = np.concatenate(q2L); owner = np.concatenate(ownerL)
+                            d = q2 - q1; segMag = np.linalg.norm(d, axis=1)
+                            with np.errstate(invalid='ignore', divide='ignore'):
+                                rNorm = np.where(segMag[:,None] > 0, d/segMag[:,None], 0.0)
+                            if getattr(self, '_re_rt_engine', 'open3d') == 'mitsuba':
+                                prim = np.asarray(self._re_rt.intersect_segments_mitsuba(q1, q2, self._re_rt.scene, mitsubaMode=self._re_mitsuba_mode))
+                                allHit = prim >= 0; allFace = prim.astype(np.int64); allDist = np.zeros(len(prim))
+                            else:
+                                hitMap, distMap = self._re_rt.cast_rays_open3d_segments(q1, rNorm, segMag)
+                                allHit = (hitMap != 4294967295) & (distMap <= segMag + 1e-9)
+                                allFace = hitMap.astype(np.int64); allDist = np.clip(distMap, 0.0, segMag)
+                        else:
+                            owner = np.zeros(0, dtype=np.int64)
+
+                        #per active marker: record timesteps in this segment, carry the end position
+                        for kl in range(nC):
+                            k = int(kIdx[kl])                  #index into use
+                            m = int(use[k])                    #global marker index
+                            tm = trajs[kl]
+                            if len(tm) < 2:
+                                stillActive[k] = False             #left the domain immediately
+                                continue
+                            arc = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(tm, axis=0), axis=1))])
+                            tRel = arc / speed                     #time since this segment's start
+                            sel = np.where(owner == kl)[0]
+                            face = -1; tHit = tRel[-1]
+                            if len(sel) > 0:
+                                h = np.where(allHit[sel])[0]
+                                if len(h) > 0:
+                                    kk = int(h[0]); tHit = (arc[kk] + allDist[sel[kk]]) / speed; face = int(allFace[sel[kk]])
+                            tEndMarker = min(tHit, seg_dur)
+                            #record positions at timesteps falling in (current_time, current_time+tEndMarker]
+                            for j in range(tIdx, N_ts):
+                                rel_t = ts[j] - current_time
+                                if rel_t < 0:
+                                    continue
+                                if rel_t > tEndMarker + 1e-12:
+                                    break
+                                self.xyzSteps[i, m, j, :] = [np.interp(rel_t, tRel, tm[:,c]) for c in range(3)]
+                            if face >= 0:
+                                jhit = int(np.searchsorted(ts, current_time + tHit))
+                                if jhit < N_ts:
+                                    intersectRecord[i, m, jhit] = face
+                                stillActive[k] = False             #hit geometry -> stop tracing
+                            else:
+                                newLaunch[m] = [np.interp(seg_dur, tRel, tm[:,c]) for c in range(3)]   #carry to next equilibrium
+                        #free this chunk's arrays before reading the next one
+                        xyzAll = trajs = q1L = q2L = ownerL = None
+                        q1 = q2 = owner = d = segMag = rNorm = allHit = allFace = allDist = None
+                        hitMap = distMap = prim = None
                     launchPt = newLaunch
                     use = use[stillActive]
 

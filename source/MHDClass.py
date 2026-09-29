@@ -785,6 +785,66 @@ class MHD:
         run(args, env=current_env, cwd=controlfilePath)
         return
 
+    def getMultipleFieldPathsParallel(self, dphi, gridfiles, tags, controlfilePath,
+                                      controlfile, NCPUs, bbox=True):
+        """
+        Parallel version of getMultipleFieldPaths.  MAFOT's heatstructure is serial, so
+        the launch points are pre-split into one gridfile per chunk and each chunk is
+        traced by its own heatstructure process, with up to NCPUs running at once.
+
+        Each process gets its own tag, so MAFOT writes struct_<tag>.dat and
+        log_heatstructure_<tag>.dat and chunks never collide.  Points are traced
+        independently, so concatenating the chunk outputs in order is identical to one
+        serial run over all points.  After all chunks finish, the per-chunk logs are merged
+        (in order) into log_heatstructure.dat and removed.
+
+        GPU mode (mafot_gpu) runs the chunks one at a time.
+        """
+        from subprocess import run, PIPE, STDOUT
+        from concurrent.futures import ThreadPoolExecutor
+        current_env = os.environ.copy()
+        nConcurrent = 1 if self.mafot_gpu else max(1, int(NCPUs))
+
+        argsList = []
+        for gridfile, tag in zip(gridfiles, tags):
+            args = ['heatstructure', '-d', str(dphi)]
+            if self.mafot_gpu:
+                args.append('-g')
+            args += ['-P', gridfile]
+            if bbox is True:
+                args.append('-b')
+            args += [controlfile, tag]
+            argsList.append(args)
+
+        print('Running MAFOT heatstructure on {:d} chunks, {:d} at a time'.format(len(argsList), nConcurrent))
+        log.info('Running MAFOT heatstructure on {:d} chunks, {:d} at a time'.format(len(argsList), nConcurrent))
+
+        #capture each process' stdout so the chunks don't interleave in the HEAT log
+        def runChunk(args):
+            return run(args, env=current_env, cwd=controlfilePath, stdout=PIPE, stderr=STDOUT, text=True)
+        with ThreadPoolExecutor(max_workers=nConcurrent) as pool:
+            results = list(pool.map(runChunk, argsList))
+
+        failed = []
+        for tag, res in zip(tags, results):
+            print('--- heatstructure chunk {:s} ---'.format(tag))
+            print(res.stdout)
+            if res.returncode != 0:
+                failed.append('{:s} (exit {:d})'.format(tag, res.returncode))
+
+        #merge per-chunk MAFOT logs, in chunk order
+        with open(controlfilePath + 'log_heatstructure.dat', 'w') as merged:
+            for tag in tags:
+                chunkLog = controlfilePath + 'log_heatstructure_' + tag + '.dat'
+                if os.path.exists(chunkLog):
+                    with open(chunkLog) as f:
+                        merged.write(f.read())
+                    os.remove(chunkLog)
+
+        if len(failed) > 0:
+            raise RuntimeError('MAFOT heatstructure failed for chunk(s): ' + ', '.join(failed))
+        return
+
 
     def readBtraceFile(self):
         """
