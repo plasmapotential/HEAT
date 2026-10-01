@@ -443,7 +443,10 @@ class Runaways:
                     nUse = len(use)
                     NCPUs = max(1, int(getattr(self, 'NCPUs', 1) or 1))
                     maxChunk = int(getattr(self, 'maxPtsPerMAFOTchunk', 250))
-                    chunkSize = max(1, min(int(np.ceil(nUse / NCPUs)), maxChunk))
+                    #number of chunks is a multiple of NCPUs (equal-size chunks, every wave of
+                    #processes full), with no chunk larger than maxChunk
+                    nChunks = NCPUs * int(np.ceil(nUse / float(NCPUs * maxChunk)))
+                    chunkSize = max(1, int(np.ceil(nUse / float(nChunks))))
                     chunks = [np.arange(s, min(s+chunkSize, nUse)) for s in range(0, nUse, chunkSize)]
                     tags = ['REchunk{:04d}'.format(c) for c in range(len(chunks))]
                     gridfiles = [self.controlfilePath + 'struct_grid_' + tag + '.dat' for tag in tags]
