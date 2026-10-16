@@ -390,7 +390,6 @@ class Runaways:
         #trace uses one g-file, so we trace one batched one-shot per segment and carry the end
         #positions into the next equilibrium (this replaces the old step-by-step equilibrium reload).
         MHDtimes = np.append(MHD.timesteps, self.tMax)
-        Rctr = np.mean(np.sqrt(pts[:,0]**2 + pts[:,1]**2))
         dpinit = float(getattr(MHD, 'dpinit', 1.0))
         ep0, tEQ0 = self.ep, self.tEQ          #source equilibrium (restored per slice and at the end)
 
@@ -431,7 +430,12 @@ class Runaways:
                 seg_end = min(MHDtimes[i_MHDtNext], self.tMax)
                 seg_dur = seg_end - current_time
                 if seg_dur > 1e-15:
-                    nSteps = int(np.ceil(seg_dur * v_par * 180.0 / (np.pi * Rctr) / dpinit * 1.1)) + 2
+                    #MAFOT steps in toroidal angle, and a marker at major radius R advances
+                    #v_par/R per unit time, so the step budget must be sized from the SMALLEST R of
+                    #the active markers (as the filament code does); sizing it from the mean R made
+                    #markers on small-R orbits run out of steps (and look lost) before seg_dur.
+                    Rmin = np.min(np.sqrt(launchPt[use, 0]**2 + launchPt[use, 1]**2))
+                    nSteps = int(np.ceil(seg_dur * v_par * 180.0 / (np.pi * Rmin) / dpinit * 1.1)) + 2
                     MHD.ittStruct = float(nSteps)
                     MHD.writeControlFile(self.controlfilePath+self.controlfileStruct, self.tEQ, traceDir, mode='struct')
 
