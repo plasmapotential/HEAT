@@ -591,13 +591,60 @@ class engineObj():
     def findPsiSepfromPFCs(self, t, rNew=None):
         """
         finds psiSep for limiters by incrementally increasing R_{psiSep, IMP},
-        at a specific time.  Then rewrite all gfiles in MHD.timesteps with this
-        new LCFS.
+        at a specific time.  Then overwrites the gfile for *this* timestep
+        only with the new LCFS.  This must be called once per timestep
+        (rather than applying one psiSep to the whole MHD.timesteps list via
+        newLCFSallTimesteps) because the equilibrium -- and therefore the
+        correct tangent point -- changes at every timestep.
+
+        Before searching for a tangent point, this checks whether the
+        as-loaded (un-corrected) equilibrium already has psiN >= 1.0
+        everywhere on the candidate tangent surface.  If so, the ROI CAD is
+        already outside the raw LCFS at this timestep (eg during a current
+        ramp, when Ip -- and therefore the SOL width -- is still small) and
+        this function leaves the equilibrium untouched, returning False.
+        This avoids manufacturing an artificial limiter contact -- and the
+        unphysically large q0 that comes with an artificially tiny effective
+        SOL width -- at timesteps where the plasma does not actually touch
+        the CAD.
 
         Both MHD and PFC objects must be defined before running this function
+
+        Returns True if the LCFS was adjusted at this timestep, False if the
+        un-corrected equilibrium was already outside the ROI CAD and nothing
+        was changed.
         """
         tIdx = np.where(t==self.MHD.timesteps)[0][0]
         gfile = self.MHD.shotPath + self.tsFmt.format(t) + '/g'+self.shotFmt.format(self.MHD.shot)+'_'+self.tsFmt.format(t)
+
+        #candidate tangent point: maximum R across all ROI PFCs.  This
+        #mirrors newLCFS()'s default (rNew=None) behavior.
+        if rNew in ['None', 'none', 'na', 'NA', 'N/A', 'n/a', '', ' ', None]:
+            rCandidate = 0.0
+            for PFC in self.PFCs:
+                if PFC.Rmax > rCandidate:
+                    rCandidate = PFC.Rmax
+        else:
+            rCandidate = float(rNew)
+
+        #peek at psiN on the candidate tangent surface using the as-loaded
+        #equilibrium, before touching anything.  ep.psiFunc is built once
+        #from the gfile's original psiRZn and is unaffected by later
+        #in-place edits to ep.g['psiSep'], so this always reflects the
+        #un-corrected LCFS.
+        ep = self.MHD.ep[tIdx]
+        zMin = ep.g['ZmAxis'] - 0.25
+        zMax = ep.g['ZmAxis'] + 0.25
+        zWall = np.linspace(zMin, zMax, 100000)
+        rWall = np.ones((len(zWall)))*rCandidate
+        psiNwall = ep.psiFunc.ev(rWall, zWall).min()
+        print("Un-corrected psiN at candidate limiter tangent R={:f}: {:f}".format(rCandidate, psiNwall))
+        log.info("Un-corrected psiN at candidate limiter tangent R={:f}: {:f}".format(rCandidate, psiNwall))
+        if psiNwall >= 1.0:
+            print("ROI CAD is already outside the LCFS at this timestep.  Leaving equilibrium as-is.")
+            log.info("ROI CAD is already outside the LCFS at this timestep.  Leaving equilibrium as-is.")
+            return False
+
         #redefine LCFS to be tangent to CAD maximum R (because rNew=None)
         self.newLCFS(t, rNew=rNew, zNew=None, psiSep=None)
         print("CAD rTangent: {:f}".format(self.MHD.rTangent))
@@ -632,11 +679,13 @@ class engineObj():
             else:
                 break
 
-        #now that we have found rTangent and the psiSep that makes this CAD
-        #truly limited, write this psiSep to all gfiles in HEAT tree
-        self.newLCFSallTimesteps(rNew=self.MHD.rTangent, zNew=None, psiSep=None)
-        #self.MHD.makeEFITobjects()
-        return
+        #this timestep's gfile and self.MHD.ep[tIdx] now reflect the
+        #corrected LCFS.  Resync any PFC objects that already cached an ep
+        #reference (eg PFC.EPs / PFC.ep) -- only this timestep's entry
+        #changed above, so other timesteps are unaffected by this resync.
+        for PFC in self.PFCs:
+            PFC.resetPFCeps(self.MHD)
+        return True
 
     def newLCFSallTimesteps(self, rNew=None, zNew=None, psiSep=None):
         """
@@ -2046,6 +2095,12 @@ class engineObj():
         #list of dictionaries for time varying inputs
         self.inputDicts = []
 
+        #timesteps where the limiter LCFS tangency correction
+        #(findPsiSepfromPFCs) has already been applied this run.  Diverted
+        #discharges (hfMode != 'limiter') are never touched; see the
+        #per-PFC hfOpt loop below.
+        self.limiterLCFSTimesteps = set()
+
         # mergedPFCs path assigns local PFCs inside the timestep loop; Btrace-only uses
         # continue and never touches it — keep None so post-loop revert can test safely.
         PFCs = None
@@ -2148,7 +2203,24 @@ class engineObj():
                     except Exception as e:
                         print("Could not load HF parameters.  Expected for GUI.  Check error message:")
                         print(e)
-                    
+
+                    #limiter discharges: make the LCFS tangent to (not inside) the
+                    #ROI CAD before computing q0.  This must run once per timestep
+                    #(not once for all of MHD.timesteps) because the equilibrium
+                    #changes at every timestep.  Diverted discharges (hfMode !=
+                    #'limiter') are left completely untouched.
+                    if self.HF.hfMode == 'limiter' and tIdx not in self.limiterLCFSTimesteps:
+                        self.findPsiSepfromPFCs(t)
+                        self.limiterLCFSTimesteps.add(tIdx)
+                        # The heat-flux object may be a merged PFC.  Its EPs
+                        # list was copied before the correction and is not the
+                        # list rebuilt inside findPsiSepfromPFCs, so reading
+                        # PFC.EPs here would restore the uncorrected
+                        # equilibrium.  Use the MHD object reloaded from the
+                        # corrected g-file.
+                        PFC.EPs[tIdx] = self.MHD.ep[tIdx]
+                        PFC.ep = self.MHD.ep[tIdx]
+
                     #build list of divertor power sharing fracs and broadcast to PFC mesh elements
                     divFracs = [self.HF.fracUI, self.HF.fracUO, self.HF.fracLI, self.HF.fracLO]
                     PFC.broadcastDivFracs(divFracs)

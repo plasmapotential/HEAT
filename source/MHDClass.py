@@ -931,17 +931,17 @@ class MHD:
             zMax = g['ZmAxis'] + 0.25
             zWall = np.linspace(zMin, zMax, 100000)
             rWall = np.ones((len(zWall)))*rNew
-#            psiWall = ep.psiFunc_noN.ev(rWall, zWall)
-#            psiNew = ep.psiFunc_noN.ev(rWall, zWall).min()
             psiaxis = g['psiAxis']
             psiedge = g['psiSep']
             psiNwall = ep.psiFunc.ev(rWall, zWall)
             psiWall = psiNwall*(psiedge - psiaxis) + psiaxis
-            psiNew = psiWall.min()
-            psiNewNormalized = ep.psiFunc.ev(rWall, zWall).min()
-            idx = np.argmin(psiWall)
-            idx2 = np.argmin(ep.psiFunc.ev(rWall, zWall))
-            #print('R = {:f}, Z = {:f}'.format(rWall[idx2], zWall[idx2]))
+            # Select the point furthest inside the old LCFS in normalized
+            # flux.  Do not use psiWall.min(): when psiSep - psiAxis is
+            # negative (as in SPARC), that selects the *largest* psiN and
+            # writes an inconsistent psiSep.
+            idx = int(np.argmin(psiNwall))
+            psiNew = float(psiWall[idx])
+            psiNewNormalized = float(psiNwall[idx])
 
 #            print('New LCFS R: {:f}'.format(rWall[idx]))
 #            print('New LCFS Z: {:f}'.format(zWall[idx]))
@@ -961,17 +961,54 @@ class MHD:
         #this overrides any psiNew we got using R, Z
         if psiSep is not None:
             print("psi provided...overwriting R,Z")
-            psiNewNormalized = (psiNew - g['psiAxis']) / (g['psiSep'] - g['psiAxis'])
-            psiNew = psiSep
-        #find contour
-#        import matplotlib.pyplot as plt
-#        CS = plt.contourf(g['R'],g['Z'],g['psiRZ'])
-#        lcfsCS = plt.contour(CS, levels = [psiNew])
-#        rlcfs = lcfsCS.allsegs[0][0][:,0]
-#        zlcfs = lcfsCS.allsegs[0][0][:,1]
-        surface = ep.getBs_FluxSur(psiNewNormalized)
-        rlcfs = surface['Rs']
-        zlcfs = surface['Zs']
+            psiNew = float(psiSep)
+            psiNewNormalized = float(
+                (psiNew - g['psiAxis']) / (g['psiSep'] - g['psiAxis'])
+            )
+
+        # Reconstruct the LCFS directly from the psi grid.  EFIT's
+        # getBs_FluxSur() can return vector-valued roots for near-tangent
+        # limiter surfaces, causing "setting an array element with a
+        # sequence".  HEAT already uses matplotlib contours elsewhere for
+        # equilibrium interpolation; use the same robust path here.
+        fig, ax = plt.subplots()
+        try:
+            lcfsCS = ax.contour(
+                g['R'], g['Z'], g['psiRZ'], levels=[float(psiNew)]
+            )
+            segments = [
+                np.asarray(segment, dtype=float)
+                for segment in lcfsCS.allsegs[0]
+                if len(segment) >= 3
+            ]
+        finally:
+            plt.close(fig)
+
+        if not segments:
+            raise ValueError(
+                "Could not extract LCFS contour at psiSep={:f}".format(psiNew)
+            )
+
+        # Prefer the closed contour that encloses the magnetic axis.  If the
+        # contour touches a grid boundary, fall back to a segment crossing
+        # the magnetic-axis Z plane, then to the longest available segment.
+        from matplotlib.path import Path as MplPath
+        enclosing = [
+            segment
+            for segment in segments
+            if MplPath(segment, closed=True).contains_point(
+                (float(g['RmAxis']), float(g['ZmAxis']))
+            )
+        ]
+        crossing = [
+            segment
+            for segment in segments
+            if np.min(segment[:, 1]) <= g['ZmAxis'] <= np.max(segment[:, 1])
+        ]
+        candidates = enclosing or crossing or segments
+        lcfs = max(candidates, key=len)
+        rlcfs = lcfs[:, 0]
+        zlcfs = lcfs[:, 1]
         print("minimum LCFS R: {:f}".format(min(rlcfs)))
         print("psi at this R: {:f}".format(psiNewNormalized))
         print("Nlcfs")
