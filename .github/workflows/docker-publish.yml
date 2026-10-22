@@ -14,8 +14,10 @@
 # from this repository (context = repo root). That uses your committed docker/Dockerfile
 # in full. HEAT application source inside the image still comes from `git clone` in the
 # Dockerfile at HEAT_REF (branch or tag on GitHub), not from the Actions checkout.
-# By default HEAT_REF matches the Docker image tag; override with input heat_ref
-# if the git ref should differ from the Hub tag.
+# By default HEAT_REF is the branch you dispatched from ("Use workflow from"), so the
+# Dockerfile and the HEAT source it clones come from the same branch; set input
+# heat_ref only when they should differ (e.g. rebuilding an old release with a
+# newer Dockerfile).
 #
 # Note: A cold build (full OpenFOAM + swak4Foam) can take many hours. If the job
 # times out on ubuntu-latest, increase timeout-minutes (max 360 on hosted runners)
@@ -33,7 +35,7 @@ on:
         required: true
         type: string
       heat_ref:
-        description: 'Git branch or tag for Dockerfile HEAT_REF (leave empty to use image_tag)'
+        description: 'HEAT branch/tag cloned INTO the container (Dockerfile HEAT_REF). Leave empty to use the branch selected above'
         required: false
         type: string
         default: ''
@@ -57,7 +59,8 @@ jobs:
     environment:
       name: dockerhub-publish
     env:
-      HEAT_REF: ${{ inputs.heat_ref != '' && inputs.heat_ref || inputs.image_tag }}
+      # github.ref_name is the branch/tag chosen in "Use workflow from" when dispatching
+      HEAT_REF: ${{ inputs.heat_ref != '' && inputs.heat_ref || github.ref_name }}
 
     steps:
       - name: Checkout repo (Dockerfile + context; HEAT source in image = clone per HEAT_REF)

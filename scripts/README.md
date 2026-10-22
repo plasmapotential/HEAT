@@ -42,4 +42,4 @@ Use this script to cut a new HEAT release (Docker image tag) with less manual ed
 
 **Prereqs:** `docker`, logged in to Docker Hub (`docker login`). Run the script **from the repository root** (the Dockerfile expects build context = repo root so that paths like `docker/buildM3DC1` resolve).
 
-**Note:** The Dockerfile uses build-arg `HEAT_REF` (default `v4.3`), so you never need to edit it to switch branch/tag—pass it at build time. The image must be built from the **repository root** with `-f docker/Dockerfile .` (not from inside `docker/`), so that `COPY docker/buildM3DC1` etc. resolve correctly.
+**Note:** The Dockerfile uses build-arg `HEAT_REF` (default `v4.4`), so you never need to edit it to switch branch/tag—pass it at build time. The image must be built from the **repository root** with `-f docker/Dockerfile .` (not from inside `docker/`), so that `COPY docker/buildM3DC1` etc. resolve correctly.

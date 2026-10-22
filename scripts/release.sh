@@ -2,9 +2,9 @@
 # Release helper for HEAT: update image tag everywhere, then optionally build and push the Docker image.
 # Usage:
 #   ./scripts/release.sh <IMAGE_TAG> [HEAT_REF] [--build]
-#   ./scripts/release.sh v4.2.6           # update refs only; build from default branch (v4.3)"
-#   ./scripts/release.sh v4.2.6 v4.3      # update refs; HEAT_REF=v4.3 for docker build"
-#   ./scripts/release.sh v4.2.6 v4.3 --build   # update refs and run docker build"
+#   ./scripts/release.sh v4.2.6           # update refs only; build from default branch (v4.4)"
+#   ./scripts/release.sh v4.2.6 v4.4      # update refs; HEAT_REF=v4.4 for docker build"
+#   ./scripts/release.sh v4.2.6 v4.4 --build   # update refs and run docker build"
 #
 # Prereqs: docker, logged in to Docker Hub (docker login). Run from repo root.
 # After running: commit the updated files, push your branch, open PR to main.
@@ -16,12 +16,12 @@ cd "$REPO_ROOT"
 if [ -z "$1" ]; then
   echo "Usage: $0 <IMAGE_TAG> [HEAT_REF] [--build]"
   echo "  IMAGE_TAG  e.g. v4.2.6 or v4.3.0 (Docker image tag to push to Docker Hub)"
-  echo "  HEAT_REF   optional; branch or tag to clone in Dockerfile (default: v4.3)"
+  echo "  HEAT_REF   optional; branch or tag to clone in Dockerfile (default: v4.4)"
   echo "  --build    run 'docker build' after updating files"
   exit 1
 fi
 IMAGE_TAG="$1"
-HEAT_REF="v4.3"
+HEAT_REF="v4.4"
 BUILD_NOW=""
 [ "$2" = "--build" ] || [ "$2" = "-b" ] && BUILD_NOW=1
 [ -n "$2" ] && [ "$2" != "--build" ] && [ "$2" != "-b" ] && HEAT_REF="$2"

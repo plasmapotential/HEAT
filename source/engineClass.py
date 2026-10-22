@@ -5138,7 +5138,12 @@ class engineObj():
                     meshFile = self.FEM.elmerDir + meshName         
 
             #location where we will save the Elmer grid mesh (its a directory)
-            meshDir = self.FEM.elmerOutDir + PFC.name
+            #ElmerGrid strips any trailing ".<ext>" from the -out name, so a PFC
+            #name containing a dot (eg "Slice.1") would land in "Slice/" while the
+            #SIF is told to read "Slice.1/".  Sanitize dots so the mesh dir and the
+            #Mesh DB reference agree.  PFC.name is left untouched everywhere else.
+            elmerMeshName = PFC.name.replace('.', '_')
+            meshDir = self.FEM.elmerOutDir + elmerMeshName
             self.FEM.buildElmerMesh(meshDir, meshFile)
 
             PFC.meshDir = meshDir
@@ -5213,8 +5218,8 @@ class engineObj():
             params = self.FEM.elmerData[PFC.name]
             #copy the ReX init file
             self.FEM.copyReXinit(PFC)
-            #solve the Elmer system
-            self.FEM.runElmerSolve(params['SIF'], PFC.name)
+            #solve the Elmer system (mesh dir name must match buildElmerMesh above)
+            self.FEM.runElmerSolve(params['SIF'], PFC.name.replace('.', '_'))
 
         #set tree permissions
         tools.recursivePermissions(self.FEM.elmerOutDir, self.UID, self.GID, self.chmod)
