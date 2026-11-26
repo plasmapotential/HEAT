@@ -130,6 +130,7 @@ class MHD:
           call so the (GPU-enabled) heatstructure / heatlaminar_mpi binaries run on the GPU;
           when False they run on the CPU. Requires MAFOT built with GPU support (GPU=True).
           GPU laminar mode uses a single MPI rank (NCPUs is automatically set to 1). Omit for default False.
+          If True is requested but no CUDA GPU is visible, HEAT drops the flag and runs on the CPU.
 
         """
         self.allowed_vars = [
@@ -198,7 +199,34 @@ class MHD:
                 elif var == 'mafot_gpu':
                     self.mafot_gpu = False
 
+        if getattr(self, 'mafot_gpu', False) and not self.cuda_gpu_available():
+            self.mafot_gpu = False
+            msg = ("mafot_gpu is True, but no CUDA GPU was found. "
+                   "MAFOT will run on the CPU without -g.")
+            print(msg)
+            log.info(msg)
+
         return
+
+
+    def cuda_gpu_available(self):
+        """True when nvidia-smi lists a CUDA GPU.
+
+        MAFOT's -g flag exits immediately with
+        'ERROR: -g requires a CUDA-capable GPU, but none was found'
+        when this is false, so callers must not pass -g in that case.
+        """
+        from subprocess import TimeoutExpired, run
+        try:
+            result = run(
+                ['nvidia-smi', '-L'],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+        except (FileNotFoundError, OSError, TimeoutExpired):
+            return False
+        return result.returncode == 0 and 'GPU' in (result.stdout or '')
 
 
     def determineEQFiletype(self,file):

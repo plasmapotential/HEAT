@@ -3510,7 +3510,7 @@ class engineObj():
                 #GPU: trace the whole field line in one MAFOT/CUDA launch (batchMode) to
                 #avoid per-step CPU<->GPU launches. CPU: walk up the field line step-by-step,
                 #which lets us prune traces that already intersect as we go.
-                PFC.findOpticalShadows(self.MHD,self.CAD,self.HF.rayTracer,batchMode=getattr(self.MHD,'mafot_gpu',False))
+                PFC.findOpticalShadows(self.MHD,self.CAD,self._cpuSafeRayTracer(self.HF.rayTracer),batchMode=getattr(self.MHD,'mafot_gpu',False))
                 #original HEAT homebrew MT ray-triangle method
                 #PFC.findShadows_structure(self.MHD, self.CAD)
             else:
@@ -3620,6 +3620,7 @@ class engineObj():
         """
         runs the radiated power calculation
         """
+        self.RAD.rayTracer = self._cpuSafeRayTracer(self.RAD.rayTracer)
         if self.RAD.rayTracer == 'mitsuba_gpu':
             mode = 'cuda'
         elif self.RAD.rayTracer == 'mitsuba_cuda':

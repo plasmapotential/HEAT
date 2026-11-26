@@ -34,7 +34,18 @@ fi
 #export GID=$(id -g)
 #export USER=$(whoami)
 
+# GPU hosts get docker-compose.gpu.yml. CPU hosts cannot select driver "nvidia".
+COMPOSE_FILES=(-f docker-compose.yml)
+if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then
+  echo "NVIDIA GPU detected. requesting GPU in the container..."
+  COMPOSE_FILES+=(-f docker-compose.gpu.yml)
+else
+  echo "No NVIDIA GPU on this host. starting without GPU."
+fi
+
 #run docker compose
-docker compose up
+#docker compose up
 #run docker compose interactively (for terminal mode)
-#docker compose run --rm HEAT /bin/bash
+#docker compose "${COMPOSE_FILES[@]}" run --rm HEAT --m t --f /root/terminal/batchFile_downstreams.dat
+docker compose "${COMPOSE_FILES[@]}" run --entrypoint "" HEAT /bin/bash
+

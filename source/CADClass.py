@@ -460,8 +460,10 @@ class CAD:
         """
         Generates intersect objects from list of part numbers.
 
-        if resolution is 'standard' then generates mesh using FreeCAD
-        Standard algorithm
+        Always meshes with the FreeCAD Standard algorithm.  Mefisto
+        (MaxLength=resolution) can spin indefinitely on some STEP compounds,
+        and intersect meshes only need to capture shadowing geometry.
+        resolution is still used by the caller to name the cached STL.
         """
         #Check if this is a single file or list and make it a list
         if type(partslist) == str:
@@ -475,10 +477,7 @@ class CAD:
                 if part == self.CADparts[i].Label:
                     count += 1
                     self.intersectParts[idx] = self.CADparts[i]
-                    if resolution=="standard":
-                        self.intersectMeshes[idx] = self.part2meshStandard(self.intersectParts[idx])[0]
-                    else:
-                        self.intersectMeshes[idx] = self.part2mesh(self.intersectParts[idx], resolution=resolution)[0]
+                    self.intersectMeshes[idx] = self.part2meshStandard(self.intersectParts[idx])[0]
 
             if count == 0:
                 print("Part "+part+" not found in CAD.  Cannot Mesh!")

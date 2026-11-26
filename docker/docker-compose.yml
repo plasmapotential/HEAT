@@ -21,33 +21,28 @@ services:
       # HEAT data directory on this machine (need to replace with absolute path on Windows)
       - ${HOME}/HEAT:/root/HEAT
 #      # HEAT source code from github
-#      - /home/tlooby/source/HEAT/github:/root/source/HEAT
+      - /data/home/aredl/source/HEAT:/root/source/HEAT
 #      # Batch mode directory
-#      - /home/tlooby/HEATruns/SPARC/filament_OOLIM:/root/terminal
+#      - /data/home/aredl/HEATrun/SPARC/Filament_testcase:/root/terminal
+#      - /data/home/aredl/DIAG_HEATmap/:/root/terminal
+      - /data/home/aredl/HEAT_ops/HEATruns/T1_lower_postprocessing/:/root/terminal
+#      - /data/home/aredl/HEATrun/WEST/WEST_limiter_test_case:/root/terminal
     stdin_open: true # docker run -i
     tty: true        # docker run -t
     #if you want to set env vars, do it here:
     environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics 
       - dockerUID=$dockerUID
       - dockerGID=$dockerGID
       - UID=$dockerUID
       - GID=$dockerGID
       - OMPI_ALLOW_RUN_AS_ROOT=1
       - OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
-    #for NVIDIA GPUs
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all         # or 1
-              capabilities: [gpu]
+    # GPU reservation lives in docker-compose.gpu.yml.
+    # runDockerCompose adds that file only when this host has an NVIDIA GPU.
 #NOTES (image uses ENTRYPOINT + CMD so you can override mode via 'command:' or get a shell via --entrypoint):
 # GUI (default): docker compose up
 # TUI/batch: uncomment the 'command:' line above (set path to your batchFile), bind mount /root/terminal, then docker compose up
 # Interactive shell (override entrypoint so we get bash, not launchHEAT.py):
 #   docker compose run --entrypoint "" HEAT /bin/bash
 # From inside a shell you can still run: python3 ./source/HEAT/source/launchHEAT.py --m t --f /root/terminal/batchFile.dat
-# To change image tag: docker tag plasmapotential/heat:v4.3.3
+# To change image tag: docker tag plasmapotential/heat:v4.3
